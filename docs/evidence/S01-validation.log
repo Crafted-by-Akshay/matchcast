@@ -1,0 +1,233 @@
+S01 local bootstrap validation — 2026-10-17
+Node 22.13.1; npm 10.9.0; Python 3.12.11; uv 0.11.26; macOS arm64
+Baseline 2de98ee15ec83254282f5277ec379b8d446a6b09 plus candidate working-tree changes.
+Terminal ANSI control sequences removed; command results preserved.
+
+Initial startup/shutdown probe — FAILED intermediate candidate (exit 1)
+Environment keys: LC_CTYPE, NEXT_TELEMETRY_DISABLED, OLDPWD, PATH, PWD, SHLVL, UV_CACHE_DIR, UV_PYTHON, UV_PYTHON_DOWNLOADS, _, __CF_USER_TEXT_ENCODING, npm_config_cache
+START api ['uv', 'run', '--locked', '--package', 'matchcast-api', 'uvicorn', 'app.main:app', '--app-dir', 'services/api', '--host', '127.0.0.1', '--port', '53454']
+HTTP 200 http://127.0.0.1:53454/health contains '{"status":"healthy"}'
+START worker ['uv', 'run', '--locked', '--package', 'matchcast-worker', 'matchcast-worker']
+WORKER ready in local mode and remains running
+START web ['npm', 'run', 'dev', '--workspace', 'apps/broadcast-web', '--', '--hostname', '127.0.0.1', '--port', '53455']
+HTTP 200 http://127.0.0.1:53455/ contains 'Every match has a story.'
+NEGATIVE unsupported cloud mode: exit 2
+usage: matchcast-worker [-h] [--mode {local}]
+matchcast-worker: error: argument --mode: invalid choice: 'azure' (choose from local)
+STOP web exit 0
+STOP worker exit -9
+STOP api exit 143
+api startup/shutdown log:
+INFO:     Started server process [27861]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:53454 (Press CTRL+C to quit)
+INFO:     127.0.0.1:53471 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [27861]
+
+worker startup/shutdown log:
+MatchCast worker ready: mode=local; idle scaffold; no cloud integrations
+
+web startup/shutdown log:
+
+> @matchcast/broadcast-web@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 53455
+
+▲ Next.js 16.4.2 (Turbopack)
+- Local:         http://127.0.0.1:53455
+- Network:       http://127.0.0.1:53455
+✓ Ready in 204ms
+✓ Running next.config.ts took 15ms
+
+ GET / 200 in 158ms (next.js: 80ms, application-code: 78ms)
+
+
+Traceback (most recent call last):
+  File "/Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout/../probe.py", line 92, in <module>
+    assert 'MatchCast worker stopped' in (logs / 'worker.log').read_text()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+
+Final fresh-copy make install && make lint typecheck test build — exit 0
+npm ci
+
+added 381 packages, and audited 383 packages in 4s
+
+145 packages are looking for funding
+  run `npm fund` for details
+
+5 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+uv sync --locked --all-packages
+Using CPython 3.12.11 interpreter at: /Users/akshay/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/bin/python3.12
+Creating virtual environment at: .venv
+Resolved 31 packages in 13ms
+   Building matchcast-api @ file:///Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout/services/api
+   Building matchcast-worker @ file:///Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout/services/worker
+      Built matchcast-worker @ file:///Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout/services/worker
+      Built matchcast-api @ file:///Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout/services/api
+Prepared 2 packages in 194ms
+Installed 29 packages in 16ms
+ + annotated-types==0.8.0
+ + anyio==4.15.1
+ + certifi==2026.7.22
+ + click==8.5.0
+ + fastapi==0.119.1
+ + h11==0.16.0
+ + httpcore==1.0.9
+ + httptools==0.9.0
+ + httpx==0.28.1
+ + idna==3.20
+ + iniconfig==2.3.1
+ + matchcast-api==0.1.0 (from file:///Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout/services/api)
+ + matchcast-worker==0.1.0 (from file:///Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout/services/worker)
+ + packaging==26.3
+ + pluggy==1.7.0
+ + pydantic==2.14.1
+ + pydantic-core==2.50.1
+ + pygments==2.21.0
+ + pytest==8.4.2
+ + python-dotenv==1.2.4
+ + pyyaml==6.0.3
+ + ruff==0.17.1
+ + starlette==0.48.0
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.4
+ + uvicorn==0.54.0
+ + uvloop==0.23.0
+ + watchfiles==1.3.0
+ + websockets==17.2
+uv run --locked --all-packages ruff check .
+All checks passed!
+npm run lint --workspace apps/broadcast-web
+
+> @matchcast/broadcast-web@0.1.0 lint
+> eslint .
+
+npm run typecheck --workspace apps/broadcast-web
+
+> @matchcast/broadcast-web@0.1.0 typecheck
+> tsc --noEmit
+
+uv run --locked --all-packages pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-8.4.2, pluggy-1.7.0
+rootdir: /Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collected 6 items
+
+tests/test_api_health.py ..                                              [ 33%]
+tests/test_worker.py ....                                                [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:51
+  /Users/akshay/Documents/Development/MS-Hackathon/.git/bootstrap-validation/checkout/.venv/lib/python3.12/site-packages/starlette/testclient.py:51: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========================= 6 passed, 1 warning in 1.10s =========================
+npm run build --workspace apps/broadcast-web
+
+> @matchcast/broadcast-web@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.ts took 728ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 812ms
+  Running TypeScript ...
+  Finished TypeScript in 614ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 182ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content
+
+
+
+Final credential-free startup and negative-mode probes — exit 0
+Environment keys: LC_CTYPE, NEXT_TELEMETRY_DISABLED, OLDPWD, PATH, PWD, SHLVL, UV_CACHE_DIR, UV_PYTHON, UV_PYTHON_DOWNLOADS, _, __CF_USER_TEXT_ENCODING, npm_config_cache
+START api ['uv', 'run', '--locked', '--package', 'matchcast-api', 'uvicorn', 'app.main:app', '--app-dir', 'services/api', '--host', '127.0.0.1', '--port', '53507']
+HTTP 200 http://127.0.0.1:53507/health contains '{"status":"healthy"}'
+START worker ['uv', 'run', '--locked', '--package', 'matchcast-worker', 'matchcast-worker']
+WORKER ready in local mode and remains running
+START web ['npm', 'run', 'dev', '--workspace', 'apps/broadcast-web', '--', '--hostname', '127.0.0.1', '--port', '53508']
+HTTP 200 http://127.0.0.1:53508/ contains 'Every match has a story.'
+NEGATIVE unsupported cloud mode: exit 2
+usage: matchcast-worker [-h] [--mode {local}]
+matchcast-worker: error: argument --mode: invalid choice: 'azure' (choose from local)
+STOP web exit 0
+STOP worker exit 0
+STOP api exit 143
+api startup/shutdown log:
+INFO:     Started server process [28060]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:53507 (Press CTRL+C to quit)
+INFO:     127.0.0.1:53523 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [28060]
+
+worker startup/shutdown log:
+MatchCast worker ready: mode=local; idle scaffold; no cloud integrations
+MatchCast worker stopped
+
+web startup/shutdown log:
+
+> @matchcast/broadcast-web@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 53508
+
+▲ Next.js 16.4.2 (Turbopack)
+- Local:         http://127.0.0.1:53508
+- Network:       http://127.0.0.1:53508
+✓ Ready in 173ms
+✓ Running next.config.ts took 14ms
+
+ GET / 200 in 142ms (next.js: 70ms, application-code: 72ms)
+
+
+All local startup and negative-mode probes passed
+
+
+Final npm audit --omit=dev --json — exit 0
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {},
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "dependencies": {
+      "prod": 18,
+      "dev": 358,
+      "optional": 8,
+      "peer": 38,
+      "peerOptional": 0,
+      "total": 382
+    }
+  }
+}

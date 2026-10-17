@@ -8,6 +8,7 @@ MatchCast is an AI-powered football broadcasting platform being built for a Micr
 | --- | --- |
 | `apps/broadcast-web` | Next.js, React, and TypeScript broadcast interface |
 | `services/api` | FastAPI service and initial health endpoint |
+| `services/worker` | Local-only idle worker entry point |
 | `services/simulation` | Reserved for a future match simulation service |
 | `services/match-state` | Reserved for future match state processing |
 | `services/commentary` | Reserved for future commentary service |
@@ -20,6 +21,10 @@ MatchCast is an AI-powered football broadcasting platform being built for a Micr
 | `.github/workflows` | Reserved for CI/CD (Phase 1, Step 6) |
 
 Engineering guidance will be established in Phase 1, Step 4; see [`AGENTS.md`](AGENTS.md).
+
+Bootstrap Jira story MHACK832-22 suggests `apps/web/`. This repository retains the
+existing `apps/broadcast-web/` location established by the initial scaffold. All npm
+workspace commands use that path; there is no second frontend at `apps/web/`.
 
 ## Prerequisites
 
@@ -54,6 +59,23 @@ uv run --package matchcast-api uvicorn app.main:app --app-dir services/api --rel
 
 The API health check is available at [http://localhost:8000/health](http://localhost:8000/health) and returns `{"status":"healthy"}`.
 
+In a third terminal, start the local worker:
+
+```sh
+uv run --locked --package matchcast-worker matchcast-worker
+```
+
+It prints `MatchCast worker ready: mode=local; idle scaffold; no cloud integrations`
+and waits until Ctrl+C or SIGTERM. It does not process matches, connect to providers,
+or run agent workflows. `--mode local` is the only supported mode; unsupported modes
+exit with an error before readiness.
+
+All three entry points work without cloud credentials or an `.env` file.
+The optional [`.env.example`](.env.example) contains a placeholder for
+`MATCHCAST_WORKER_MODE`; unset defaults to `local`. Replace the placeholder with
+`local` before exporting it into your shell. No `.env` loader is configured for the
+API or worker. Do not put credentials in the template.
+
 ## Validate
 
 From the repository root:
@@ -61,9 +83,12 @@ From the repository root:
 ```sh
 make lint       # Ruff and ESLint
 make typecheck  # TypeScript compiler
-make test       # API health and smoke tests
+make test       # API smoke tests and worker mode rejection tests
 make build      # Production build of the web application
 ```
+
+Bootstrap verification, environment details, acceptance mapping, and outstanding
+review/merge requirements are recorded in [`docs/evidence/S01.md`](docs/evidence/S01.md).
 
 ## Planned technology
 

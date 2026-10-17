@@ -1,0 +1,167 @@
+S01 independent review — 17 October 2026
+Reviewer: Codex, review chat 01a148f0-5f61-7101-8445-9c93a76feb8a
+Node 22.13.1; npm 10.9.0; Python 3.12.11; uv 0.11.26
+Source/config/gate-target hashes independently recomputed and matched S01.md.
+Fresh source copy with restricted environment and no existing app dependencies.
+
+Observed results from separate review probes:
+API HTTP 200 with healthy JSON; web HTTP 200 with expected heading.
+Worker ready and running; unsupported --mode azure rejected with exit 2.
+Process-group SIGTERM: web 0, worker 0, API wrapper 143 with orderly shutdown.
+Production npm audit --omit=dev: found 0 vulnerabilities.
+git diff --check passed; .env ignored.
+
+The following sections preserve captured command/process logs.
+
+===== install =====
+npm ci
+
+added 381 packages, and audited 383 packages in 16s
+
+145 packages are looking for funding
+  run `npm fund` for details
+
+5 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
+uv sync --locked --all-packages
+Using CPython 3.12.11 interpreter at: /Users/akshay/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/bin/python3.12
+Creating virtual environment at: .venv
+Resolved 31 packages in 14ms
+   Building matchcast-api @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-independent-review-u2p3mbjc/checkout/services/api
+   Building matchcast-worker @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-independent-review-u2p3mbjc/checkout/services/worker
+Downloading ruff (8.8MiB)
+Downloading uvloop (1.3MiB)
+Downloading pygments (1.2MiB)
+Downloading pydantic-core (1.9MiB)
+ Downloaded pygments
+ Downloaded uvloop
+ Downloaded pydantic-core
+ Downloaded ruff
+      Built matchcast-worker @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-independent-review-u2p3mbjc/checkout/services/worker
+      Built matchcast-api @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-independent-review-u2p3mbjc/checkout/services/api
+Prepared 29 packages in 1.64s
+Installed 29 packages in 19ms
+ + annotated-types==0.8.0
+ + anyio==4.15.1
+ + certifi==2026.7.22
+ + click==8.5.0
+ + fastapi==0.119.1
+ + h11==0.16.0
+ + httpcore==1.0.9
+ + httptools==0.9.0
+ + httpx==0.28.1
+ + idna==3.20
+ + iniconfig==2.3.1
+ + matchcast-api==0.1.0 (from file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-independent-review-u2p3mbjc/checkout/services/api)
+ + matchcast-worker==0.1.0 (from file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-independent-review-u2p3mbjc/checkout/services/worker)
+ + packaging==26.3
+ + pluggy==1.7.0
+ + pydantic==2.14.1
+ + pydantic-core==2.50.1
+ + pygments==2.21.0
+ + pytest==8.4.2
+ + python-dotenv==1.2.4
+ + pyyaml==6.0.3
+ + ruff==0.17.1
+ + starlette==0.48.0
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.4
+ + uvicorn==0.54.0
+ + uvloop==0.23.0
+ + watchfiles==1.3.0
+ + websockets==17.2
+
+===== checks =====
+uv run --locked --all-packages ruff check .
+All checks passed!
+npm run lint --workspace apps/broadcast-web
+
+> @matchcast/broadcast-web@0.1.0 lint
+> eslint .
+
+npm run typecheck --workspace apps/broadcast-web
+
+> @matchcast/broadcast-web@0.1.0 typecheck
+> tsc --noEmit
+
+uv run --locked --all-packages pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-8.4.2, pluggy-1.7.0
+rootdir: /private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-independent-review-u2p3mbjc/checkout
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collected 6 items
+
+tests/test_api_health.py ..                                              [ 33%]
+tests/test_worker.py ....                                                [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:51
+  /private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-independent-review-u2p3mbjc/checkout/.venv/lib/python3.12/site-packages/starlette/testclient.py:51: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========================= 6 passed, 1 warning in 1.07s =========================
+npm run build --workspace apps/broadcast-web
+
+> @matchcast/broadcast-web@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.ts took 1123ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 909ms
+  Running TypeScript ...
+  Finished TypeScript in 626ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 174ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content
+
+
+===== api =====
+INFO:     Started server process [28656]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:53734 (Press CTRL+C to quit)
+INFO:     127.0.0.1:53744 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [28656]
+
+===== worker =====
+MatchCast worker ready: mode=local; idle scaffold; no cloud integrations
+MatchCast worker stopped
+
+===== web =====
+
+> @matchcast/broadcast-web@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 53735
+
+▲ Next.js 16.4.2 (Turbopack)
+- Local:         http://127.0.0.1:53735
+- Network:       http://127.0.0.1:53735
+✓ Ready in 192ms
+✓ Running next.config.ts took 14ms
+
+ GET / 200 in 128ms (next.js: 72ms, application-code: 55ms)
+[?25h
