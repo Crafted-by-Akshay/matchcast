@@ -5,11 +5,12 @@
     "node": "^20.19.0 || ^22.13.0 || >=24"
   },
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/contracts"
   ],
   "scripts": {
-    "lint": "npm run lint --workspace apps/broadcast-web",
-    "typecheck": "npm run typecheck --workspace apps/broadcast-web",
-    "build": "npm run build --workspace apps/broadcast-web"
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspace @matchcast/contracts && npm run build --workspace apps/broadcast-web"
   }
 }

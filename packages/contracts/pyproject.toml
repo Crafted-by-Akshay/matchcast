@@ -1,0 +1,13 @@
+[project]
+name = "matchcast-contracts"
+version = "1.0.0"
+description = "Canonical JSON Schema contracts and contextual validation for MatchCast"
+requires-python = ">=3.12,<3.13"
+dependencies = ["jsonschema>=4.23,<5", "rfc3339-validator>=0.1.4,<1"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["matchcast_contracts"]

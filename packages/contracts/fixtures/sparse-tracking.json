@@ -1,0 +1,45 @@
+{
+  "kind": "tracking_frame",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "frame-6",
+  "stream_sequence": 6,
+  "revision": 0,
+  "event_time_ms": 9500,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 9500
+  },
+  "payload": {
+    "pitch": {
+      "length_m": 105,
+      "width_m": 68
+    },
+    "position_unit": "m",
+    "clock_unit": "ms",
+    "complete": false,
+    "players": [
+      {
+        "player_id": "home1",
+        "position": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      }
+    ],
+    "ball": {
+      "ball_id": "ball-main",
+      "position": {
+        "x": 105,
+        "y": 68,
+        "z": 1.2
+      }
+    }
+  }
+}

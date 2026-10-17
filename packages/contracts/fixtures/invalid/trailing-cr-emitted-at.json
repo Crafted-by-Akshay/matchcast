@@ -1,0 +1,30 @@
+{
+  "kind": "event",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-goal",
+  "stream_sequence": 10,
+  "revision": 0,
+  "event_time_ms": 10000,
+  "emitted_at": "2026-10-17T10:00:00.000Z\r",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 10000
+  },
+  "payload": {
+    "type": "goal",
+    "player_id": "home1",
+    "team_id": "home",
+    "own_goal": false,
+    "position_unit": "m",
+    "position": {
+      "x": 100,
+      "y": 34,
+      "z": 0
+    }
+  }
+}

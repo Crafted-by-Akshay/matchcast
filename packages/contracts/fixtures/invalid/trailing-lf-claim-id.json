@@ -1,0 +1,31 @@
+{
+  "kind": "claim",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "claim_id": "claim-goal\n",
+  "source": {
+    "type": "events",
+    "events": [
+      {
+        "event_id": "event-goal",
+        "stream_sequence": 10,
+        "revision": 0
+      }
+    ]
+  },
+  "metric": "goals",
+  "value": 1,
+  "units": "count",
+  "derivation_version": "1.0.0",
+  "snapshot": {
+    "state_revision": 1,
+    "max_evidence_sequence": 10,
+    "event_time_ms": 10000
+  },
+  "max_evidence_sequence": 10,
+  "approval_status": "approved"
+}

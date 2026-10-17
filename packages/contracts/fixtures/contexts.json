@@ -1,0 +1,1179 @@
+{
+  "valid": [
+    {
+      "name": "approved-publication",
+      "operation": "publication",
+      "packet": {
+        "kind": "publication",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "publication_id": "publication-goal",
+        "claim_ids": [
+          "claim-goal",
+          "claim-distance"
+        ],
+        "state": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        },
+        "persona": "neutral",
+        "language": "en",
+        "event_time_ms": 10000,
+        "published_at": "2026-10-17T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:05Z",
+        "audio_generation_id": "audio-generation-1",
+        "text": "Synthetic contract example; not a measured broadcast."
+      },
+      "claims": [
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "approved"
+        },
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-distance",
+          "source": {
+            "type": "interval",
+            "from_event_time_ms": 9500,
+            "to_event_time_ms": 9800,
+            "from_stream_sequence": 6,
+            "to_stream_sequence": 8
+          },
+          "metric": "distance",
+          "value": 12.5,
+          "units": "m",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 8,
+          "approval_status": "approved"
+        }
+      ],
+      "state": {
+        "kind": "state_revision",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "snapshot": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        }
+      }
+    },
+    {
+      "name": "correction-target",
+      "operation": "revision_change",
+      "packet": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-correction",
+        "stream_sequence": 11,
+        "revision": 0,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "correction",
+          "target_event_id": "event-goal",
+          "target_stream_sequence": 10,
+          "target_revision": 0,
+          "new_revision": 1,
+          "replacement": {
+            "type": "goal",
+            "player_id": "home2",
+            "team_id": "home",
+            "own_goal": false,
+            "position_unit": "m",
+            "position": {
+              "x": 100,
+              "y": 34,
+              "z": 0
+            }
+          },
+          "reason": "Synthetic fixture: corrected scorer"
+        }
+      },
+      "target": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-goal",
+        "stream_sequence": 10,
+        "revision": 0,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "goal",
+          "player_id": "home1",
+          "team_id": "home",
+          "own_goal": false,
+          "position_unit": "m",
+          "position": {
+            "x": 100,
+            "y": 34,
+            "z": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "retraction-target",
+      "operation": "revision_change",
+      "packet": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-retraction",
+        "stream_sequence": 12,
+        "revision": 0,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "retraction",
+          "target_event_id": "event-goal",
+          "target_stream_sequence": 10,
+          "target_revision": 1,
+          "new_revision": 2,
+          "reason": "Synthetic fixture: goal disallowed"
+        }
+      },
+      "target": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-goal",
+        "stream_sequence": 10,
+        "revision": 1,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "goal",
+          "player_id": "home2",
+          "team_id": "home",
+          "own_goal": false,
+          "position_unit": "m",
+          "position": {
+            "x": 100,
+            "y": 34,
+            "z": 0
+          }
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "pending-claim",
+      "operation": "publication",
+      "packet": {
+        "kind": "publication",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "publication_id": "publication-goal",
+        "claim_ids": [
+          "claim-goal",
+          "claim-distance"
+        ],
+        "state": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        },
+        "persona": "neutral",
+        "language": "en",
+        "event_time_ms": 10000,
+        "published_at": "2026-10-17T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:05Z",
+        "audio_generation_id": "audio-generation-1",
+        "text": "Synthetic contract example; not a measured broadcast."
+      },
+      "claims": [
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "pending"
+        },
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-distance",
+          "source": {
+            "type": "interval",
+            "from_event_time_ms": 9500,
+            "to_event_time_ms": 9800,
+            "from_stream_sequence": 6,
+            "to_stream_sequence": 8
+          },
+          "metric": "distance",
+          "value": 12.5,
+          "units": "m",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 8,
+          "approval_status": "approved"
+        }
+      ],
+      "state": {
+        "kind": "state_revision",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "snapshot": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        }
+      },
+      "code": "unapproved_claim"
+    },
+    {
+      "name": "retracted-claim",
+      "operation": "publication",
+      "packet": {
+        "kind": "publication",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "publication_id": "publication-goal",
+        "claim_ids": [
+          "claim-goal",
+          "claim-distance"
+        ],
+        "state": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        },
+        "persona": "neutral",
+        "language": "en",
+        "event_time_ms": 10000,
+        "published_at": "2026-10-17T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:05Z",
+        "audio_generation_id": "audio-generation-1",
+        "text": "Synthetic contract example; not a measured broadcast."
+      },
+      "claims": [
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "retracted"
+        },
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-distance",
+          "source": {
+            "type": "interval",
+            "from_event_time_ms": 9500,
+            "to_event_time_ms": 9800,
+            "from_stream_sequence": 6,
+            "to_stream_sequence": 8
+          },
+          "metric": "distance",
+          "value": 12.5,
+          "units": "m",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 8,
+          "approval_status": "approved"
+        }
+      ],
+      "state": {
+        "kind": "state_revision",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "snapshot": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        }
+      },
+      "code": "unapproved_claim"
+    },
+    {
+      "name": "missing-claim",
+      "operation": "publication",
+      "packet": {
+        "kind": "publication",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "publication_id": "publication-goal",
+        "claim_ids": [
+          "claim-goal",
+          "claim-distance"
+        ],
+        "state": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        },
+        "persona": "neutral",
+        "language": "en",
+        "event_time_ms": 10000,
+        "published_at": "2026-10-17T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:05Z",
+        "audio_generation_id": "audio-generation-1",
+        "text": "Synthetic contract example; not a measured broadcast."
+      },
+      "claims": [
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "approved"
+        }
+      ],
+      "state": {
+        "kind": "state_revision",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "snapshot": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        }
+      },
+      "code": "missing_claim"
+    },
+    {
+      "name": "stale-publication",
+      "operation": "publication",
+      "packet": {
+        "kind": "publication",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "publication_id": "publication-goal",
+        "claim_ids": [
+          "claim-goal",
+          "claim-distance"
+        ],
+        "state": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        },
+        "persona": "neutral",
+        "language": "en",
+        "event_time_ms": 10000,
+        "published_at": "2026-10-17T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:05Z",
+        "audio_generation_id": "audio-generation-1",
+        "text": "Synthetic contract example; not a measured broadcast."
+      },
+      "claims": [
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "approved"
+        },
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-distance",
+          "source": {
+            "type": "interval",
+            "from_event_time_ms": 9500,
+            "to_event_time_ms": 9800,
+            "from_stream_sequence": 6,
+            "to_stream_sequence": 8
+          },
+          "metric": "distance",
+          "value": 12.5,
+          "units": "m",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 8,
+          "approval_status": "approved"
+        }
+      ],
+      "state": {
+        "kind": "state_revision",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "snapshot": {
+          "state_revision": 2,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        }
+      },
+      "code": "stale_revision"
+    },
+    {
+      "name": "stale-claim",
+      "operation": "publication",
+      "packet": {
+        "kind": "publication",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "publication_id": "publication-goal",
+        "claim_ids": [
+          "claim-goal",
+          "claim-distance"
+        ],
+        "state": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        },
+        "persona": "neutral",
+        "language": "en",
+        "event_time_ms": 10000,
+        "published_at": "2026-10-17T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:05Z",
+        "audio_generation_id": "audio-generation-1",
+        "text": "Synthetic contract example; not a measured broadcast."
+      },
+      "claims": [
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 0,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "approved"
+        },
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-distance",
+          "source": {
+            "type": "interval",
+            "from_event_time_ms": 9500,
+            "to_event_time_ms": 9800,
+            "from_stream_sequence": 6,
+            "to_stream_sequence": 8
+          },
+          "metric": "distance",
+          "value": 12.5,
+          "units": "m",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 8,
+          "approval_status": "approved"
+        }
+      ],
+      "state": {
+        "kind": "state_revision",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "snapshot": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        }
+      },
+      "code": "stale_revision"
+    },
+    {
+      "name": "cross-session-claim",
+      "operation": "publication",
+      "packet": {
+        "kind": "publication",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "publication_id": "publication-goal",
+        "claim_ids": [
+          "claim-goal",
+          "claim-distance"
+        ],
+        "state": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        },
+        "persona": "neutral",
+        "language": "en",
+        "event_time_ms": 10000,
+        "published_at": "2026-10-17T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:05Z",
+        "audio_generation_id": "audio-generation-1",
+        "text": "Synthetic contract example; not a measured broadcast."
+      },
+      "claims": [
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "other-session",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "approved"
+        },
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-distance",
+          "source": {
+            "type": "interval",
+            "from_event_time_ms": 9500,
+            "to_event_time_ms": 9800,
+            "from_stream_sequence": 6,
+            "to_stream_sequence": 8
+          },
+          "metric": "distance",
+          "value": 12.5,
+          "units": "m",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 8,
+          "approval_status": "approved"
+        }
+      ],
+      "state": {
+        "kind": "state_revision",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "snapshot": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        }
+      },
+      "code": "stream_mismatch"
+    },
+    {
+      "name": "duplicate-claim",
+      "operation": "publication",
+      "packet": {
+        "kind": "publication",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "publication_id": "publication-goal",
+        "claim_ids": [
+          "claim-goal",
+          "claim-distance"
+        ],
+        "state": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        },
+        "persona": "neutral",
+        "language": "en",
+        "event_time_ms": 10000,
+        "published_at": "2026-10-17T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:05Z",
+        "audio_generation_id": "audio-generation-1",
+        "text": "Synthetic contract example; not a measured broadcast."
+      },
+      "claims": [
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "approved"
+        },
+        {
+          "kind": "claim",
+          "schema_version": "1.0.0",
+          "stream": {
+            "tenant_id": "tenant-demo",
+            "session_id": "session-demo",
+            "match_id": "match-demo"
+          },
+          "claim_id": "claim-goal",
+          "source": {
+            "type": "events",
+            "events": [
+              {
+                "event_id": "event-goal",
+                "stream_sequence": 10,
+                "revision": 0
+              }
+            ]
+          },
+          "metric": "goals",
+          "value": 1,
+          "units": "count",
+          "derivation_version": "1.0.0",
+          "snapshot": {
+            "state_revision": 1,
+            "max_evidence_sequence": 10,
+            "event_time_ms": 10000
+          },
+          "max_evidence_sequence": 10,
+          "approval_status": "approved"
+        }
+      ],
+      "state": {
+        "kind": "state_revision",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "snapshot": {
+          "state_revision": 1,
+          "max_evidence_sequence": 10,
+          "event_time_ms": 10000
+        }
+      },
+      "code": "duplicate_reference"
+    },
+    {
+      "name": "wrong-target-id",
+      "operation": "revision_change",
+      "packet": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-correction",
+        "stream_sequence": 11,
+        "revision": 0,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "correction",
+          "target_event_id": "event-goal",
+          "target_stream_sequence": 10,
+          "target_revision": 0,
+          "new_revision": 1,
+          "replacement": {
+            "type": "goal",
+            "player_id": "home2",
+            "team_id": "home",
+            "own_goal": false,
+            "position_unit": "m",
+            "position": {
+              "x": 100,
+              "y": 34,
+              "z": 0
+            }
+          },
+          "reason": "Synthetic fixture: corrected scorer"
+        }
+      },
+      "target": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "other-goal",
+        "stream_sequence": 10,
+        "revision": 0,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "goal",
+          "player_id": "home1",
+          "team_id": "home",
+          "own_goal": false,
+          "position_unit": "m",
+          "position": {
+            "x": 100,
+            "y": 34,
+            "z": 0
+          }
+        }
+      },
+      "code": "invalid_revision"
+    },
+    {
+      "name": "stale-target-revision",
+      "operation": "revision_change",
+      "packet": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-correction",
+        "stream_sequence": 11,
+        "revision": 0,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "correction",
+          "target_event_id": "event-goal",
+          "target_stream_sequence": 10,
+          "target_revision": 0,
+          "new_revision": 1,
+          "replacement": {
+            "type": "goal",
+            "player_id": "home2",
+            "team_id": "home",
+            "own_goal": false,
+            "position_unit": "m",
+            "position": {
+              "x": 100,
+              "y": 34,
+              "z": 0
+            }
+          },
+          "reason": "Synthetic fixture: corrected scorer"
+        }
+      },
+      "target": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-goal",
+        "stream_sequence": 10,
+        "revision": 1,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "goal",
+          "player_id": "home1",
+          "team_id": "home",
+          "own_goal": false,
+          "position_unit": "m",
+          "position": {
+            "x": 100,
+            "y": 34,
+            "z": 0
+          }
+        }
+      },
+      "code": "invalid_revision"
+    },
+    {
+      "name": "wrong-target-sequence",
+      "operation": "revision_change",
+      "packet": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-correction",
+        "stream_sequence": 11,
+        "revision": 0,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "correction",
+          "target_event_id": "event-goal",
+          "target_stream_sequence": 10,
+          "target_revision": 0,
+          "new_revision": 1,
+          "replacement": {
+            "type": "goal",
+            "player_id": "home2",
+            "team_id": "home",
+            "own_goal": false,
+            "position_unit": "m",
+            "position": {
+              "x": 100,
+              "y": 34,
+              "z": 0
+            }
+          },
+          "reason": "Synthetic fixture: corrected scorer"
+        }
+      },
+      "target": {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": {
+          "tenant_id": "tenant-demo",
+          "session_id": "session-demo",
+          "match_id": "match-demo"
+        },
+        "event_id": "event-goal",
+        "stream_sequence": 9,
+        "revision": 0,
+        "event_time_ms": 10000,
+        "emitted_at": "2026-10-17T10:00:00.000Z",
+        "clock": {
+          "period": 1,
+          "period_elapsed_ms": 10000
+        },
+        "payload": {
+          "type": "goal",
+          "player_id": "home1",
+          "team_id": "home",
+          "own_goal": false,
+          "position_unit": "m",
+          "position": {
+            "x": 100,
+            "y": 34,
+            "z": 0
+          }
+        }
+      },
+      "code": "invalid_revision"
+    }
+  ]
+}

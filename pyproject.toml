@@ -8,7 +8,7 @@ dependencies = []
 package = false
 
 [tool.uv.workspace]
-members = ["services/api", "services/worker"]
+members = ["services/api", "services/worker", "packages/contracts"]
 
 [dependency-groups]
 dev = [

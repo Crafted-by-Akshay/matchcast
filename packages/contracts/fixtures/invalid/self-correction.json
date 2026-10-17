@@ -1,0 +1,38 @@
+{
+  "kind": "event",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-correction",
+  "stream_sequence": 11,
+  "revision": 0,
+  "event_time_ms": 10000,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 10000
+  },
+  "payload": {
+    "type": "correction",
+    "target_event_id": "event-correction",
+    "target_stream_sequence": 10,
+    "target_revision": 0,
+    "new_revision": 1,
+    "replacement": {
+      "type": "goal",
+      "player_id": "home2",
+      "team_id": "home",
+      "own_goal": false,
+      "position_unit": "m",
+      "position": {
+        "x": 100,
+        "y": 34,
+        "z": 0
+      }
+    },
+    "reason": "Synthetic fixture: corrected scorer"
+  }
+}

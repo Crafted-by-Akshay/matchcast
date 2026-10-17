@@ -1,0 +1,36 @@
+{
+  "kind": "roster",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "pitch": {
+    "length_m": 105,
+    "width_m": 68
+  },
+  "ball_id": "ball-main",
+  "team_ids": [
+    "home",
+    "away"
+  ],
+  "players": [
+    {
+      "player_id": "home1",
+      "team_id": "home"
+    },
+    {
+      "player_id": "home1",
+      "team_id": "away"
+    },
+    {
+      "player_id": "away1",
+      "team_id": "away"
+    },
+    {
+      "player_id": "away2",
+      "team_id": "away"
+    }
+  ]
+}

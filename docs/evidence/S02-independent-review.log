@@ -1,0 +1,293 @@
+S02 independent corrected-candidate re-review — 17 October 2026
+Reviewer: Codex chat 01a148f0-5f61-7101-8445-9c93a76feb8a
+Node 22.13.1; Python 3.12.11; npm 10.9.0; uv 0.11.26
+Four updated evidence hashes recomputed and matched.
+Additional independent rejection probes: 58; failures: 0.
+Exact repeated count transport: 0 and 9007199254740991.
+Originally reported newline and count defects resolved.
+The following sections preserve captured command logs.
+
+===== install =====
+npm ci
+
+added 400 packages, and audited 403 packages in 4s
+
+151 packages are looking for funding
+  run `npm fund` for details
+
+5 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+uv sync --locked --all-packages
+Using CPython 3.12.11 interpreter at: /Users/akshay/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/bin/python3.12
+Creating virtual environment at: .venv
+Resolved 39 packages in 13ms
+   Building matchcast-api @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/services/api
+   Building matchcast-contracts @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/packages/contracts
+   Building matchcast-worker @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/services/worker
+      Built matchcast-api @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/services/api
+      Built matchcast-contracts @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/packages/contracts
+      Built matchcast-worker @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/services/worker
+Prepared 3 packages in 377ms
+Installed 37 packages in 45ms
+ + annotated-types==0.8.0
+ + anyio==4.15.1
+ + attrs==26.1.0
+ + certifi==2026.7.22
+ + click==8.5.0
+ + fastapi==0.119.1
+ + h11==0.16.0
+ + httpcore==1.0.9
+ + httptools==0.9.0
+ + httpx==0.28.1
+ + idna==3.20
+ + iniconfig==2.3.1
+ + jsonschema==4.26.0
+ + jsonschema-specifications==2025.9.1
+ + matchcast-api==0.1.0 (from file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/services/api)
+ + matchcast-contracts==1.0.0 (from file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/packages/contracts)
+ + matchcast-worker==0.1.0 (from file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/services/worker)
+ + packaging==26.3
+ + pluggy==1.7.0
+ + pydantic==2.14.1
+ + pydantic-core==2.50.1
+ + pygments==2.21.0
+ + pytest==8.4.2
+ + python-dotenv==1.2.4
+ + pyyaml==6.0.3
+ + referencing==0.37.0
+ + rfc3339-validator==0.1.4
+ + rpds-py==2026.9.1
+ + ruff==0.17.1
+ + six==1.17.0
+ + starlette==0.48.0
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.4
+ + uvicorn==0.54.0
+ + uvloop==0.23.0
+ + watchfiles==1.3.0
+ + websockets==17.2
+
+===== checks =====
+uv run --locked --all-packages ruff check .
+All checks passed!
+npm run lint
+
+> lint
+> npm run lint --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 lint
+> eslint .
+
+
+> @matchcast/contracts@1.0.0 lint
+> cd ../.. && eslint --config packages/contracts/eslint.config.mjs packages/contracts/src packages/contracts/scripts tests/contracts
+
+/Applications/Xcode.app/Contents/Developer/usr/bin/make contracts-check
+npm run check:generated --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 check:generated
+> node scripts/generate.mjs --check
+
+Generated TypeScript matches canonical JSON Schema
+npm run typecheck
+
+> typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @matchcast/contracts@1.0.0 typecheck
+> tsc --noEmit && tsc -p ../../tests/contracts/tsconfig.json
+
+npm run build --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+npm run test --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 test
+> node --test --test-reporter=spec ../../tests/contracts/*.test.mjs
+
+✔ valid wire fixture: roster.json (1.251958ms)
+✔ valid wire fixture: goal.json (1.281083ms)
+✔ valid wire fixture: corrected-goal.json (0.404417ms)
+✔ valid wire fixture: correction.json (0.478292ms)
+✔ valid wire fixture: retraction.json (0.3305ms)
+✔ valid wire fixture: tracking.json (0.548375ms)
+✔ valid wire fixture: state.json (0.231708ms)
+✔ valid wire fixture: claim-events.json (0.501625ms)
+✔ valid wire fixture: claim-interval.json (0.3915ms)
+✔ valid wire fixture: publication.json (0.4965ms)
+✔ valid wire fixture: pass.json (0.172667ms)
+✔ valid wire fixture: shot.json (0.181875ms)
+✔ valid wire fixture: period.json (0.301083ms)
+✔ valid wire fixture: own-goal.json (0.147583ms)
+✔ valid wire fixture: caption-ta.json (0.182917ms)
+✔ valid wire fixture: sparse-tracking.json (0.107875ms)
+✔ valid wire fixture: claim-count-zero.json (0.179167ms)
+✔ valid wire fixture: claim-count-max.json (0.606209ms)
+✔ invalid wire fixture: invalid/version-roster.json (0.238333ms)
+✔ invalid wire fixture: invalid/version-goal.json (0.092292ms)
+✔ invalid wire fixture: invalid/version-tracking.json (0.127375ms)
+✔ invalid wire fixture: invalid/version-state.json (0.102792ms)
+✔ invalid wire fixture: invalid/version-claim-events.json (0.091166ms)
+✔ invalid wire fixture: invalid/version-publication.json (0.073ms)
+✔ invalid wire fixture: invalid/unknown-player.json (0.189041ms)
+✔ invalid wire fixture: invalid/unknown-scorer.json (0.176875ms)
+✔ invalid wire fixture: invalid/unknown-recipient.json (0.149583ms)
+✔ invalid wire fixture: invalid/unknown-corrected-player.json (0.119125ms)
+✔ invalid wire fixture: invalid/wrong-player-team.json (0.102625ms)
+✔ invalid wire fixture: invalid/unknown-team.json (0.142958ms)
+✔ invalid wire fixture: invalid/unknown-ball.json (0.203667ms)
+✔ invalid wire fixture: invalid/outside-x.json (0.125083ms)
+✔ invalid wire fixture: invalid/outside-ball-y.json (0.2565ms)
+✔ invalid wire fixture: invalid/negative-coordinate.json (0.104334ms)
+✔ invalid wire fixture: invalid/wrong-units.json (0.091667ms)
+✔ invalid wire fixture: invalid/pitch-mismatch.json (0.098292ms)
+✔ invalid wire fixture: invalid/duplicate-player.json (0.1095ms)
+✔ invalid wire fixture: invalid/incomplete-frame.json (0.086416ms)
+✔ invalid wire fixture: invalid/duplicate-roster-id.json (0.07825ms)
+✔ invalid wire fixture: invalid/unknown-roster-team.json (0.077541ms)
+✔ invalid wire fixture: invalid/invalid-clock.json (0.084917ms)
+✔ invalid wire fixture: invalid/missing-roster.json (0.090167ms)
+✔ invalid wire fixture: invalid/missing-event-roster.json (0.083333ms)
+✔ invalid wire fixture: invalid/unknown-event-type.json (0.084083ms)
+✔ invalid wire fixture: invalid/missing-event-id.json (0.081292ms)
+✔ invalid wire fixture: invalid/unexpected-field.json (0.080375ms)
+✔ invalid wire fixture: invalid/unsafe-sequence.json (0.078167ms)
+✔ invalid wire fixture: invalid/fractional-sequence.json (0.08575ms)
+✔ invalid wire fixture: invalid/invalid-date.json (0.080792ms)
+✔ invalid wire fixture: invalid/non-utc-date.json (0.07325ms)
+✔ invalid wire fixture: invalid/invalid-new-revision.json (0.104708ms)
+✔ invalid wire fixture: invalid/self-correction.json (0.096291ms)
+✔ invalid wire fixture: invalid/future-correction-target.json (0.177708ms)
+✔ invalid wire fixture: invalid/revised-control-envelope.json (0.097167ms)
+✔ invalid wire fixture: invalid/future-claim.json (0.099167ms)
+✔ invalid wire fixture: invalid/future-source.json (0.212458ms)
+✔ invalid wire fixture: invalid/reversed-interval.json (0.091375ms)
+✔ invalid wire fixture: invalid/future-interval-time.json (0.083ms)
+✔ invalid wire fixture: invalid/future-interval-sequence.json (0.09175ms)
+✔ invalid wire fixture: invalid/missing-evidence.json (0.081792ms)
+✔ invalid wire fixture: invalid/missing-derivation.json (0.081541ms)
+✔ invalid wire fixture: invalid/missing-snapshot.json (0.077833ms)
+✔ invalid wire fixture: invalid/fractional-count.json (0.07425ms)
+✔ invalid wire fixture: invalid/invalid-approval.json (0.120709ms)
+✔ invalid wire fixture: invalid/invalid-expiry.json (0.095667ms)
+✔ invalid wire fixture: invalid/future-publication.json (0.090542ms)
+✔ invalid wire fixture: invalid/missing-audio-generation.json (0.076375ms)
+✔ invalid wire fixture: invalid/missing-claim-ids.json (0.074791ms)
+✔ invalid wire fixture: invalid/cross-session-roster.json (0.086833ms)
+✔ invalid wire fixture: invalid/first-period-offset.json (0.081291ms)
+✔ invalid wire fixture: invalid/trailing-lf-claim-id.json (0.076625ms)
+✔ invalid wire fixture: invalid/trailing-lf-derivation-version.json (0.132ms)
+✔ invalid wire fixture: invalid/trailing-lf-published-at.json (0.077ms)
+✔ invalid wire fixture: invalid/trailing-lf-expires-at.json (0.218666ms)
+✔ invalid wire fixture: invalid/trailing-lf-emitted-at.json (0.074125ms)
+✔ invalid wire fixture: invalid/trailing-cr-claim-id.json (0.073583ms)
+✔ invalid wire fixture: invalid/trailing-cr-derivation-version.json (0.08575ms)
+✔ invalid wire fixture: invalid/trailing-cr-published-at.json (0.079209ms)
+✔ invalid wire fixture: invalid/trailing-cr-expires-at.json (0.071584ms)
+✔ invalid wire fixture: invalid/trailing-cr-emitted-at.json (0.071375ms)
+✔ invalid wire fixture: invalid/trailing-crlf-claim-id.json (0.079709ms)
+✔ invalid wire fixture: invalid/trailing-crlf-derivation-version.json (0.074375ms)
+✔ invalid wire fixture: invalid/trailing-crlf-published-at.json (0.07225ms)
+✔ invalid wire fixture: invalid/trailing-crlf-expires-at.json (0.07575ms)
+✔ invalid wire fixture: invalid/trailing-crlf-emitted-at.json (0.07175ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-claim-id.json (0.100542ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-derivation-version.json (0.096958ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-published-at.json (0.159875ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-expires-at.json (0.093375ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-emitted-at.json (0.082875ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-claim-id.json (0.080292ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-derivation-version.json (0.087541ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-published-at.json (0.074584ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-expires-at.json (0.070333ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-emitted-at.json (0.078ms)
+✔ invalid wire fixture: invalid/count-max-plus-one.json (0.077291ms)
+✔ invalid wire fixture: invalid/count-max-plus-two.json (0.079083ms)
+✔ invalid wire fixture: invalid/negative-count.json (0.070375ms)
+✔ valid references: approved-publication (0.161792ms)
+✔ valid references: correction-target (0.134167ms)
+✔ valid references: retraction-target (0.037584ms)
+✔ invalid references: pending-claim (0.052458ms)
+✔ invalid references: retracted-claim (0.030917ms)
+✔ invalid references: missing-claim (0.025833ms)
+✔ invalid references: stale-publication (0.053708ms)
+✔ invalid references: stale-claim (0.030292ms)
+✔ invalid references: cross-session-claim (0.026459ms)
+✔ invalid references: duplicate-claim (0.025083ms)
+✔ invalid references: wrong-target-id (0.044875ms)
+✔ invalid references: stale-target-revision (0.040083ms)
+✔ invalid references: wrong-target-sequence (0.094375ms)
+✔ non-finite numbers cannot enter the wire representation (0.105291ms)
+✔ maximum count remains an exact safe integer through JSON transport (0.054583ms)
+ℹ tests 113
+ℹ suites 0
+ℹ pass 113
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 141.838834
+uv run --locked --all-packages pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-8.4.2, pluggy-1.7.0
+rootdir: /private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collected 120 items
+
+tests/contracts/test_contracts.py ...................................... [ 31%]
+........................................................................ [ 91%]
+....                                                                     [ 95%]
+tests/test_api_health.py ..                                              [ 96%]
+tests/test_worker.py ....                                                [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:51
+  /private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s02-rereview-k3md001z/checkout/.venv/lib/python3.12/site-packages/starlette/testclient.py:51: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 120 passed, 1 warning in 1.96s ========================
+npm run build
+
+> build
+> npm run build --workspace @matchcast/contracts && npm run build --workspace apps/broadcast-web
+
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+
+> @matchcast/broadcast-web@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.ts took 722ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 771ms
+  Running TypeScript ...
+  Finished TypeScript in 631ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 191ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content
