@@ -282,3 +282,5 @@ PASS — changed-source hash matched ccafc07740183bd23b1d2376996f990fa28b0cf273e
 The candidate and verifier snapshot had the same tracked/untracked paths. Only docs/evidence/S03.md and docs/evidence/S03-validation.log differed; implementation files were unchanged from the passing snapshot.
 
 Verified implementation commit: 71808189f1962f10ae98a3871a731596943f46c (source snapshot matches the independently reviewed and tested candidate).
+
+PR update: #2 https://github.com/Crafted-by-Akshay/matchcast/pull/2 is open against main at e65e0535ad6d75cf67b36ce3fe3df7809439d06e. MHACK832-24 and MHACK832-165 were moved to In Progress and updated with the evidence and PR link. The PR is unmerged; issue completion remains pending integration verification.
