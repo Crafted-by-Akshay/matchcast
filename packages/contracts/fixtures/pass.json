@@ -1,0 +1,35 @@
+{
+  "kind": "event",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-pass",
+  "stream_sequence": 7,
+  "revision": 0,
+  "event_time_ms": 9600,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 9600
+  },
+  "payload": {
+    "type": "pass",
+    "player_id": "home1",
+    "recipient_player_id": "home2",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+      "x": 20,
+      "y": 30,
+      "z": 0
+    },
+    "end_position": {
+      "x": 30,
+      "y": 40,
+      "z": 0
+    }
+  }
+}

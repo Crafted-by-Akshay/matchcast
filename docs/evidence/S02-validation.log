@@ -1,0 +1,712 @@
+S02 local contract validation — 2026-10-17
+Node 22.13.1; npm 10.9.0; Python 3.12.11; uv 0.11.26; macOS 26.6.2 arm64
+Baseline 8da95e8b1833632e6960c25ecb37e100184cf78b plus uncommitted candidate changes.
+Terminal ANSI control sequences removed; observed command output preserved.
+
+Initial failed run diagnostics (corrected before final run):
+
+uv run --locked --all-packages ruff check .
+E501 Line too long (101 > 100)
+  --> packages/contracts/matchcast_contracts/__init__.py:77:101
+   |
+75 |         json.dumps(packet, allow_nan=False)
+76 |     except (ValueError, TypeError) as exc:
+77 |         raise ContractError("invalid_schema", "/", "packet must contain finite JSON values") from exc
+   |                                                                                                     ^
+78 |     if "schema_version" in packet:
+79 |         _require(packet["schema_version"] == SCHEMA_VERSION, "unsupported_schema_version",
+   |
+
+E501 Line too long (102 > 100)
+  --> packages/contracts/matchcast_contracts/__init__.py:92:101
+   |
+90 |         ids = [player["player_id"] for player in packet["players"]]
+91 |         _require(len(ids) == len(set(ids)) and packet["ball_id"] not in ids,
+92 |                  "invalid_roster", "/players", "player IDs must be unique and distinct from the ball")
+   |                                                                                                     ^^
+93 |         _require(all(p["team_id"] in packet["team_ids"] for p in packet["players"]),
+94 |                  "unknown_team", "/players", "roster player has an unknown team")
+   |
+
+E501 Line too long (101 > 100)
+   --> packages/contracts/matchcast_contracts/__init__.py:103:101
+    |
+101 |         clock = packet["clock"]
+102 |         _require(clock["period_elapsed_ms"] <= packet["event_time_ms"]
+103 |                  and (clock["period"] != 1 or clock["period_elapsed_ms"] == packet["event_time_ms"]),
+    |                                                                                                     ^
+104 |                  "invalid_clock", "/clock", "inconsistent period and total active match time")
+105 |     if kind == "tracking_frame":
+    |
+
+E501 Line too long (102 > 100)
+   --> packages/contracts/matchcast_contracts/__init__.py:106:101
+    |
+104 |                  "invalid_clock", "/clock", "inconsistent period and total active match time")
+105 |     if kind == "tracking_frame":
+106 |         _require(roster is not None, "roster_required", "/stream", "tracking requires roster context")
+    |                                                                                                     ^^
+107 |         payload = packet["payload"]
+108 |         _require(payload["pitch"] == roster["pitch"], "pitch_mismatch", "/payload/pitch",
+    |
+
+E501 Line too long (102 > 100)
+   --> packages/contracts/matchcast_contracts/__init__.py:116:101
+    |
+114 |             _require(player["player_id"] in known, "unknown_player", path,
+115 |                      "player is not in the supplied roster")
+116 |             _require(player["player_id"] not in seen, "duplicate_reference", path, "duplicate player")
+    |                                                                                                     ^^
+117 |             seen.add(player["player_id"])
+118 |             _position(player["position"], roster, path + "/position")
+    |
+
+E501 Line too long (101 > 100)
+   --> packages/contracts/matchcast_contracts/__init__.py:119:101
+    |
+117 |             seen.add(player["player_id"])
+118 |             _position(player["position"], roster, path + "/position")
+119 |         _require(not payload["complete"] or seen == known, "incomplete_tracking", "/payload/players",
+    |                                                                                                     ^
+120 |                  "complete frame must contain every roster player")
+121 |         _require(payload["ball"]["ball_id"] == roster["ball_id"], "unknown_ball", "/payload/ball",
+    |
+
+E501 Line too long (103 > 100)
+   --> packages/contracts/matchcast_contracts/__init__.py:136:101
+    |
+134 |             path += "/replacement"
+135 |         if payload is not None and payload["type"] != "period_boundary":
+136 |             _require(roster is not None, "roster_required", "/stream", "player references need roster")
+    |                                                                                                     ^^^
+137 |             _football(payload, roster, path)
+138 |     if kind == "claim":
+    |
+
+E501 Line too long (101 > 100)
+   --> packages/contracts/matchcast_contracts/__init__.py:149:101
+    |
+147 |                      "source event IDs must be unique")
+148 |             _require(all(e["stream_sequence"] <= maximum for e in source["events"]),
+149 |                      "future_evidence", "/source/events", "source exceeds maximum evidence sequence")
+    |                                                                                                     ^
+150 |         else:
+151 |             _require(source["from_event_time_ms"] <= source["to_event_time_ms"]
+    |
+
+E501 Line too long (104 > 100)
+   --> packages/contracts/matchcast_contracts/__init__.py:200:101
+    |
+198 |         claim = validate(claim)
+199 |         _require(claim["kind"] == "claim", "invalid_schema", "/claims", "expected claim packets")
+200 |         _require(claim["claim_id"] not in by_id, "duplicate_reference", "/claims", "duplicate claim ID")
+    |                                                                                                     ^^^^
+201 |         by_id[claim["claim_id"]] = claim
+202 |     for claim_id in publication["claim_ids"]:
+    |
+
+Found 9 errors.
+make: *** [lint] Error 1
+
+not ok 37 - invalid wire fixture: invalid/duplicate-roster-id.json
+  ---
+  duration_ms: 0.259041
+  location: '/Users/akshay/Documents/Development/MS-Hackathon/tests/contracts/contracts.test.mjs:23:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    The validation function is expected to return "true". Received false
+
+    Caught error:
+
+    ContractError: invalid_schema at /players: must NOT have duplicate items (items ## 0 and 1 are identical)
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/akshay/Documents/Development/MS-Hackathon/tests/contracts/contracts.test.mjs:24:12)
+    Test.runInAsyncScope (node:async_hooks:211:14)
+    Test.run (node:internal/test_runner/test:931:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:629:18)
+    Test.postRun (node:internal/test_runner/test:1042:19)
+    Test.run (node:internal/test_runner/test:970:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:629:7)
+  ...
+
+
+make install — exit 0
+
+npm ci
+
+added 400 packages, and audited 403 packages in 15s
+
+151 packages are looking for funding
+  run `npm fund` for details
+
+5 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+uv sync --locked --all-packages
+Resolved 39 packages in 17ms
+   Building matchcast-contracts @ file:///Users/akshay/Documents/Development/MS-Hackathon/packages/contracts
+   Building matchcast-worker @ file:///Users/akshay/Documents/Development/MS-Hackathon/services/worker
+      Built matchcast-worker @ file:///Users/akshay/Documents/Development/MS-Hackathon/services/worker
+      Built matchcast-contracts @ file:///Users/akshay/Documents/Development/MS-Hackathon/packages/contracts
+Prepared 9 packages in 879ms
+Installed 9 packages in 4ms
+ + attrs==26.1.0
+ + jsonschema==4.26.0
+ + jsonschema-specifications==2025.9.1
+ + matchcast-contracts==1.0.0 (from file:///Users/akshay/Documents/Development/MS-Hackathon/packages/contracts)
+ + matchcast-worker==0.1.0 (from file:///Users/akshay/Documents/Development/MS-Hackathon/services/worker)
+ + referencing==0.37.0
+ + rfc3339-validator==0.1.4
+ + rpds-py==2026.9.1
+ + six==1.17.0
+
+
+make lint typecheck test build — exit 0
+
+uv run --locked --all-packages ruff check .
+All checks passed!
+npm run lint
+
+> lint
+> npm run lint --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 lint
+> eslint .
+
+
+> @matchcast/contracts@1.0.0 lint
+> cd ../.. && eslint --config packages/contracts/eslint.config.mjs packages/contracts/src packages/contracts/scripts tests/contracts
+
+/Applications/Xcode.app/Contents/Developer/usr/bin/make contracts-check
+npm run check:generated --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 check:generated
+> node scripts/generate.mjs --check
+
+Generated TypeScript matches canonical JSON Schema
+npm run typecheck
+
+> typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @matchcast/contracts@1.0.0 typecheck
+> tsc --noEmit && tsc -p ../../tests/contracts/tsconfig.json
+
+npm run build --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+npm run test --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 test
+> node --test --test-reporter=spec ../../tests/contracts/*.test.mjs
+
+✔ valid wire fixture: roster.json (1.412709ms)
+✔ valid wire fixture: goal.json (1.323459ms)
+✔ valid wire fixture: corrected-goal.json (0.397ms)
+✔ valid wire fixture: correction.json (0.300042ms)
+✔ valid wire fixture: retraction.json (0.313542ms)
+✔ valid wire fixture: tracking.json (0.604334ms)
+✔ valid wire fixture: state.json (0.218083ms)
+✔ valid wire fixture: claim-events.json (0.444958ms)
+✔ valid wire fixture: claim-interval.json (0.303333ms)
+✔ valid wire fixture: publication.json (0.469667ms)
+✔ valid wire fixture: pass.json (0.163792ms)
+✔ valid wire fixture: shot.json (0.182875ms)
+✔ valid wire fixture: period.json (0.30725ms)
+✔ valid wire fixture: own-goal.json (0.151792ms)
+✔ valid wire fixture: caption-ta.json (0.121625ms)
+✔ valid wire fixture: sparse-tracking.json (0.12225ms)
+✔ invalid wire fixture: invalid/version-roster.json (0.22775ms)
+✔ invalid wire fixture: invalid/version-goal.json (0.073958ms)
+✔ invalid wire fixture: invalid/version-tracking.json (0.06875ms)
+✔ invalid wire fixture: invalid/version-state.json (0.064542ms)
+✔ invalid wire fixture: invalid/version-claim-events.json (0.0695ms)
+✔ invalid wire fixture: invalid/version-publication.json (0.064541ms)
+✔ invalid wire fixture: invalid/unknown-player.json (0.17425ms)
+✔ invalid wire fixture: invalid/unknown-scorer.json (0.175875ms)
+✔ invalid wire fixture: invalid/unknown-recipient.json (0.14275ms)
+✔ invalid wire fixture: invalid/unknown-corrected-player.json (0.106209ms)
+✔ invalid wire fixture: invalid/wrong-player-team.json (0.08175ms)
+✔ invalid wire fixture: invalid/unknown-team.json (0.075375ms)
+✔ invalid wire fixture: invalid/unknown-ball.json (0.210083ms)
+✔ invalid wire fixture: invalid/outside-x.json (0.094583ms)
+✔ invalid wire fixture: invalid/outside-ball-y.json (0.2505ms)
+✔ invalid wire fixture: invalid/negative-coordinate.json (0.083959ms)
+✔ invalid wire fixture: invalid/wrong-units.json (0.07175ms)
+✔ invalid wire fixture: invalid/pitch-mismatch.json (0.078709ms)
+✔ invalid wire fixture: invalid/duplicate-player.json (0.078875ms)
+✔ invalid wire fixture: invalid/incomplete-frame.json (0.071792ms)
+✔ invalid wire fixture: invalid/duplicate-roster-id.json (0.135166ms)
+✔ invalid wire fixture: invalid/unknown-roster-team.json (0.065917ms)
+✔ invalid wire fixture: invalid/invalid-clock.json (0.0735ms)
+✔ invalid wire fixture: invalid/missing-roster.json (0.077166ms)
+✔ invalid wire fixture: invalid/missing-event-roster.json (0.0735ms)
+✔ invalid wire fixture: invalid/unknown-event-type.json (0.07725ms)
+✔ invalid wire fixture: invalid/missing-event-id.json (0.068792ms)
+✔ invalid wire fixture: invalid/unexpected-field.json (0.069959ms)
+✔ invalid wire fixture: invalid/unsafe-sequence.json (0.069166ms)
+✔ invalid wire fixture: invalid/fractional-sequence.json (0.065458ms)
+✔ invalid wire fixture: invalid/invalid-date.json (0.074041ms)
+✔ invalid wire fixture: invalid/non-utc-date.json (0.064958ms)
+✔ invalid wire fixture: invalid/invalid-new-revision.json (0.087917ms)
+✔ invalid wire fixture: invalid/self-correction.json (0.083833ms)
+✔ invalid wire fixture: invalid/future-correction-target.json (0.164417ms)
+✔ invalid wire fixture: invalid/revised-control-envelope.json (0.086708ms)
+✔ invalid wire fixture: invalid/future-claim.json (0.080417ms)
+✔ invalid wire fixture: invalid/future-source.json (0.117666ms)
+✔ invalid wire fixture: invalid/reversed-interval.json (0.078292ms)
+✔ invalid wire fixture: invalid/future-interval-time.json (0.18325ms)
+✔ invalid wire fixture: invalid/future-interval-sequence.json (0.079209ms)
+✔ invalid wire fixture: invalid/missing-evidence.json (0.074708ms)
+✔ invalid wire fixture: invalid/missing-derivation.json (0.06575ms)
+✔ invalid wire fixture: invalid/missing-snapshot.json (0.06325ms)
+✔ invalid wire fixture: invalid/fractional-count.json (0.060375ms)
+✔ invalid wire fixture: invalid/invalid-approval.json (0.068375ms)
+✔ invalid wire fixture: invalid/invalid-expiry.json (0.075625ms)
+✔ invalid wire fixture: invalid/future-publication.json (0.071916ms)
+✔ invalid wire fixture: invalid/missing-audio-generation.json (0.063583ms)
+✔ invalid wire fixture: invalid/missing-claim-ids.json (0.059625ms)
+✔ invalid wire fixture: invalid/cross-session-roster.json (0.068458ms)
+✔ invalid wire fixture: invalid/first-period-offset.json (0.102375ms)
+✔ valid references: approved-publication (0.226666ms)
+✔ valid references: correction-target (0.12625ms)
+✔ valid references: retraction-target (0.03875ms)
+✔ invalid references: pending-claim (0.157ms)
+✔ invalid references: retracted-claim (0.077959ms)
+✔ invalid references: missing-claim (0.032916ms)
+✔ invalid references: stale-publication (0.058209ms)
+✔ invalid references: stale-claim (0.033375ms)
+✔ invalid references: cross-session-claim (0.029458ms)
+✔ invalid references: duplicate-claim (0.029375ms)
+✔ invalid references: wrong-target-id (0.048084ms)
+✔ invalid references: stale-target-revision (0.046041ms)
+✔ invalid references: wrong-target-sequence (0.103208ms)
+✔ non-finite numbers cannot enter the wire representation (0.106542ms)
+ℹ tests 82
+ℹ suites 0
+ℹ pass 82
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 136.76375
+uv run --locked --all-packages pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-8.4.2, pluggy-1.7.0
+rootdir: /Users/akshay/Documents/Development/MS-Hackathon
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collected 89 items
+
+tests/contracts/test_contracts.py ...................................... [ 42%]
+.............................................                            [ 93%]
+tests/test_api_health.py ..                                              [ 95%]
+tests/test_worker.py ....                                                [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:51
+  /Users/akshay/Documents/Development/MS-Hackathon/.venv/lib/python3.12/site-packages/starlette/testclient.py:51: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 89 passed, 1 warning in 1.02s =========================
+npm run build
+
+> build
+> npm run build --workspace @matchcast/contracts && npm run build --workspace apps/broadcast-web
+
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+
+> @matchcast/broadcast-web@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.ts took 53ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 119ms
+  Running TypeScript ...
+  Finished TypeScript in 519ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 177ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content
+
+
+
+Explicit negative CLI probes — both languages exit 2 as expected
+
+Python unknown-player exit 2 unknown_player at /payload/players/0: player is not in the supplied roster
+TypeScript unknown-player exit 2 unknown_player at /payload/players/0: player is not in the supplied roster
+Python outside-x exit 2 invalid_coordinates at /payload/players/0/position: position exceeds roster pitch bounds in metres
+TypeScript outside-x exit 2 invalid_coordinates at /payload/players/0/position: position exceeds roster pitch bounds in metres
+Python version-goal exit 2 unsupported_schema_version at /schema_version: supported version is 1.0.0
+TypeScript version-goal exit 2 unsupported_schema_version at /schema_version: supported version is 1.0.0
+
+
+Web/API/worker local startup probes — exit 0
+
+Environment keys: LC_CTYPE, NEXT_TELEMETRY_DISABLED, PATH, UV_CACHE_DIR, UV_PYTHON, UV_PYTHON_DOWNLOADS, __CF_USER_TEXT_ENCODING, npm_config_cache
+START api ['uv', 'run', '--locked', '--package', 'matchcast-api', 'uvicorn', 'app.main:app', '--app-dir', 'services/api', '--host', '127.0.0.1', '--port', '54243']
+HTTP 200 http://127.0.0.1:54243/health contains '{"status":"healthy"}'
+START worker ['uv', 'run', '--locked', '--package', 'matchcast-worker', 'matchcast-worker']
+WORKER ready in local mode and remains running
+START web ['npm', 'run', 'dev', '--workspace', 'apps/broadcast-web', '--', '--hostname', '127.0.0.1', '--port', '54244']
+HTTP 200 http://127.0.0.1:54244/ contains 'Every match has a story.'
+NEGATIVE unsupported cloud mode: exit 2
+usage: matchcast-worker [-h] [--mode {local}]
+matchcast-worker: error: argument --mode: invalid choice: 'azure' (choose from local)
+STOP web exit 0
+STOP worker exit 0
+STOP api exit 143
+api startup/shutdown log:
+INFO:     Started server process [31021]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:54243 (Press CTRL+C to quit)
+INFO:     127.0.0.1:54248 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [31021]
+
+worker startup/shutdown log:
+MatchCast worker ready: mode=local; idle scaffold; no cloud integrations
+MatchCast worker stopped
+
+web startup/shutdown log:
+
+> @matchcast/broadcast-web@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 54244
+
+▲ Next.js 16.4.2 (Turbopack)
+- Local:         http://127.0.0.1:54244
+- Network:       http://127.0.0.1:54244
+✓ Ready in 329ms
+✓ Running next.config.ts took 64ms
+
+ GET / 200 in 159ms (next.js: 93ms, application-code: 66ms)
+
+
+All local startup and negative-mode probes passed
+
+
+npm audit --omit=dev --json — exit 0
+
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {},
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "dependencies": {
+      "prod": 28,
+      "dev": 368,
+      "optional": 8,
+      "peer": 36,
+      "peerOptional": 0,
+      "total": 402
+    }
+  }
+}
+
+
+S02 independently reported defects — repair validation
+Node 22.13.1; Python 3.12.11; no dependency changes; candidate uncommitted.
+{
+  "source_sha256": "6251454545f6e370777f91e3118078d978dc19ed80f1207ef02f47a5e5085175",
+  "configuration_sha256": "90f648c70a3e886cef22ffdf6ea941fd278b1b0e433b74ed1cfc67bc52e4b853",
+  "schema_sha256": "e7cb542f799519ae88a46ff3ee568c7866e9471f7c678be7ae8f47cd3ca85417",
+  "fixtures_sha256": "efbe2fd5200a805df1c67378d9cdcbf484f6926014611d4169a48b7bec59647f",
+  "config_paths": [
+    "Makefile",
+    "package-lock.json",
+    "package.json",
+    "packages/contracts/eslint.config.mjs",
+    "packages/contracts/fixtures/contexts.json",
+    "packages/contracts/fixtures/manifest.json",
+    "packages/contracts/matchcast_contracts/schemas/v1.json",
+    "packages/contracts/package.json",
+    "packages/contracts/pyproject.toml",
+    "packages/contracts/tsconfig.json",
+    "pyproject.toml",
+    "tests/contracts/tsconfig.json",
+    "uv.lock"
+  ]
+}
+
+Pre-fix reproduction (both defects observed)
+identifier Python accepted 'claim-goal\n'
+derivation Python accepted '1.0.0\n'
+timestamp Python exception ValueError Invalid isoformat string: '2026-10-17T10:00:00Z\n'
+count Python accepted 9007199254740993
+count TypeScript exit 0 value 9007199254740992
+
+After-fix CLI rejection and safe-boundary transport probes
+Python trailing-lf-claim-id exit 2 "invalid_schema at /claim_id: 'claim-goal\\n' does not match '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?![\\\\s\\\\S])'"
+TypeScript trailing-lf-claim-id exit 2 'invalid_schema at /claim_id: must match pattern "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?![\\s\\S])"'
+Python trailing-lf-derivation-version exit 2 "invalid_schema at /derivation_version: '1.0.0\\n' does not match '^[0-9]+\\\\.[0-9]+\\\\.[0-9]+(?![\\\\s\\\\S])'"
+TypeScript trailing-lf-derivation-version exit 2 'invalid_schema at /derivation_version: must match pattern "^[0-9]+\\.[0-9]+\\.[0-9]+(?![\\s\\S])"'
+Python trailing-lf-published-at exit 2 "invalid_schema at /published_at: '2026-10-17T10:00:00Z\\n' does not match '^[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,3})?Z(?![\\\\s\\\\S])'"
+TypeScript trailing-lf-published-at exit 2 'invalid_schema at /published_at: must match pattern "^[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,3})?Z(?![\\s\\S])"'
+Python trailing-lf-expires-at exit 2 "invalid_schema at /expires_at: '2026-10-17T10:00:05Z\\n' does not match '^[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,3})?Z(?![\\\\s\\\\S])'"
+TypeScript trailing-lf-expires-at exit 2 'invalid_schema at /expires_at: must match pattern "^[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,3})?Z(?![\\s\\S])"'
+Python trailing-lf-emitted-at exit 2 "invalid_schema at /emitted_at: '2026-10-17T10:00:00.000Z\\n' does not match '^[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,3})?Z(?![\\\\s\\\\S])'"
+TypeScript trailing-lf-emitted-at exit 2 'invalid_schema at /emitted_at: must match pattern "^[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,3})?Z(?![\\s\\S])"'
+Python count-max-plus-one exit 2 'invalid_schema at /value: 9007199254740992 is greater than the maximum of 9007199254740991'
+TypeScript count-max-plus-one exit 2 'invalid_schema at /value: must be <= 9007199254740991'
+Python count-max-plus-two exit 2 'invalid_schema at /value: 9007199254740993 is greater than the maximum of 9007199254740991'
+TypeScript count-max-plus-two exit 2 'invalid_schema at /value: must be <= 9007199254740991'
+Python maximum valid count preserved exactly: 9007199254740991
+TypeScript maximum valid count preserved exactly: 9007199254740991
+
+make contracts-generate — exit 0; make lint typecheck test build — exit 0
+uv run --locked --all-packages ruff check .
+All checks passed!
+npm run lint
+
+> lint
+> npm run lint --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 lint
+> eslint .
+
+
+> @matchcast/contracts@1.0.0 lint
+> cd ../.. && eslint --config packages/contracts/eslint.config.mjs packages/contracts/src packages/contracts/scripts tests/contracts
+
+/Applications/Xcode.app/Contents/Developer/usr/bin/make contracts-check
+npm run check:generated --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 check:generated
+> node scripts/generate.mjs --check
+
+Generated TypeScript matches canonical JSON Schema
+npm run typecheck
+
+> typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @matchcast/contracts@1.0.0 typecheck
+> tsc --noEmit && tsc -p ../../tests/contracts/tsconfig.json
+
+npm run build --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+npm run test --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 test
+> node --test --test-reporter=spec ../../tests/contracts/*.test.mjs
+
+✔ valid wire fixture: roster.json (1.339542ms)
+✔ valid wire fixture: goal.json (1.232ms)
+✔ valid wire fixture: corrected-goal.json (0.419708ms)
+✔ valid wire fixture: correction.json (0.314542ms)
+✔ valid wire fixture: retraction.json (0.353291ms)
+✔ valid wire fixture: tracking.json (0.599542ms)
+✔ valid wire fixture: state.json (0.230292ms)
+✔ valid wire fixture: claim-events.json (0.407792ms)
+✔ valid wire fixture: claim-interval.json (0.300833ms)
+✔ valid wire fixture: publication.json (0.586ms)
+✔ valid wire fixture: pass.json (0.221667ms)
+✔ valid wire fixture: shot.json (0.215375ms)
+✔ valid wire fixture: period.json (0.240583ms)
+✔ valid wire fixture: own-goal.json (0.106792ms)
+✔ valid wire fixture: caption-ta.json (0.096208ms)
+✔ valid wire fixture: sparse-tracking.json (0.10125ms)
+✔ valid wire fixture: claim-count-zero.json (0.0705ms)
+✔ valid wire fixture: claim-count-max.json (0.109417ms)
+✔ invalid wire fixture: invalid/version-roster.json (0.228333ms)
+✔ invalid wire fixture: invalid/version-goal.json (0.102167ms)
+✔ invalid wire fixture: invalid/version-tracking.json (0.1105ms)
+✔ invalid wire fixture: invalid/version-state.json (0.082375ms)
+✔ invalid wire fixture: invalid/version-claim-events.json (0.073208ms)
+✔ invalid wire fixture: invalid/version-publication.json (0.069667ms)
+✔ invalid wire fixture: invalid/unknown-player.json (0.172542ms)
+✔ invalid wire fixture: invalid/unknown-scorer.json (0.167917ms)
+✔ invalid wire fixture: invalid/unknown-recipient.json (0.144167ms)
+✔ invalid wire fixture: invalid/unknown-corrected-player.json (0.125041ms)
+✔ invalid wire fixture: invalid/wrong-player-team.json (0.095125ms)
+✔ invalid wire fixture: invalid/unknown-team.json (0.140667ms)
+✔ invalid wire fixture: invalid/unknown-ball.json (0.20575ms)
+✔ invalid wire fixture: invalid/outside-x.json (0.118083ms)
+✔ invalid wire fixture: invalid/outside-ball-y.json (0.252542ms)
+✔ invalid wire fixture: invalid/negative-coordinate.json (0.095042ms)
+✔ invalid wire fixture: invalid/wrong-units.json (0.083291ms)
+✔ invalid wire fixture: invalid/pitch-mismatch.json (0.09925ms)
+✔ invalid wire fixture: invalid/duplicate-player.json (0.104583ms)
+✔ invalid wire fixture: invalid/incomplete-frame.json (0.090625ms)
+✔ invalid wire fixture: invalid/duplicate-roster-id.json (0.15225ms)
+✔ invalid wire fixture: invalid/unknown-roster-team.json (0.072292ms)
+✔ invalid wire fixture: invalid/invalid-clock.json (0.084042ms)
+✔ invalid wire fixture: invalid/missing-roster.json (0.082041ms)
+✔ invalid wire fixture: invalid/missing-event-roster.json (0.077167ms)
+✔ invalid wire fixture: invalid/unknown-event-type.json (0.075208ms)
+✔ invalid wire fixture: invalid/missing-event-id.json (0.071792ms)
+✔ invalid wire fixture: invalid/unexpected-field.json (0.073875ms)
+✔ invalid wire fixture: invalid/unsafe-sequence.json (0.072458ms)
+✔ invalid wire fixture: invalid/fractional-sequence.json (0.080458ms)
+✔ invalid wire fixture: invalid/invalid-date.json (0.078833ms)
+✔ invalid wire fixture: invalid/non-utc-date.json (0.069125ms)
+✔ invalid wire fixture: invalid/invalid-new-revision.json (0.088666ms)
+✔ invalid wire fixture: invalid/self-correction.json (0.086083ms)
+✔ invalid wire fixture: invalid/future-correction-target.json (0.158417ms)
+✔ invalid wire fixture: invalid/revised-control-envelope.json (0.083875ms)
+✔ invalid wire fixture: invalid/future-claim.json (0.085125ms)
+✔ invalid wire fixture: invalid/future-source.json (0.194625ms)
+✔ invalid wire fixture: invalid/reversed-interval.json (0.089125ms)
+✔ invalid wire fixture: invalid/future-interval-time.json (0.081917ms)
+✔ invalid wire fixture: invalid/future-interval-sequence.json (0.079125ms)
+✔ invalid wire fixture: invalid/missing-evidence.json (0.083417ms)
+✔ invalid wire fixture: invalid/missing-derivation.json (0.082125ms)
+✔ invalid wire fixture: invalid/missing-snapshot.json (0.077833ms)
+✔ invalid wire fixture: invalid/fractional-count.json (0.073208ms)
+✔ invalid wire fixture: invalid/invalid-approval.json (0.109458ms)
+✔ invalid wire fixture: invalid/invalid-expiry.json (0.082875ms)
+✔ invalid wire fixture: invalid/future-publication.json (0.4585ms)
+✔ invalid wire fixture: invalid/missing-audio-generation.json (0.099792ms)
+✔ invalid wire fixture: invalid/missing-claim-ids.json (0.078125ms)
+✔ invalid wire fixture: invalid/cross-session-roster.json (0.091708ms)
+✔ invalid wire fixture: invalid/first-period-offset.json (0.121291ms)
+✔ invalid wire fixture: invalid/trailing-lf-claim-id.json (0.059208ms)
+✔ invalid wire fixture: invalid/trailing-lf-derivation-version.json (0.116708ms)
+✔ invalid wire fixture: invalid/trailing-lf-published-at.json (0.055ms)
+✔ invalid wire fixture: invalid/trailing-lf-expires-at.json (0.183083ms)
+✔ invalid wire fixture: invalid/trailing-lf-emitted-at.json (0.049708ms)
+✔ invalid wire fixture: invalid/trailing-cr-claim-id.json (0.050375ms)
+✔ invalid wire fixture: invalid/trailing-cr-derivation-version.json (0.058125ms)
+✔ invalid wire fixture: invalid/trailing-cr-published-at.json (0.055084ms)
+✔ invalid wire fixture: invalid/trailing-cr-expires-at.json (0.045375ms)
+✔ invalid wire fixture: invalid/trailing-cr-emitted-at.json (0.045875ms)
+✔ invalid wire fixture: invalid/trailing-crlf-claim-id.json (0.04475ms)
+✔ invalid wire fixture: invalid/trailing-crlf-derivation-version.json (0.047417ms)
+✔ invalid wire fixture: invalid/trailing-crlf-published-at.json (0.044125ms)
+✔ invalid wire fixture: invalid/trailing-crlf-expires-at.json (0.044333ms)
+✔ invalid wire fixture: invalid/trailing-crlf-emitted-at.json (0.043833ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-claim-id.json (0.072958ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-derivation-version.json (0.078458ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-published-at.json (0.119542ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-expires-at.json (0.049833ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-emitted-at.json (0.06075ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-claim-id.json (0.048792ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-derivation-version.json (0.051167ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-published-at.json (0.046917ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-expires-at.json (0.051334ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-emitted-at.json (0.04675ms)
+✔ invalid wire fixture: invalid/count-max-plus-one.json (0.049542ms)
+✔ invalid wire fixture: invalid/count-max-plus-two.json (0.047167ms)
+✔ invalid wire fixture: invalid/negative-count.json (0.042791ms)
+✔ valid references: approved-publication (0.16325ms)
+✔ valid references: correction-target (0.131417ms)
+✔ valid references: retraction-target (0.037166ms)
+✔ invalid references: pending-claim (0.0525ms)
+✔ invalid references: retracted-claim (0.031334ms)
+✔ invalid references: missing-claim (0.02525ms)
+✔ invalid references: stale-publication (0.052083ms)
+✔ invalid references: stale-claim (0.029959ms)
+✔ invalid references: cross-session-claim (0.026959ms)
+✔ invalid references: duplicate-claim (0.024375ms)
+✔ invalid references: wrong-target-id (0.045041ms)
+✔ invalid references: stale-target-revision (0.03925ms)
+✔ invalid references: wrong-target-sequence (0.0975ms)
+✔ non-finite numbers cannot enter the wire representation (0.099458ms)
+✔ maximum count remains an exact safe integer through JSON transport (0.055166ms)
+ℹ tests 113
+ℹ suites 0
+ℹ pass 113
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 126.23925
+uv run --locked --all-packages pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-8.4.2, pluggy-1.7.0
+rootdir: /Users/akshay/Documents/Development/MS-Hackathon
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collected 120 items
+
+tests/contracts/test_contracts.py ...................................... [ 31%]
+........................................................................ [ 91%]
+....                                                                     [ 95%]
+tests/test_api_health.py ..                                              [ 96%]
+tests/test_worker.py ....                                                [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:51
+  /Users/akshay/Documents/Development/MS-Hackathon/.venv/lib/python3.12/site-packages/starlette/testclient.py:51: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 120 passed, 1 warning in 1.25s ========================
+npm run build
+
+> build
+> npm run build --workspace @matchcast/contracts && npm run build --workspace apps/broadcast-web
+
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+
+> @matchcast/broadcast-web@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.ts took 63ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 120ms
+  Running TypeScript ...
+  Finished TypeScript in 606ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 198ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content

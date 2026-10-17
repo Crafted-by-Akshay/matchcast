@@ -1,0 +1,30 @@
+{
+  "kind": "event",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-shot",
+  "stream_sequence": 8,
+  "revision": 0,
+  "event_time_ms": 9800,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 9800
+  },
+  "payload": {
+    "type": "shot",
+    "player_id": "home1",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+      "x": 90,
+      "y": 34,
+      "z": 0
+    },
+    "on_target": true
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "kind": "publication",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "publication_id": "publication-goal",
+  "claim_ids": [
+    "claim-goal",
+    "claim-distance"
+  ],
+  "state": {
+    "state_revision": 1,
+    "max_evidence_sequence": 10,
+    "event_time_ms": 10000
+  },
+  "persona": "neutral",
+  "language": "en",
+  "event_time_ms": 10000,
+  "published_at": "2026-10-17T10:00:00Z\u2028",
+  "expires_at": "2026-10-17T10:00:05Z",
+  "audio_generation_id": "audio-generation-1",
+  "text": "Synthetic contract example; not a measured broadcast."
+}

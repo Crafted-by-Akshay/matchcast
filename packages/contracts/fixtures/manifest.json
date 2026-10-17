@@ -1,0 +1,453 @@
+{
+  "roster": "roster.json",
+  "valid": [
+    "roster.json",
+    "goal.json",
+    "corrected-goal.json",
+    "correction.json",
+    "retraction.json",
+    "tracking.json",
+    "state.json",
+    "claim-events.json",
+    "claim-interval.json",
+    "publication.json",
+    "pass.json",
+    "shot.json",
+    "period.json",
+    "own-goal.json",
+    "caption-ta.json",
+    "sparse-tracking.json",
+    "claim-count-zero.json",
+    "claim-count-max.json"
+  ],
+  "invalid": [
+    {
+      "file": "invalid/version-roster.json",
+      "code": "unsupported_schema_version",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/version-goal.json",
+      "code": "unsupported_schema_version",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/version-tracking.json",
+      "code": "unsupported_schema_version",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/version-state.json",
+      "code": "unsupported_schema_version",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/version-claim-events.json",
+      "code": "unsupported_schema_version",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/version-publication.json",
+      "code": "unsupported_schema_version",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/unknown-player.json",
+      "code": "unknown_player",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/unknown-scorer.json",
+      "code": "unknown_player",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/unknown-recipient.json",
+      "code": "unknown_player",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/unknown-corrected-player.json",
+      "code": "unknown_player",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/wrong-player-team.json",
+      "code": "player_team_mismatch",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/unknown-team.json",
+      "code": "unknown_team",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/unknown-ball.json",
+      "code": "unknown_ball",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/outside-x.json",
+      "code": "invalid_coordinates",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/outside-ball-y.json",
+      "code": "invalid_coordinates",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/negative-coordinate.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/wrong-units.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/pitch-mismatch.json",
+      "code": "pitch_mismatch",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/duplicate-player.json",
+      "code": "duplicate_reference",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/incomplete-frame.json",
+      "code": "incomplete_tracking",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/duplicate-roster-id.json",
+      "code": "invalid_roster",
+      "with_roster": false
+    },
+    {
+      "file": "invalid/unknown-roster-team.json",
+      "code": "unknown_team",
+      "with_roster": false
+    },
+    {
+      "file": "invalid/invalid-clock.json",
+      "code": "invalid_clock",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/missing-roster.json",
+      "code": "roster_required",
+      "with_roster": false
+    },
+    {
+      "file": "invalid/missing-event-roster.json",
+      "code": "roster_required",
+      "with_roster": false
+    },
+    {
+      "file": "invalid/unknown-event-type.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/missing-event-id.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/unexpected-field.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/unsafe-sequence.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/fractional-sequence.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/invalid-date.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/non-utc-date.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/invalid-new-revision.json",
+      "code": "invalid_revision",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/self-correction.json",
+      "code": "invalid_revision",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/future-correction-target.json",
+      "code": "invalid_revision",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/revised-control-envelope.json",
+      "code": "invalid_revision",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/future-claim.json",
+      "code": "future_evidence",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/future-source.json",
+      "code": "future_evidence",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/reversed-interval.json",
+      "code": "invalid_interval",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/future-interval-time.json",
+      "code": "future_evidence",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/future-interval-sequence.json",
+      "code": "future_evidence",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/missing-evidence.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/missing-derivation.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/missing-snapshot.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/fractional-count.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/invalid-approval.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/invalid-expiry.json",
+      "code": "invalid_expiry",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/future-publication.json",
+      "code": "future_evidence",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/missing-audio-generation.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/missing-claim-ids.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/cross-session-roster.json",
+      "code": "stream_mismatch",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/first-period-offset.json",
+      "code": "invalid_clock",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/trailing-lf-claim-id.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/claim_id"
+    },
+    {
+      "file": "invalid/trailing-lf-derivation-version.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/derivation_version"
+    },
+    {
+      "file": "invalid/trailing-lf-published-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/published_at"
+    },
+    {
+      "file": "invalid/trailing-lf-expires-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/expires_at"
+    },
+    {
+      "file": "invalid/trailing-lf-emitted-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/emitted_at"
+    },
+    {
+      "file": "invalid/trailing-cr-claim-id.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/claim_id"
+    },
+    {
+      "file": "invalid/trailing-cr-derivation-version.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/derivation_version"
+    },
+    {
+      "file": "invalid/trailing-cr-published-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/published_at"
+    },
+    {
+      "file": "invalid/trailing-cr-expires-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/expires_at"
+    },
+    {
+      "file": "invalid/trailing-cr-emitted-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/emitted_at"
+    },
+    {
+      "file": "invalid/trailing-crlf-claim-id.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/claim_id"
+    },
+    {
+      "file": "invalid/trailing-crlf-derivation-version.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/derivation_version"
+    },
+    {
+      "file": "invalid/trailing-crlf-published-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/published_at"
+    },
+    {
+      "file": "invalid/trailing-crlf-expires-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/expires_at"
+    },
+    {
+      "file": "invalid/trailing-crlf-emitted-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/emitted_at"
+    },
+    {
+      "file": "invalid/trailing-line-separator-claim-id.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/claim_id"
+    },
+    {
+      "file": "invalid/trailing-line-separator-derivation-version.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/derivation_version"
+    },
+    {
+      "file": "invalid/trailing-line-separator-published-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/published_at"
+    },
+    {
+      "file": "invalid/trailing-line-separator-expires-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/expires_at"
+    },
+    {
+      "file": "invalid/trailing-line-separator-emitted-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/emitted_at"
+    },
+    {
+      "file": "invalid/trailing-paragraph-separator-claim-id.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/claim_id"
+    },
+    {
+      "file": "invalid/trailing-paragraph-separator-derivation-version.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/derivation_version"
+    },
+    {
+      "file": "invalid/trailing-paragraph-separator-published-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/published_at"
+    },
+    {
+      "file": "invalid/trailing-paragraph-separator-expires-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/expires_at"
+    },
+    {
+      "file": "invalid/trailing-paragraph-separator-emitted-at.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/emitted_at"
+    },
+    {
+      "file": "invalid/count-max-plus-one.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/value"
+    },
+    {
+      "file": "invalid/count-max-plus-two.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/value"
+    },
+    {
+      "file": "invalid/negative-count.json",
+      "code": "invalid_schema",
+      "with_roster": true,
+      "path": "/value"
+    }
+  ]
+}

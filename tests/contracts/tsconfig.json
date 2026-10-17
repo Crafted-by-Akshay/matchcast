@@ -1,0 +1,5 @@
+{
+  "extends": "../../packages/contracts/tsconfig.json",
+  "compilerOptions": { "rootDir": "../..", "noEmit": true },
+  "include": ["types.ts"]
+}

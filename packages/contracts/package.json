@@ -1,0 +1,32 @@
+{
+  "name": "@matchcast/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "check:generated": "node scripts/generate.mjs --check",
+    "lint": "cd ../.. && eslint --config packages/contracts/eslint.config.mjs packages/contracts/src packages/contracts/scripts tests/contracts",
+    "typecheck": "tsc --noEmit && tsc -p ../../tests/contracts/tsconfig.json",
+    "build": "tsc",
+    "test": "node --test --test-reporter=spec ../../tests/contracts/*.test.mjs"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "eslint": "10.13.0",
+    "globals": "16.4.0",
+    "json-schema-to-typescript": "16.0.0",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.71.2"
+  }
+}

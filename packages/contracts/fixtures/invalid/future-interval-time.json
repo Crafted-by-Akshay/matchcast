@@ -1,0 +1,28 @@
+{
+  "kind": "claim",
+  "schema_version": "1.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "claim_id": "claim-distance",
+  "source": {
+    "type": "interval",
+    "from_event_time_ms": 9500,
+    "to_event_time_ms": 10001,
+    "from_stream_sequence": 6,
+    "to_stream_sequence": 8
+  },
+  "metric": "distance",
+  "value": 12.5,
+  "units": "m",
+  "derivation_version": "1.0.0",
+  "snapshot": {
+    "state_revision": 1,
+    "max_evidence_sequence": 10,
+    "event_time_ms": 10000
+  },
+  "max_evidence_sequence": 8,
+  "approval_status": "approved"
+}

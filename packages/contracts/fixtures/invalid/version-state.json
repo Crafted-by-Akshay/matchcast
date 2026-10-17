@@ -1,0 +1,14 @@
+{
+  "kind": "state_revision",
+  "schema_version": "2.0.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "snapshot": {
+    "state_revision": 1,
+    "max_evidence_sequence": 10,
+    "event_time_ms": 10000
+  }
+}

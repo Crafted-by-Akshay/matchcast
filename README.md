@@ -12,7 +12,7 @@ MatchCast is an AI-powered football broadcasting platform being built for a Micr
 | `services/simulation` | Reserved for a future match simulation service |
 | `services/match-state` | Reserved for future match state processing |
 | `services/commentary` | Reserved for future commentary service |
-| `packages/contracts` | Reserved for shared data contracts (Phase 1, Step 3) |
+| `packages/contracts` | Canonical JSON Schema, generated TypeScript, Python validation, and shared fixtures |
 | `packages/shared` | Reserved for shared utilities |
 | `packages/agents` | Reserved for agent orchestration (Phase 1, Step 5) |
 | `tests` | Repository-level tests |
@@ -81,14 +81,20 @@ API or worker. Do not put credentials in the template.
 From the repository root:
 
 ```sh
-make lint       # Ruff and ESLint
-make typecheck  # TypeScript compiler
-make test       # API smoke tests and worker mode rejection tests
-make build      # Production build of the web application
+make lint       # Ruff, ESLint, and generated contract drift check
+make typecheck  # Frontend, contract validator, and generated type examples
+make test       # Node/Python contract tests plus API and worker checks
+make build      # Contracts package and web production build
 ```
 
 Bootstrap verification, environment details, acceptance mapping, and outstanding
 review/merge requirements are recorded in [`docs/evidence/S01.md`](docs/evidence/S01.md).
+
+Shared wire definitions, units, ordering/correction rules, reference validation,
+and versioning are documented in [`docs/contracts.md`](docs/contracts.md).
+After editing the canonical schema, run `make contracts-generate`; `make
+contracts-check` verifies that the checked-in TypeScript types match it. S02
+acceptance evidence is in [`docs/evidence/S02.md`](docs/evidence/S02.md).
 
 ## Planned technology
 

@@ -1,0 +1,920 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:matchcast:contracts:1.0.0",
+  "title": "MatchCastContract",
+  "description": "MatchCast wire contracts v1.0.0. Contextual validation is specified in docs/contracts.md.",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/Roster"
+    },
+    {
+      "$ref": "#/definitions/EventEnvelope"
+    },
+    {
+      "$ref": "#/definitions/TrackingFrame"
+    },
+    {
+      "$ref": "#/definitions/StateRevisionPacket"
+    },
+    {
+      "$ref": "#/definitions/ClaimPacket"
+    },
+    {
+      "$ref": "#/definitions/PublicationPacket"
+    }
+  ],
+  "definitions": {
+    "Identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?![\\s\\S])"
+    },
+    "Sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "Counter": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "SchemaVersion": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,3})?Z(?![\\s\\S])"
+    },
+    "StreamIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tenant_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "session_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "match_id": {
+          "$ref": "#/definitions/Identifier"
+        }
+      },
+      "required": [
+        "tenant_id",
+        "session_id",
+        "match_id"
+      ]
+    },
+    "Pitch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "length_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "width_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "length_m",
+        "width_m"
+      ]
+    },
+    "Position": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0
+        },
+        "z": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "GroundPosition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0
+        },
+        "z": {
+          "type": "number",
+          "const": 0
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "MatchClock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "period": {
+          "type": "integer",
+          "enum": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "period_elapsed_ms": {
+          "$ref": "#/definitions/Counter"
+        }
+      },
+      "required": [
+        "period",
+        "period_elapsed_ms"
+      ]
+    },
+    "RosterPlayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        }
+      },
+      "required": [
+        "player_id",
+        "team_id"
+      ]
+    },
+    "Roster": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "roster",
+          "type": "string"
+        },
+        "schema_version": {
+          "$ref": "#/definitions/SchemaVersion"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "pitch": {
+          "$ref": "#/definitions/Pitch"
+        },
+        "ball_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Identifier"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "players": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RosterPlayer"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "pitch",
+        "ball_id",
+        "team_ids",
+        "players"
+      ]
+    },
+    "Goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "goal",
+          "type": "string"
+        },
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "own_goal": {
+          "type": "boolean"
+        },
+        "position_unit": {
+          "const": "m",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/definitions/GroundPosition"
+        }
+      },
+      "required": [
+        "type",
+        "player_id",
+        "team_id",
+        "own_goal",
+        "position_unit",
+        "position"
+      ]
+    },
+    "Pass": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "pass",
+          "type": "string"
+        },
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "recipient_player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "position_unit": {
+          "const": "m",
+          "type": "string"
+        },
+        "start_position": {
+          "$ref": "#/definitions/GroundPosition"
+        },
+        "end_position": {
+          "$ref": "#/definitions/GroundPosition"
+        }
+      },
+      "required": [
+        "type",
+        "player_id",
+        "recipient_player_id",
+        "team_id",
+        "position_unit",
+        "start_position",
+        "end_position"
+      ]
+    },
+    "Shot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "shot",
+          "type": "string"
+        },
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "position_unit": {
+          "const": "m",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/definitions/GroundPosition"
+        },
+        "on_target": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "player_id",
+        "team_id",
+        "position_unit",
+        "position",
+        "on_target"
+      ]
+    },
+    "PeriodBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "period_boundary",
+          "type": "string"
+        },
+        "boundary": {
+          "type": "string",
+          "enum": [
+            "started",
+            "ended"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "boundary"
+      ]
+    },
+    "FootballPayload": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/Goal"
+        },
+        {
+          "$ref": "#/definitions/Pass"
+        },
+        {
+          "$ref": "#/definitions/Shot"
+        },
+        {
+          "$ref": "#/definitions/PeriodBoundary"
+        }
+      ]
+    },
+    "Correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "correction",
+          "type": "string"
+        },
+        "target_event_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "target_stream_sequence": {
+          "$ref": "#/definitions/Sequence"
+        },
+        "target_revision": {
+          "$ref": "#/definitions/Counter"
+        },
+        "new_revision": {
+          "$ref": "#/definitions/Counter"
+        },
+        "replacement": {
+          "$ref": "#/definitions/FootballPayload"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "type",
+        "target_event_id",
+        "target_stream_sequence",
+        "target_revision",
+        "new_revision",
+        "replacement",
+        "reason"
+      ]
+    },
+    "Retraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "retraction",
+          "type": "string"
+        },
+        "target_event_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "target_stream_sequence": {
+          "$ref": "#/definitions/Sequence"
+        },
+        "target_revision": {
+          "$ref": "#/definitions/Counter"
+        },
+        "new_revision": {
+          "$ref": "#/definitions/Counter"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "type",
+        "target_event_id",
+        "target_stream_sequence",
+        "target_revision",
+        "new_revision",
+        "reason"
+      ]
+    },
+    "EventEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "event",
+          "type": "string"
+        },
+        "schema_version": {
+          "$ref": "#/definitions/SchemaVersion"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "event_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "stream_sequence": {
+          "$ref": "#/definitions/Sequence"
+        },
+        "revision": {
+          "$ref": "#/definitions/Counter"
+        },
+        "event_time_ms": {
+          "$ref": "#/definitions/Counter"
+        },
+        "emitted_at": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "clock": {
+          "$ref": "#/definitions/MatchClock"
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/Goal"
+            },
+            {
+              "$ref": "#/definitions/Pass"
+            },
+            {
+              "$ref": "#/definitions/Shot"
+            },
+            {
+              "$ref": "#/definitions/PeriodBoundary"
+            },
+            {
+              "$ref": "#/definitions/Correction"
+            },
+            {
+              "$ref": "#/definitions/Retraction"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "event_id",
+        "stream_sequence",
+        "revision",
+        "event_time_ms",
+        "emitted_at",
+        "clock",
+        "payload"
+      ]
+    },
+    "TrackedPlayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "position": {
+          "$ref": "#/definitions/GroundPosition"
+        }
+      },
+      "required": [
+        "player_id",
+        "position"
+      ]
+    },
+    "TrackedBall": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ball_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "position": {
+          "$ref": "#/definitions/Position"
+        }
+      },
+      "required": [
+        "ball_id",
+        "position"
+      ]
+    },
+    "TrackingPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch": {
+          "$ref": "#/definitions/Pitch"
+        },
+        "position_unit": {
+          "const": "m",
+          "type": "string"
+        },
+        "clock_unit": {
+          "const": "ms",
+          "type": "string"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "players": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TrackedPlayer"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "ball": {
+          "$ref": "#/definitions/TrackedBall"
+        }
+      },
+      "required": [
+        "pitch",
+        "position_unit",
+        "clock_unit",
+        "complete",
+        "players",
+        "ball"
+      ]
+    },
+    "TrackingFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "tracking_frame",
+          "type": "string"
+        },
+        "schema_version": {
+          "$ref": "#/definitions/SchemaVersion"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "event_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "stream_sequence": {
+          "$ref": "#/definitions/Sequence"
+        },
+        "revision": {
+          "$ref": "#/definitions/Counter"
+        },
+        "event_time_ms": {
+          "$ref": "#/definitions/Counter"
+        },
+        "emitted_at": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "clock": {
+          "$ref": "#/definitions/MatchClock"
+        },
+        "payload": {
+          "$ref": "#/definitions/TrackingPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "event_id",
+        "stream_sequence",
+        "revision",
+        "event_time_ms",
+        "emitted_at",
+        "clock",
+        "payload"
+      ]
+    },
+    "StateRevisionReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state_revision": {
+          "$ref": "#/definitions/Counter"
+        },
+        "max_evidence_sequence": {
+          "$ref": "#/definitions/Counter"
+        },
+        "event_time_ms": {
+          "$ref": "#/definitions/Counter"
+        }
+      },
+      "required": [
+        "state_revision",
+        "max_evidence_sequence",
+        "event_time_ms"
+      ]
+    },
+    "StateRevisionPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "state_revision",
+          "type": "string"
+        },
+        "schema_version": {
+          "$ref": "#/definitions/SchemaVersion"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "snapshot": {
+          "$ref": "#/definitions/StateRevisionReference"
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "snapshot"
+      ]
+    },
+    "SourceEventReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "stream_sequence": {
+          "$ref": "#/definitions/Sequence"
+        },
+        "revision": {
+          "$ref": "#/definitions/Counter"
+        }
+      },
+      "required": [
+        "event_id",
+        "stream_sequence",
+        "revision"
+      ]
+    },
+    "EventSources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "events",
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SourceEventReference"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "type",
+        "events"
+      ]
+    },
+    "IntervalSources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "interval",
+          "type": "string"
+        },
+        "from_event_time_ms": {
+          "$ref": "#/definitions/Counter"
+        },
+        "to_event_time_ms": {
+          "$ref": "#/definitions/Counter"
+        },
+        "from_stream_sequence": {
+          "$ref": "#/definitions/Sequence"
+        },
+        "to_stream_sequence": {
+          "$ref": "#/definitions/Sequence"
+        }
+      },
+      "required": [
+        "type",
+        "from_event_time_ms",
+        "to_event_time_ms",
+        "from_stream_sequence",
+        "to_stream_sequence"
+      ]
+    },
+    "ClaimPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "claim",
+          "type": "string"
+        },
+        "schema_version": {
+          "$ref": "#/definitions/SchemaVersion"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "claim_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "source": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/EventSources"
+            },
+            {
+              "$ref": "#/definitions/IntervalSources"
+            }
+          ]
+        },
+        "metric": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "value": {
+          "type": "number"
+        },
+        "units": {
+          "type": "string",
+          "enum": [
+            "count",
+            "m",
+            "ms",
+            "s",
+            "m/s",
+            "ratio"
+          ]
+        },
+        "derivation_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?![\\s\\S])"
+        },
+        "snapshot": {
+          "$ref": "#/definitions/StateRevisionReference"
+        },
+        "max_evidence_sequence": {
+          "$ref": "#/definitions/Counter"
+        },
+        "approval_status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "retracted"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "claim_id",
+        "source",
+        "metric",
+        "value",
+        "units",
+        "derivation_version",
+        "snapshot",
+        "max_evidence_sequence",
+        "approval_status"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "units": {
+                "const": "count"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PublicationPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "publication",
+          "type": "string"
+        },
+        "schema_version": {
+          "$ref": "#/definitions/SchemaVersion"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "publication_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "claim_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Identifier"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "state": {
+          "$ref": "#/definitions/StateRevisionReference"
+        },
+        "persona": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ta"
+          ]
+        },
+        "event_time_ms": {
+          "$ref": "#/definitions/Counter"
+        },
+        "published_at": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "expires_at": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "audio_generation_id": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "publication_id",
+        "claim_ids",
+        "state",
+        "persona",
+        "language",
+        "event_time_ms",
+        "published_at",
+        "expires_at",
+        "audio_generation_id",
+        "text"
+      ]
+    }
+  }
+}
