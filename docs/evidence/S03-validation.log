@@ -280,3 +280,5 @@ PASS — environment hash matched 40bc50d9b76a4c480f6b6ce8ddc14a01bbe2063463f0b0
 PASS — configuration hash matched 13f4ff5e2499522fc2394561246fb0e081d5209327e747a6f6b75ab9327bb000 using the exact listed sorted paths.
 PASS — changed-source hash matched ccafc07740183bd23b1d2376996f990fa28b0cf273ed11c53a0aecd8974db302 using the exact listed sorted paths.
 The candidate and verifier snapshot had the same tracked/untracked paths. Only docs/evidence/S03.md and docs/evidence/S03-validation.log differed; implementation files were unchanged from the passing snapshot.
+
+Verified implementation commit: 71808189f1962f10ae98a3871a731596943f46c (source snapshot matches the independently reviewed and tested candidate).
