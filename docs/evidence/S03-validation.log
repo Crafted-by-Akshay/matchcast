@@ -1,0 +1,282 @@
+S03 validation evidence header
+Recorded: 2026-10-17; source base: e65e0535ad6d75cf67b36ce3fe3df7809439d06e
+Runtime: macOS 15.6 arm64; Node 22.13.1; npm 10.9.0; Python 3.12.11; uv 0.9.7
+
+Hash algorithm for repository trees: sort the exact paths below; for each path,
+SHA-256 receives UTF-8 repository-relative path, NUL, raw file bytes, NUL.
+Effective local environment JSON (canonical compact JSON with sorted keys):
+{"MATCHCAST_MODE":"local","MATCHCAST_MODEL_API_KEY":null,"MATCHCAST_MODEL_ENDPOINT":null}
+Local environment SHA-256: 40bc50d9b76a4c480f6b6ce8ddc14a01bbe2063463f0b023dac2702c9c2a8aea
+Configuration/source paths (exact):
+.python-version
+Makefile
+package-lock.json
+package.json
+packages/contracts/matchcast_contracts/schemas/v1.json
+pyproject.toml
+services/api/app/config.py
+services/api/app/main.py
+services/api/app/sessions.py
+services/api/pyproject.toml
+uv.lock
+Configuration/source SHA-256: 13f4ff5e2499522fc2394561246fb0e081d5209327e747a6f6b75ab9327bb000
+Changed-source paths (exact; excludes this evidence and its validation log):
+README.md
+docs/backend.md
+services/api/app/config.py
+services/api/app/main.py
+services/api/app/sessions.py
+services/api/pyproject.toml
+tests/test_api_health.py
+tests/test_api_sessions.py
+uv.lock
+Changed-source SHA-256: ccafc07740183bd23b1d2376996f990fa28b0cf273ed11c53a0aecd8974db302
+
+Live probe environment overrides (all other MATCHCAST_* variables unset):
+local: {} (effective defaults: local, endpoint unset, API key unset)
+cloud_missing: {"MATCHCAST_MODE":"cloud"}; endpoint and API key unset
+cloud_configured: {"MATCHCAST_MODE":"cloud","MATCHCAST_MODEL_ENDPOINT":"https://example.invalid/model","MATCHCAST_MODEL_API_KEY":"placeholder-only"}
+The endpoint is a reserved invalid example and the key is a literal placeholder;
+the process made no outbound provider request. The value is not a credential.
+
+Independent review: PASS. The verifier used a separate read-only snapshot at
+e65e0535ad6d75cf67b36ce3fe3df7809439d06e, Node 22.13.1, and Python 3.12.11.
+It independently ran installation, uv lock --check, make lint typecheck test
+build, startup/readiness probes, and session isolation checks. It observed 113
+Node tests and 130 pytest tests passing, all three readiness scenarios passing,
+and no blocker. No cloud provider probe was made. PR and merge remain pending.
+
+--- Builder project check output and actual process probe observations ---
+uv run --locked --all-packages ruff check .
+All checks passed!
+npm run lint
+
+> lint
+> npm run lint --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 lint
+> eslint .
+
+
+> @matchcast/contracts@1.0.0 lint
+> cd ../.. && eslint --config packages/contracts/eslint.config.mjs packages/contracts/src packages/contracts/scripts tests/contracts
+
+/Applications/Xcode.app/Contents/Developer/usr/bin/make contracts-check
+npm run check:generated --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 check:generated
+> node scripts/generate.mjs --check
+
+Generated TypeScript matches canonical JSON Schema
+npm run typecheck
+
+> typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @matchcast/contracts@1.0.0 typecheck
+> tsc --noEmit && tsc -p ../../tests/contracts/tsconfig.json
+
+npm run build --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+npm run test --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 test
+> node --test --test-reporter=spec ../../tests/contracts/*.test.mjs
+
+✔ valid wire fixture: roster.json (1.316625ms)
+✔ valid wire fixture: goal.json (1.312ms)
+✔ valid wire fixture: corrected-goal.json (0.448ms)
+✔ valid wire fixture: correction.json (0.318542ms)
+✔ valid wire fixture: retraction.json (0.312333ms)
+✔ valid wire fixture: tracking.json (0.583292ms)
+✔ valid wire fixture: state.json (0.39475ms)
+✔ valid wire fixture: claim-events.json (0.579959ms)
+✔ valid wire fixture: claim-interval.json (0.376875ms)
+✔ valid wire fixture: publication.json (0.595167ms)
+✔ valid wire fixture: pass.json (0.254166ms)
+✔ valid wire fixture: shot.json (0.179375ms)
+✔ valid wire fixture: period.json (0.304291ms)
+✔ valid wire fixture: own-goal.json (0.108ms)
+✔ valid wire fixture: caption-ta.json (0.097042ms)
+✔ valid wire fixture: sparse-tracking.json (0.102208ms)
+✔ valid wire fixture: claim-count-zero.json (0.091584ms)
+✔ valid wire fixture: claim-count-max.json (0.132416ms)
+✔ invalid wire fixture: invalid/version-roster.json (0.206958ms)
+✔ invalid wire fixture: invalid/version-goal.json (0.077083ms)
+✔ invalid wire fixture: invalid/version-tracking.json (0.0795ms)
+✔ invalid wire fixture: invalid/version-state.json (0.063333ms)
+✔ invalid wire fixture: invalid/version-claim-events.json (0.066958ms)
+✔ invalid wire fixture: invalid/version-publication.json (0.066584ms)
+✔ invalid wire fixture: invalid/unknown-player.json (0.162667ms)
+✔ invalid wire fixture: invalid/unknown-scorer.json (0.162583ms)
+✔ invalid wire fixture: invalid/unknown-recipient.json (0.138833ms)
+✔ invalid wire fixture: invalid/unknown-corrected-player.json (0.113166ms)
+✔ invalid wire fixture: invalid/wrong-player-team.json (0.095542ms)
+✔ invalid wire fixture: invalid/unknown-team.json (0.17675ms)
+✔ invalid wire fixture: invalid/unknown-ball.json (0.230417ms)
+✔ invalid wire fixture: invalid/outside-x.json (0.118917ms)
+✔ invalid wire fixture: invalid/outside-ball-y.json (0.297833ms)
+✔ invalid wire fixture: invalid/negative-coordinate.json (0.174041ms)
+✔ invalid wire fixture: invalid/wrong-units.json (0.1245ms)
+✔ invalid wire fixture: invalid/pitch-mismatch.json (0.121125ms)
+✔ invalid wire fixture: invalid/duplicate-player.json (0.113333ms)
+✔ invalid wire fixture: invalid/incomplete-frame.json (0.095709ms)
+✔ invalid wire fixture: invalid/duplicate-roster-id.json (0.085167ms)
+✔ invalid wire fixture: invalid/unknown-roster-team.json (0.082042ms)
+✔ invalid wire fixture: invalid/invalid-clock.json (0.095125ms)
+✔ invalid wire fixture: invalid/missing-roster.json (0.093375ms)
+✔ invalid wire fixture: invalid/missing-event-roster.json (0.089584ms)
+✔ invalid wire fixture: invalid/unknown-event-type.json (0.088042ms)
+✔ invalid wire fixture: invalid/missing-event-id.json (0.083625ms)
+✔ invalid wire fixture: invalid/unexpected-field.json (0.083459ms)
+✔ invalid wire fixture: invalid/unsafe-sequence.json (0.084167ms)
+✔ invalid wire fixture: invalid/fractional-sequence.json (0.091542ms)
+✔ invalid wire fixture: invalid/invalid-date.json (0.087125ms)
+✔ invalid wire fixture: invalid/non-utc-date.json (0.073208ms)
+✔ invalid wire fixture: invalid/invalid-new-revision.json (0.105ms)
+✔ invalid wire fixture: invalid/self-correction.json (0.097333ms)
+✔ invalid wire fixture: invalid/future-correction-target.json (0.187333ms)
+✔ invalid wire fixture: invalid/revised-control-envelope.json (0.092583ms)
+✔ invalid wire fixture: invalid/future-claim.json (0.097709ms)
+✔ invalid wire fixture: invalid/future-source.json (0.2725ms)
+✔ invalid wire fixture: invalid/reversed-interval.json (0.1005ms)
+✔ invalid wire fixture: invalid/future-interval-time.json (0.087792ms)
+✔ invalid wire fixture: invalid/future-interval-sequence.json (0.0825ms)
+✔ invalid wire fixture: invalid/missing-evidence.json (0.07875ms)
+✔ invalid wire fixture: invalid/missing-derivation.json (0.080625ms)
+✔ invalid wire fixture: invalid/missing-snapshot.json (0.075709ms)
+✔ invalid wire fixture: invalid/fractional-count.json (0.070667ms)
+✔ invalid wire fixture: invalid/invalid-approval.json (0.12625ms)
+✔ invalid wire fixture: invalid/invalid-expiry.json (0.093167ms)
+✔ invalid wire fixture: invalid/future-publication.json (0.450041ms)
+✔ invalid wire fixture: invalid/missing-audio-generation.json (0.12375ms)
+✔ invalid wire fixture: invalid/missing-claim-ids.json (0.09775ms)
+✔ invalid wire fixture: invalid/cross-session-roster.json (0.102042ms)
+✔ invalid wire fixture: invalid/first-period-offset.json (0.097917ms)
+✔ invalid wire fixture: invalid/trailing-lf-claim-id.json (0.093834ms)
+✔ invalid wire fixture: invalid/trailing-lf-derivation-version.json (0.159083ms)
+✔ invalid wire fixture: invalid/trailing-lf-published-at.json (0.091416ms)
+✔ invalid wire fixture: invalid/trailing-lf-expires-at.json (0.237125ms)
+✔ invalid wire fixture: invalid/trailing-lf-emitted-at.json (0.078625ms)
+✔ invalid wire fixture: invalid/trailing-cr-claim-id.json (0.073167ms)
+✔ invalid wire fixture: invalid/trailing-cr-derivation-version.json (0.091208ms)
+✔ invalid wire fixture: invalid/trailing-cr-published-at.json (0.084208ms)
+✔ invalid wire fixture: invalid/trailing-cr-expires-at.json (0.076917ms)
+✔ invalid wire fixture: invalid/trailing-cr-emitted-at.json (0.077125ms)
+✔ invalid wire fixture: invalid/trailing-crlf-claim-id.json (0.075417ms)
+✔ invalid wire fixture: invalid/trailing-crlf-derivation-version.json (0.081375ms)
+✔ invalid wire fixture: invalid/trailing-crlf-published-at.json (0.07475ms)
+✔ invalid wire fixture: invalid/trailing-crlf-expires-at.json (0.074291ms)
+✔ invalid wire fixture: invalid/trailing-crlf-emitted-at.json (0.075083ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-claim-id.json (0.107292ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-derivation-version.json (0.113541ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-published-at.json (0.137167ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-expires-at.json (0.072ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-emitted-at.json (0.076917ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-claim-id.json (0.073875ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-derivation-version.json (0.075459ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-published-at.json (0.073042ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-expires-at.json (0.068375ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-emitted-at.json (0.067042ms)
+✔ invalid wire fixture: invalid/count-max-plus-one.json (0.079208ms)
+✔ invalid wire fixture: invalid/count-max-plus-two.json (0.080916ms)
+✔ invalid wire fixture: invalid/negative-count.json (0.069541ms)
+✔ valid references: approved-publication (0.187459ms)
+✔ valid references: correction-target (0.154083ms)
+✔ valid references: retraction-target (0.038375ms)
+✔ invalid references: pending-claim (0.054ms)
+✔ invalid references: retracted-claim (0.031458ms)
+✔ invalid references: missing-claim (0.025083ms)
+✔ invalid references: stale-publication (0.052084ms)
+✔ invalid references: stale-claim (0.029792ms)
+✔ invalid references: cross-session-claim (0.026792ms)
+✔ invalid references: duplicate-claim (0.024584ms)
+✔ invalid references: wrong-target-id (0.045375ms)
+✔ invalid references: stale-target-revision (0.040333ms)
+✔ invalid references: wrong-target-sequence (0.096167ms)
+✔ non-finite numbers cannot enter the wire representation (0.105792ms)
+✔ maximum count remains an exact safe integer through JSON transport (0.062708ms)
+ℹ tests 113
+ℹ suites 0
+ℹ pass 113
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 143.962667
+uv run --locked --all-packages pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-8.4.2, pluggy-1.7.0
+rootdir: /Users/akshay/.codex/worktrees/s03-backend-sessions/MS-Hackathon
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collected 130 items
+
+tests/contracts/test_contracts.py ...................................... [ 29%]
+........................................................................ [ 84%]
+....                                                                     [ 87%]
+tests/test_api_health.py .......                                         [ 93%]
+tests/test_api_sessions.py .....                                         [ 96%]
+tests/test_worker.py ....                                                [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:51
+  /Users/akshay/.codex/worktrees/s03-backend-sessions/MS-Hackathon/.venv/lib/python3.12/site-packages/starlette/testclient.py:51: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 130 passed, 1 warning in 1.23s ========================
+npm run build
+
+> build
+> npm run build --workspace @matchcast/contracts && npm run build --workspace apps/broadcast-web
+
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+
+> @matchcast/broadcast-web@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.ts took 55ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 116ms
+  Running TypeScript ...
+  Finished TypeScript in 549ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 183ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content
+
+local: health HTTP 200 healthy; readiness HTTP 200; model=local_mock; process started
+local: orderly Uvicorn shutdown observed; uv wrapper exit=143 after SIGTERM
+cloud_missing: health HTTP 200 healthy; readiness HTTP 503; model=unavailable; process started
+cloud_missing: orderly Uvicorn shutdown observed; uv wrapper exit=143 after SIGTERM
+cloud_configured: health HTTP 200 healthy; readiness HTTP 503; model=pending; process started
+cloud_configured: orderly Uvicorn shutdown observed; uv wrapper exit=143 after SIGTERM
+
+Independent verifier hash-evidence follow-up (read-only; no suite rerun):
+PASS — environment hash matched 40bc50d9b76a4c480f6b6ce8ddc14a01bbe2063463f0b023dac2702c9c2a8aea.
+PASS — configuration hash matched 13f4ff5e2499522fc2394561246fb0e081d5209327e747a6f6b75ab9327bb000 using the exact listed sorted paths.
+PASS — changed-source hash matched ccafc07740183bd23b1d2376996f990fa28b0cf273ed11c53a0aecd8974db302 using the exact listed sorted paths.
+The candidate and verifier snapshot had the same tracked/untracked paths. Only docs/evidence/S03.md and docs/evidence/S03-validation.log differed; implementation files were unchanged from the passing snapshot.

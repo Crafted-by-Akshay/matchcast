@@ -5,8 +5,12 @@ description = "Initial MatchCast API service"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115,<0.120",
+    "matchcast-contracts",
     "uvicorn[standard]>=0.34,<1",
 ]
+
+[tool.uv.sources]
+matchcast-contracts = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

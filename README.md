@@ -7,7 +7,7 @@ MatchCast is an AI-powered football broadcasting platform being built for a Micr
 | Path | Purpose |
 | --- | --- |
 | `apps/broadcast-web` | Next.js, React, and TypeScript broadcast interface |
-| `services/api` | FastAPI service and initial health endpoint |
+| `services/api` | FastAPI liveness/readiness endpoints, typed configuration, and local session API |
 | `services/worker` | Local-only idle worker entry point |
 | `services/simulation` | Reserved for a future match simulation service |
 | `services/match-state` | Reserved for future match state processing |
@@ -54,10 +54,10 @@ npm run dev --workspace apps/broadcast-web
 Start the FastAPI app at [http://localhost:8000](http://localhost:8000):
 
 ```sh
-uv run --package matchcast-api uvicorn app.main:app --app-dir services/api --reload
+uv run --locked --package matchcast-api uvicorn app.main:app --app-dir services/api --reload
 ```
 
-The API health check is available at [http://localhost:8000/health](http://localhost:8000/health) and returns `{"status":"healthy"}`.
+The liveness check is available at [http://localhost:8000/health](http://localhost:8000/health) and returns `{"status":"healthy"}` without contacting a model. Local readiness is available at [http://localhost:8000/ready](http://localhost:8000/ready); it reports the model and in-memory session store as local mocks. Configuration and readiness semantics, environment variables, and the session API are documented in [`docs/backend.md`](docs/backend.md).
 
 In a third terminal, start the local worker:
 
