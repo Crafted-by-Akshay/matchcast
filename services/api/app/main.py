@@ -35,7 +35,7 @@ def create_app(
     """Build an app with injectable config and storage for deterministic tests."""
 
     resolved_settings = settings_result or load_settings()
-    store = session_store or InMemorySessionStore()
+    store = InMemorySessionStore() if session_store is None else session_store
     application = FastAPI(title="MatchCast API", version="0.2.0")
     application.state.settings_result = resolved_settings
     application.state.session_store = store

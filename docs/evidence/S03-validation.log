@@ -1,6 +1,6 @@
 S03 validation evidence header
 Recorded: 2026-10-17; source base: e65e0535ad6d75cf67b36ce3fe3df7809439d06e
-Runtime: macOS 15.6 arm64; Node 22.13.1; npm 10.9.0; Python 3.12.11; uv 0.9.7
+Original runtime label (unverified OS; superseded by S03-review-fix.log): macOS 15.6 arm64; Node 22.13.1; npm 10.9.0; Python 3.12.11; uv 0.9.7
 
 Hash algorithm for repository trees: sort the exact paths below; for each path,
 SHA-256 receives UTF-8 repository-relative path, NUL, raw file bytes, NUL.

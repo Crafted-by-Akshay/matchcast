@@ -4,7 +4,7 @@ import json
 from importlib.resources import files
 
 from app.main import create_app
-from app.sessions import StreamIdentity
+from app.sessions import InMemorySessionStore, StreamIdentity
 from fastapi.testclient import TestClient
 from jsonschema import Draft7Validator
 from pydantic import ValidationError
@@ -116,3 +116,31 @@ def test_update_and_reset_are_isolated_even_for_sessions_sharing_match_id() -> N
     assert reset.json()["state_revision"] == 2
     assert client.get(second_path).json()["state"] == {}
     assert client.get(third_path).json()["state"] == {}
+
+
+def test_empty_injected_store_is_used_for_session_operations() -> None:
+    class SizedSessionStore(InMemorySessionStore):
+        def __len__(self) -> int:
+            return len(self._sessions)
+
+    store = SizedSessionStore()
+    assert not store
+    injected_client = TestClient(create_app(session_store=store))
+    stream = StreamIdentity(tenant_id="injected", session_id="empty", match_id="match")
+    path = "/sessions/injected/empty/match"
+
+    created = injected_client.post("/sessions", json={"stream": stream.model_dump()})
+    assert created.status_code == 201
+    record = store.get(stream)
+    assert record is not None
+    assert record.state == {}
+
+    store.replace(stream, {"source": "injected-store"})
+    assert injected_client.get(path).json()["state"] == {"source": "injected-store"}
+
+    reset = injected_client.post(f"{path}/reset")
+    assert reset.status_code == 200
+    record = store.get(stream)
+    assert record is not None
+    assert record.state == {}
+    assert record.state_revision == 2
