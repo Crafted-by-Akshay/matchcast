@@ -1,0 +1,15 @@
+{
+  "name": "matchcast",
+  "private": true,
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "lint": "npm run lint --workspace apps/broadcast-web",
+    "typecheck": "npm run typecheck --workspace apps/broadcast-web",
+    "build": "npm run build --workspace apps/broadcast-web"
+  }
+}
