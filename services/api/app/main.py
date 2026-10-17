@@ -1,11 +1,161 @@
-"""Minimal FastAPI application for the MatchCast API."""
+"""MatchCast API liveness, honest readiness, and local isolated session operations."""
 
-from fastapi import FastAPI
+from __future__ import annotations
 
-app = FastAPI(title="MatchCast API", version="0.1.0")
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, Response, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+from app.config import SettingsResult, load_settings
+from app.sessions import (
+    InMemorySessionStore,
+    SessionCreate,
+    SessionRecord,
+    SessionReplace,
+    SessionStore,
+    StreamIdentity,
+)
 
 
-@app.get("/health", tags=["health"])
-async def health() -> dict[str, str]:
-    """Report that the API process is ready to serve requests."""
-    return {"status": "healthy"}
+def _record_json(record: SessionRecord) -> dict[str, Any]:
+    return {
+        "stream": record.stream.model_dump(),
+        "state": record.state,
+        "state_revision": record.state_revision,
+    }
+
+
+def create_app(
+    *,
+    settings_result: SettingsResult | None = None,
+    session_store: SessionStore | None = None,
+) -> FastAPI:
+    """Build an app with injectable config and storage for deterministic tests."""
+
+    resolved_settings = settings_result or load_settings()
+    store = InMemorySessionStore() if session_store is None else session_store
+    application = FastAPI(title="MatchCast API", version="0.2.0")
+    application.state.settings_result = resolved_settings
+    application.state.session_store = store
+
+    @application.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(
+        _request: Any, exc: RequestValidationError
+    ) -> JSONResponse:
+        # Pydantic's default errors include raw input/context, which may contain NaN
+        # (not JSON serializable) or sensitive values. Return only stable diagnostics.
+        errors = [
+            {"loc": list(error["loc"]), "msg": error["msg"], "type": error["type"]}
+            for error in exc.errors()
+        ]
+        return JSONResponse(status_code=422, content={"detail": errors})
+
+    @application.get("/health", tags=["health"])
+    async def health() -> dict[str, str]:
+        """Liveness only: does not require configuration or an external model."""
+        return {"status": "healthy"}
+
+    @application.get("/ready", tags=["health"])
+    async def readiness(response: Response) -> dict[str, Any]:
+        """Report local/mock versus pending/unavailable dependencies honestly."""
+        result: SettingsResult = application.state.settings_result
+        if result.settings is None:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return {
+                "status": "not_ready",
+                "mode": "unknown",
+                "configuration": {"status": "invalid", "errors": list(result.errors)},
+                "dependencies": {
+                    "model": {"status": "unavailable", "detail": "configuration is invalid"},
+                    "session_store": {"status": "local_mock", "detail": "process-local memory"},
+                },
+            }
+
+        settings = result.settings
+        if settings.mode == "local":
+            return {
+                "status": "ready",
+                "mode": "local",
+                "configuration": {"status": "valid", "errors": []},
+                "dependencies": {
+                    "model": {"status": "local_mock", "detail": "no model connection is attempted"},
+                    "session_store": {"status": "local_mock", "detail": "process-local memory"},
+                },
+            }
+
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "not_ready",
+            "mode": "cloud",
+            "configuration": {"status": "valid", "errors": []},
+            "dependencies": {
+                "model": {
+                    "status": "pending",
+                    "detail": "cloud model adapter is not implemented; no provider probe was made",
+                },
+                "session_store": {"status": "local_mock", "detail": "process-local memory"},
+            },
+        }
+
+    @application.post("/sessions", status_code=status.HTTP_201_CREATED, tags=["sessions"])
+    async def create_session(request: SessionCreate) -> dict[str, Any]:
+        record = store.create(request.stream)
+        if record is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="session already exists"
+            )
+        return _record_json(record)
+
+    @application.get(
+        "/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"]
+    )
+    async def inspect_session(tenant_id: str, session_id: str, match_id: str) -> dict[str, Any]:
+        return _record_json(_require_session(tenant_id, session_id, match_id, store))
+
+    @application.put(
+        "/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"]
+    )
+    async def replace_session(
+        tenant_id: str, session_id: str, match_id: str, request: SessionReplace
+    ) -> dict[str, Any]:
+        stream = _stream(tenant_id, session_id, match_id)
+        record = store.replace(stream, request.state)
+        if record is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+        return _record_json(record)
+
+    @application.post(
+        "/sessions/{tenant_id}/{session_id}/{match_id}/reset", tags=["sessions"]
+    )
+    async def reset_session(tenant_id: str, session_id: str, match_id: str) -> dict[str, Any]:
+        stream = _stream(tenant_id, session_id, match_id)
+        record = store.reset(stream)
+        if record is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+        return _record_json(record)
+
+    return application
+
+
+def _stream(tenant_id: str, session_id: str, match_id: str) -> StreamIdentity:
+    try:
+        return StreamIdentity(tenant_id=tenant_id, session_id=session_id, match_id=match_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
+def _require_session(
+    tenant_id: str, session_id: str, match_id: str, store: SessionStore
+) -> SessionRecord:
+    stream = _stream(tenant_id, session_id, match_id)
+    record = store.get(stream)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+    return record
+
+
+app = create_app()

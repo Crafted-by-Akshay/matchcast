@@ -1,0 +1,424 @@
+S03 PR review corrections — 17 October 2026
+Reviewer/corrector: Codex chat 01a148f0-5f61-7101-8445-9c93a76feb8a
+
+Initial targeted regression before source fix: FAILED at tests/test_api_sessions.py:135; store.get(stream) was None after HTTP 201.
+After explicit None selection fix: targeted regression PASSED (1 passed, existing deprecation warning).
+These are observed regression summaries; captured fresh-copy logs follow.
+
+{
+  "source_hash": "f99e77bae0afe9927c73737234f56be1f6fc87205f1994972e0ffdb101e3a884",
+  "config_hash": "57b25607ea5e6239cf33f9503f2d5466ba75c1521c459de94df9fb913a8d0622",
+  "changed_hash": "095b36af151f787b067eb1cb468589465983ad7fdbe409cf6771610dcdf993be",
+  "environment_hash": "40bc50d9b76a4c480f6b6ce8ddc14a01bbe2063463f0b023dac2702c9c2a8aea",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+  "versions": {
+    "node": "v22.13.1",
+    "npm": "10.9.0",
+    "python": "Python 3.12.11",
+    "uv": "uv 0.11.26 (396ef7ce4 2026-06-30 aarch64-apple-darwin)"
+  },
+  "probes": [
+    {
+      "case": "local",
+      "health": 200,
+      "ready": 200,
+      "model": "local_mock"
+    },
+    {
+      "case": "four-stream-reset-isolation",
+      "result": "pass",
+      "other_nonempty_states_preserved": true
+    },
+    {
+      "case": "local-shutdown",
+      "wrapper_exit": 143,
+      "orderly_uvicorn_shutdown": true
+    },
+    {
+      "case": "missing",
+      "health": 200,
+      "ready": 503,
+      "model": "unavailable"
+    },
+    {
+      "case": "missing-shutdown",
+      "wrapper_exit": 143,
+      "orderly_uvicorn_shutdown": true
+    },
+    {
+      "case": "configured",
+      "health": 200,
+      "ready": 503,
+      "model": "pending"
+    },
+    {
+      "case": "configured-shutdown",
+      "wrapper_exit": 143,
+      "orderly_uvicorn_shutdown": true
+    }
+  ]
+}
+
+===== install =====
+npm ci
+
+added 400 packages, and audited 403 packages in 4s
+
+151 packages are looking for funding
+  run `npm fund` for details
+
+5 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+uv sync --locked --all-packages
+Using CPython 3.12.11 interpreter at: /Users/akshay/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/bin/python3.12
+Creating virtual environment at: .venv
+Resolved 39 packages in 16ms
+   Building matchcast-api @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/services/api
+   Building matchcast-contracts @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/packages/contracts
+   Building matchcast-worker @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/services/worker
+      Built matchcast-worker @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/services/worker
+      Built matchcast-api @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/services/api
+      Built matchcast-contracts @ file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/packages/contracts
+Prepared 3 packages in 555ms
+Installed 37 packages in 53ms
+ + annotated-types==0.8.0
+ + anyio==4.15.1
+ + attrs==26.1.0
+ + certifi==2026.7.22
+ + click==8.5.0
+ + fastapi==0.119.1
+ + h11==0.16.0
+ + httpcore==1.0.9
+ + httptools==0.9.0
+ + httpx==0.28.1
+ + idna==3.20
+ + iniconfig==2.3.1
+ + jsonschema==4.26.0
+ + jsonschema-specifications==2025.9.1
+ + matchcast-api==0.1.0 (from file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/services/api)
+ + matchcast-contracts==1.0.0 (from file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/packages/contracts)
+ + matchcast-worker==0.1.0 (from file:///private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/services/worker)
+ + packaging==26.3
+ + pluggy==1.7.0
+ + pydantic==2.14.1
+ + pydantic-core==2.50.1
+ + pygments==2.21.0
+ + pytest==8.4.2
+ + python-dotenv==1.2.4
+ + pyyaml==6.0.3
+ + referencing==0.37.0
+ + rfc3339-validator==0.1.4
+ + rpds-py==2026.9.1
+ + ruff==0.17.1
+ + six==1.17.0
+ + starlette==0.48.0
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.4
+ + uvicorn==0.54.0
+ + uvloop==0.23.0
+ + watchfiles==1.3.0
+ + websockets==17.2
+
+===== lock =====
+Resolved 39 packages in 1ms
+
+===== checks =====
+uv run --locked --all-packages ruff check .
+All checks passed!
+npm run lint
+
+> lint
+> npm run lint --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 lint
+> eslint .
+
+
+> @matchcast/contracts@1.0.0 lint
+> cd ../.. && eslint --config packages/contracts/eslint.config.mjs packages/contracts/src packages/contracts/scripts tests/contracts
+
+/Applications/Xcode.app/Contents/Developer/usr/bin/make contracts-check
+npm run check:generated --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 check:generated
+> node scripts/generate.mjs --check
+
+Generated TypeScript matches canonical JSON Schema
+npm run typecheck
+
+> typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @matchcast/broadcast-web@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @matchcast/contracts@1.0.0 typecheck
+> tsc --noEmit && tsc -p ../../tests/contracts/tsconfig.json
+
+npm run build --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+npm run test --workspace @matchcast/contracts
+
+> @matchcast/contracts@1.0.0 test
+> node --test --test-reporter=spec ../../tests/contracts/*.test.mjs
+
+✔ valid wire fixture: roster.json (1.595292ms)
+✔ valid wire fixture: goal.json (1.954708ms)
+✔ valid wire fixture: corrected-goal.json (0.565541ms)
+✔ valid wire fixture: correction.json (0.312334ms)
+✔ valid wire fixture: retraction.json (0.409125ms)
+✔ valid wire fixture: tracking.json (0.647833ms)
+✔ valid wire fixture: state.json (0.275583ms)
+✔ valid wire fixture: claim-events.json (0.517708ms)
+✔ valid wire fixture: claim-interval.json (0.345542ms)
+✔ valid wire fixture: publication.json (0.580875ms)
+✔ valid wire fixture: pass.json (0.176208ms)
+✔ valid wire fixture: shot.json (0.21475ms)
+✔ valid wire fixture: period.json (0.320667ms)
+✔ valid wire fixture: own-goal.json (0.168833ms)
+✔ valid wire fixture: caption-ta.json (0.208083ms)
+✔ valid wire fixture: sparse-tracking.json (0.127416ms)
+✔ valid wire fixture: claim-count-zero.json (0.189292ms)
+✔ valid wire fixture: claim-count-max.json (0.615917ms)
+✔ invalid wire fixture: invalid/version-roster.json (0.278916ms)
+✔ invalid wire fixture: invalid/version-goal.json (0.11475ms)
+✔ invalid wire fixture: invalid/version-tracking.json (0.106667ms)
+✔ invalid wire fixture: invalid/version-state.json (0.118625ms)
+✔ invalid wire fixture: invalid/version-claim-events.json (0.098125ms)
+✔ invalid wire fixture: invalid/version-publication.json (0.083417ms)
+✔ invalid wire fixture: invalid/unknown-player.json (0.209083ms)
+✔ invalid wire fixture: invalid/unknown-scorer.json (0.205708ms)
+✔ invalid wire fixture: invalid/unknown-recipient.json (0.207416ms)
+✔ invalid wire fixture: invalid/unknown-corrected-player.json (0.166458ms)
+✔ invalid wire fixture: invalid/wrong-player-team.json (0.114625ms)
+✔ invalid wire fixture: invalid/unknown-team.json (0.160708ms)
+✔ invalid wire fixture: invalid/unknown-ball.json (0.217584ms)
+✔ invalid wire fixture: invalid/outside-x.json (0.154375ms)
+✔ invalid wire fixture: invalid/outside-ball-y.json (0.293542ms)
+✔ invalid wire fixture: invalid/negative-coordinate.json (0.112792ms)
+✔ invalid wire fixture: invalid/wrong-units.json (0.09325ms)
+✔ invalid wire fixture: invalid/pitch-mismatch.json (0.0975ms)
+✔ invalid wire fixture: invalid/duplicate-player.json (0.100083ms)
+✔ invalid wire fixture: invalid/incomplete-frame.json (0.088208ms)
+✔ invalid wire fixture: invalid/duplicate-roster-id.json (0.0915ms)
+✔ invalid wire fixture: invalid/unknown-roster-team.json (0.114084ms)
+✔ invalid wire fixture: invalid/invalid-clock.json (0.110708ms)
+✔ invalid wire fixture: invalid/missing-roster.json (0.112125ms)
+✔ invalid wire fixture: invalid/missing-event-roster.json (0.094875ms)
+✔ invalid wire fixture: invalid/unknown-event-type.json (0.089958ms)
+✔ invalid wire fixture: invalid/missing-event-id.json (0.079167ms)
+✔ invalid wire fixture: invalid/unexpected-field.json (0.078167ms)
+✔ invalid wire fixture: invalid/unsafe-sequence.json (0.076709ms)
+✔ invalid wire fixture: invalid/fractional-sequence.json (0.081833ms)
+✔ invalid wire fixture: invalid/invalid-date.json (0.100917ms)
+✔ invalid wire fixture: invalid/non-utc-date.json (0.113708ms)
+✔ invalid wire fixture: invalid/invalid-new-revision.json (0.150917ms)
+✔ invalid wire fixture: invalid/self-correction.json (0.119ms)
+✔ invalid wire fixture: invalid/future-correction-target.json (0.188875ms)
+✔ invalid wire fixture: invalid/revised-control-envelope.json (0.096041ms)
+✔ invalid wire fixture: invalid/future-claim.json (0.097958ms)
+✔ invalid wire fixture: invalid/future-source.json (0.254417ms)
+✔ invalid wire fixture: invalid/reversed-interval.json (0.123ms)
+✔ invalid wire fixture: invalid/future-interval-time.json (0.099417ms)
+✔ invalid wire fixture: invalid/future-interval-sequence.json (0.090417ms)
+✔ invalid wire fixture: invalid/missing-evidence.json (0.09775ms)
+✔ invalid wire fixture: invalid/missing-derivation.json (0.088583ms)
+✔ invalid wire fixture: invalid/missing-snapshot.json (0.080875ms)
+✔ invalid wire fixture: invalid/fractional-count.json (0.078083ms)
+✔ invalid wire fixture: invalid/invalid-approval.json (0.133292ms)
+✔ invalid wire fixture: invalid/invalid-expiry.json (0.10025ms)
+✔ invalid wire fixture: invalid/future-publication.json (0.087583ms)
+✔ invalid wire fixture: invalid/missing-audio-generation.json (0.072292ms)
+✔ invalid wire fixture: invalid/missing-claim-ids.json (0.0715ms)
+✔ invalid wire fixture: invalid/cross-session-roster.json (0.084333ms)
+✔ invalid wire fixture: invalid/first-period-offset.json (0.080875ms)
+✔ invalid wire fixture: invalid/trailing-lf-claim-id.json (0.076458ms)
+✔ invalid wire fixture: invalid/trailing-lf-derivation-version.json (0.141875ms)
+✔ invalid wire fixture: invalid/trailing-lf-published-at.json (0.111ms)
+✔ invalid wire fixture: invalid/trailing-lf-expires-at.json (0.252458ms)
+✔ invalid wire fixture: invalid/trailing-lf-emitted-at.json (0.090833ms)
+✔ invalid wire fixture: invalid/trailing-cr-claim-id.json (0.096208ms)
+✔ invalid wire fixture: invalid/trailing-cr-derivation-version.json (0.101542ms)
+✔ invalid wire fixture: invalid/trailing-cr-published-at.json (0.10525ms)
+✔ invalid wire fixture: invalid/trailing-cr-expires-at.json (0.1095ms)
+✔ invalid wire fixture: invalid/trailing-cr-emitted-at.json (0.230541ms)
+✔ invalid wire fixture: invalid/trailing-crlf-claim-id.json (0.10175ms)
+✔ invalid wire fixture: invalid/trailing-crlf-derivation-version.json (0.128167ms)
+✔ invalid wire fixture: invalid/trailing-crlf-published-at.json (0.105041ms)
+✔ invalid wire fixture: invalid/trailing-crlf-expires-at.json (0.093583ms)
+✔ invalid wire fixture: invalid/trailing-crlf-emitted-at.json (0.093125ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-claim-id.json (0.317417ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-derivation-version.json (0.168833ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-published-at.json (0.260042ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-expires-at.json (0.112375ms)
+✔ invalid wire fixture: invalid/trailing-line-separator-emitted-at.json (0.098125ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-claim-id.json (0.087042ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-derivation-version.json (0.087917ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-published-at.json (0.081125ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-expires-at.json (0.098792ms)
+✔ invalid wire fixture: invalid/trailing-paragraph-separator-emitted-at.json (0.096875ms)
+✔ invalid wire fixture: invalid/count-max-plus-one.json (0.088709ms)
+✔ invalid wire fixture: invalid/count-max-plus-two.json (0.07575ms)
+✔ invalid wire fixture: invalid/negative-count.json (0.075791ms)
+✔ valid references: approved-publication (0.199375ms)
+✔ valid references: correction-target (0.154041ms)
+✔ valid references: retraction-target (0.040875ms)
+✔ invalid references: pending-claim (0.062125ms)
+✔ invalid references: retracted-claim (0.036042ms)
+✔ invalid references: missing-claim (0.029875ms)
+✔ invalid references: stale-publication (0.061792ms)
+✔ invalid references: stale-claim (0.034333ms)
+✔ invalid references: cross-session-claim (0.030458ms)
+✔ invalid references: duplicate-claim (0.028166ms)
+✔ invalid references: wrong-target-id (0.050667ms)
+✔ invalid references: stale-target-revision (0.044291ms)
+✔ invalid references: wrong-target-sequence (0.107541ms)
+✔ non-finite numbers cannot enter the wire representation (0.116125ms)
+✔ maximum count remains an exact safe integer through JSON transport (0.063209ms)
+ℹ tests 113
+ℹ suites 0
+ℹ pass 113
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 154.371375
+uv run --locked --all-packages pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-8.4.2, pluggy-1.7.0
+rootdir: /private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collected 131 items
+
+tests/contracts/test_contracts.py ...................................... [ 29%]
+........................................................................ [ 83%]
+....                                                                     [ 87%]
+tests/test_api_health.py .......                                         [ 92%]
+tests/test_api_sessions.py ......                                        [ 96%]
+tests/test_worker.py ....                                                [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:51
+  /private/var/folders/gz/8m459c8j4d52dx4cvhmvxt2r0000gq/T/matchcast-s03-repair-s7fun4gv/checkout/.venv/lib/python3.12/site-packages/starlette/testclient.py:51: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 131 passed, 1 warning in 1.90s ========================
+npm run build
+
+> build
+> npm run build --workspace @matchcast/contracts && npm run build --workspace apps/broadcast-web
+
+
+> @matchcast/contracts@1.0.0 build
+> tsc
+
+
+> @matchcast/broadcast-web@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.ts took 795ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 869ms
+  Running TypeScript ...
+  Finished TypeScript in 622ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 172ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content
+
+
+===== audit =====
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {},
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "dependencies": {
+      "prod": 28,
+      "dev": 368,
+      "optional": 8,
+      "peer": 36,
+      "peerOptional": 0,
+      "total": 402
+    }
+  }
+}
+
+===== local-live =====
+INFO:     Started server process [52331]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:57782 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57797 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57798 - "GET /ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57799 - "POST /sessions HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57800 - "PUT /sessions/t1/s1/m1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57801 - "POST /sessions HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57802 - "PUT /sessions/t1/s2/m1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57803 - "POST /sessions HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57804 - "PUT /sessions/t2/s1/m1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57805 - "POST /sessions HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57806 - "PUT /sessions/t1/s1/m2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57807 - "POST /sessions/t1/s1/m1/reset HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57808 - "GET /sessions/t1/s2/m1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57809 - "GET /sessions/t2/s1/m1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57810 - "GET /sessions/t1/s1/m2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57811 - "GET /sessions/t1/missing/m1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57812 - "POST /sessions HTTP/1.1" 422 Unprocessable Entity
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [52331]
+
+===== missing-live =====
+INFO:     Started server process [52334]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:57813 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57816 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57817 - "GET /ready HTTP/1.1" 503 Service Unavailable
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [52334]
+
+===== configured-live =====
+INFO:     Started server process [52336]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:57818 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57821 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57822 - "GET /ready HTTP/1.1" 503 Service Unavailable
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [52336]
