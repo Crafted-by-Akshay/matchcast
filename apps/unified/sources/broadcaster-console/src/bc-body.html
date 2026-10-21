@@ -1,0 +1,52 @@
+<div id="bc">
+  <header class="bc-top">
+    <div class="bc-brand">MATCH<span>CAST</span><em>Broadcaster desk</em></div>
+    <div class="bc-score" aria-live="polite">
+      <span class="tm h" id="bc-h">HOME</span><span class="sc" id="bc-score">0–0</span><span class="tm a" id="bc-a">AWAY</span>
+      <span class="bc-clk" id="bc-clk">0:00</span>
+      <span class="bc-state" id="bc-state">Pre-match</span>
+    </div>
+    <div class="bc-ctl">
+      <button class="bc-btn" id="bc-pp" aria-pressed="false">Pause</button>
+      <select id="bc-speed" aria-label="Playback speed">
+        <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+      </select>
+      <button class="bc-btn" id="bc-new">New match</button>
+      <div class="bc-seg" id="bc-lang" role="group" aria-label="Script language">
+        <button data-l="en" aria-pressed="true">EN</button><button data-l="ta" aria-pressed="false">தமிழ்</button>
+      </div>
+    </div>
+  </header>
+  <div class="bc-note"><b>Simulated match, fictional clubs.</b> Browser prototype. Each Azure service is labelled where it runs in production.</div>
+
+  <main class="bc-main">
+    <div class="bc-left">
+      <section class="bc-view" id="bc-view" aria-label="Live match view">
+        <div class="bc-reason" id="bc-reason" hidden></div>
+        <div class="bc-call" id="bc-call" hidden></div>
+        <div class="bc-wild" id="bc-wild" hidden></div>
+        <div class="bc-l3" id="bc-l3" hidden></div>
+      </section>
+      <div class="bc-cams" id="bc-cams" role="group" aria-label="Camera"></div>
+      <div class="bc-mini" id="bc-mini" aria-label="Win probability now"></div>
+      <div class="bc-strip" id="bc-strip" aria-live="polite">Waiting for kick-off.</div>
+    </div>
+
+    <aside class="bc-side">
+      <nav class="bc-tabs" role="tablist" aria-label="Broadcaster tools" id="bc-tabs">
+        <button role="tab" data-p="focus" aria-selected="true">Focus</button>
+        <button role="tab" data-p="win" aria-selected="false">Win</button>
+        <button role="tab" data-p="script" aria-selected="false">Script</button>
+        <button role="tab" data-p="players" aria-selected="false">Players</button>
+        <button role="tab" data-p="calls" aria-selected="false">Calls</button>
+        <button role="tab" data-p="desk" aria-selected="false">Desk</button>
+      </nav>
+      <div class="bc-pane" id="pane-focus" role="tabpanel"></div>
+      <div class="bc-pane" id="pane-win" role="tabpanel" hidden></div>
+      <div class="bc-pane" id="pane-script" role="tabpanel" hidden></div>
+      <div class="bc-pane" id="pane-players" role="tabpanel" hidden></div>
+      <div class="bc-pane" id="pane-calls" role="tabpanel" hidden></div>
+      <div class="bc-pane" id="pane-desk" role="tabpanel" hidden></div>
+    </aside>
+  </main>
+</div>

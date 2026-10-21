@@ -1,0 +1,764 @@
+{
+ "season": "2026/27",
+ "competition": "MatchCast Premier (synthetic)",
+ "clubs": [
+  {
+   "key": "HAR",
+   "club": "Harbor City",
+   "city": "London",
+   "stadium": "london",
+   "color": "#2F7BEA",
+   "str": 4,
+   "coach": "Elena Marsh",
+   "squad": [
+    {
+     "num": 1,
+     "name": "N. Brennan",
+     "pos": "GK",
+     "rating": 91
+    },
+    {
+     "num": 3,
+     "name": "Z. Keane",
+     "pos": "LB",
+     "rating": 91
+    },
+    {
+     "num": 4,
+     "name": "V. Iniesta",
+     "pos": "CB",
+     "rating": 88
+    },
+    {
+     "num": 5,
+     "name": "Z. Sandoval",
+     "pos": "CB",
+     "rating": 89
+    },
+    {
+     "num": 2,
+     "name": "Z. Fofana",
+     "pos": "RB",
+     "rating": 90
+    },
+    {
+     "num": 8,
+     "name": "A. Garrido",
+     "pos": "CM",
+     "rating": 92
+    },
+    {
+     "num": 6,
+     "name": "Y. Yeboah",
+     "pos": "DM",
+     "rating": 92
+    },
+    {
+     "num": 10,
+     "name": "B. Fuentes",
+     "pos": "CM",
+     "rating": 91
+    },
+    {
+     "num": 11,
+     "name": "E. Guerreiro",
+     "pos": "LW",
+     "rating": 88
+    },
+    {
+     "num": 9,
+     "name": "S. Nakamura",
+     "pos": "ST",
+     "rating": 89
+    },
+    {
+     "num": 7,
+     "name": "P. Reyes",
+     "pos": "RW",
+     "rating": 93
+    }
+   ]
+  },
+  {
+   "key": "TRV",
+   "club": "Thames Rovers",
+   "city": "London",
+   "stadium": "london",
+   "color": "#8A1C2B",
+   "str": -1,
+   "coach": "Callum Drury",
+   "squad": [
+    {
+     "num": 1,
+     "name": "S. Brandão",
+     "pos": "GK",
+     "rating": 85
+    },
+    {
+     "num": 3,
+     "name": "A. Ferreira",
+     "pos": "LB",
+     "rating": 82
+    },
+    {
+     "num": 4,
+     "name": "O. Jensen",
+     "pos": "CB",
+     "rating": 82
+    },
+    {
+     "num": 5,
+     "name": "S. Duarte",
+     "pos": "CB",
+     "rating": 86
+    },
+    {
+     "num": 2,
+     "name": "M. Sandoval",
+     "pos": "RB",
+     "rating": 83
+    },
+    {
+     "num": 8,
+     "name": "M. Moreno",
+     "pos": "CM",
+     "rating": 82
+    },
+    {
+     "num": 6,
+     "name": "T. Ekström",
+     "pos": "DM",
+     "rating": 83
+    },
+    {
+     "num": 10,
+     "name": "P. Coman",
+     "pos": "CM",
+     "rating": 83
+    },
+    {
+     "num": 11,
+     "name": "M. Varela",
+     "pos": "LW",
+     "rating": 81
+    },
+    {
+     "num": 9,
+     "name": "N. Xhaka",
+     "pos": "ST",
+     "rating": 84
+    },
+    {
+     "num": 7,
+     "name": "G. Petit",
+     "pos": "RW",
+     "rating": 81
+    }
+   ]
+  },
+  {
+   "key": "RID",
+   "club": "Ridgeview",
+   "city": "Madrid",
+   "stadium": "madrid",
+   "color": "#F2702A",
+   "str": 3,
+   "coach": "Iker Salvat",
+   "squad": [
+    {
+     "num": 1,
+     "name": "R. Sandoval",
+     "pos": "GK",
+     "rating": 87
+    },
+    {
+     "num": 3,
+     "name": "N. Jesus",
+     "pos": "LB",
+     "rating": 88
+    },
+    {
+     "num": 4,
+     "name": "K. Kanté",
+     "pos": "CB",
+     "rating": 90
+    },
+    {
+     "num": 5,
+     "name": "O. Udeh",
+     "pos": "CB",
+     "rating": 87
+    },
+    {
+     "num": 2,
+     "name": "N. Adeyemi",
+     "pos": "RB",
+     "rating": 88
+    },
+    {
+     "num": 8,
+     "name": "S. Toure",
+     "pos": "CM",
+     "rating": 89
+    },
+    {
+     "num": 6,
+     "name": "I. Vidal",
+     "pos": "DM",
+     "rating": 88
+    },
+    {
+     "num": 10,
+     "name": "G. Brandão",
+     "pos": "CM",
+     "rating": 88
+    },
+    {
+     "num": 11,
+     "name": "N. Fofana",
+     "pos": "LW",
+     "rating": 91
+    },
+    {
+     "num": 9,
+     "name": "P. Petit",
+     "pos": "ST",
+     "rating": 88
+    },
+    {
+     "num": 7,
+     "name": "T. Arbeloa",
+     "pos": "RW",
+     "rating": 88
+    }
+   ]
+  },
+  {
+   "key": "MON",
+   "club": "Montaña CF",
+   "city": "Madrid",
+   "stadium": "madrid",
+   "color": "#C9A227",
+   "str": 0,
+   "coach": "Paula Ortiz",
+   "squad": [
+    {
+     "num": 1,
+     "name": "K. Uribe",
+     "pos": "GK",
+     "rating": 84
+    },
+    {
+     "num": 3,
+     "name": "A. Moreno",
+     "pos": "LB",
+     "rating": 83
+    },
+    {
+     "num": 4,
+     "name": "Z. Zielinski",
+     "pos": "CB",
+     "rating": 85
+    },
+    {
+     "num": 5,
+     "name": "N. Guerreiro",
+     "pos": "CB",
+     "rating": 86
+    },
+    {
+     "num": 2,
+     "name": "Z. Yilmaz",
+     "pos": "RB",
+     "rating": 83
+    },
+    {
+     "num": 8,
+     "name": "S. Vidal",
+     "pos": "CM",
+     "rating": 88
+    },
+    {
+     "num": 6,
+     "name": "Y. Kanté",
+     "pos": "DM",
+     "rating": 86
+    },
+    {
+     "num": 10,
+     "name": "V. Ramos",
+     "pos": "CM",
+     "rating": 84
+    },
+    {
+     "num": 11,
+     "name": "R. Guerreiro",
+     "pos": "LW",
+     "rating": 87
+    },
+    {
+     "num": 9,
+     "name": "D. Weiss",
+     "pos": "ST",
+     "rating": 85
+    },
+    {
+     "num": 7,
+     "name": "B. Mbeki",
+     "pos": "RW",
+     "rating": 86
+    }
+   ]
+  },
+  {
+   "key": "GUA",
+   "club": "Guanabara FC",
+   "city": "Rio de Janeiro",
+   "stadium": "rio",
+   "color": "#0B8A4E",
+   "str": 2,
+   "coach": "Rafael Lins",
+   "squad": [
+    {
+     "num": 1,
+     "name": "S. Varela",
+     "pos": "GK",
+     "rating": 88
+    },
+    {
+     "num": 3,
+     "name": "G. Quinn",
+     "pos": "LB",
+     "rating": 88
+    },
+    {
+     "num": 4,
+     "name": "O. Iniesta",
+     "pos": "CB",
+     "rating": 90
+    },
+    {
+     "num": 5,
+     "name": "F. Lozano",
+     "pos": "CB",
+     "rating": 86
+    },
+    {
+     "num": 2,
+     "name": "T. Ferreira",
+     "pos": "RB",
+     "rating": 87
+    },
+    {
+     "num": 8,
+     "name": "P. Jovanović",
+     "pos": "CM",
+     "rating": 90
+    },
+    {
+     "num": 6,
+     "name": "H. Zielinski",
+     "pos": "DM",
+     "rating": 88
+    },
+    {
+     "num": 10,
+     "name": "K. Achterberg",
+     "pos": "CM",
+     "rating": 90
+    },
+    {
+     "num": 11,
+     "name": "J. Olmo",
+     "pos": "LW",
+     "rating": 85
+    },
+    {
+     "num": 9,
+     "name": "M. Ilić",
+     "pos": "ST",
+     "rating": 87
+    },
+    {
+     "num": 7,
+     "name": "N. Uribe",
+     "pos": "RW",
+     "rating": 88
+    }
+   ]
+  },
+  {
+   "key": "LOM",
+   "club": "Lombardia Nord",
+   "city": "Milan",
+   "stadium": "milan",
+   "color": "#1A1A1A",
+   "str": 1,
+   "coach": "Marco Vitale",
+   "squad": [
+    {
+     "num": 1,
+     "name": "B. Guerreiro",
+     "pos": "GK",
+     "rating": 86
+    },
+    {
+     "num": 3,
+     "name": "J. Alves",
+     "pos": "LB",
+     "rating": 88
+    },
+    {
+     "num": 4,
+     "name": "D. Guerreiro",
+     "pos": "CB",
+     "rating": 85
+    },
+    {
+     "num": 5,
+     "name": "C. Tamura",
+     "pos": "CB",
+     "rating": 84
+    },
+    {
+     "num": 2,
+     "name": "R. Toure",
+     "pos": "RB",
+     "rating": 87
+    },
+    {
+     "num": 8,
+     "name": "A. Lindgren",
+     "pos": "CM",
+     "rating": 88
+    },
+    {
+     "num": 6,
+     "name": "J. Quinn",
+     "pos": "DM",
+     "rating": 85
+    },
+    {
+     "num": 10,
+     "name": "D. Diallo",
+     "pos": "CM",
+     "rating": 87
+    },
+    {
+     "num": 11,
+     "name": "G. Jara",
+     "pos": "LW",
+     "rating": 84
+    },
+    {
+     "num": 9,
+     "name": "T. Jovanović",
+     "pos": "ST",
+     "rating": 90
+    },
+    {
+     "num": 7,
+     "name": "D. Yilmaz",
+     "pos": "RW",
+     "rating": 84
+    }
+   ]
+  },
+  {
+   "key": "NAV",
+   "club": "Navigli United",
+   "city": "Milan",
+   "stadium": "milan",
+   "color": "#2B5DAA",
+   "str": -2,
+   "coach": "Giulia Ferri",
+   "squad": [
+    {
+     "num": 1,
+     "name": "P. Ortega",
+     "pos": "GK",
+     "rating": 83
+    },
+    {
+     "num": 3,
+     "name": "A. Fofana",
+     "pos": "LB",
+     "rating": 79
+    },
+    {
+     "num": 4,
+     "name": "C. Ulloa",
+     "pos": "CB",
+     "rating": 80
+    },
+    {
+     "num": 5,
+     "name": "Z. Duarte",
+     "pos": "CB",
+     "rating": 80
+    },
+    {
+     "num": 2,
+     "name": "E. Eriksen",
+     "pos": "RB",
+     "rating": 82
+    },
+    {
+     "num": 8,
+     "name": "L. Olmo",
+     "pos": "CM",
+     "rating": 83
+    },
+    {
+     "num": 6,
+     "name": "N. Okoro",
+     "pos": "DM",
+     "rating": 81
+    },
+    {
+     "num": 10,
+     "name": "S. Sørensen",
+     "pos": "CM",
+     "rating": 82
+    },
+    {
+     "num": 11,
+     "name": "B. Pavlov",
+     "pos": "LW",
+     "rating": 84
+    },
+    {
+     "num": 9,
+     "name": "B. Kowalski",
+     "pos": "ST",
+     "rating": 82
+    },
+    {
+     "num": 7,
+     "name": "E. Yilmaz",
+     "pos": "RW",
+     "rating": 83
+    }
+   ]
+  },
+  {
+   "key": "COL",
+   "club": "Coloso Ciudad",
+   "city": "Mexico City",
+   "stadium": "mexico",
+   "color": "#B3202A",
+   "str": -3,
+   "coach": "Andrés Robles",
+   "squad": [
+    {
+     "num": 1,
+     "name": "M. Cuadrado",
+     "pos": "GK",
+     "rating": 81
+    },
+    {
+     "num": 3,
+     "name": "T. Vidal",
+     "pos": "LB",
+     "rating": 79
+    },
+    {
+     "num": 4,
+     "name": "O. Walsh",
+     "pos": "CB",
+     "rating": 81
+    },
+    {
+     "num": 5,
+     "name": "S. Olmo",
+     "pos": "CB",
+     "rating": 82
+    },
+    {
+     "num": 2,
+     "name": "P. Falcão",
+     "pos": "RB",
+     "rating": 80
+    },
+    {
+     "num": 8,
+     "name": "Y. Ulloa",
+     "pos": "CM",
+     "rating": 83
+    },
+    {
+     "num": 6,
+     "name": "Z. Kessler",
+     "pos": "DM",
+     "rating": 83
+    },
+    {
+     "num": 10,
+     "name": "M. Dalgaard",
+     "pos": "CM",
+     "rating": 82
+    },
+    {
+     "num": 11,
+     "name": "B. Ekström",
+     "pos": "LW",
+     "rating": 78
+    },
+    {
+     "num": 9,
+     "name": "Z. Bauer",
+     "pos": "ST",
+     "rating": 84
+    },
+    {
+     "num": 7,
+     "name": "T. Dalgaard",
+     "pos": "RW",
+     "rating": 80
+    }
+   ]
+  }
+ ],
+ "fixtures": [
+  {
+   "md": 1,
+   "home": "HAR",
+   "away": "COL"
+  },
+  {
+   "md": 1,
+   "home": "NAV",
+   "away": "TRV"
+  },
+  {
+   "md": 1,
+   "home": "RID",
+   "away": "LOM"
+  },
+  {
+   "md": 1,
+   "home": "GUA",
+   "away": "MON"
+  },
+  {
+   "md": 2,
+   "home": "NAV",
+   "away": "HAR"
+  },
+  {
+   "md": 2,
+   "home": "COL",
+   "away": "LOM"
+  },
+  {
+   "md": 2,
+   "home": "GUA",
+   "away": "TRV"
+  },
+  {
+   "md": 2,
+   "home": "RID",
+   "away": "MON"
+  },
+  {
+   "md": 3,
+   "home": "HAR",
+   "away": "LOM"
+  },
+  {
+   "md": 3,
+   "home": "GUA",
+   "away": "NAV"
+  },
+  {
+   "md": 3,
+   "home": "COL",
+   "away": "MON"
+  },
+  {
+   "md": 3,
+   "home": "RID",
+   "away": "TRV"
+  },
+  {
+   "md": 4,
+   "home": "GUA",
+   "away": "HAR"
+  },
+  {
+   "md": 4,
+   "home": "LOM",
+   "away": "MON"
+  },
+  {
+   "md": 4,
+   "home": "RID",
+   "away": "NAV"
+  },
+  {
+   "md": 4,
+   "home": "COL",
+   "away": "TRV"
+  },
+  {
+   "md": 5,
+   "home": "HAR",
+   "away": "MON"
+  },
+  {
+   "md": 5,
+   "home": "RID",
+   "away": "GUA"
+  },
+  {
+   "md": 5,
+   "home": "LOM",
+   "away": "TRV"
+  },
+  {
+   "md": 5,
+   "home": "COL",
+   "away": "NAV"
+  },
+  {
+   "md": 6,
+   "home": "RID",
+   "away": "HAR"
+  },
+  {
+   "md": 6,
+   "home": "MON",
+   "away": "TRV"
+  },
+  {
+   "md": 6,
+   "home": "COL",
+   "away": "GUA"
+  },
+  {
+   "md": 6,
+   "home": "LOM",
+   "away": "NAV"
+  },
+  {
+   "md": 7,
+   "home": "HAR",
+   "away": "TRV"
+  },
+  {
+   "md": 7,
+   "home": "COL",
+   "away": "RID"
+  },
+  {
+   "md": 7,
+   "home": "MON",
+   "away": "NAV"
+  },
+  {
+   "md": 7,
+   "home": "LOM",
+   "away": "GUA"
+  }
+ ]
+}
