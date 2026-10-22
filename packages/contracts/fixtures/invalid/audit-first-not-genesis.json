@@ -1,0 +1,24 @@
+{
+  "kind": "audit_record",
+  "schema_version": "1.1.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "audit_id": "audit-1",
+  "sequence": 1,
+  "time": "2026-10-22T10:00:01.000Z",
+  "actor_kind": "agent",
+  "actor_id": "analyst",
+  "action": "claim_created",
+  "subject_id": "claim-1",
+  "details": {
+    "metric": "shots",
+    "value": 3,
+    "ratio": 0.62,
+    "note": "Köln press"
+  },
+  "prev_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+  "hash": "bbef0bc17f8be6c5615d774e792b7e9760503d961895044443d190a0208c43e0"
+}

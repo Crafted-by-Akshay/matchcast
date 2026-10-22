@@ -21,6 +21,9 @@
     },
     {
       "$ref": "#/definitions/PublicationPacket"
+    },
+    {
+      "$ref": "#/definitions/AuditRecord"
     }
   ],
   "definitions": {
@@ -1185,6 +1188,98 @@
         "closing_speed_mps",
         "position_unit",
         "position"
+      ]
+    },
+    "Sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "AuditRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "audit_record",
+          "type": "string"
+        },
+        "schema_version": {
+          "$ref": "#/definitions/SchemaVersion"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "audit_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "sequence": {
+          "$ref": "#/definitions/Sequence"
+        },
+        "time": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "actor_kind": {
+          "type": "string",
+          "enum": [
+            "agent",
+            "person",
+            "system"
+          ]
+        },
+        "actor_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "event_rejected",
+            "moment_skipped",
+            "claim_created",
+            "line_drafted",
+            "line_verified",
+            "line_review",
+            "line_rejected",
+            "line_repair_requested",
+            "line_abstained",
+            "line_approved",
+            "line_edited",
+            "line_killed",
+            "publication_created",
+            "translation_rejected",
+            "fallback_used",
+            "recap_created",
+            "ask_answered",
+            "talk_answered",
+            "export_created",
+            "safety_blocked"
+          ]
+        },
+        "subject_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "details": {
+          "type": "object"
+        },
+        "prev_hash": {
+          "$ref": "#/definitions/Sha256"
+        },
+        "hash": {
+          "$ref": "#/definitions/Sha256"
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "audit_id",
+        "sequence",
+        "time",
+        "actor_kind",
+        "actor_id",
+        "action",
+        "subject_id",
+        "details",
+        "prev_hash",
+        "hash"
       ]
     }
   }

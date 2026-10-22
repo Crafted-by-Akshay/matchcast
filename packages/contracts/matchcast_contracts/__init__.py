@@ -274,6 +274,16 @@ def validate(packet: Any, *, roster: Any = None) -> dict:
                 "/source",
                 "interval exceeds committed evidence",
             )
+    if kind == "audit_record":
+        from .audit import check_details
+
+        check_details(packet["details"])
+        _require(
+            packet["sequence"] > 1 or packet["prev_hash"] == "0" * 64,
+            "invalid_chain",
+            "/prev_hash",
+            "the first record must use the all-zero genesis hash",
+        )
     if kind == "publication":
         _require(
             datetime.fromisoformat(packet["expires_at"])

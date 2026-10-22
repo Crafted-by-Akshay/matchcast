@@ -1,12 +1,14 @@
 import { Ajv, type ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
 import schema from "../matchcast_contracts/schemas/v1.json" with { type: "json" };
+import { checkDetails } from "./audit.js";
 import type {
   MatchCastContract, Roster, StreamIdentity, Position, FootballPayload,
   ClaimPacket, PublicationPacket, EventEnvelope,
 } from "./generated.js";
 
 export type * from "./generated.js";
+export * from "./audit.js";
 export const SUPPORTED_VERSIONS: readonly string[] = schema.definitions.SchemaVersion.enum;
 export const SCHEMA_VERSION = SUPPORTED_VERSIONS[SUPPORTED_VERSIONS.length - 1];
 const V1_0_PAYLOADS = new Set(["goal", "pass", "shot", "period_boundary", "correction", "retraction"]);
@@ -171,6 +173,11 @@ export function validateContract(input: unknown, rosterInput?: unknown): MatchCa
         source.to_event_time_ms <= packet.snapshot.event_time_ms,
       "future_evidence", "/source", "interval exceeds committed evidence");
     }
+  }
+  if (packet.kind === "audit_record") {
+    checkDetails(packet.details);
+    requireContract(packet.sequence > 1 || packet.prev_hash === "0".repeat(64), "invalid_chain", "/prev_hash",
+      "the first record must use the all-zero genesis hash");
   }
   if (packet.kind === "publication") {
     requireContract(Date.parse(packet.expires_at) > Date.parse(packet.published_at),
