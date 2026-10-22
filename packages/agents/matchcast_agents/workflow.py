@@ -81,11 +81,16 @@ def rules_agents(
     personas: tuple[Persona, ...] = ("casual", "analyst"),
     *,
     seed_bad_claim: bool = False,
+    seed_bad_claim_at_ms: int = 720_000,
     failing_tools: frozenset[str] = frozenset(),
 ) -> AgentSet:
     return AgentSet(
         ProducerRules(personas),
-        AnalystRules(corrupt_first_claim=seed_bad_claim, failing_tools=failing_tools),
+        AnalystRules(
+            corrupt_first_claim=seed_bad_claim,
+            failing_tools=failing_tools,
+            corrupt_after_ms=seed_bad_claim_at_ms,
+        ),
         NarratorRules(),
         VerifierRules(),
     )
@@ -131,6 +136,7 @@ class MatchWorkflow:
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)
         self._clock = clock
+        self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
         self._lock = asyncio.Lock()
         self.stats = {
             "events": 0,
@@ -177,6 +183,24 @@ class MatchWorkflow:
         extra = {"mode": getattr(agent, "mode", "live"), **details}
         self._audit("agent", agent.agent_id, action, subject, extra)
 
+    async def _call(self, agent: Any, method: str, subject: str, *args: Any, **kwargs: Any) -> Any:
+        """Call an agent, then audit any rules fallback it made and publish the status change."""
+        try:
+            return await getattr(agent, method)(*args, **kwargs)
+        finally:
+            self._sync_status(agent, subject)
+
+    def _sync_status(self, agent: Any, subject: str) -> None:
+        take = getattr(agent, "take_fallbacks", None)
+        reasons = take() if take else []
+        for reason in reasons:
+            self._agent("fallback_used", agent, subject, fallback_reason=reason)
+            self.hub.publish("status", None, {"status": "rules_fallback", "reason": reason})
+            self.status = "rules_fallback"
+        if not reasons and self.status == "rules_fallback" and getattr(agent, "mode", "") == "live":
+            self.status = "live"
+            self.hub.publish("status", None, {"status": "live"})
+
     def _save_line(self, line: LineRecord) -> None:
         self.store.put_line(self.sk, line)
         self.hub.publish("line", f"line:{line.line_id}:{line.status}", line.model_dump())
@@ -210,7 +234,9 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
-        decision = await self.agents.producer.decide(ctx, event)
+        decision = await self._call(
+            self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
+        )
         if isinstance(decision, Skip):
             self.stats["skipped"] += 1
             if decision.reason in AUDIT_SKIPPED:
@@ -240,7 +266,7 @@ class MatchWorkflow:
         claims = await self._analyse(ctx, task, repair=False)
         if not claims:
             return
-        drafts = await a.narrator.write(ctx, task, claims)
+        drafts = await self._call(a.narrator, "write", task.moment_id, ctx, task, claims)
         for draft in drafts:
             await self._verify_line(ctx, task, claims, draft, attempt=0)
 
@@ -250,7 +276,9 @@ class MatchWorkflow:
         """Run the Analyst, store its claims with their tool calls; a failed tool means no claim."""
         a = self.agents
         try:
-            results = await a.analyst.analyse(ctx, task, repair=repair)
+            results = await self._call(
+                a.analyst, "analyse", task.moment_id, ctx, task, repair=repair
+            )
         except ToolError as error:
             self._agent(
                 "fallback_used",
@@ -320,7 +348,7 @@ class MatchWorkflow:
             persona=draft.persona,
             claim_ids=list(draft.claim_ids),
         )
-        verdict = await a.verifier.check(ctx, draft, claims)
+        verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
         record.checks = list(verdict.checks)
         record.reason_code = verdict.reason_code
         if verdict.verdict == "rejected":
@@ -382,7 +410,9 @@ class MatchWorkflow:
             if not claims:
                 return
             ctx = fresh
-        redrafts = await a.narrator.write(ctx, task, claims, attempt=1)
+        redrafts = await self._call(
+            a.narrator, "write", task.moment_id, ctx, task, claims, attempt=1
+        )
         replacement = next((d for d in redrafts if d.persona == draft.persona), None)
         if replacement is None:
             return
@@ -478,7 +508,7 @@ class MatchWorkflow:
                 text=text,
                 max_chars=280,
             )
-            verdict = await self.agents.verifier.check(ctx, draft, claims)
+            verdict = await self._call(self.agents.verifier, "check", line_id, ctx, draft, claims)
             if verdict.verdict == "rejected":
                 return line, verdict
             line.text, line.checks, line.reason_code = text, list(verdict.checks), None
