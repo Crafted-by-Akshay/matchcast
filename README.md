@@ -21,11 +21,11 @@ Three things to click once it is open:
 
 | Stage | What MatchCast does | Where |
 | --- | --- | --- |
-| Ingest | A seeded simulator emits passes, shots, tackles, possession changes, pressure and metadata as `matchcast.event/1` records | [`docs/architecture/06-simulation.md`](docs/architecture/06-simulation.md), `services/simulation` |
+| Ingest | A seeded simulator (in the browser today; a headless runner is designed) emits passes, shots, tackles, possession changes, pressure and metadata as `matchcast.event/1` records | [`docs/architecture/06-simulation.md`](docs/architecture/06-simulation.md), `apps/unified/sources` |
 | Interpret | Stats, xG and patterns computed by tested metric functions | [`docs/metrics.md`](docs/metrics.md), `packages/metrics` |
 | Explain | The Analyst turns events into claims with evidence; the Narrator writes lines from the claim's inputs | [`docs/architecture/04-agents.md`](docs/architecture/04-agents.md), `packages/agents` |
 | Render | Watch, Analyst and Broadcast views alongside the match | [`docs/architecture/11-frontend.md`](docs/architecture/11-frontend.md), `apps/unified` |
-| Personalise | Watch modes, favourite club, player focus, one metric, English, Spanish and Hindi | [`docs/architecture/10-voice-and-translation.md`](docs/architecture/10-voice-and-translation.md) |
+| Personalise | Watch modes, favourite club, player focus, one metric, modes and favourites work in the app; the language picker is a UI today and live translation by Azure Translator is designed, not wired | [`docs/architecture/10-voice-and-translation.md`](docs/architecture/10-voice-and-translation.md) |
 
 ## Architecture
 
@@ -49,19 +49,19 @@ Four agents with separate jobs: **Producer** (picks moments, routes lines, asks 
 
 | Technology | Use | Code |
 | --- | --- | --- |
-| Microsoft Foundry (gpt-6-luna) | Agent model calls with managed identity | [`packages/agents/matchcast_agents/live/client.py`](packages/agents/matchcast_agents/live/client.py), [`scripts/smoke_foundry.py`](scripts/smoke_foundry.py) |
-| Microsoft Agent Framework | Producer, Analyst, Narrator, Verifier workflow | [`packages/agents`](packages/agents) |
-| Azure MCP / MCP server | Tools for the agents and Copilot | [`services/mcp`](services/mcp), [`docs/mcp.md`](docs/mcp.md) |
+| Microsoft Foundry (gpt-6-luna) | Client with managed identity written and smoke-tested by script; live agent run pending model quota (rules mode today) | [`packages/agents/matchcast_agents/live/client.py`](packages/agents/matchcast_agents/live/client.py), [`scripts/smoke_foundry.py`](scripts/smoke_foundry.py) |
+| Microsoft Agent Framework | Target orchestrator for the four agents; today `packages/agents` is a hand-written workflow with the same shape, and the move is designed, not built | [`docs/architecture/04-agents.md`](docs/architecture/04-agents.md) |
+| MCP server | Tools for Copilot and clients, mounted by the API at `/mcp`; agents call in-process twins until the MCP client switch is built | [`services/mcp`](services/mcp), [`docs/mcp.md`](docs/mcp.md) |
 | Azure Container Apps, Event Hubs, Storage, Key Vault, Application Insights | Hosting, event stream, state, secrets, telemetry | [`infra/`](infra/), [`docs/infra.md`](docs/infra.md) |
 | Microsoft Entra ID | Sign-in with Viewer, Producer and Admin roles | [`services/api/app/auth.py`](services/api/app/auth.py) |
-| Azure AI Content Safety | Screens generated lines | [`packages/agents/matchcast_agents/safety.py`](packages/agents/matchcast_agents/safety.py) |
+| Azure AI Content Safety | REST client written; local rules do the screening until it is wired in | [`packages/agents/matchcast_agents/safety.py`](packages/agents/matchcast_agents/safety.py) |
 | GitHub Actions + OIDC, azd | CI and deploy | [`.github/workflows/`](.github/workflows/) |
 
-Planned, not built yet: Speech, Translator, Vision, AI Search, Databricks, Fabric. The architecture docs mark each one; nothing here is claimed as running that does not run.
+Rows above say where a service is written but not live. Planned, not built yet: Speech, Translator, Vision, AI Search, Databricks, Fabric. The architecture docs mark each one; nothing here is claimed as running that does not run.
 
 ## Responsible AI
 
-Every published line passes the Verifier and, in Producer mode, a human approval. Content Safety screens text, a red-team set is kept in `eval/`, and all people and clubs are fictional. See [`docs/responsible-ai.md`](docs/responsible-ai.md) and [`docs/architecture/14-security-and-responsible-ai.md`](docs/architecture/14-security-and-responsible-ai.md).
+Every published line passes the Verifier and, in Producer mode, a human approval. A local screen checks text (the Azure Content Safety client is written, not wired yet), a red-team set is kept in `eval/`, and all people and clubs are fictional. See [`docs/responsible-ai.md`](docs/responsible-ai.md) and [`docs/architecture/14-security-and-responsible-ai.md`](docs/architecture/14-security-and-responsible-ai.md).
 
 ## Run locally
 
@@ -94,7 +94,7 @@ make e2e                         # Playwright
 | --- | --- |
 | `apps/unified` | The app: Watch, Analyst and Broadcast views behind one top bar |
 | `services/api` | FastAPI: matches, events, SSE stream, approval and audit |
-| `services/worker`, `services/simulation`, `services/mcp` | Event consumer, headless simulator, MCP tools |
+| `services/worker`, `services/mcp` | Event consumer, MCP tools (`services/simulation` is a placeholder for the headless runner) |
 | `packages/contracts` | JSON Schema for events, claims and audit; generated TypeScript |
 | `packages/agents`, `packages/metrics`, `packages/shared` | Agent workflow, metric functions, Azure clients and telemetry |
 | `infra`, `azure.yaml` | Bicep and azd |
