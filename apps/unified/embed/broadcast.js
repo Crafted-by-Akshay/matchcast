@@ -60,10 +60,13 @@ function consumerStep(dt, snap) {
     const p = players[i]; if (!p || p.off) return;
     p.pos2.x += (q[0] + q[2] * age - p.pos2.x) * k; p.pos2.y += (q[1] + q[3] * age - p.pos2.y) * k;
     p.vel.set(q[2], q[3]);
-    // the action pose (kick, slide, header, dive, celebration): take Watch's, then run its clock here because the desk does not step the match
-    const a = q[5];
-    if (a) { a.plan = { lofted: a.lofted }; if (snap || !p.act || p.act.type !== a.type || Math.abs(p.act.t - a.t) > 0.35) p.act = a; }
-    else if (p.act && (snap || p.act.t >= p.act.dur * 0.9)) p.act = null;
+    // the action pose (kick, slide, header, dive, celebration): take Watch's when a new frame arrives, then run its clock here because the desk does not step the match
+    if (p._actFrame !== CONS.n) {
+      p._actFrame = CONS.n;
+      const a = q[5];
+      if (a) { if (snap || !p.act || p.act.type !== a.type || Math.abs(p.act.t - a.t) > 0.35) { a.plan = { lofted: a.lofted }; p.act = a; } }
+      else if (p.act && (snap || p.act.t >= p.act.dur * 0.9)) p.act = null;
+    } else if (snap && !q[5] && p.act) p.act = null;
     if (p.act && !snap) { p.act.t += dt; if (p.act.t >= p.act.dur) p.act = null; }
     let dy = q[4] - p.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); p.yaw += dy * k;
   });
