@@ -8,13 +8,15 @@ COPY pyproject.toml uv.lock ./
 COPY packages packages
 COPY services/api services/api
 COPY services/worker services/worker
+COPY services/mcp services/mcp
+COPY data/season data/season
 RUN uv sync --locked --no-dev --package matchcast-api
 
 FROM python:3.12-slim
 RUN useradd --system --uid 10001 matchcast
 WORKDIR /app
 COPY --from=build /app /app
-ENV PATH="/app/.venv/bin:$PATH" MATCHCAST_MODE=cloud
+ENV PATH="/app/.venv/bin:$PATH" MATCHCAST_MODE=cloud MATCHCAST_SEASON_DIR=/app/data/season/v1
 USER matchcast
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--app-dir", "services/api", "--host", "0.0.0.0", "--port", "8000"]

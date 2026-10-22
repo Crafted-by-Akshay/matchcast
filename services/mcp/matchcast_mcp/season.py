@@ -34,9 +34,10 @@ def default_root() -> Path:
     env = os.environ.get("MATCHCAST_SEASON_DIR")
     if env:
         return Path(env)
-    return next(
-        p / "data/season/v1" for p in Path(__file__).resolve().parents if (p / "data").is_dir()
-    )
+    for p in Path(__file__).resolve().parents:
+        if (p / "data/season/v1").is_dir():
+            return p / "data/season/v1"
+    raise SeasonError("season data not found: set MATCHCAST_SEASON_DIR to the Parquet folder")
 
 
 class Season:
@@ -45,8 +46,9 @@ class Season:
         self._con = duckdb.connect()
         for table in TABLES:
             path = self.root / f"{table}.parquet"
-            quoted = str(path).replace("'", "''")  # a view cannot take a parameter
-            self._con.execute(f"CREATE VIEW {table} AS SELECT * FROM read_parquet('{quoted}')")
+            if not path.is_file():
+                raise SeasonError(f"season file missing: {path}")
+            self._con.read_parquet(str(path)).create_view(table)
         # the check_sql guard is the first line; this stops file and setting access if it is beaten
         self._con.execute(
             f"SET allowed_directories=['{str(self.root).replace(chr(39), chr(39) * 2)}']"
