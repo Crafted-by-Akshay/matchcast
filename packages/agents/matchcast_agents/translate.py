@@ -8,6 +8,7 @@ English. Anything else drops that language for that line: the viewer keeps the E
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import html
 import json
 import logging
@@ -15,7 +16,9 @@ import os
 import re
 import urllib.parse
 import urllib.request
-from collections.abc import Iterable
+from collections import OrderedDict
+from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -41,9 +44,9 @@ class Translator(Protocol):
 
 
 def numbers(text: str) -> list[str]:
-    """Every number in the text, Devanagari digits read as ASCII and separators dropped, sorted."""
+    """Numbers in the text, Devanagari read as ASCII, decimal commas as points, sorted."""
     found = _NUMBER.findall(text.translate(_DEVANAGARI))
-    return sorted(re.sub(r"[.,]", "", n) for n in found)  # 2.5 and 2,5 are the same number
+    return sorted(n.replace(",", ".") for n in found)  # 2.5 and 2,5 are the same, 25 is not
 
 
 def protect(text: str, names: Iterable[str]) -> str:
@@ -116,6 +119,11 @@ class Variant:
     reason: str | None = None
 
 
+_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="translate")
+_RETRY = ("service_error", "paused")  # not remembered: the next viewer may succeed
+CACHE_LIMIT = 2000
+
+
 class TranslationService:
     """Translates a verified line once per language, within a character cap."""
 
@@ -132,7 +140,7 @@ class TranslationService:
         env_cap = os.environ.get("TRANSLATOR_MAX_CHARS")
         self.max_chars = max_chars if max_chars is not None else int(env_cap or MAX_CHARS_DEFAULT)
         self.used = 0
-        self._done: dict[tuple[str, str], asyncio.Future[Variant]] = {}
+        self._tasks: OrderedDict[str, asyncio.Task[Variant]] = OrderedDict()
 
     @property
     def ready(self) -> bool:
@@ -142,37 +150,67 @@ class TranslationService:
     def paused(self) -> bool:
         return self.used >= self.max_chars
 
-    async def variant(self, key: str, text: str, lang: str, names: Iterable[str]) -> Variant:
-        """The checked translation of ``text``; shared by every viewer asking for the same key."""
+    async def variant(
+        self,
+        scope: str,
+        key: str,
+        text: str,
+        lang: str,
+        names: Iterable[str],
+        on_reject: Callable[[str], None] | None = None,
+    ) -> Variant:
+        """The checked translation of ``text``, shared by every viewer asking for the same thing.
+
+        ``scope`` (session and match) and the text and names are part of the cache key, so a
+        variant is never served to another match. ``on_reject`` runs once, when the result is
+        first computed."""
         if lang == "en" or lang not in LANGUAGES:
             return Variant(None, "unsupported")
         if self.translator is None:
             return Variant(None, "unavailable")
-        slot = (key, lang)
-        pending = self._done.get(slot)
-        if pending is None:
-            pending = asyncio.get_running_loop().create_future()
-            self._done[slot] = pending
-            try:
-                pending.set_result(await self._translate(text, lang, list(names)))
-            except BaseException as error:
-                self._done.pop(slot, None)  # a cancelled or failed attempt is retried
-                pending.cancel()
-                raise error
-        return await asyncio.shield(pending)
+        names = sorted(set(names))
+        digest = hashlib.sha256(
+            json.dumps([scope, key, lang, text, names], ensure_ascii=False).encode()
+        ).hexdigest()
+        task = self._tasks.get(digest)
+        if task is None:
+            task = asyncio.get_running_loop().create_task(
+                self._translate(text, lang, names, on_reject)
+            )
+            self._tasks[digest] = task
+            task.add_done_callback(lambda t, d=digest: self._settled(d, t))
+            while len(self._tasks) > CACHE_LIMIT:
+                self._tasks.popitem(last=False)
+        return await asyncio.shield(task)  # a viewer leaving cancels only its own wait
 
-    async def _translate(self, text: str, lang: str, names: list[str]) -> Variant:
+    def _settled(self, digest: str, task: asyncio.Task[Variant]) -> None:
+        if task.cancelled() or task.exception() is not None or task.result().reason in _RETRY:
+            self._tasks.pop(digest, None)
+
+    async def _translate(
+        self, text: str, lang: str, names: list[str], on_reject: Callable[[str], None] | None
+    ) -> Variant:
         if self.paused:
             return Variant(None, "paused")
-        self.used += len(text)
+        sent = protect(text, names)
+        self.used += len(sent)
         try:
             raw = await asyncio.wait_for(
-                asyncio.to_thread(self.translator.translate, protect(text, names), lang),  # type: ignore[union-attr]
+                asyncio.get_running_loop().run_in_executor(
+                    _POOL,
+                    self.translator.translate,
+                    sent,
+                    lang,  # type: ignore[union-attr]
+                ),
                 TRANSLATE_TIMEOUT_S + 1,
             )
-        except (TranslationError, TimeoutError) as error:
+        except Exception as error:  # noqa: BLE001 - auth, network, timeout: keep the English
             log.warning("translation to %s failed: %s", lang, type(error).__name__)
             return Variant(None, "service_error")
         translated = clean(raw)
         reason = recheck(text, translated, names)
-        return Variant(None, reason) if reason else Variant(translated)
+        if reason:
+            if on_reject:
+                on_reject(reason)
+            return Variant(None, reason)
+        return Variant(translated)

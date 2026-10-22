@@ -448,12 +448,16 @@ def build_router(registry: Registry) -> APIRouter:
             if lang == "en" or item.event != "publication":
                 return item
             data = item.data
+            pub_id = data["publication_id"]
             variant = await registry.translation.variant(
-                data["publication_id"], data["text"], lang, _names(flow)
+                f"{session_id}/{match_id}",
+                pub_id,
+                data["text"],
+                lang,
+                _names(flow),
+                lambda reason: flow.record_translation_rejected(pub_id, lang, reason),
             )
             if variant.text is None:
-                if variant.reason not in ("unavailable", "paused", "unsupported"):
-                    flow.record_translation_rejected(data["publication_id"], lang, variant.reason)
                 return item
             return StreamEvent(item.event, item.id, {**data, "variants": {lang: variant.text}})
 
@@ -719,12 +723,15 @@ def build_router(registry: Registry) -> APIRouter:
         if body.lang != "en" and not result.abstained:
             key = "ask-" + hashlib.sha256(result.answer.encode()).hexdigest()[:12]
             variant = await registry.translation.variant(
-                key, result.answer, body.lang, _names(flow)
+                f"{body.session_id}/{match_id}",
+                key,
+                result.answer,
+                body.lang,
+                _names(flow),
+                lambda reason: flow.record_translation_rejected(key, body.lang, reason),
             )
             if variant.text is not None:
                 reply["variants"] = {body.lang: variant.text}
-            elif variant.reason not in ("unavailable", "paused", "unsupported"):
-                flow.record_translation_rejected(key, body.lang, variant.reason or "rejected")
         return reply
 
     return router

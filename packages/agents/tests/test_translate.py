@@ -21,7 +21,8 @@ def test_names_and_markers_are_wrapped_and_text_is_escaped():
 
 
 def test_numbers_read_devanagari_and_comma_decimals():
-    assert numbers("सात 7 शॉट, ७ और 2,5") == numbers("7 7 25") == ["25", "7", "7"]
+    assert numbers("सात 7 शॉट, ७ और 2,5") == numbers("7 7 2.5") == ["2.5", "7", "7"]
+    assert numbers("2.5 xG") != numbers("25 xG")
 
 
 def test_recheck_accepts_faithful_and_rejects_each_kind_of_drift():
@@ -59,7 +60,7 @@ def test_one_call_per_line_and_language_shared_by_concurrent_viewers():
     async def go():
         service = TranslationService(fake, max_chars=1000)
         return await asyncio.gather(
-            *[service.variant("p1", EN, "es", ["Northgate FC"]) for _ in range(5)]
+            *[service.variant("s/m", "p1", EN, "es", ["Northgate FC"]) for _ in range(5)]
         )
 
     results = run(go())
@@ -68,7 +69,7 @@ def test_one_call_per_line_and_language_shared_by_concurrent_viewers():
 
 def test_unsupported_unconfigured_and_failing_service_keep_english():
     async def go(service, lang):
-        return await service.variant("p", EN, lang, [])
+        return await service.variant("s/m", "p", EN, lang, [])
 
     assert run(go(TranslationService(Fake(), 100), "en")).reason == "unsupported"
     assert run(go(TranslationService(Fake(), 100), "ta")).reason == "unsupported"
@@ -78,7 +79,7 @@ def test_unsupported_unconfigured_and_failing_service_keep_english():
 
 def test_a_changed_number_is_rejected_with_the_reason():
     service = TranslationService(Fake(lambda t: t.replace("7", "9")), 1000)
-    v = run(service.variant("p", EN, "es", ["Northgate FC"]))
+    v = run(service.variant("s/m", "p", EN, "es", ["Northgate FC"]))
     assert v.text is None and v.reason == "numbers_differ"
 
 
@@ -86,8 +87,8 @@ def test_character_cap_pauses_translation():
     service = TranslationService(Fake(), max_chars=len(EN))
 
     async def go():
-        first = await service.variant("a", EN, "es", [])
-        second = await service.variant("b", EN, "es", [])
+        first = await service.variant("s/m", "a", EN, "es", [])
+        second = await service.variant("s/m", "b", EN, "es", [])
         return first, second
 
     first, second = run(go())
@@ -129,3 +130,66 @@ def test_azure_translator_failure_is_a_translation_error_without_detail():
         with pytest.raises(TranslationError) as raised:
             translator.translate("x", "es")
     assert "secret" not in str(raised.value)
+
+
+def test_a_variant_is_never_served_to_another_match_or_other_names():
+    fake = Fake(lambda t: "[es] " + t)
+
+    async def go():
+        service = TranslationService(fake, 10_000)
+        one = await service.variant("a/m1", "p", "Zed has 3 shots", "es", ["Zed"])
+        two = await service.variant("b/m2", "p", "Hugo has 3 shots", "es", ["Hugo"])
+        return one, two
+
+    one, two = run(go())
+    assert len(fake.calls) == 2 and one.text != two.text
+
+
+def test_one_viewer_leaving_does_not_cancel_the_others():
+    import threading
+
+    gate = threading.Event()
+
+    class Slow(Fake):
+        def translate(self, text_html, lang):
+            gate.wait(2)
+            return text_html
+
+    async def go():
+        service = TranslationService(Slow(), 10_000)
+        first = asyncio.create_task(service.variant("s/m", "p", EN, "es", []))
+        second = asyncio.create_task(service.variant("s/m", "p", EN, "es", []))
+        await asyncio.sleep(0.05)
+        first.cancel()
+        gate.set()
+        return await second
+
+    assert run(go()).text == EN
+
+
+def test_credential_errors_keep_english_and_are_retried_later():
+    class Broken(Fake):
+        def translate(self, text_html, lang):
+            raise RuntimeError("no credential")
+
+    async def go():
+        service = TranslationService(Broken(), 10_000)
+        first = await service.variant("s/m", "p", EN, "es", [])
+        service.translator = Fake()
+        second = await service.variant("s/m", "p", EN, "es", [])
+        return first, second
+
+    first, second = run(go())
+    assert first.reason == "service_error" and second.text == EN
+
+
+def test_a_rejection_is_audited_once_however_many_viewers_ask():
+    seen = []
+    service = TranslationService(Fake(lambda t: t.replace("7", "9")), 10_000)
+
+    async def go():
+        for _ in range(4):
+            await service.variant("s/m", "p", EN, "es", [], seen.append)
+
+    run(go())
+    assert seen == ["numbers_differ"]
