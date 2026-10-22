@@ -45,3 +45,33 @@ def max_numbers(persona: str) -> int:
 
 def slug(persona: str) -> str:
     return persona.replace(":", "-")
+
+
+ALIASES = {"fan": "casual", "producer": "broadcast"}
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.casefold()).strip("-")
+
+
+def normalise(raw: str | None, clubs: dict[str, str], names: dict[str, str]) -> str | None:
+    """Turn what the viewer sends into a server persona, or None when it is not one.
+
+    Watch sends ``club:<key>``, ``player:<name>`` and ``metric:<name>``; the server speaks
+    ``my-club:<team_id>``, ``player-focus:<player_id>`` and ``one-metric:<metric>``.
+    """
+    if not raw:
+        return None
+    raw = ALIASES.get(raw, raw)
+    kind, _, arg = raw.partition(":")
+    if kind == "club":
+        team = next((t for t, n in clubs.items() if arg in (t, _slug(n))), None)
+        raw = f"my-club:{team}" if team else ""
+    elif kind == "player":
+        player = next(
+            (p for p, n in names.items() if arg in (p, n) or _slug(arg) == _slug(n)), None
+        )
+        raw = f"player-focus:{player}" if player else ""
+    elif kind == "metric":
+        raw = f"one-metric:{arg.replace('-', '_')}"
+    return raw if valid(raw) else None

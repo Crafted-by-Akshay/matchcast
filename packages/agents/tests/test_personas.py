@@ -66,3 +66,24 @@ def test_one_metric_only_quotes_that_metric(match) -> None:
     flow = flow_with(match, ["one-metric:shots_on_target"])
     lines = flow.store.lines(flow.sk)
     assert lines and all(ln.text.startswith("Shots on target:") for ln in lines)
+
+
+def test_watch_client_names_map_to_server_personas(match) -> None:
+    from matchcast_agents.personas import normalise
+
+    clubs, names = match["teams"], match["names"]
+    assert normalise("fan", clubs, names) == "casual"
+    assert normalise("club:northgate-fc", clubs, names) == "my-club:home"
+    assert normalise("club:away", clubs, names) == "my-club:away"
+    player = next(iter(names))
+    assert normalise(f"player:{names[player]}", clubs, names) == f"player-focus:{player}"
+    assert normalise("metric:shots-on-target", clubs, names) == "one-metric:shots_on_target"
+    assert normalise("club:nobody", clubs, names) is None
+
+
+def test_a_watch_mode_added_mid_match_gets_lines_from_then_on(match) -> None:
+    flow = flow_with(match, ["casual"])
+    before = {ln.persona for ln in flow.store.lines(flow.sk)}
+    assert flow.add_persona("one-metric:fouls") and not flow.add_persona("poet")
+    run(flow.ingest([]))
+    assert before == {"casual"} and flow.extra_personas == ["one-metric:fouls"]
