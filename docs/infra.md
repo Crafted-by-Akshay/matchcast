@@ -41,3 +41,6 @@ Then assign the judge account the `Producer` role in Entra admin centre > Enterp
 Fallback if the tenant blocks app registrations: leave `ENTRA_CLIENT_ID` empty and use the signed demo code in the UI, labelled "Simulated sign-in", and record the reason here.
 
 Known exception to "no secret": `entra-client-secret` (Key Vault reference on the apps). Not yet run: the registration, the Easy Auth deployment and the sign-in flow need the Mac mini or portal.
+
+## Scaling proof (PLT-9)
+KEDA rule `match-events-backlog` (threshold 50 unprocessed events) wakes the api from 0. To record the graph: in one shell run `scripts/watch_replicas.sh replicas.csv 1200 5`, in another publish 500 events in 10 s with the replay publisher (DAT-1, 4x mode), then plot `replicas.csv` and commit the image under `docs/evidence/`. Expected: 0 to 1 within 60 s, back to 0 within 10 minutes of the last event. Waiting on DAT-1's replay publisher and the first deployed api image.
