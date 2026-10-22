@@ -55,3 +55,32 @@ def process(repo: StateRepo, events: Iterable[dict[str, Any]]) -> list[dict[str,
         if nxt.revision != state.revision:
             packets.append(revision_packet(nxt, event))
     return packets
+
+
+def process_applied(
+    repo: StateRepo, events: Iterable[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """`process`, and also the events that became applied, in stream order (ADR-0017).
+
+    An event ahead of a gap is held and comes back from a later call, once the gap closes; a
+    sequence given up on in `skipped` never comes back. The api passes these to the workflow
+    so the reducer is the only writer of `matchstate`."""
+    packets: list[dict[str, Any]] = []
+    applied: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("kind") != "event":
+            continue
+        sk = stream_key(event)
+        state = repo.get(sk) or StreamState()
+        nxt = reduce(state, event)
+        if nxt is state:
+            continue
+        repo.save(sk, nxt)
+        if nxt.revision != state.revision:
+            packets.append(revision_packet(nxt, event))
+        known = {**state.pending, event["stream_sequence"]: event}
+        gaps = [(lo, hi) for lo, hi in nxt.skipped]
+        for seq in range(state.max_sequence + 1, nxt.max_sequence + 1):
+            if seq in known and not any(lo <= seq <= hi for lo, hi in gaps):
+                applied.append(known[seq])
+    return packets, applied
