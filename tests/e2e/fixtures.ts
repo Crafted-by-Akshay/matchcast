@@ -4,13 +4,17 @@ import { test as base, expect, type BrowserContext } from '@playwright/test';
 // Specs import `test` from here (re-exporting everything else from Playwright). A live run (E2E_BASE_URL) talks to the real deployment and is not guarded.
 export * from '@playwright/test';
 
-const BLOCKED = ['azure.com', 'cognitiveservices.azure.com', 'openai.azure.com', 'search.windows.net'];
+const BLOCKED = ['azure.com', 'cognitiveservices.azure.com', 'openai.azure.com', 'search.windows.net', 'speech.microsoft.com', 'cognitive.microsoft.com', 'microsofttranslator.com'];
 export const isAzureHost = (host: string) => BLOCKED.some((s) => host === s || host.endsWith('.' + s));
 
 export const test = base.extend<{ azureHits: string[]; azureGuard: void }>({
   azureHits: async ({}, use) => { await use([]); },
   azureGuard: [async ({ browser, context, azureHits }, use) => {
-    const guard = (c: BrowserContext) => c.route((url) => isAzureHost(url.hostname), (route) => { azureHits.push(route.request().url()); return route.abort('blockedbyclient'); });
+    const guard = async (c: BrowserContext) => {
+      await c.route((url) => isAzureHost(url.hostname), (route) => { azureHits.push(route.request().url()); return route.abort('blockedbyclient'); });
+      // the Speech SDK talks over WebSockets, which context.route does not see
+      await c.routeWebSocket((url) => isAzureHost(url.hostname), (ws) => { azureHits.push(ws.url()); return ws.close(); });
+    };
     const newContext = browser.newContext.bind(browser);
     if (!process.env.E2E_BASE_URL) {
       await guard(context);

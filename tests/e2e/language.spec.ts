@@ -5,7 +5,7 @@ import { collectErrors, openShell } from './helpers';
 declare const AG: any, MCC: any, cardOf: any;
 
 const goal = (page, minute: number, score: string) => page.evaluate(([m, s]) => {
-  AG.onWatch('k1', [{ minute: m, type: 'goal', team: 'ars', player: 'A One', score: s, data: {} }], []);
+  AG.onWatch('k1', [{ minute: m, type: 'goal', team: 'thr', player: 'A One', score: s, data: {} }], []);
 }, [minute, score]);
 
 test.beforeEach(({ page }) => page.addInitScript(() => { (window as any).MC_TEST = true; }));
@@ -13,17 +13,17 @@ test.beforeEach(({ page }) => page.addInitScript(() => { (window as any).MC_TEST
 test('language: Spanish and Hindi keep numbers and names; a bad translation shows Translation unavailable', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.evaluate(() => AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' }));
+  await page.evaluate(() => AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }));
   await goal(page, 10.1, '1-0');
   const c = await page.evaluate(() => { const x = AG.run.claims.find((q: any) => q.kind === 'score'); return { en: x.text, tr: x.tr }; });
   for (const lang of ['es', 'hi']) {
     expect(c.tr[lang].ok).toBe(true);
     for (const n of ['1', '0', '10']) expect(c.tr[lang].text).toContain(n);
-    for (const name of ['A One', 'Arsenal', 'Chelsea']) expect(c.tr[lang].text).toContain(name);
+    for (const name of ['A One', 'Thames Rovers', 'Coloso Ciudad']) expect(c.tr[lang].text).toContain(name);
   }
   expect(c.tr.es.text).toContain('Gol de');
   // a translator that changes a number is rejected, audited, and the card carries the note instead of a line
-  await page.evaluate(() => AG.setTranslator((x: any) => x.kind === 'score' ? 'Gol de Arsenal (A One) en el min 10. Arsenal 2–0 Chelsea.' : null));
+  await page.evaluate(() => AG.setTranslator((x: any) => x.kind === 'score' ? 'Gol de Thames Rovers (A One) en el min 10. Thames Rovers 2–0 Coloso Ciudad.' : null));
   await goal(page, 20.2, '2-0');
   const bad = await page.evaluate(() => { const x = AG.run.claims.filter((q: any) => q.kind === 'score')[1]; return { es: x.tr.es, card: cardOf(x).tr.es }; });
   expect(bad.es.ok).toBe(false);
@@ -36,8 +36,8 @@ test('language: Spanish and Hindi keep numbers and names; a bad translation show
 test('language: a moment with prose from Watch stays English with a note', async ({ page }) => {
   await openShell(page, 'agents');
   await page.evaluate(() => {
-    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k1', [], [{ id: 'm1', minute: 30, type: 'turning_point', title: 'Momentum shifts', why: 'Arsenal have had 70% of the ball.' }]);
+    AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch('k1', [], [{ id: 'm1', minute: 30, type: 'turning_point', title: 'Momentum shifts', why: 'Thames Rovers have had 70% of the ball.' }]);
   });
   const t = await page.evaluate(() => AG.run.claims[0].tr);
   expect(t.es.ok).toBe(false);
@@ -46,11 +46,11 @@ test('language: a moment with prose from Watch stays English with a note', async
 
 test('language: a swapped score, swapped clubs or an extra name is rejected', async ({ page }) => {
   await openShell(page, 'agents');
-  await page.evaluate(() => AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' }));
+  await page.evaluate(() => AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }));
   await goal(page, 10.1, '1-0');
   const bad = await page.evaluate(() => {
     const c = AG.run.claims.find((q: any) => q.kind === 'score');
-    return ['Gol de Arsenal (A One) en el min 10. Arsenal 0–1 Chelsea.', 'Gol de Arsenal (A One) en el min 10. Chelsea 1–0 Arsenal.', 'Gol de Arsenal (Bob Smith) en el min 10. Arsenal 1–0 Chelsea.', 'Gol de Arsenal (A One) en el min 10. Arsenal 1–0 Chelsea.'].map((t) => AG.checkTranslation(c, t).ok);
+    return ['Gol de Thames Rovers (A One) en el min 10. Thames Rovers 0–1 Coloso Ciudad.', 'Gol de Thames Rovers (A One) en el min 10. Coloso Ciudad 1–0 Thames Rovers.', 'Gol de Thames Rovers (Bob Smith) en el min 10. Thames Rovers 1–0 Coloso Ciudad.', 'Gol de Thames Rovers (A One) en el min 10. Thames Rovers 1–0 Coloso Ciudad.'].map((t) => AG.checkTranslation(c, t).ok);
   });
   expect(bad).toEqual([false, false, false, true]);
 });
@@ -58,9 +58,9 @@ test('language: a swapped score, swapped clubs or an extra name is rejected', as
 test('language: shot and xG lines translate and pass the re-check in both languages', async ({ page }) => {
   await openShell(page, 'agents');
   await page.evaluate(() => {
-    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k1', [{ minute: 33.3, type: 'shot', team: 'che', player: 'C One', x: 90, y: 30, xg: 0.4, kind: 'open play', data: { xg: 0.4, kind: 'open play' } },
-      { minute: 36.1, type: 'shot', team: 'ars', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'penalty', data: { xg: 0.3, kind: 'penalty' } }], []);
+    AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch('k1', [{ minute: 33.3, type: 'shot', team: 'cco', player: 'C One', x: 90, y: 30, xg: 0.4, kind: 'open play', data: { xg: 0.4, kind: 'open play' } },
+      { minute: 36.1, type: 'shot', team: 'thr', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'penalty', data: { xg: 0.3, kind: 'penalty' } }], []);
   });
   const kinds = await page.evaluate(() => AG.run.claims.filter((c: any) => c.tr).map((c: any) => [c.kind, c.tr.es.ok, c.tr.hi.ok]));
   expect(kinds.length).toBeGreaterThanOrEqual(3);
@@ -70,7 +70,7 @@ test('language: shot and xG lines translate and pass the re-check in both langua
 // PR 118: the api sends variants only for translations it re-checked; they replace the rules text for that language and the other language keeps the fallback.
 test('language: api variants are shown for the language they cover; the other keeps the rules line', async ({ page }) => {
   await openShell(page, 'agents');
-  await page.evaluate(() => AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' }));
+  await page.evaluate(() => AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }));
   await goal(page, 10.1, '1-0');
   const r = await page.evaluate(() => {
     const x = AG.run.claims.find((q: any) => q.kind === 'score');
