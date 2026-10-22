@@ -194,3 +194,53 @@ def test_concurrent_queries_share_one_connection_safely() -> None:
 
     with ThreadPoolExecutor(16) as pool:
         assert all(r == [[28]] for r in pool.map(one, range(200)))
+
+
+def test_predict_danger_scores_a_shot_and_refuses_the_future(store) -> None:
+    shot = next(e for e in FIXTURE["events"] if e["payload"]["type"] == "shot")
+    result = run(
+        call(
+            store,
+            "predict_danger",
+            up_to_sequence=shot["stream_sequence"],
+            event_id=shot["event_id"],
+        )
+    )
+    data = result.structured_content
+    assert 0.0 <= data["score"] <= 1.0
+    assert "not a probability" in data["meaning"]
+    assert {"xg", "phase", "kind"} <= set(data["unset_inputs"])
+    early = run(call(store, "predict_danger", up_to_sequence=1, event_id=shot["event_id"]))
+    assert early.is_error
+
+
+def test_danger_features_follow_the_cards_feature_order() -> None:
+    import json as _json
+
+    from matchcast_mcp import danger
+
+    folder = Path(__file__).parents[3] / "data/models/danger/v1"
+    card = _json.loads((folder / "model-card.json").read_text())
+    sample = _json.loads((folder / "heldout-sample.json").read_text())
+    session, _ = danger._load(str(folder))
+    import numpy as np
+
+    for row in sample:  # the packaged model reproduces the recorded scores
+        out = session.run(None, {"X": np.array([row["features"]], dtype=np.float32)})
+        assert abs(float(out[1][0][1]) - row["p"]) < 1e-5
+    PASS = {"type": "pass"}
+    event = {
+        "event_id": "e",
+        "stream_sequence": 5,
+        "event_time_ms": 30_000,
+        "payload": {"type": "shot", "team_id": "home", "position": {"x": 90.0, "y": 30.0}},
+    }
+    earlier = [
+        {"event_id": "a", "stream_sequence": 4, "event_time_ms": 25_000, "payload": PASS},
+        {"event_id": "b", "stream_sequence": 3, "event_time_ms": 5_000, "payload": PASS},
+    ]
+    row, unset = danger.features(event, earlier, card)
+    by_name = dict(zip(card["features"], row, strict=True))
+    assert len(row) == 47 and by_name["passes_prev_10s"] == 1.0  # the pass 25 s ago is outside
+    assert by_name["type=shot"] == 1.0 and by_name["x"] == 90.0 and by_name["xg"] == -1.0
+    assert by_name["phase="] == 1.0 and "xg" in unset
