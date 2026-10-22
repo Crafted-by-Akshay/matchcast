@@ -32,6 +32,8 @@ On-demand agents (never on the live loop):
 
 ## 3. Workflow graph (Microsoft Agent Framework)
 
+Exported image: [img/2-agent-workflow.png](img/2-agent-workflow.png) (regenerate with `scripts/export_diagrams.sh`).
+
 ```mermaid
 flowchart LR
   ev([state revision]) --> P[Producer executor]
