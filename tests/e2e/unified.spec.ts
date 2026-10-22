@@ -80,13 +80,16 @@ test('full time in Watch reaches the Analyst library', async () => {
 
 test('a fixture change reloads Watch with the new seed; New match in Broadcast makes it custom', async () => {
   test.setTimeout(480_000); // Broadcast restarts its engine after the change; software rendering on CI is slow
+  await page.click('#tab-watch'); // the shell reloads only the visible view when the fixture changes
+  await expect(page.locator('#v-watch')).toBeVisible();
   const first = await page.locator('#fx').inputValue();
   const other = await page.$$eval('#fx option', (os, cur) => os.map((o: any) => o.value).find((v) => v && v !== cur), first);
   await page.selectOption('#fx', other!);
   const newSeed = await page.evaluate(async (id) => (await fetch('shared/fixtures.json').then((r) => r.json())).find((x: any) => x.id === id).setup.seed, other);
   await expect.poll(async () => (await page.$$eval('#v-watch iframe', (x) => x.map((i: any) => i.getAttribute('src'))))[0] ?? '', { timeout: 60_000, message: 'Watch iframe never got the new fixture seed' }).toContain('seed=' + newSeed);
   await page.click('#tab-broadcast');
-  await expect.poll(async () => { const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url())); return f ? f.evaluate(() => !!((window as any).__mc && (window as any).__mc.S.started)).catch(() => false) : false; }, { timeout: 240_000, intervals: [2000] }).toBe(true);
+  // wait for the reloaded desk (new document, new seed), not the previous one that is still attached while it navigates
+  await expect.poll(async () => { const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url())); return f ? f.evaluate((n) => { const m = (window as any).__mc; return !!(m && m.S.started && String(m.SET().seed) === String(n)); }, newSeed).catch(() => false) : false; }, { timeout: 240_000, intervals: [2000], message: 'Broadcast never restarted on the new fixture' }).toBe(true);
   const bc = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;
   await bc.evaluate(() => document.getElementById('bc-new')!.click());
   await expect(page.locator('#fx')).toHaveValue('custom', { timeout: 30_000 });
