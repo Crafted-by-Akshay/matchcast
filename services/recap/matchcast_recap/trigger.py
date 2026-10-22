@@ -1,7 +1,10 @@
 """The function holds no agent logic (03 F8): it spots full time and asks the api for the recap.
 
 ``POST /internal/v1/recaps`` is idempotent (the workflow skips personas that already have a recap),
-so a replayed batch or two functions seeing the same event only repeat a cheap no-op.
+so a replayed batch or two functions seeing the same event only repeat a cheap no-op. With extra
+time configured (``RECAP_FINAL_PERIODS=2,4``) the end of period 2 writes a regulation-time recap,
+because the function cannot know whether extra time follows; the end of the last period is sent
+with ``final`` so the api writes the recap again and the full-time one replaces it.
 """
 
 import json
@@ -18,6 +21,7 @@ class MatchKey(NamedTuple):
     tenant_id: str
     session_id: str
     match_id: str
+    final: bool = False  # the last configured period ended after an earlier one: replace its recap
 
 
 def final_periods() -> frozenset[int]:
@@ -34,7 +38,8 @@ def full_time_matches(
     Anything that is not a contract event (claims, lines, bad JSON) is ignored.
     """
     wanted = periods or final_periods()
-    seen: dict[MatchKey, None] = {}
+    supersedes = len(wanted) > 1
+    seen: dict[tuple[str, str, str], bool] = {}
     for body in bodies:
         try:
             event = json.loads(body)
@@ -44,11 +49,12 @@ def full_time_matches(
             if payload["boundary"] != "ended" or event["clock"]["period"] not in wanted:
                 continue
             stream = event["stream"]
-            key = MatchKey(stream["tenant_id"], stream["session_id"], stream["match_id"])
+            key = (stream["tenant_id"], stream["session_id"], stream["match_id"])
+            last = supersedes and event["clock"]["period"] == max(wanted)
         except (ValueError, KeyError, TypeError):
             continue
-        seen.setdefault(key)
-    return list(seen)
+        seen[key] = seen.get(key, False) or last
+    return [MatchKey(*key, final) for key, final in seen.items()]
 
 
 class RecapClient:

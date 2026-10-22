@@ -17,17 +17,17 @@ Played 7: won 2, drawn 3, lost 2. Goals for 5, against
 
 | Shirt | Player | Position | Rating |
 | --- | --- | --- | --- |
-| 1 | P. Ortega | GK | 83 |
-| 2 | E. Eriksen | RB | 82 |
-| 3 | A. Fofana | LB | 79 |
-| 4 | C. Ulloa | CB | 80 |
-| 5 | Z. Duarte | CB | 80 |
-| 6 | N. Okoro | DM | 81 |
-| 7 | E. Yilmaz | RW | 83 |
-| 8 | L. Olmo | CM | 83 |
-| 9 | B. Kowalski | ST | 82 |
-| 10 | S. Sørensen | CM | 82 |
-| 11 | B. Pavlov | LW | 84 |
+| 1 | P. Yamanari | GK | 83 |
+| 2 | E. Lunodersen | RB | 82 |
+| 3 | A. Chacourt | LB | 79 |
+| 4 | C. Roumont | CB | 80 |
+| 5 | Z. Raslund | CB | 80 |
+| 6 | N. Beldero | DM | 81 |
+| 7 | E. Navvena | RW | 83 |
+| 8 | L. Serchard | CM | 83 |
+| 9 | B. Olalagu | ST | 82 |
+| 10 | S. Fujisawa | CM | 82 |
+| 11 | B. Stansevic | LW | 84 |
 
 ## Results
 

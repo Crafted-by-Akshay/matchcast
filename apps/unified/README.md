@@ -77,6 +77,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - Tested in local headless Chromium. Not yet tested inside the claude.ai artifact host.
 
 ## Lower-thirds, teleprompter and the approval queue (EXP-7, EXP-11)
+- Broadcast accepts an `air` message only from the shell (`e.source === window.parent`), because the approval gate lives in the shell; `broadcast.spec.ts` sends a forged one and checks nothing airs.
 - The lower-third and teleprompter sit inside the live view (`#bc-view`), because the desk's CSS hides every other direct child of `body`. `tests/e2e/broadcast.spec.ts` (QUA-2) checks they are visible on screen, not only un-hidden.
 - Agents tab, Approval queue: **Demo** mode airs verified Broadcast lines at once. **Producer** mode holds each one until a person approves, edits or kills it. The signed-in producer is a simulated account (Planned: Entra ID).
 - Broadcast shows an approved line as a lower-third for 8 seconds and keeps the last five in the teleprompter list. A pending or killed line reaches no view, including Watch's Match Pulse.
@@ -90,6 +91,7 @@ Choosing Spanish or Hindi in Watch shows Match Pulse cards in that language. Wit
 
 ## Audit chain from the server (EXP-12)
 With an api configured, "Verify chain" in the Agents tab fetches `GET /v1/matches/{id}/audit`, pages through the records (1000 a call, `from_seq`), recomputes every hash in the page (same rules as `verifyChain` in packages/contracts: sorted-key canonical JSON, SHA-256, genesis of 64 zeros) and shows "Chain intact · N records · server" or the first broken sequence and reason. With no api, or if the api cannot answer, it checks the in-page chain and says so. The Analyst's own Trust & audit page still verifies its in-page chain (Planned: switch it to the same call).
+
 ## Wild-moment alerts (EXP-9)
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
 
@@ -124,3 +126,12 @@ A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chi
 - While Vision is on, `embed/watch.js` posts `visReport()` to the shell every 5 s. The shell keeps the latest report (`M.vision`) and forwards it to the Analyst, which shows it at the top of Data science > Tracking lab (`analyst-pages/40_vision.js`): recall, precision, position error, glyph-reader identity, passes, ball, speed.
 - Identity with Azure AI Vision Read OCR as a second opinion, the crop queue and the `/vision/identify` api are **Planned** (tasks 275 and 277); the panel says so.
 - Tests: `tracking lab:` and `vision on in Watch reaches the Tracking lab` in `tests/e2e/analyst.spec.ts`.
+
+## Talk by voice (EXP-16)
+Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.js`): hold, speak, release and the words fill the box and submit it; Space or Enter on the focused button works too, and typing always works. Watch's talk-to-player already had a mic. Both use the browser's speech recognition (the button is disabled where the browser has none). Orders that change play are labelled "Game mode" in Watch and never touch the event record behind the claims. Planned, all needing the api: the Speech token endpoint with the Azure Speech SDK, the `/talk` role agents with Verifier and Content Safety, and a spoken reply from the api's voices. No Speech key is ever placed in the page.
+
+## On-air log (AB#362)
+- On-air log (`embed/onair.js`): every line that reached air is logged; "Export on-air JSON" saves `matchcast.onair/1` (id, minute, text, alert, verdict; marked simulated) and shows the file's SHA-256. Pending and killed lines are never in it. Test: `tests/e2e/onair.spec.ts`.
+
+## Broadcast overlay layout
+- The replay bar, on-air log, lower-third and teleprompter sit inside the live view. Below 560 px wide they stack (teleprompter on one line at the top, replay bar under it, lower-third and on-air log at the bottom) so none cover each other. `tests/e2e/broadcast-layout.spec.ts` checks the four boxes for overlap on a desktop and a phone viewport.

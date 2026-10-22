@@ -17,17 +17,17 @@ Played 7: won 0, drawn 4, lost 3. Goals for 5, against
 
 | Shirt | Player | Position | Rating |
 | --- | --- | --- | --- |
-| 1 | K. Uribe | GK | 84 |
-| 2 | Z. Yilmaz | RB | 83 |
-| 3 | A. Moreno | LB | 83 |
-| 4 | Z. Zielinski | CB | 85 |
-| 5 | N. Guerreiro | CB | 86 |
-| 6 | Y. Kanté | DM | 86 |
-| 7 | B. Mbeki | RW | 86 |
-| 8 | S. Vidal | CM | 88 |
-| 9 | D. Weiss | ST | 85 |
-| 10 | V. Ramos | CM | 84 |
-| 11 | R. Guerreiro | LW | 87 |
+| 1 | K. Chalaine | GK | 84 |
+| 2 | Z. Navvena | RB | 83 |
+| 3 | A. Dorlano | LB | 83 |
+| 4 | Z. Satonari | CB | 85 |
+| 5 | N. Belruda | CB | 86 |
+| 6 | Y. Frestrand | DM | 86 |
+| 7 | B. Vladtek | RW | 86 |
+| 8 | S. Kawadate | CM | 88 |
+| 9 | D. Haldahl | ST | 85 |
+| 10 | V. Shindate | CM | 84 |
+| 11 | R. Belruda | LW | 87 |
 
 ## Results
 

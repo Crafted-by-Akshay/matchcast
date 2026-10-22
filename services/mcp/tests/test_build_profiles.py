@@ -53,9 +53,9 @@ def test_player_pages_cover_the_squads_and_use_season_totals(built) -> None:
     pages = list((built / "players").glob("*.md"))
     assert len(pages) == 88
     shots = season.query(
-        "SELECT sum(shots) FROM player_match_stats WHERE team_id='HAR' AND player='N. Brennan'"
+        "SELECT sum(shots) FROM player_match_stats WHERE team_id='HAR' AND player='N. Navlano'"
     )["rows"][0][0]
-    assert re.search(rf"{shots} shots", (built / "players/har-n-brennan.md").read_text())
+    assert re.search(rf"{shots} shots", (built / "players/har-n-navlano.md").read_text())
 
 
 def test_a_stale_page_is_removed(tmp_path) -> None:
@@ -97,7 +97,7 @@ def test_unnamed_questions_never_return_entity_pages() -> None:
         ("how is average xG worked out", "metrics:xg"),
         ("what is synthetic data", "app:"),
         ("who coaches Harbor City", "clubs:har"),
-        ("tell me about N. Brennan", "players:har-n-brennan"),
+        ("tell me about N. Navlano", "players:har-n-navlano"),
         ("what happened in M001", "season:m001"),
     ],
 )

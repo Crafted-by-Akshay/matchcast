@@ -24,6 +24,14 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   tag.style.cssText = 'position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:9;padding:6px 14px;border-radius:999px;background:#c62828;color:#fff;font:800 13px system-ui,sans-serif;letter-spacing:.12em';
   // the desk hides every direct child of body except its own roots (bc.css), so the controls sit inside the live view
   (document.getElementById('bc-view') || document.body).append(bar, tag);
+  // narrow views (phones): the four on-air overlays stack instead of covering each other. Inline styles set the wide layout, so these rules need !important.
+  const st = document.createElement('style');
+  st.textContent = '@media (max-width:560px){'
+    + '#mc-tele{left:8px!important;right:8px!important;top:8px!important;width:auto!important;max-height:2.4em!important;overflow:hidden!important}'
+    + '#mc-replay{left:8px!important;right:8px!important;top:64px!important;flex-wrap:wrap}'
+    + '#mc-l3{left:8px!important;right:8px!important;bottom:56px!important;max-width:none!important;font-size:13px!important}'
+    + '#mc-onair{left:8px!important;right:8px!important;bottom:8px!important;flex-wrap:wrap}}';
+  document.head.append(st);
   const live = bar.querySelector('#mc-replay-live');
   let timer = 0;
   const stop = () => {

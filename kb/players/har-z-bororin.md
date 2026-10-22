@@ -1,0 +1,13 @@
+---
+title: Z. Bororin
+entities: har-z-bororin, HAR
+generated: scripts/build_profiles.py
+---
+## Profile
+
+Z. Bororin wears number 5 for Harbor City (HAR) and plays as CB.
+Rating 89. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 67 passes (88% completed), 24 tackles, 0 shots, 0.00 xG, 4.0 km on average per match.

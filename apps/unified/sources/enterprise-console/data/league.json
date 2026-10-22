@@ -13,67 +13,67 @@
    "squad": [
     {
      "num": 1,
-     "name": "N. Brennan",
+     "name": "N. Navlano",
      "pos": "GK",
      "rating": 91
     },
     {
      "num": 3,
-     "name": "Z. Keane",
+     "name": "Z. Morinari",
      "pos": "LB",
      "rating": 91
     },
     {
      "num": 4,
-     "name": "V. Iniesta",
+     "name": "V. Namtembo",
      "pos": "CB",
      "rating": 88
     },
     {
      "num": 5,
-     "name": "Z. Sandoval",
+     "name": "Z. Bororin",
      "pos": "CB",
      "rating": 89
     },
     {
      "num": 2,
-     "name": "Z. Fofana",
+     "name": "Z. Chacourt",
      "pos": "RB",
      "rating": 90
     },
     {
      "num": 8,
-     "name": "A. Garrido",
+     "name": "A. Tamahara",
      "pos": "CM",
      "rating": 92
     },
     {
      "num": 6,
-     "name": "Y. Yeboah",
+     "name": "Y. Marimero",
      "pos": "DM",
      "rating": 92
     },
     {
      "num": 10,
-     "name": "B. Fuentes",
+     "name": "B. Minanari",
      "pos": "CM",
      "rating": 91
     },
     {
      "num": 11,
-     "name": "E. Guerreiro",
+     "name": "E. Belruda",
      "pos": "LW",
      "rating": 88
     },
     {
      "num": 9,
-     "name": "S. Nakamura",
+     "name": "S. Zarnila",
      "pos": "ST",
      "rating": 89
     },
     {
      "num": 7,
-     "name": "P. Reyes",
+     "name": "P. Hirahara",
      "pos": "RW",
      "rating": 93
     }
@@ -90,67 +90,67 @@
    "squad": [
     {
      "num": 1,
-     "name": "S. Brandão",
+     "name": "S. Okodele",
      "pos": "GK",
      "rating": 85
     },
     {
      "num": 3,
-     "name": "A. Ferreira",
+     "name": "A. Zarvena",
      "pos": "LB",
      "rating": 82
     },
     {
      "num": 4,
-     "name": "O. Jensen",
+     "name": "O. Pellaine",
      "pos": "CB",
      "rating": 82
     },
     {
      "num": 5,
-     "name": "S. Duarte",
+     "name": "S. Raslund",
      "pos": "CB",
      "rating": 86
     },
     {
      "num": 2,
-     "name": "M. Sandoval",
+     "name": "M. Bororin",
      "pos": "RB",
      "rating": 83
     },
     {
      "num": 8,
-     "name": "M. Moreno",
+     "name": "M. Dorlano",
      "pos": "CM",
      "rating": 82
     },
     {
      "num": 6,
-     "name": "T. Ekström",
+     "name": "T. Talnila",
      "pos": "DM",
      "rating": 83
     },
     {
      "num": 10,
-     "name": "P. Coman",
+     "name": "P. Dralav",
      "pos": "CM",
      "rating": 83
     },
     {
      "num": 11,
-     "name": "M. Varela",
+     "name": "M. Mbadimi",
      "pos": "LW",
      "rating": 81
     },
     {
      "num": 9,
-     "name": "N. Xhaka",
+     "name": "N. Engoberg",
      "pos": "ST",
      "rating": 84
     },
     {
      "num": 7,
-     "name": "G. Petit",
+     "name": "G. Zorlav",
      "pos": "RW",
      "rating": 81
     }
@@ -167,67 +167,67 @@
    "squad": [
     {
      "num": 1,
-     "name": "R. Sandoval",
+     "name": "R. Bororin",
      "pos": "GK",
      "rating": 87
     },
     {
      "num": 3,
-     "name": "N. Jesus",
+     "name": "N. Caltera",
      "pos": "LB",
      "rating": 88
     },
     {
      "num": 4,
-     "name": "K. Kanté",
+     "name": "K. Frestrand",
      "pos": "CB",
      "rating": 90
     },
     {
      "num": 5,
-     "name": "O. Udeh",
+     "name": "O. Tortera",
      "pos": "CB",
      "rating": 87
     },
     {
      "num": 2,
-     "name": "N. Adeyemi",
+     "name": "N. Velruda",
      "pos": "RB",
      "rating": 88
     },
     {
      "num": 8,
-     "name": "S. Toure",
+     "name": "S. Laucourt",
      "pos": "CM",
      "rating": 89
     },
     {
      "num": 6,
-     "name": "I. Vidal",
+     "name": "I. Kawadate",
      "pos": "DM",
      "rating": 88
     },
     {
      "num": 10,
-     "name": "G. Brandão",
+     "name": "G. Okodele",
      "pos": "CM",
      "rating": 88
     },
     {
      "num": 11,
-     "name": "N. Fofana",
+     "name": "N. Chacourt",
      "pos": "LW",
      "rating": 91
     },
     {
      "num": 9,
-     "name": "P. Petit",
+     "name": "P. Zorlav",
      "pos": "ST",
      "rating": 88
     },
     {
      "num": 7,
-     "name": "T. Arbeloa",
+     "name": "T. Tamanari",
      "pos": "RW",
      "rating": 88
     }
@@ -244,67 +244,67 @@
    "squad": [
     {
      "num": 1,
-     "name": "K. Uribe",
+     "name": "K. Chalaine",
      "pos": "GK",
      "rating": 84
     },
     {
      "num": 3,
-     "name": "A. Moreno",
+     "name": "A. Dorlano",
      "pos": "LB",
      "rating": 83
     },
     {
      "num": 4,
-     "name": "Z. Zielinski",
+     "name": "Z. Satonari",
      "pos": "CB",
      "rating": 85
     },
     {
      "num": 5,
-     "name": "N. Guerreiro",
+     "name": "N. Belruda",
      "pos": "CB",
      "rating": 86
     },
     {
      "num": 2,
-     "name": "Z. Yilmaz",
+     "name": "Z. Navvena",
      "pos": "RB",
      "rating": 83
     },
     {
      "num": 8,
-     "name": "S. Vidal",
+     "name": "S. Kawadate",
      "pos": "CM",
      "rating": 88
     },
     {
      "num": 6,
-     "name": "Y. Kanté",
+     "name": "Y. Frestrand",
      "pos": "DM",
      "rating": 86
     },
     {
      "num": 10,
-     "name": "V. Ramos",
+     "name": "V. Shindate",
      "pos": "CM",
      "rating": 84
     },
     {
      "num": 11,
-     "name": "R. Guerreiro",
+     "name": "R. Belruda",
      "pos": "LW",
      "rating": 87
     },
     {
      "num": 9,
-     "name": "D. Weiss",
+     "name": "D. Haldahl",
      "pos": "ST",
      "rating": 85
     },
     {
      "num": 7,
-     "name": "B. Mbeki",
+     "name": "B. Vladtek",
      "pos": "RW",
      "rating": 86
     }
@@ -321,67 +321,67 @@
    "squad": [
     {
      "num": 1,
-     "name": "S. Varela",
+     "name": "S. Mbadimi",
      "pos": "GK",
      "rating": 88
     },
     {
      "num": 3,
-     "name": "G. Quinn",
+     "name": "G. Lunholm",
      "pos": "LB",
      "rating": 88
     },
     {
      "num": 4,
-     "name": "O. Iniesta",
+     "name": "O. Namtembo",
      "pos": "CB",
      "rating": 90
     },
     {
      "num": 5,
-     "name": "F. Lozano",
+     "name": "F. Koflagu",
      "pos": "CB",
      "rating": 86
     },
     {
      "num": 2,
-     "name": "T. Ferreira",
+     "name": "T. Zarvena",
      "pos": "RB",
      "rating": 87
     },
     {
      "num": 8,
-     "name": "P. Jovanović",
+     "name": "P. Djedele",
      "pos": "CM",
      "rating": 90
     },
     {
      "num": 6,
-     "name": "H. Zielinski",
+     "name": "H. Satonari",
      "pos": "DM",
      "rating": 88
     },
     {
      "num": 10,
-     "name": "K. Achterberg",
+     "name": "K. Hartvik",
      "pos": "CM",
      "rating": 90
     },
     {
      "num": 11,
-     "name": "J. Olmo",
+     "name": "J. Serchard",
      "pos": "LW",
      "rating": 85
     },
     {
      "num": 9,
-     "name": "M. Ilić",
+     "name": "M. Nduwana",
      "pos": "ST",
      "rating": 87
     },
     {
      "num": 7,
-     "name": "N. Uribe",
+     "name": "N. Chalaine",
      "pos": "RW",
      "rating": 88
     }
@@ -398,67 +398,67 @@
    "squad": [
     {
      "num": 1,
-     "name": "B. Guerreiro",
+     "name": "B. Belruda",
      "pos": "GK",
      "rating": 86
     },
     {
      "num": 3,
-     "name": "J. Alves",
+     "name": "J. Namlagu",
      "pos": "LB",
      "rating": 88
     },
     {
      "num": 4,
-     "name": "D. Guerreiro",
+     "name": "D. Belruda",
      "pos": "CB",
      "rating": 85
     },
     {
      "num": 5,
-     "name": "C. Tamura",
+     "name": "C. Torilito",
      "pos": "CB",
      "rating": 84
     },
     {
      "num": 2,
-     "name": "R. Toure",
+     "name": "R. Laucourt",
      "pos": "RB",
      "rating": 87
     },
     {
      "num": 8,
-     "name": "A. Lindgren",
+     "name": "A. Ndulagu",
      "pos": "CM",
      "rating": 88
     },
     {
      "num": 6,
-     "name": "J. Quinn",
+     "name": "J. Lunholm",
      "pos": "DM",
      "rating": 85
     },
     {
      "num": 10,
-     "name": "D. Diallo",
+     "name": "D. Ndubola",
      "pos": "CM",
      "rating": 87
     },
     {
      "num": 11,
-     "name": "G. Jara",
+     "name": "G. Inooka",
      "pos": "LW",
      "rating": 84
     },
     {
      "num": 9,
-     "name": "T. Jovanović",
+     "name": "T. Djedele",
      "pos": "ST",
      "rating": 90
     },
     {
      "num": 7,
-     "name": "D. Yilmaz",
+     "name": "D. Navvena",
      "pos": "RW",
      "rating": 84
     }
@@ -475,67 +475,67 @@
    "squad": [
     {
      "num": 1,
-     "name": "P. Ortega",
+     "name": "P. Yamanari",
      "pos": "GK",
      "rating": 83
     },
     {
      "num": 3,
-     "name": "A. Fofana",
+     "name": "A. Chacourt",
      "pos": "LB",
      "rating": 79
     },
     {
      "num": 4,
-     "name": "C. Ulloa",
+     "name": "C. Roumont",
      "pos": "CB",
      "rating": 80
     },
     {
      "num": 5,
-     "name": "Z. Duarte",
+     "name": "Z. Raslund",
      "pos": "CB",
      "rating": 80
     },
     {
      "num": 2,
-     "name": "E. Eriksen",
+     "name": "E. Lunodersen",
      "pos": "RB",
      "rating": 82
     },
     {
      "num": 8,
-     "name": "L. Olmo",
+     "name": "L. Serchard",
      "pos": "CM",
      "rating": 83
     },
     {
      "num": 6,
-     "name": "N. Okoro",
+     "name": "N. Beldero",
      "pos": "DM",
      "rating": 81
     },
     {
      "num": 10,
-     "name": "S. Sørensen",
+     "name": "S. Fujisawa",
      "pos": "CM",
      "rating": 82
     },
     {
      "num": 11,
-     "name": "B. Pavlov",
+     "name": "B. Stansevic",
      "pos": "LW",
      "rating": 84
     },
     {
      "num": 9,
-     "name": "B. Kowalski",
+     "name": "B. Olalagu",
      "pos": "ST",
      "rating": 82
     },
     {
      "num": 7,
-     "name": "E. Yilmaz",
+     "name": "E. Navvena",
      "pos": "RW",
      "rating": 83
     }
@@ -552,67 +552,67 @@
    "squad": [
     {
      "num": 1,
-     "name": "M. Cuadrado",
+     "name": "M. Fontier",
      "pos": "GK",
      "rating": 81
     },
     {
      "num": 3,
-     "name": "T. Vidal",
+     "name": "T. Kawadate",
      "pos": "LB",
      "rating": 79
     },
     {
      "num": 4,
-     "name": "O. Walsh",
+     "name": "O. Dagedahl",
      "pos": "CB",
      "rating": 81
     },
     {
      "num": 5,
-     "name": "S. Olmo",
+     "name": "S. Serchard",
      "pos": "CB",
      "rating": 82
     },
     {
      "num": 2,
-     "name": "P. Falcão",
+     "name": "P. Tamasawa",
      "pos": "RB",
      "rating": 80
     },
     {
      "num": 8,
-     "name": "Y. Ulloa",
+     "name": "Y. Roumont",
      "pos": "CM",
      "rating": 83
     },
     {
      "num": 6,
-     "name": "Z. Kessler",
+     "name": "Z. Kwadele",
      "pos": "DM",
      "rating": 83
     },
     {
      "num": 10,
-     "name": "M. Dalgaard",
+     "name": "M. Nagadate",
      "pos": "CM",
      "rating": 82
     },
     {
      "num": 11,
-     "name": "B. Ekström",
+     "name": "B. Talnila",
      "pos": "LW",
      "rating": 78
     },
     {
      "num": 9,
-     "name": "Z. Bauer",
+     "name": "Z. Abakuma",
      "pos": "ST",
      "rating": 84
     },
     {
      "num": 7,
-     "name": "T. Dalgaard",
+     "name": "T. Nagadate",
      "pos": "RW",
      "rating": 80
     }

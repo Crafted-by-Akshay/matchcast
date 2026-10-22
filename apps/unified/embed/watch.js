@@ -68,6 +68,10 @@ MCS.progress('Loading the stadium and players');
   const asks = new Map(); let askN = 0;
   window.mcAsk = (q) => new Promise((res) => { const id = ++askN; asks.set(id, res); MCS.send({ type: 'ask', id, q }); setTimeout(() => { if (asks.delete(id)) res({ text: "I can't confirm that from the match data yet.", verdict: 'abstained', note: 'no answer in time' }); }, 9000); });
   window.addEventListener('message', (e) => { const d = e.data || {}; if (d.src === 'matchcast-shell' && d.type === 'answer' && asks.has(d.id)) { asks.get(d.id)(d.answer); asks.delete(d.id); } });
+  // EXP-16: a label for what orders do (Watch's own mic button already does speech recognition)
+  const gm = document.createElement('div'); gm.className = 'mcx-gm'; gm.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px';
+  gm.textContent = 'Game mode: orders change how the simulated match is played. They never change the event record behind the claims.';
+  if ($('tk-form')) $('tk-form').after(gm);
   const kept = [];
   window.addEventListener('message', (e) => {
     const d = e.data || {};

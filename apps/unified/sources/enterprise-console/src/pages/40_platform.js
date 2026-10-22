@@ -121,7 +121,7 @@ function pf_redraw(el, pageId, f) { if (el.isConnected && R.page === pageId) f(e
 const PF_STAFF = [
   { name: 'Marcus Okafor', title: 'Assistant coach', group: 'MC-Viewers', role: 'viewer', last: '3 h ago', status: 'Active' },
   { name: 'Sofia Brandt', title: 'Performance analyst', group: 'MC-Analysts', role: 'analyst', last: 'Yesterday', status: 'Active' },
-  { name: 'Ben Achterberg', title: 'Academy analyst', group: 'MC-Analysts', role: 'analyst', last: 'Never', status: 'Invited' },
+  { name: 'Ben Hartvik', title: 'Academy analyst', group: 'MC-Analysts', role: 'analyst', last: 'Never', status: 'Invited' },
   { name: 'Kenji Watanabe', title: 'Recruitment analyst', group: 'MC-Scouts', role: 'scout', last: '2 d ago', status: 'Active' },
   { name: 'Rachel Dunmore', title: 'Director of football (approver)', group: 'MC-Approvers', role: 'manager', last: '5 h ago', status: 'Active' },
   { name: 'Owen Price', title: 'Data engineer', group: 'MC-Admins', role: 'admin', last: '1 d ago', status: 'Active' },

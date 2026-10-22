@@ -17,17 +17,17 @@ Played 7: won 0, drawn 2, lost 5. Goals for 2, against
 
 | Shirt | Player | Position | Rating |
 | --- | --- | --- | --- |
-| 1 | B. Guerreiro | GK | 86 |
-| 2 | R. Toure | RB | 87 |
-| 3 | J. Alves | LB | 88 |
-| 4 | D. Guerreiro | CB | 85 |
-| 5 | C. Tamura | CB | 84 |
-| 6 | J. Quinn | DM | 85 |
-| 7 | D. Yilmaz | RW | 84 |
-| 8 | A. Lindgren | CM | 88 |
-| 9 | T. Jovanović | ST | 90 |
-| 10 | D. Diallo | CM | 87 |
-| 11 | G. Jara | LW | 84 |
+| 1 | B. Belruda | GK | 86 |
+| 2 | R. Laucourt | RB | 87 |
+| 3 | J. Namlagu | LB | 88 |
+| 4 | D. Belruda | CB | 85 |
+| 5 | C. Torilito | CB | 84 |
+| 6 | J. Lunholm | DM | 85 |
+| 7 | D. Navvena | RW | 84 |
+| 8 | A. Ndulagu | CM | 88 |
+| 9 | T. Djedele | ST | 90 |
+| 10 | D. Ndubola | CM | 87 |
+| 11 | G. Inooka | LW | 84 |
 
 ## Results
 

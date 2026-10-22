@@ -17,17 +17,17 @@ Played 7: won 5, drawn 2, lost 0. Goals for 11, against
 
 | Shirt | Player | Position | Rating |
 | --- | --- | --- | --- |
-| 1 | R. Sandoval | GK | 87 |
-| 2 | N. Adeyemi | RB | 88 |
-| 3 | N. Jesus | LB | 88 |
-| 4 | K. Kanté | CB | 90 |
-| 5 | O. Udeh | CB | 87 |
-| 6 | I. Vidal | DM | 88 |
-| 7 | T. Arbeloa | RW | 88 |
-| 8 | S. Toure | CM | 89 |
-| 9 | P. Petit | ST | 88 |
-| 10 | G. Brandão | CM | 88 |
-| 11 | N. Fofana | LW | 91 |
+| 1 | R. Bororin | GK | 87 |
+| 2 | N. Velruda | RB | 88 |
+| 3 | N. Caltera | LB | 88 |
+| 4 | K. Frestrand | CB | 90 |
+| 5 | O. Tortera | CB | 87 |
+| 6 | I. Kawadate | DM | 88 |
+| 7 | T. Tamanari | RW | 88 |
+| 8 | S. Laucourt | CM | 89 |
+| 9 | P. Zorlav | ST | 88 |
+| 10 | G. Okodele | CM | 88 |
+| 11 | N. Chacourt | LW | 91 |
 
 ## Results
 
