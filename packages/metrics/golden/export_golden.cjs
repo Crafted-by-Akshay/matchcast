@@ -1,6 +1,6 @@
-// Writes golden.json: 50 seeded cases with expected values from the JavaScript reference formulas.
-// The xG curve and pass-difficulty terms are copied from the prototype engine (apps/unified/sources/3d-source/v2:
-// main.js xgAt, explain.js passDifficulty); the other metrics are the documented formulas in docs/metrics.md.
+// Writes golden.json: 54 seeded cases with expected values from the JavaScript reference formulas.
+// An independent JavaScript implementation of the formulas in docs/metrics.md (see ADR-0016). The xG curve and the
+// pass-difficulty terms follow the engine's curve and explain.js passDifficulty, except that the lane term is a distance.
 //   node packages/metrics/golden/export_golden.cjs > packages/metrics/golden/golden.json
 'use strict';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -53,7 +53,7 @@ const r = (a, b) => a + (b - a) * rnd(), r1 = (v) => Math.round(v * 100) / 100;
 const opps = (n) => Array.from({ length: n }, () => [r1(r(0, 105)), r1(r(0, 68))]);
 const cases = [];
 for (let i = 0; i < 12; i++) { const sh = { x: r1(r(60, 104)), y: r1(r(8, 60)), attack_x: 105, kind: ['open_play', 'header', 'free_kick', 'penalty', 'open_play'][i % 5], body_part: i % 3 === 0 ? 'head' : 'foot' }; const o = i % 2 ? opps(10) : null; cases.push({ metric: 'xg', input: { shot: sh, opponents: o }, expected: xg(sh, o) }); }
-for (let i = 0; i < 4; i++) { const sh = { x: r1(r(1, 45)), y: r1(r(8, 60)), attack_x: 0, kind: 'open_play', body_part: 'foot' }; cases.push({ metric: 'xg', input: { shot: sh, opponents: opps(10) }, expected: xg(sh, opps(0)) * 0 + xg(sh, null) * 0 + 0 }); cases[cases.length - 1].expected = xg(sh, cases[cases.length - 1].input.opponents); }
+for (let i = 0; i < 4; i++) { const sh = { x: r1(r(1, 45)), y: r1(r(8, 60)), attack_x: 0, kind: 'open_play', body_part: 'foot' }; cases.push({ metric: 'xg', input: { shot: sh, opponents: opps(10) }, expected: 0 }); cases[cases.length - 1].expected = xg(sh, cases[cases.length - 1].input.opponents); }
 for (let i = 0; i < 12; i++) { const x0 = r1(r(5, 95)), y0 = r1(r(5, 63)), p = { x0, y0, x1: r1(clamp(x0 + r(-20, 35), 1, 104)), y1: r1(r(3, 65)), attack_x: i % 4 === 3 ? 0 : 105, completed: rnd() < 0.8, lofted: rnd() < 0.3, through_or_cross: rnd() < 0.2, weak_foot: rnd() < 0.15 }; const o = opps(10); cases.push({ metric: 'pass_difficulty', input: { pass: p, opponents: o }, expected: difficulty(p, o) }); cases.push({ metric: 'pass_quality', input: { pass: p, opponents: o }, expected: quality(p, o) }); }
 for (let i = 0; i < 4; i++) { const t = 9000 + i * 100, S = Array.from({ length: 8 }, (_, k) => [t - 600 + k * 150, r1(30 + k * 2.5 * (i + 1)), r1(30 + k), r1(k * 0.2)]); cases.push({ metric: 'ball_speed_kmh', input: { samples: S, event_time_ms: t, window_ms: 500 }, expected: speed(S, t, 500) }); }
 for (let i = 0; i < 4; i++) { const o = opps(10), x = r1(r(10, 95)), y = r1(r(5, 63)), rad = [5, 5, 8, 3][i]; cases.push({ metric: 'pressure_index', input: { x, y, opponents: o, radius_m: rad }, expected: pressure(x, y, o, rad) }); }

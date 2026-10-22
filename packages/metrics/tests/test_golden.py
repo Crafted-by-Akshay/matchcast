@@ -78,3 +78,8 @@ def test_xg_constants_match_calibration_file():
     assert (core.XG_B0, core.XG_B1, core.XG_B2) == pytest.approx(
         (fit["b0"], fit["b1"], fit["b2"]), abs=1e-6
     )
+
+
+def test_pressure_index_rejects_radius_of_one_or_less():
+    with pytest.raises(ValueError):
+        pressure_index(10.0, 10.0, Frame(((11.0, 10.0),)), radius_m=1.0)

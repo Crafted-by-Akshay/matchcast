@@ -144,6 +144,8 @@ def ball_speed_kmh(
 
 def pressure_index(x: float, y: float, state: Frame, radius_m: float = 5.0) -> float:
     """0-1 pressure: 0.7 nearest-opponent term (full at 1 m) + 0.3 crowding (3+ within radius)."""
+    if radius_m <= 1:
+        raise ValueError("radius_m must be greater than 1")
     ds = [math.hypot(ox - x, oy - y) for ox, oy in state.opponents]
     near = _clamp((radius_m - min(ds, default=99.0)) / (radius_m - 1), 0, 1)
     crowd = min(sum(1 for d in ds if d <= radius_m), 3) / 3
