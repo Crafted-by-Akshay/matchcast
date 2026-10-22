@@ -69,11 +69,12 @@ function consumerStep(dt, snap) {
 // ---- lower-third and teleprompter (EXP-7): only lines the shell has approved for air reach here
 const mcL3 = document.createElement('div');
 mcL3.id = 'mc-l3'; mcL3.setAttribute('role', 'status'); mcL3.hidden = true;
-mcL3.style.cssText = 'position:fixed;left:24px;bottom:84px;max-width:60%;padding:10px 16px;background:rgba(10,20,40,.92);color:#fff;border-left:4px solid #3aa0ff;font:600 15px system-ui,sans-serif;z-index:30;border-radius:4px';
+mcL3.style.cssText = 'position:absolute;left:12px;bottom:100px;max-width:60%;padding:10px 16px;background:rgba(10,20,40,.92);color:#fff;border-left:4px solid #3aa0ff;font:600 15px system-ui,sans-serif;z-index:10;border-radius:4px';
 const mcTele = document.createElement('ol');
 mcTele.id = 'mc-tele'; mcTele.setAttribute('aria-label', 'Teleprompter: approved lines');
-mcTele.style.cssText = 'position:fixed;right:12px;top:64px;width:300px;margin:0;padding:8px 8px 8px 28px;background:rgba(10,20,40,.85);color:#e8eefc;font:13px system-ui,sans-serif;z-index:30;border-radius:4px;max-height:40%;overflow:auto';
-document.body.append(mcL3, mcTele);
+mcTele.style.cssText = 'position:absolute;right:10px;top:44px;width:280px;margin:0;padding:8px 8px 8px 28px;background:rgba(10,20,40,.85);color:#e8eefc;font:13px system-ui,sans-serif;border-radius:4px;max-height:40%;overflow:auto;z-index:10'; mcTele.hidden = true;
+// bc.css hides every direct child of body except #bc, #stage and #load, so on-air graphics sit inside the live view
+(document.getElementById('bc-view') || document.body).append(mcL3, mcTele);
 let mcL3Timer = 0; const mcAired = [];
 window.addEventListener('message', (e) => {
   const d = e.data || {};
@@ -84,5 +85,5 @@ window.addEventListener('message', (e) => {
   mcL3.style.borderLeftColor = l.alert ? '#ff4d4d' : '#3aa0ff';
   mcL3.dataset.alert = l.alert || '';
   clearTimeout(mcL3Timer); mcL3Timer = setTimeout(() => { mcL3.hidden = true; }, 8000);
-  mcTele.innerHTML = ''; for (const x of mcAired.slice().reverse()) { const li = document.createElement('li'); li.textContent = x.text; mcTele.append(li); }
+  mcTele.hidden = false; mcTele.innerHTML = ''; for (const x of mcAired.slice().reverse()) { const li = document.createElement('li'); li.textContent = x.text; mcTele.append(li); }
 });
