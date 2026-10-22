@@ -20,10 +20,11 @@ test('a player action in Watch shows as the same pose in Broadcast', async ({ pa
   await expect.poll(() => b.evaluate(() => (window as any).__mc.players[5].act), { timeout: 20_000 }).toBeNull();
 
   // running path (not paused): the desk advances the action's clock between Watch's 4 Hz frames and lets it expire by itself.
-  // Watch's own frames are held back so the test sends the only ones.
+  // Watch's own frames are held back at the shell so the test sends the only ones.
   await tab(page, 'broadcast');
+  // the shell forwards Watch's frames to Broadcast; stop it, because a capture listener inside Broadcast runs after the desk's own handler and cannot hold them back
+  await page.evaluate(() => { const orig = (window as any).post; (window as any).post = (v: string, m: any) => (m?.type === 'frame' ? undefined : orig(v, m)); });
   await b.evaluate(() => {
-    window.addEventListener('message', (e) => { const d = e.data || {}; if (d.src === 'matchcast-shell' && d.type === 'frame' && !d.synthetic) e.stopImmediatePropagation(); }, true);
     const m = (window as any).__mc; (window as any).__sendFrame = (act: any) => {
       const f = { mclock: m.S.mclock, half: m.S.half, ht: false, over: false, paused: false, speed: 1, mscale: 1, score: m.S.score.slice(), stats: {}, ball: [m.ball.p.x, m.ball.p.y, m.ball.p.z],
         players: m.players.map((p: any, i: number) => [p.pos2.x, p.pos2.y, 0, 0, p.yaw, i === 3 ? act : 0]) };
