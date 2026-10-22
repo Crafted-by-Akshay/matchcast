@@ -1,0 +1,13 @@
+---
+title: H. Satonari
+entities: gua-h-satonari, GUA
+generated: scripts/build_profiles.py
+---
+## Profile
+
+H. Satonari wears number 6 for Guanabara FC (GUA) and plays as DM.
+Rating 88. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 117 passes (79% completed), 28 tackles, 1 shots, 0.06 xG, 4.2 km on average per match.

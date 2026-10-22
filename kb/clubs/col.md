@@ -17,17 +17,17 @@ Played 7: won 3, drawn 4, lost 0. Goals for 9, against
 
 | Shirt | Player | Position | Rating |
 | --- | --- | --- | --- |
-| 1 | M. Cuadrado | GK | 81 |
-| 2 | P. Falcão | RB | 80 |
-| 3 | T. Vidal | LB | 79 |
-| 4 | O. Walsh | CB | 81 |
-| 5 | S. Olmo | CB | 82 |
-| 6 | Z. Kessler | DM | 83 |
-| 7 | T. Dalgaard | RW | 80 |
-| 8 | Y. Ulloa | CM | 83 |
-| 9 | Z. Bauer | ST | 84 |
-| 10 | M. Dalgaard | CM | 82 |
-| 11 | B. Ekström | LW | 78 |
+| 1 | M. Fontier | GK | 81 |
+| 2 | P. Tamasawa | RB | 80 |
+| 3 | T. Kawadate | LB | 79 |
+| 4 | O. Dagedahl | CB | 81 |
+| 5 | S. Serchard | CB | 82 |
+| 6 | Z. Kwadele | DM | 83 |
+| 7 | T. Nagadate | RW | 80 |
+| 8 | Y. Roumont | CM | 83 |
+| 9 | Z. Abakuma | ST | 84 |
+| 10 | M. Nagadate | CM | 82 |
+| 11 | B. Talnila | LW | 78 |
 
 ## Results
 

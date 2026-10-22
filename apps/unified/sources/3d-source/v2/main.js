@@ -23,11 +23,11 @@ const V2 = (x, z) => new THREE.Vector2(x, z);
 // Formation slots are in each team's own frame: attacking +x, own goal at x=0, left touchline at z=0.
 const TEAMS = [
   { key: 'HAR', club: 'Harbor City', kit: 0x2F7BEA, kit2: 0xF2F5F8, kitShorts: 0xF2F5F8, kitSocks: 0x2F7BEA, gkKit: 0x9BE35A, css: '#3D86F0', form: '4-3-3', players: [
-    [1, 'D. Varga', 'GK', [4, 34], 79, 1.91, 'R'], [2, 'A. Rocha', 'LB', [18, 9], 76, 1.76, 'L'], [5, 'M. Brandt', 'CB', [16, 26], 81, 1.90, 'R'], [4, 'J. Kim', 'CB', [16, 42], 80, 1.86, 'R'], [3, 'L. Osei', 'RB', [18, 59], 77, 1.79, 'R'],
-    [8, 'S. Iyer', 'CM', [36, 22], 82, 1.74, 'R'], [6, 'R. Okafor', 'DM', [31, 34], 84, 1.88, 'R'], [10, 'E. Lindqvist', 'CM', [36, 46], 83, 1.80, 'L'], [7, 'P. Duarte', 'LW', [52, 10], 80, 1.72, 'R'], [9, 'K. Mercer', 'ST', [55, 34], 86, 1.84, 'R'], [11, 'N. Haddad', 'RW', [52, 58], 79, 1.75, 'L']] },
+    [1, 'D. Rouvelle', 'GK', [4, 34], 79, 1.91, 'R'], [2, 'A. Hallund', 'LB', [18, 9], 76, 1.76, 'L'], [5, 'M. Adedimi', 'CB', [16, 26], 81, 1.90, 'R'], [4, 'J. Holstrand', 'CB', [16, 42], 80, 1.86, 'R'], [3, 'L. Odahara', 'RB', [18, 59], 77, 1.79, 'R'],
+    [8, 'S. Kaldersen', 'CM', [36, 22], 82, 1.74, 'R'], [6, 'R. Odanari', 'DM', [31, 34], 84, 1.88, 'R'], [10, 'E. Kawakami', 'CM', [36, 46], 83, 1.80, 'L'], [7, 'P. Raslund', 'LW', [52, 10], 80, 1.72, 'R'], [9, 'K. Navdero', 'ST', [55, 34], 86, 1.84, 'R'], [11, 'N. Kosmir', 'RW', [52, 58], 79, 1.75, 'L']] },
   { key: 'RID', club: 'Ridgeview', kit: 0xF2702A, kit2: 0x1A1D22, kitShorts: 0x1A1D22, kitSocks: 0xF2702A, gkKit: 0xA98BFF, css: '#FF7A2E', form: '4-4-2', players: [
-    [1, 'O. Brennan', 'GK', [4, 34], 80, 1.93, 'R'], [3, 'T. Mensah', 'LB', [18, 9], 76, 1.78, 'L'], [4, 'H. Dumont', 'CB', [16, 26], 79, 1.89, 'R'], [5, 'G. Novak', 'CB', [16, 42], 78, 1.92, 'R'], [2, 'F. Silva', 'RB', [18, 59], 75, 1.73, 'R'],
-    [11, 'Y. Tanaka', 'LM', [38, 9], 78, 1.71, 'L'], [6, 'B. Arslan', 'CM', [34, 27], 80, 1.83, 'R'], [8, 'C. Reyes', 'CM', [34, 41], 81, 1.77, 'R'], [7, 'T. Ansel', 'RM', [38, 59], 85, 1.81, 'R'], [9, 'S. Moreau', 'ST', [53, 29], 82, 1.87, 'R'], [10, 'V. Petrov', 'ST', [53, 40], 83, 1.80, 'L']] }
+    [1, 'O. Navlano', 'GK', [4, 34], 80, 1.93, 'R'], [3, 'T. Kawaoka', 'LB', [18, 9], 76, 1.78, 'L'], [4, 'H. Hologren', 'CB', [16, 26], 79, 1.89, 'R'], [5, 'G. Frelund', 'CB', [16, 42], 78, 1.92, 'R'], [2, 'F. Englund', 'RB', [18, 59], 75, 1.73, 'R'],
+    [11, 'Y. Minaoka', 'LM', [38, 9], 78, 1.71, 'L'], [6, 'B. Seydimi', 'CM', [34, 27], 80, 1.83, 'R'], [8, 'C. Hirahara', 'CM', [34, 41], 81, 1.77, 'R'], [7, 'T. Torlund', 'RM', [38, 59], 85, 1.81, 'R'], [9, 'S. Bellaine', 'ST', [53, 29], 82, 1.87, 'R'], [10, 'V. Takekami', 'ST', [53, 40], 83, 1.80, 'L']] }
 ];
 const SKIN = [0xF1C9A5, 0xC68E62, 0x8D5A3B, 0xE0B08A, 0x5C3A24, 0xD9A47A, 0xA86B45, 0x704530];
 const surname = (n) => n.split(' ').slice(-1)[0];
@@ -505,7 +505,7 @@ function makeFlag(sc) {
   cloth.position.set(0.17, 0.32, 0); g.add(cloth); g.scale.setScalar(1 / sc); g.position.y = 0.06 / sc; return g;
 }
 // match officials are fictional; a referee and both assistants come from the same national association, as at a World Cup
-const REFS = [['Anders Holmqvist', 'SWE', 'Mikael Strand', 'Jonas Lindgren'], ['Matteo Ricciardi', 'ITA', 'Paolo Ferrante', 'Luca Benedetti'], ['Daniel Okonkwo', 'NGA', 'Ifeanyi Bello', 'Samuel Adeyemi'],
+const REFS = [['Anders Holmqvist', 'SWE', 'Mikael Strand', 'Jonas Halvard'], ['Matteo Ricciardi', 'ITA', 'Paolo Ferrante', 'Luca Benedetti'], ['Daniel Okonkwo', 'NGA', 'Ifeanyi Bello', 'Samuel Oduya'],
   ['Kenji Morita', 'JPN', 'Takeshi Ando', 'Ryo Hasegawa'], ['Rafael Quintero', 'MEX', 'Héctor Salas', 'Iván Montoya'], ['Pierre-Luc Garnier', 'FRA', 'Julien Moreau', 'Antoine Lefèvre'],
   ['Tomás Echeverría', 'ARG', 'Martín Ledesma', 'Gonzalo Ibarra'], ['Youssef Benali', 'MAR', 'Karim Haddou', 'Anas Tazi'], ['Hamid Rezaei', 'IRN', 'Reza Karimi', 'Omid Farahani'],
   ['Callum Rees', 'WAL', 'Owain Pritchard', 'Dylan Hughes'], ['Bruno Teixeira', 'BRA', 'Caio Rangel', 'Diego Paixão'], ['Grant McAllister', 'SCO', 'Ewan Baird', 'Ross Kerr']];

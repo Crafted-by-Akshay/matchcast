@@ -1,0 +1,13 @@
+---
+title: N. Belruda
+entities: mon-n-belruda, MON
+generated: scripts/build_profiles.py
+---
+## Profile
+
+N. Belruda wears number 5 for Montaña CF (MON) and plays as CB.
+Rating 86. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 74 passes (84% completed), 25 tackles, 0 shots, 0.00 xG, 3.8 km on average per match.

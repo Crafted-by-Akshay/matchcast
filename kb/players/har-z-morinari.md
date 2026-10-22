@@ -1,0 +1,13 @@
+---
+title: Z. Morinari
+entities: har-z-morinari, HAR
+generated: scripts/build_profiles.py
+---
+## Profile
+
+Z. Morinari wears number 3 for Harbor City (HAR) and plays as LB.
+Rating 91. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 128 passes (86% completed), 39 tackles, 0 shots, 0.00 xG, 4.6 km on average per match.
