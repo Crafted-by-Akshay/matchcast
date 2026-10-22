@@ -255,7 +255,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
         <div class="ag-table"><table><thead><tr><th>Time</th><th>Metric</th><th>Value</th><th>Units</th><th>Agent</th><th>Source</th><th>Verdict</th><th>Reason</th><th>Approval</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
       </section>
       <section class="ag-panel"><h3>Audit chain</h3>
-        <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
+        <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <span id="ag-bad-note" class="muted" role="status"></span> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
         <ol class="ag-recs" id="ag-recs"></ol>
       </section>
       <p class="ag-note">Simulated: the agents run rules in the page; the Azure parts are not connected. Watch is the live source. Its events and moments reach this pipeline each second, and its score goes to Broadcast's scoreboard and the Analyst's live pill. Broadcast's pitch still runs its own engine, and the Analyst keeps its season runs, until the single-engine refactor (see README).</p>
@@ -303,6 +303,7 @@ const frameOf = (view) => FR[view] && FR[view].el;
 function url(view) {
   const s = M.setup; const q = new URLSearchParams();
   for (const k of KEYS) q.set(k, s[k]);
+  if (view === 'watch' && M.speed) q.set('speed', M.speed);
   return VIEWS[view] + '?' + q.toString();
 }
 
@@ -642,6 +643,10 @@ function init(list) {
   // default: the season's most open fixture, so the first view has goals to watch
   const best = FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
   M.setup = setupOf(best); M.fixture = best.id;
+  // filming URL (?seed=2026&speed=4&seedBadClaim=1): the same match, pace and demo claim on every take
+  const Q = new URLSearchParams(location.search);
+  if (/^\d+$/.test(Q.get('seed') || '')) { M.setup = Object.assign({}, M.setup, { seed: +Q.get('seed') }); M.fixture = fixtureOf(M.setup); }
+  if (+Q.get('speed') > 0) M.speed = Math.min(8, Math.max(0.25, +Q.get('speed')));
   for (const b of document.querySelectorAll('.switch [data-view]')) b.onclick = () => { if (location.hash.slice(1) !== b.dataset.view) location.hash = b.dataset.view; else show(b.dataset.view); };
   // arrow keys, Home and End move between the dashboard tabs (WAI-ARIA tabs pattern)
   document.querySelector('.switch').addEventListener('keydown', (e) => {
@@ -679,7 +684,15 @@ function init(list) {
     const v = await MCC.verify();
     $('ag-verify-out').textContent = pre + (v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '… · in-page (simulated)' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count + ' · in-page (simulated)');
   };
-  $('ag-bad').onchange = (e) => AG.seedBad(e.target.checked);
+  // the in-page Verifier gets the wrong number at once (Simulated); the api's Verifier gets it with the match (POST /v1/matches seed_bad_claim, minute 12)
+  const badNote = () => {
+    const b = LV.badState, on = $('ag-bad').checked;
+    $('ag-bad-note').textContent = !on ? '' : !LV.enabled ? 'In-page Verifier only (Simulated): no agent api.'
+      : b === 'sent' ? 'Sent to the server Verifier with this match; it also happens in-page.'
+      : b === 'late' ? 'In-page now. This match was already created, so the server Verifier gets it at the next match start.' : 'Will go to the server Verifier with the match (from minute 12) and happens in-page now.';
+  };
+  $('ag-bad').onchange = (e) => { AG.seedBad(e.target.checked); LV.seedBad(e.target.checked); badNote(); };
+  setInterval(badNote, 2000);
   // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
   M.lang = 'en'; M.persona = M.persona || 'fan';
   const LANGS = ['en', 'es', 'hi'];
@@ -709,11 +722,12 @@ function init(list) {
     else { const t = prompt('Edit the line (numbers must already be in it)', c.text); if (t == null) return; res = AG.edit(id, PRODUCER, t); }
     $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
   };
-  AG.onChange(() => { $('ag-bad').checked = AG.seeding; renderAgents(); pushCards(); });
+  AG.onChange(() => { $('ag-bad').checked = AG.seeding; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
   const paintPill = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; };
   LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });
+  if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
   $('status-btn').onclick = () => { const dlg = $('status-dlg'); STX.draw($('status-box')); if (dlg.showModal) dlg.showModal(); };
   show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'watch');

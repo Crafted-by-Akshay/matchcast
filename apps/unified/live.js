@@ -4,7 +4,7 @@
 const LV = (() => {
   const WARM_MS = window.MATCHCAST_WARM_MS || 45000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
   const BROWSER = 'b-' + Math.random().toString(36).slice(2, 10);
-  let base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
+  let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
   const set = (s) => { if (s !== st) { st = s; onStatus(s); } };
@@ -56,7 +56,8 @@ const LV = (() => {
     r.sending = true;
     try {
       if (!r.created) {
-        const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: r.roster });
+        r.bad = badClaim;   // the api takes the demo switch at match creation only
+        const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
         if (res.ok || res.status === 409) r.created = true; else throw new Error('create ' + res.status);
       }
       const batch = r.queue.slice(0, BATCH);
@@ -128,5 +129,7 @@ const LV = (() => {
   const setPersona = (p, l) => { l = l || 'en'; if (p === persona && l === lang) return; persona = p; lang = l; if (run) { if (run.es) run.es.close(); open(); } };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, stop, persona: setPersona, toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
+    begin, events, stop, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    get badState() { return !badClaim ? 'off' : !run || !run.created ? 'pending' : run.bad ? 'sent' : 'late'; },   // pending: goes with the match; late: this match was created without it
+     toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();
