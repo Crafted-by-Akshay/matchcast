@@ -4,6 +4,11 @@
 const AG = (() => {
   const PICK = ['goal', 'red_card', 'big_chance', 'turning_point', 'milestone'];   // the moments the Producer airs
   let run = null, changed = () => {};
+  let seedBad = false;   // demo switch: the next score claim is stated wrongly, so the Verifier rejects it and repairs it from the log
+  const TOOLS = { score: ['event_log.goals', 'score_counter'], shot: ['event_log.shot', 'xg_lookup'], xg_total: ['event_log.shots', 'xg_sum'], moment: ['explain.moment'] };
+  const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  // one trace step per agent action: who, what, how long it took (ms), and whether rules or a model did it
+  const trace = (c, agent, step, t0, extra) => c.trace.push(Object.assign({ agent, step, ms: +(clock() - t0).toFixed(3), mode: c.source === 'model' ? 'model' : 'rules', tokens: null }, extra || {}));
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
     roll: { score: [0, 0], xg: [0, 0], nextXg: 5 },
@@ -42,19 +47,30 @@ const AG = (() => {
     if (Object.values(rc).some((v) => v == null)) return { verdict: 'abstained', repaired: false, reason: 'no matching event in the log' };
     if (agrees(c, rc)) return { verdict: 'verified', repaired: false, reason: 'recount from the event log matches' };
     // one repair: the log is the source, so the inputs take the recount and the line is written again
-    const was = Object.assign({}, c.inputs);
+    const was = Object.assign({}, c.inputs), t1 = clock();
     Object.assign(c.inputs, rc); c.text = narrate(c);
+    trace(c, 'verifier', 'repair', t1, { detail: 'differed from the event log; rewrote the line from the recount', was, now: rc });
     log(c, 'verifier', 'repair', { was, now: rc });
     return { verdict: 'verified', repaired: true, reason: 'differed from the event log; repaired from it once' };
   };
 
   // one claim through the pipeline: Analyst claims it, Narrator writes it, Verifier checks it, Producer routes or holds it
   const pipeline = (c) => {
+    let t = clock();
+    c.trace = [];
+    trace(c, 'producer', 'task', t, { detail: 'picked a ' + c.kind + ' claim for the match' });
+    t = clock();
     run.claims.push(c); run.stat.claims++;
+    if (seedBad && c.kind === 'score') { seedBad = false; c.inputs.score = [c.inputs.score[0] + 1, c.inputs.score[1]]; c.seeded = true; }   // demo: a wrong number
     log(c, 'analyst', 'claim', { kind: c.kind, inputs: c.inputs, evidence: c.evidence, basis: c.basis || null });
+    trace(c, 'analyst', 'claim', t, { tools: TOOLS[c.kind] || [], detail: c.seeded ? 'claimed a score one goal too high (seeded for the demo)' : 'claim from ' + c.evidence.length + ' source event(s)' });
+    t = clock();
     c.text = narrate(c); run.stat.lines++;
+    trace(c, 'narrator', 'draft', t, { detail: 'wrote the line from the claim inputs' });
     say('Analyst', c.minute, c.id + ' · ' + c.text, '');
+    t = clock();
     const v = verify(c);
+    trace(c, 'verifier', 'verdict', t, { detail: v.verdict + ': ' + v.reason });
     Object.assign(c, { verdict: v.verdict, repaired: v.repaired, reason: v.reason });
     log(c, 'verifier', 'verdict', { verdict: v.verdict, repaired: v.repaired });
     if (v.repaired) run.stat.repaired++;
@@ -62,11 +78,15 @@ const AG = (() => {
     if (v.verdict === 'verified') {
       run.stat.verified++;
       c.route = c.kind === 'xg_total' ? 'analyst' : c.kind === 'shot' ? 'fan' : 'broadcast';
+      t = clock();
       log(c, 'producer', 'approve', { route: c.route });
+      trace(c, 'producer', 'approval', t, { detail: 'approved for the ' + c.route + ' view' });
+      trace(c, 'producer', 'publication', clock(), { detail: 'line published to the ' + c.route + ' view' });
       say('Producer', c.minute, c.id + ' approved for the ' + c.route + ' view', 'ok');
     } else {
       run.stat.abstained++;
       log(c, 'producer', 'hold', { reason: v.reason });
+      trace(c, 'producer', 'hold', clock(), { detail: v.reason });
       say('Producer', c.minute, c.id + ' held: ' + v.reason, 'warn');
     }
   };
@@ -113,5 +133,5 @@ const AG = (() => {
     c.source = src; changed();
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  return { reset, onWatch, ingest, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();
