@@ -244,3 +244,15 @@ def test_a_malformed_event_does_not_take_its_batch_down() -> None:
     nonum = {k: v for k, v in events[2].items() if k != "stream_sequence"}
     _handle(pipeline, flow, [events[0], junk, nonum])
     assert flow.seen == [1]
+
+
+def test_a_replayed_batch_reaches_the_workflow_again_so_it_can_dedupe() -> None:
+    from app.pipeline import Pipeline
+    from matchcast_worker.repo import MemoryStateRepo
+
+    events = FIXTURE["events"][:4]
+    pipeline = Pipeline(None, None, None, MemoryStateRepo())  # type: ignore[arg-type]
+    flow = _FakeFlow()
+    _handle(pipeline, flow, events)
+    _handle(pipeline, flow, events)  # the hub replays after a restart
+    assert flow.seen == [1, 2, 3, 4, 1, 2, 3, 4]  # the real workflow drops these in add_event

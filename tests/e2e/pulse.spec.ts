@@ -5,7 +5,7 @@ import { collectErrors, openShell, viewFrame } from './helpers';
 // Cards are posted to Watch the way the shell does; only the DOM is checked.
 declare const post: (view: string, msg: unknown) => void; // top-level function of the shell
 
-const goal = (id: string, extra: object = {}) => ({ id, minute: 12.4, kind: 'score', text: "Goal for Arsenal (A One) at 12'. Arsenal 1–0 Chelsea.", plain: 'Goal for Arsenal!', verdict: 'verified', source: 'model', player: null, chips: ['Score 1–0', "12'"], evidence: [{ minute: 12.4, type: 'goal', player: 'A One', team: 'ars', xg: null }], ...extra });
+const goal = (id: string, extra: object = {}) => ({ id, minute: 12.4, kind: 'score', text: "Goal for Thames Rovers (A One) at 12'. Thames Rovers 1–0 Coloso Ciudad.", plain: 'Goal for Thames Rovers!', verdict: 'verified', source: 'model', player: null, chips: ['Score 1–0', "12'"], evidence: [{ minute: 12.4, type: 'goal', player: 'A One', team: 'thr', xg: null }], ...extra });
 
 async function openWatch(page: Page): Promise<Frame> {
   await openShell(page, 'watch');

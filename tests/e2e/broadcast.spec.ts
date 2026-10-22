@@ -15,8 +15,8 @@ test('on-air graphics are visible, wait for approval in producer mode, and alert
   await page.click('#tab-agents');   // the Broadcast frame is display:none while another tab shows, so look at it from the Broadcast tab below
   await page.selectOption('#aq-mode', 'producer');
   await page.evaluate(() => {
-    AG.reset('k2', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k2', [{ minute: 10.1, type: 'goal', team: 'ars', player: 'A One', score: '1-0', data: {} }], []);
+    AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch('k2', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });
   await expect.poll(() => page.locator('#aq-list li[data-id]').count()).toBe(1);
   await page.click('#tab-broadcast');
@@ -35,7 +35,7 @@ test('on-air graphics are visible, wait for approval in producer mode, and alert
   expect(await bc.evaluate(() => { const v = document.getElementById('bc-view')!; return v.contains(document.getElementById('mc-l3')) && v.contains(document.getElementById('mc-tele')); })).toBe(true);
   // a red card is an alert: red edge, 'verified' in the label
   await page.evaluate(() => AG.setMode('demo'));
-  await page.evaluate(() => AG.onWatch('k2', [], [{ id: 'm9', minute: 55, type: 'red_card', title: 'Red card for C One', why: 'Chelsea down to ten men at 55\'.' }]));
+  await page.evaluate(() => AG.onWatch('k2', [], [{ id: 'm9', minute: 55, type: 'red_card', title: 'Red card for C One', why: 'Coloso Ciudad down to ten men at 55\'.' }]));
   await expect(l3).toContainText('ALERT · Red card · verified', { timeout: 3000 });
   expect(await l3.evaluate((el) => getComputedStyle(el).borderLeftColor)).toBe('rgb(255, 77, 77)');
   expect(errs).toEqual([]);

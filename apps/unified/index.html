@@ -50,6 +50,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
 #lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+@media (max-width:560px){#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
@@ -520,14 +521,14 @@ function cardOf(c) {
 // ---------------------------------------------------------------- Ask (EXP-5)
 // 300 characters, 5 questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
 const LANGS_OK = ['en', 'es', 'hi'];
-const askTimes = [];
+const askTimes = { watch: [], broadcast: [] };   // one budget per view
 async function answerAsk(id, q, to = 'watch') {
   const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
-  const now = Date.now(); while (askTimes.length && now - askTimes[0] > 60000) askTimes.shift();
-  if (askTimes.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
-  askTimes.push(now);
-  if (LV.enabled && LV.status === 'live') { try { reply(await LV.ask(q)); return; } catch (e) { /* the api could not answer: the rules below do */ } }
+  const times = askTimes[to] || (askTimes[to] = []), now = Date.now(); while (times.length && now - times[0] > 60000) times.shift();
+  if (times.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
+  times.push(now);
+  if (LV.enabled && LV.status === 'live') { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
   const a = AG.ask(q);
   reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
 }
