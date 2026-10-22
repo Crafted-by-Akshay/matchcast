@@ -4,7 +4,7 @@ import copy
 
 import pytest
 from conftest import run
-from matchcast_agents import MatchWorkflow
+from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError, validate, validate_publication_context
 from matchcast_contracts.audit import verify_chain
@@ -186,6 +186,27 @@ def test_the_desk_is_only_sent_claims_behind_a_verified_line(match) -> None:
     }
     calls = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "a2a_call"]
     assert calls and all(r["details"]["claim_id"] in verified for r in calls)
+
+
+def test_a_repaired_line_still_gets_its_desk_comparison(match, monkeypatch) -> None:
+    from matchcast_agents.rules import producer
+
+    original = producer.moment_score
+    monkeypatch.setattr(
+        producer, "moment_score", lambda payload: (original(payload)[0], 1, original(payload)[2])
+    )
+    desk = FakeDesk()
+    config = WorkflowConfig()
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], stats_desk=desk, config=config,
+        agents=rules_agents(config.personas, seed_bad_claim=True, seed_bad_claim_at_ms=0),
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    assert flow.stats["repaired"] and desk.calls
+    calls = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "a2a_call"]
+    repaired_claims = {c for ln in flow.store.lines(flow.sk) if ln.repair_of for c in ln.claim_ids}
+    assert any(r["details"]["claim_id"] in repaired_claims for r in calls)
 
 
 def test_a_slow_desk_times_out_without_blocking_the_moment(match, monkeypatch) -> None:

@@ -160,7 +160,7 @@ class MatchWorkflow:
         stats_desk: StatsDesk | None = None,
     ) -> None:
         self.stats_desk = stats_desk
-        self._verified_claim_ids: set[str] = set()
+        self._verified_claims: dict[str, dict[str, Any]] = {}
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
@@ -618,12 +618,12 @@ class MatchWorkflow:
         if not claims:
             return
         drafts = await self._call(a.narrator, "write", task.moment_id, ctx, task, claims)
-        self._verified_claim_ids = set()
+        self._verified_claims = {}
         for draft in drafts:
             await self._verify_line(ctx, task, claims, draft, attempt=0)
         if task.priority == 1 and self.stats_desk is not None:
             # After verification: only a claim that backs a verified line is ever sent to the desk.
-            checked = [c for c in claims if c["claim_id"] in self._verified_claim_ids]
+            checked = list(self._verified_claims.values())
             try:
                 await asyncio.wait_for(self._ask_stats_desk(task, checked), STATS_DESK_BUDGET_S)
             except TimeoutError:
@@ -774,7 +774,9 @@ class MatchWorkflow:
         )
         if record.status == "verified":
             self.stats["verified"] += 1
-            self._verified_claim_ids.update(record.claim_ids)
+            for claim in claims:
+                if claim["claim_id"] in record.claim_ids:
+                    self._verified_claims[claim["claim_id"]] = claim
             if self.config.approval_mode == "auto":
                 self._approve(record, "agent", a.producer.agent_id)
 
