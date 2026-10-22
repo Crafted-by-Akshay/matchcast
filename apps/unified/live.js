@@ -15,12 +15,14 @@ const LV = (() => {
   const num = (v) => v != null && v !== '' && Number.isFinite(+v);
   const clampX = (v, d) => Math.max(0, Math.min(105, num(v) ? +v : d)), clampY = (v, d) => Math.max(0, Math.min(68, num(v) ? +v : d));
   let lastShot = null;   // Watch's goal events carry no position, so a goal takes the position of the shot before it
+  // the shot's drawn fate (goal, save or miss) says whether it was on target; without a fate (an older source) the xG guess stays
+  const onTarget = (ev) => ev.fate === 'goal' || ev.fate === 'save' ? true : ev.fate === 'miss' ? false : ev.kind === 'penalty' || (+ev.xg || 0) > 0.1;
   const pos = (x, y) => ({ x: clampX(x, 52.5), y: clampY(y, 34), z: 0 });
   const payloadOf = (ev, t, p) => {
     const other = teamIds.find((id) => id !== t);
     switch (ev.type) {
       case 'goal': { const g = num(ev.x) ? ev : lastShot || ev; return { v: '1.0.0', o: { type: 'goal', player_id: p, team_id: t, own_goal: !!ev.ownGoal, position_unit: 'm', position: pos(g.x, g.y) } }; }
-      case 'shot': lastShot = ev; return { v: '1.0.0', o: { type: 'shot', player_id: p, team_id: t, position_unit: 'm', position: pos(ev.x, ev.y), on_target: ev.kind === 'penalty' || (+ev.xg || 0) > 0.1 } };
+      case 'shot': lastShot = ev; return { v: '1.0.0', o: { type: 'shot', player_id: p, team_id: t, position_unit: 'm', position: pos(ev.x, ev.y), on_target: onTarget(ev) } };
       case 'pass': return ev.to && num(ev.x0) ? { v: '1.0.0', o: { type: 'pass', player_id: p, recipient_player_id: slug(ev.to), team_id: t, position_unit: 'm', start_position: pos(ev.x0, ev.y0), end_position: pos(ev.x1, ev.y1) } } : null;
       case 'foul': return ev.on ? { v: '1.1.0', o: { type: 'foul', player_id: p, team_id: t, victim_player_id: slug(ev.on), advantage: false, position_unit: 'm', position: pos(ev.x, ev.y) } } : null;
       case 'yellow_card': case 'red_card': {
