@@ -19,11 +19,12 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.statsdesk import StatsDeskError
-from matchcast_agents.store import MemoryStore
+from matchcast_agents.store import MemoryStore, stream_key
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
@@ -35,6 +36,7 @@ from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 TENANT = "demo"
 HEARTBEAT_S = 15
 ASK_PER_MINUTE = 5
+DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {
@@ -120,6 +122,12 @@ class ExportBody(BaseModel):
     metric: str | None = None
 
 
+class DsAsk(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    question: str = Field(min_length=1, max_length=300)
+
+
 class RecapTrigger(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tenant_id: str = Field(default=TENANT, pattern=ID)
@@ -163,6 +171,8 @@ class Registry:
         self._model_client: ModelClient | None = None
         self.asked: dict[str, deque[float]] = {}
         self.exports: dict[str, tuple[bytes, str, str]] = {}
+        self.season = self.stats_desk._season if self.stats_desk else None
+        self.ds_asked: dict[str, deque[float]] = {}
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -191,6 +201,19 @@ class Registry:
             except Exception:  # noqa: BLE001 - no endpoint, SDK or credential: stay on rules
                 logging.getLogger(__name__).warning("live mode requested; using rules agents")
         return self._model_client
+
+    def allow_ds(self, client: str, now: float | None = None) -> bool:
+        """At most DS_PER_MINUTE Data Scientist questions per client per rolling minute."""
+        now = time.monotonic() if now is None else now
+        for key in [k for k, w in self.ds_asked.items() if not w or now - w[-1] >= 60]:
+            del self.ds_asked[key]
+        window = self.ds_asked.setdefault(client, deque())
+        while window and now - window[0] >= 60:
+            window.popleft()
+        if len(window) >= DS_PER_MINUTE:
+            return False
+        window.append(now)
+        return True
 
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))
@@ -495,6 +518,34 @@ def build_router(registry: Registry) -> APIRouter:
             payload, media_type=media,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )  # fmt: skip
+
+    @router.post("/ds/ask")
+    async def ds_ask(body: DsAsk, request: Request) -> dict[str, Any]:
+        """Data Scientist: a season question, answered from one verified SELECT (F10)."""
+        if registry.season is None:
+            raise Problem(503, "season_unavailable", "the season data is not loaded")
+        if not registry.allow_ds(request.client.host if request.client else "local"):
+            raise Problem(429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute")
+        try:
+            result = ds_ask_season(body.question, registry.season)
+        except SeasonError as error:
+            raise Problem(400, "invalid_query", str(error)) from error
+        stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": "season"}
+        registry.store.append_audit(
+            stream_key(stream), stream=stream, actor_kind="agent", actor_id="data-scientist",
+            action="ds_answered" if result.verdict == "verified" else "ds_unverified",
+            subject_id="ds-ask",
+            details={"verdict": result.verdict, "sql": result.sql, "mismatch": result.mismatch},
+            time=_now(),
+        )  # fmt: skip
+        return {
+            "answer": result.answer,
+            "verdict": result.verdict,
+            "sql": result.sql,
+            "columns": result.columns,
+            "rows": result.rows,
+            "chart_spec": result.chart_spec,
+        }
 
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:

@@ -433,3 +433,17 @@ def test_exports_are_hash_stamped_downloadable_and_audited(client: TestClient) -
     assert [r["action"] for r in audit].count("export_created") == 2
     assert verify_chain(audit)["valid"] is True
     assert client.get("/v1/exports/nope").status_code == 404
+
+
+def test_ds_ask_answers_refuses_and_limits(client: TestClient) -> None:
+    body = {"session_id": "short", "question": "which team has the highest average xG?"}
+    ok = client.post("/v1/ds/ask", json=body)
+    assert ok.status_code == 200 and ok.json()["verdict"] == "verified" and ok.json()["chart_spec"]
+    from matchcast_agents.store import stream_key
+
+    sk = stream_key({"tenant_id": "demo", "session_id": "short", "match_id": "season"})
+    audit = client.app.state.matches.store.audit_records(sk)
+    assert [r["action"] for r in audit] == ["ds_answered"] and verify_chain(audit)["valid"] is True
+    for _ in range(4):
+        assert client.post("/v1/ds/ask", json=body).status_code == 200
+    assert client.post("/v1/ds/ask", json=body).status_code == 429
