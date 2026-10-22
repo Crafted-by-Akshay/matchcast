@@ -151,3 +151,7 @@ Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.j
 - Ideas not done (visual risk, in the prototype source): fewer grass-noise specks in `paintPitch`, decode the player model off the main thread.
 ## Broadcast desk script: English, Spanish, Hindi
 - `embed/bclang.js` wraps the desk's line builder: each event gets a Spanish and a Hindi line from rules templates that copy the names and numbers. Every translation goes through the same Verifier re-check as the shell (same numbers, same facts in the same order, no new capitalised names); a line that fails stays in English and the script list says why ("English shown: ..."). Tamil is removed from the desk. Translations are rules templates (**Planned**: Azure AI Translator, ADR in docs/architecture). Test: `tests/e2e/broadcast-lang.spec.ts`.
+
+
+## Server translations (EXP-17, api PR 118)
+When the api sends `variants: {es|hi: text}` on a publication (only after its own number, name and citation re-check), `agents.js` ingest stores it as that language's translation (`api: true`, shown as "Translated by Azure AI Translator") and Watch renders it as text. A language the api did not send keeps the rules-template line, so nothing changes until Platform sets `TRANSLATOR_ENDPOINT`. Test: the `api variants` case in `tests/e2e/language.spec.ts`.
