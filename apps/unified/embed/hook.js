@@ -69,5 +69,33 @@ const MCS = (() => {
       send({ type: 'events', setup: setup(), batch: outbox.events.splice(0), moments: outbox.moments.splice(0) });
     }, 1000);
   };
-  return { view: '', framed, send, setup, live, apply, started, loop, emit, clubs, progress };
+  // Push-to-talk (EXP-16): hold the button, speak, release; the words fill the box and submit it. Typing always works.
+  // This uses the browser's speech recognition and says so; Azure Speech in the browser (a 10 minute token from the api) is Planned.
+  const ptt = (input, form, lang) => {
+    if (!input || !form || input.dataset.ptt) return null;
+    input.dataset.ptt = '1';
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'mcx-ptt'; b.textContent = '🎤';
+    b.setAttribute('aria-label', 'Hold to talk'); b.title = SR ? 'Hold to talk (browser speech recognition; Azure Speech is Planned)' : 'This browser has no speech recognition. Type instead.';
+    b.style.cssText = 'min-width:40px;min-height:36px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:var(--ink);cursor:pointer';
+    const st = document.createElement('span'); st.className = 'mcx-ptt-s'; st.setAttribute('role', 'status'); st.style.cssText = 'font-size:11px;color:var(--muted);align-self:center';
+    input.after(b); b.after(st);
+    if (!SR) { b.disabled = true; st.textContent = 'No speech recognition here'; return b; }
+    let rec = null, heard = '';
+    const stop = () => { if (rec) { try { rec.stop(); } catch (e) { /* already stopped */ } } };
+    const start = () => {
+      if (rec) return;
+      heard = ''; rec = new SR(); rec.lang = lang || 'en-GB'; rec.interimResults = false; rec.continuous = false;
+      rec.onresult = (e) => { heard = Array.from(e.results).map((r) => r[0].transcript).join(' ').trim(); };
+      rec.onend = () => { rec = null; st.textContent = ''; b.setAttribute('aria-pressed', 'false'); if (heard) { input.value = heard.slice(0, 300); form.requestSubmit(); } };
+      rec.onerror = () => { st.textContent = 'Could not hear that. Try again or type.'; };
+      st.textContent = 'Listening…'; b.setAttribute('aria-pressed', 'true'); rec.start();
+    };
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); start(); });
+    for (const t of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(t, stop);
+    b.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); start(); } });
+    b.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') stop(); });
+    return b;
+  };
+  return { view: '', framed, send, setup, live, apply, started, loop, emit, clubs, progress, ptt };
 })();

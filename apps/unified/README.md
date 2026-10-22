@@ -76,3 +76,6 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 
 ## Wild-moment alerts (EXP-9)
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
+
+## Talk by voice (EXP-16)
+Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.js`): hold, speak, release and the words fill the box and submit it; Space or Enter on the focused button works too, and typing always works. Watch's talk-to-player already had a mic. Both use the browser's speech recognition (the button is disabled where the browser has none). Orders that change play are labelled "Game mode" in Watch and never touch the event record behind the claims. Planned, all needing the api: the Speech token endpoint with the Azure Speech SDK, the `/talk` role agents with Verifier and Content Safety, and a spoken reply from the api's voices. No Speech key is ever placed in the page.

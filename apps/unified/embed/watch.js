@@ -60,6 +60,10 @@ MCS.progress('Loading the stadium and players');
     if (fade) { clearTimeout(el.t1); el.classList.remove('out'); el.t1 = setTimeout(() => el.classList.add('out'), 11400); clearTimeout(el.t2); el.t2 = setTimeout(() => { el.remove(); cards.delete(c.id + host.id); }, 12000); }
     return el;
   };
+  // EXP-16: a label for what orders do (Watch's own mic button already does speech recognition)
+  const gm = document.createElement('div'); gm.className = 'mcx-gm'; gm.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px';
+  gm.textContent = 'Game mode: orders change how the simulated match is played. They never change the event record behind the claims.';
+  if ($('tk-form')) $('tk-form').after(gm);
   const kept = [];
   window.addEventListener('message', (e) => {
     const d = e.data || {};
