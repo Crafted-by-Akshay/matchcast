@@ -1,8 +1,8 @@
 # ADR-0017: One writer for the `matchstate` table
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-22
-- **Decided by:** Agents lane (draft); Platform lane and the coordinator to accept
+- **Decided by:** Agents lane (draft); Platform lane accepted 22 Oct 2026 and wired it (Pipeline.handle)
 
 ## Context
 
@@ -37,6 +37,7 @@ Option 2. A single writer per mode:
 - More moving parts in `Pipeline.handle`: a bug in the reducer now blocks narration. The `direct` mode and the consistency test are the guard.
 - Setting `MATCHCAST_STATE_WRITER=reducer` before `Pipeline.handle` calls the reducer, or in `direct` mode, leaves `matchstate` unwritten (nothing reads it directly today). Set it only together with the wiring, in pipeline modes.
 - Platform owns the wiring in `pipeline.py` and the Bicep table; Agents built the `MATCHCAST_STATE_WRITER` switch and the consistency test (`services/worker/tests/test_state_writer.py`); Platform sets the variable in Bicep for the pipeline modes.
+- A dropped event leaves its sequence unfilled, so later events wait in the reducer until 500 are held (docs/infra.md).
 
 ## Affects
 
