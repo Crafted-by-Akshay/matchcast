@@ -43,6 +43,7 @@ Backend code can use the installed uv workspace package:
 
 ```python
 from matchcast_contracts import validate
+
 packet = validate(incoming_json, roster=authoritative_roster)
 ```
 

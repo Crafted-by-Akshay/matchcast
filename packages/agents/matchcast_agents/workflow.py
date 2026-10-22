@@ -140,6 +140,7 @@ class MatchWorkflow:
         self._clock = clock
         self.safety = safety or LocalSafetyScreen()
         self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
+        self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
         self.stats = {
             "events": 0,
@@ -197,12 +198,22 @@ class MatchWorkflow:
         take = getattr(agent, "take_fallbacks", None)
         reasons = take() if take else []
         for reason in reasons:
-            self._agent("fallback_used", agent, subject, fallback_reason=reason)
-            self.hub.publish("status", None, {"status": "rules_fallback", "reason": reason})
-            self.status = "rules_fallback"
-        if not reasons and self.status == "rules_fallback" and getattr(agent, "mode", "") == "live":
-            self.status = "live"
+            self._agent("fallback_used", agent, subject, fallback_reason=reason)  # every refusal
+            if self.status != "rules_fallback" or self._fallback_reason != reason:
+                self.hub.publish("status", None, {"status": "rules_fallback", "reason": reason})
+            self.status, self._fallback_reason = "rules_fallback", reason
+        if not reasons and self.status == "rules_fallback" and self._all_live():
+            self.status, self._fallback_reason = "live", None
             self.hub.publish("status", None, {"status": "live"})
+
+    def _all_live(self) -> bool:
+        """Live again only when no wrapped agent is running its rules twin."""
+        wrapped = [a for a in self._agent_list() if hasattr(a, "take_fallbacks")]
+        return bool(wrapped) and all(a.mode == "live" for a in wrapped)
+
+    def _agent_list(self) -> list[Any]:
+        a = self.agents
+        return [a.producer, a.analyst, a.narrator, a.verifier]
 
     def _save_line(self, line: LineRecord) -> None:
         self.store.put_line(self.sk, line)

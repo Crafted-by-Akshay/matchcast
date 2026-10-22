@@ -59,6 +59,10 @@ class CircuitBreaker:
             return True
         return False
 
+    def abandon_probe(self) -> None:
+        """A half-open probe ended without proof either way (cancelled, or a tool failed)."""
+        self._probing = False
+
     def record_success(self) -> None:
         self._failures.clear()
         self._opened_at = None
@@ -127,7 +131,10 @@ class ResilientAgent:
             try:
                 result = await self._live_call(name, args, kwargs)
             except ToolError:
-                self.breaker.record_success()
+                self.breaker.abandon_probe()  # a tool failure says nothing about the model
+                raise
+            except asyncio.CancelledError:
+                self.breaker.abandon_probe()
                 raise
             except Exception as error:  # noqa: BLE001  any model-side failure falls back
                 self.breaker.record_failure()
