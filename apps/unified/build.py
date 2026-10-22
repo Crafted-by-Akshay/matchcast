@@ -255,6 +255,9 @@ def build(out_root):
     os.makedirs(out_root + "shared", exist_ok=True)
     shutil.copy(W + "players.json", out_root + "shared/players.json")
     shutil.copy(W + "intl.json", out_root + "shared/intl.json")
+    # optional Data platform assets (EXP-13): fabric-dashboard.mp4/.png, model-card.json
+    for f in sorted(glob.glob(U + "platform-assets/*")):
+        shutil.copy(f, out_root + "shared/" + os.path.basename(f))
     write(
         out_root + "shared/fixtures.json",
         json.dumps(fixtures(), ensure_ascii=False, separators=(",", ":")),
