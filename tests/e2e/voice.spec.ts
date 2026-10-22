@@ -25,10 +25,14 @@ test('voice: captions match the spoken text; muted still captions; stale lines a
   await page.evaluate(() => VC.say('Arsenal 1–0 Chelsea.'));
   await expect.poll(() => page.evaluate(() => (window as any).__spoken)).toEqual(['Arsenal 1–0 Chelsea.']);
   await expect(page.locator('#vc-bar')).toHaveText('Arsenal 1–0 Chelsea.');
+  await expect(page.locator('#voice-src')).toHaveText('Browser voice (simulated)');
+  // the same claim is spoken once
+  await page.evaluate(() => { VC.say('Once.', { id: 'c9' }); VC.say('Once.', { id: 'c9' }); });
+  await expect.poll(() => page.evaluate(() => (window as any).__spoken.filter((t: string) => t === 'Once.').length)).toBe(1);
   // a line older than 5 s shows but is not spoken
   await page.evaluate(() => VC.say('Old line.', { at: Date.now() - 6000 }));
   await expect(page.locator('#vc-bar')).toHaveText('Old line.');
-  expect(await page.evaluate(() => (window as any).__spoken.length)).toBe(1);
+  expect(await page.evaluate(() => (window as any).__spoken.includes('Old line.'))).toBe(false);
   expect(errs).toEqual([]);
 });
 

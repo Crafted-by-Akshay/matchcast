@@ -4,7 +4,8 @@
 const VC = (() => {
   const EXPIRY_MS = 5000, KEY = 'mc-voice';
   let voices = { playByPlay: 'en-GB-RyanNeural', analyst: 'en-GB-SoniaNeural', es: 'es-ES-ElviraNeural', hi: 'hi-IN-SwaraNeural' };
-  let on = false, queue = [], busy = false, bar = null, hide = 0, source = 'browser';
+  let on = false, queue = [], busy = false, bar = null, hide = 0, source = 'browser', playing = null, onChange = () => {};
+  const spoken = new Set();   // one voice line per claim, however often its card is redrawn
   try { on = localStorage.getItem(KEY) === 'on'; } catch (e) { /* storage may be blocked */ }
   const load = () => fetch('voices.json').then((r) => r.ok ? r.json() : null).then((j) => { if (j) voices = Object.assign(voices, j); }).catch(() => {});
   const el = () => {
@@ -19,8 +20,7 @@ const VC = (() => {
     const it = queue.shift(); if (!it) return;
     if (Date.now() - it.at > EXPIRY_MS) { next(); return; }   // expired while waiting: caption only (already shown)
     busy = true; const done = () => { busy = false; next(); };
-    if (it.audio) { source = 'azure'; const a = new Audio(it.audio); a.onended = a.onerror = done; a.play().catch(done); return; }
-    source = 'browser';
+    if (it.audio) { const a = playing = new Audio(it.audio); a.onended = a.onerror = done; a.play().catch(done); return; }
     if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') { done(); return; }
     const u = new SpeechSynthesisUtterance(it.text); u.lang = it.lang === 'es' ? 'es-ES' : it.lang === 'hi' ? 'hi-IN' : 'en-GB';
     u.onend = u.onerror = done; window.speechSynthesis.speak(u);
@@ -29,8 +29,10 @@ const VC = (() => {
   const say = (text, o) => {
     o = o || {}; const at = o.at || Date.now();
     caption(text);
-    if (on) { queue.push({ text, at, lang: o.lang || 'en', audio: o.audio || null }); next(); }
+    source = o.audio ? 'azure' : 'browser'; onChange();
+    if (on && !(o.id && spoken.has(o.id))) {
+      if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', audio: o.audio || null }); next(); }
   };
-  const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { queue = []; if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; } };
-  return { load, say, set, get on() { return on; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
+  const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { queue = []; if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; } onChange(); };
+  return { load, say, set, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();
