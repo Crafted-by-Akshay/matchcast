@@ -475,3 +475,21 @@ def test_stream_refuses_a_persona_that_is_not_real_for_this_match(client: TestCl
         )
         assert got.status_code == 422 and got.json()["code"] == "contract_invalid", bad
     assert client.app.state.matches.get("short", "match-short").extra_personas == []
+
+
+def test_talk_route_answers_and_validates(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    body = {"session_id": "short", "target": "home9", "utterance": "How many shots have you had?"}
+    ok = client.post("/v1/matches/match-short/talk", json=body)
+    assert ok.status_code == 200 and ok.json()["verdict"] == "verified"
+    assert (
+        client.post("/v1/matches/match-short/talk", json={**body, "target": "ghost"}).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/v1/matches/match-short/talk", json={**body, "utterance": "x" * 301}
+        ).status_code
+        == 422
+    )

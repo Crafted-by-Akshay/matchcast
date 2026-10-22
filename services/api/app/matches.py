@@ -128,6 +128,13 @@ class DsAsk(BaseModel):
     question: str = Field(min_length=1, max_length=300)
 
 
+class TalkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    target: str = Field(pattern=ID)
+    utterance: str = Field(min_length=1, max_length=300)
+
+
 class RecapTrigger(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tenant_id: str = Field(default=TENANT, pattern=ID)
@@ -552,6 +559,14 @@ def build_router(registry: Registry) -> APIRouter:
             "rows": result.rows,
             "chart_spec": result.chart_spec,
         }
+
+    @router.post("/matches/{match_id}/talk")
+    async def talk(match_id: str, body: TalkBody) -> dict[str, Any]:
+        flow = registry.get(body.session_id, match_id)
+        try:
+            return await flow.talk(body.target, body.utterance)
+        except WorkflowError as error:
+            raise Problem(STATUS[error.code], error.code, str(error)) from error
 
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:

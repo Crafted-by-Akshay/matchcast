@@ -401,6 +401,39 @@ class MatchWorkflow:
         self._audit("person", "viewer", "export_created", export_id,
                     {"kind": kind, "sha256": sha256, "rows": rows})  # fmt: skip
 
+    # ---- talk to a player or the producer (EXP-16) ---------------------------------------
+
+    async def talk(self, target: str, utterance: str) -> dict[str, Any]:
+        """A role agent answers from its own facts; the reply is checked before it is returned."""
+        from .roles import player_reply, producer_reply
+        from .verify import extract_names, extract_numbers
+
+        async with self._lock:
+            shield = await self.safety.shield(utterance)
+            if shield.attack_detected:
+                self._audit("system", "content-safety", "safety_blocked", "talk",
+                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+                raise WorkflowError("prompt_attack", "the utterance was flagged as a prompt attack")
+            ctx = self._ctx()
+            if target == "producer":
+                reply, facts = producer_reply(ctx, utterance)
+            elif target in ctx.names or any(
+                e["payload"].get("player_id") == target for e in ctx.events
+            ):
+                reply, facts = player_reply(ctx, target, utterance)
+            else:
+                raise WorkflowError("not_found", f"unknown talk target {target}")
+            allowed = {float(v) for v in facts.values() if isinstance(v, int | float)}
+            numbers_ok = all(n in allowed for n in extract_numbers(reply))
+            names_ok = all(n.casefold() in ctx.allowed_names for n in extract_names(reply))
+            words = len(reply.split())
+            verdict = "verified" if numbers_ok and names_ok and words <= 60 else "rejected"
+            if verdict == "rejected":
+                reply = "I can't confirm that from the match data yet."
+            self._audit("agent", f"talk-{target}", "talk_answered", "talk",
+                        {"target": target, "verdict": verdict, "facts": facts})  # fmt: skip
+            return {"target": target, "reply": reply, "verdict": verdict, "facts": facts}
+
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
     async def recap(
