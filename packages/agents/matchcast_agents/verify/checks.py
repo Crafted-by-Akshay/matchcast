@@ -116,11 +116,44 @@ def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any
     )
 
 
-def check_names(ctx: MatchContext, line: DraftLine) -> Check:
+# lines that are not about one moment: the Ask answer and the full-time recap
+NOT_A_MOMENT = ("ask", "line-recap")
+
+
+def moment_team_problem(
+    ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]
+) -> str | None:
+    """A player named in a moment line must belong to the moment's team or be named in its event.
+
+    The moment is the event at the claims' evidence sequence. Returns the offending name."""
+    if line.line_id.startswith(NOT_A_MOMENT) or not claims:
+        return None
+    seq = max(c["max_evidence_sequence"] for c in claims)
+    event = next((e for e in ctx.events if e["stream_sequence"] == seq), None)
+    if event is None:
+        return None
+    payload = event["payload"]
+    allowed = {v for v in payload.values() if isinstance(v, str) and v in ctx.names}
+    team = payload.get("team_id")
+    if team:
+        allowed |= {p["player_id"] for p in ctx.roster["players"] if p["team_id"] == team}
+    ok = {ctx.names[pid].casefold() for pid in allowed}
+    text = line.text.casefold()
+    return next(
+        (n for n in ctx.names.values() if n.casefold() in text and n.casefold() not in ok), None
+    )
+
+
+def check_names(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]) -> Check:
     for name in extract_names(line.text):
         if name.casefold() not in ctx.allowed_names:
             return Check(name="names", passed=False, detail=f"{name} is not in this match's roster")
-    return Check(name="names", passed=True, detail="every name is in the roster")
+    stray = moment_team_problem(ctx, line, claims)
+    if stray:
+        return Check(
+            name="names", passed=False, detail=f"{stray} is not on the team in this moment"
+        )
+    return Check(name="names", passed=True, detail="every name is in the roster and in the moment")
 
 
 def check_persona(line: DraftLine) -> Check:
@@ -147,6 +180,6 @@ def run_checks(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]])
         check_sources(ctx, claims),
         check_freshness(ctx, claims),
         check_numbers(ctx, line, claims),
-        check_names(ctx, line),
+        check_names(ctx, line, claims),
         check_persona(line),
     ]
