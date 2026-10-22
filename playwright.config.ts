@@ -7,7 +7,8 @@ export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 180_000,
   retries: process.env.CI ? 1 : 0,
-  workers: 1,
+  // Software-rendered WebGL is CPU bound: one worker locally, two on the 2-core runner (each spec file runs in order).
+  workers: process.env.CI ? 2 : 1,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
     baseURL: live || 'http://localhost:4173',
