@@ -9,7 +9,9 @@ import io
 import json
 import logging
 import os
+import time
 import uuid
+from collections import deque
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, Literal
@@ -30,6 +32,7 @@ from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 
 TENANT = "demo"
 HEARTBEAT_S = 15
+ASK_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {
@@ -38,6 +41,7 @@ STATUS = {
     "forbidden_role": 403,
     "not_approvable": 409,
     "prompt_attack": 400,
+    "rate_limited": 429,
 }
 
 
@@ -98,6 +102,13 @@ class LineAction(BaseModel):
     reason: str | None = Field(default=None, max_length=200)
 
 
+class AskBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    question: str = Field(min_length=1, max_length=300)
+    persona: Literal["casual", "analyst", "broadcast"] = "casual"
+
+
 class ExportBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str = Field(pattern=ID)
@@ -122,7 +133,21 @@ class Registry:
         self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
         self.require_role = require_role
         self._model_client: ModelClient | None = None
+        self.asked: dict[str, deque[float]] = {}
         self.exports: dict[str, tuple[bytes, str, str]] = {}
+
+    def allow_ask(self, session_id: str, now: float | None = None) -> bool:
+        """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
+        now = time.monotonic() if now is None else now
+        for key in [k for k, w in self.asked.items() if not w or now - w[-1] >= 60]:
+            del self.asked[key]  # idle sessions leave no entry behind
+        window = self.asked.setdefault(session_id, deque())
+        while window and now - window[0] >= 60:
+            window.popleft()
+        if len(window) >= ASK_PER_MINUTE:
+            return False
+        window.append(now)
+        return True
 
     def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
         """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
@@ -449,6 +474,23 @@ def build_router(registry: Registry) -> APIRouter:
         if recap is None:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
         return recap
+
+    @router.post("/matches/{match_id}/ask")
+    async def ask(match_id: str, body: AskBody) -> dict[str, Any]:
+        flow = registry.get(body.session_id, match_id)
+        if not registry.allow_ask(body.session_id):
+            raise Problem(429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute")
+        try:
+            result = await flow.ask(body.question, body.persona)
+        except WorkflowError as error:
+            raise Problem(STATUS[error.code], error.code, str(error)) from error
+        return {
+            "answer": result.answer,
+            "intent": result.intent,
+            "abstained": result.abstained,
+            "citations": result.citations,
+            "mode": result.mode,
+        }
 
     return router
 

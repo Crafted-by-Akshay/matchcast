@@ -344,6 +344,34 @@ class MatchWorkflow:
             "revision": state.revision,
         }
 
+    # ---- ask the match (AGT-16) ---------------------------------------------------------
+
+    async def ask(self, question: str, persona: str = "casual", assistant: Any = None) -> Any:
+        """Answer one fan question from the match tools and the knowledge base, with citations."""
+        from .ask import default_assistant
+
+        async with self._lock:
+            shield = await self.safety.shield(question)
+            if shield.attack_detected:
+                self._audit("system", "content-safety", "safety_blocked", "ask",
+                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+                raise WorkflowError("prompt_attack", "the question was flagged as a prompt attack")
+            result = await (assistant or default_assistant()).ask(self, question, persona)
+            self._audit(
+                "agent",
+                "assistant",
+                "ask_answered",
+                "ask",
+                {
+                    "intent": result.intent,
+                    "abstained": result.abstained,
+                    "dropped": result.dropped,
+                    "citations": [c["id"] for c in result.citations],
+                    "mode": result.mode,
+                },
+            )
+            return result
+
     def record_export(self, export_id: str, kind: str, sha256: str, rows: int) -> None:
         self._audit("person", "viewer", "export_created", export_id,
                     {"kind": kind, "sha256": sha256, "rows": rows})  # fmt: skip
