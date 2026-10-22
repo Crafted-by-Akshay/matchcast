@@ -306,3 +306,12 @@ def test_recap_trigger_needs_a_producer_role_when_roles_are_required() -> None:
     client.app.state.matches.require_role = True
     trigger = {"session_id": "short", "match_id": "match-short"}
     assert client.post("/internal/v1/recaps", json=trigger).status_code == 403
+
+
+def test_goals_are_compared_with_the_season_in_the_audit(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    calls = [r for r in audit if r["action"] == "a2a_call"]
+    assert calls and calls[0]["details"]["result"]["of"] == 56
+    assert verify_chain(audit)["valid"] is True

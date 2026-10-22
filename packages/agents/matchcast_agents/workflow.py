@@ -21,6 +21,7 @@ from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
+from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, stream_key
 from .tools import InProcessTools, ToolError
 
@@ -128,7 +129,9 @@ class MatchWorkflow:
         config: WorkflowConfig | None = None,
         safety: SafetyScreen | None = None,
         clock: Callable[[], datetime] = _utc_now,
+        stats_desk: StatsDesk | None = None,
     ) -> None:
+        self.stats_desk = stats_desk
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
@@ -468,9 +471,38 @@ class MatchWorkflow:
         claims = await self._analyse(ctx, task, repair=False)
         if not claims:
             return
+        if task.priority == 1 and self.stats_desk is not None:
+            await self._ask_stats_desk(task, claims)
         drafts = await self._call(a.narrator, "write", task.moment_id, ctx, task, claims)
         for draft in drafts:
             await self._verify_line(ctx, task, claims, draft, attempt=0)
+
+    async def _ask_stats_desk(self, task: ProducerTask, claims: list[dict[str, Any]]) -> None:
+        """Priority 1 moments: compare the first team stat with the season over A2A (audited)."""
+        claim = next((c for c in claims if c["metric"].split(":")[0] in TEAM_METRICS), None)
+        if claim is None:
+            return
+        metric = claim["metric"].split(":")[0]
+        details: dict[str, Any] = {
+            "skill": "compare_to_season",
+            "metric": metric,
+            "value": claim["value"],
+            "claim_id": claim["claim_id"],
+        }
+        try:
+            result = await self.stats_desk.compare(  # type: ignore[union-attr]
+                metric, "team", claim["value"]
+            )
+        except StatsDeskError as error:
+            self._audit(
+                "agent",
+                "producer",
+                "a2a_failed",
+                task.moment_id,
+                {**details, "error": str(error)[:200]},
+            )
+            return
+        self._audit("agent", "producer", "a2a_call", task.moment_id, {**details, "result": result})
 
     async def _analyse(
         self, ctx: MatchContext, task: ProducerTask, *, repair: bool

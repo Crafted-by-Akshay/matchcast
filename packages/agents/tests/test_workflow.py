@@ -4,6 +4,7 @@ import copy
 
 import pytest
 from conftest import run
+from matchcast_agents import MatchWorkflow
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError, validate, validate_publication_context
 from matchcast_contracts.audit import verify_chain
@@ -134,3 +135,45 @@ def test_verified_audit_records_name_the_deterministic_and_meaning_checks(
     verified = next(r for r in flow.store.audit_records(flow.sk) if r["action"] == "line_verified")
     names = [c["name"] for c in verified["details"]["checks"]]
     assert names == ["sources", "freshness", "numbers", "names", "persona", "meaning", "safety"]
+
+
+class FakeDesk:
+    def __init__(self, fail: bool = False) -> None:
+        self.calls: list[tuple] = []
+        self.fail = fail
+
+    async def compare(self, metric, scope, value, team_id=None):
+        from matchcast_agents.statsdesk import StatsDeskError
+
+        self.calls.append((metric, scope, value))
+        if self.fail:
+            raise StatsDeskError("down")
+        return {"metric": metric, "value": value, "season_average": 1.2, "rank": 3, "of": 56}
+
+
+def test_priority_one_moments_call_the_stats_desk_and_audit_it(match) -> None:
+    desk = FakeDesk()
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], stats_desk=desk,
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    audit = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "a2a_call"]
+    assert audit and len(audit) == len(desk.calls)
+    assert all(r["details"]["result"]["rank"] == 3 for r in audit)
+    priorities = {
+        r["details"]["priority"]
+        for r in flow.store.audit_records(flow.sk)
+        if r["action"] == "claim_created" and "priority" in r["details"]
+    }
+    assert 1 in priorities
+
+
+def test_a_stats_desk_outage_is_audited_and_does_not_stop_lines(match) -> None:
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], stats_desk=FakeDesk(fail=True),
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    actions = {r["action"] for r in flow.store.audit_records(flow.sk)}
+    assert "a2a_failed" in actions and flow.store.lines(flow.sk)

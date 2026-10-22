@@ -14,10 +14,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.messages import LineRecord
+from matchcast_agents.statsdesk import StatsDeskError
 from matchcast_agents.store import MemoryStore
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
+from matchcast_mcp.season import Season, SeasonError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_role
@@ -99,6 +101,28 @@ class RecapTrigger(BaseModel):
     match_id: str = Field(pattern=ID)
 
 
+class _LocalStatsDesk:
+    """The Stats Desk skill called in-process; the mcp container serves the same over A2A."""
+
+    def __init__(self, season: Season) -> None:
+        self._season = season
+
+    async def compare(
+        self, metric: str, scope: str, value: float, team_id: str | None = None
+    ) -> dict[str, Any]:
+        try:
+            return self._season.compare(metric, scope, value, team_id)
+        except SeasonError as error:
+            raise StatsDeskError(str(error)) from error
+
+
+def _local_stats_desk() -> _LocalStatsDesk | None:
+    try:
+        return _LocalStatsDesk(Season())
+    except Exception:  # noqa: BLE001 - no season Parquet in this image
+        return None
+
+
 class Registry:
     """Matches held by this single api replica (ADR-0005), keyed by session and match."""
 
@@ -106,6 +130,7 @@ class Registry:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
         self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
         self.require_role = require_role
+        self.stats_desk = _local_stats_desk()
 
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))
@@ -176,6 +201,7 @@ def build_router(registry: Registry) -> APIRouter:
                 ),
                 config=config,
                 store=registry.store,
+                stats_desk=registry.stats_desk,
             )
         except (ContractError, TypeError, KeyError) as error:
             raise Problem(
