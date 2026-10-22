@@ -114,3 +114,12 @@ def test_a_watch_mode_must_point_at_something_real_and_is_capped(match) -> None:
     added = [flow.add_persona(m) for m in modes]
     assert added.count(True) == MAX_WATCH_MODES and len(flow.extra_personas) == MAX_WATCH_MODES
     assert flow.add_persona("casual")  # a base persona is always fine
+
+
+def test_club_watch_accepts_the_display_name_or_the_slug() -> None:
+    from matchcast_agents.personas import normalise
+
+    clubs = {"home": "Northgate FC", "away": "Harbour United"}
+    assert normalise("club:Northgate FC", clubs, {}) == "my-club:home"
+    assert normalise("club:harbour-united", clubs, {}) == "my-club:away"
+    assert normalise("club:Nowhere Town", clubs, {}) is None
