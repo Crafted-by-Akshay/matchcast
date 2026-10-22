@@ -59,6 +59,7 @@ class MatchCreate(BaseModel):
     clubs: dict[str, str] = Field(default_factory=dict)
     approval_mode: Literal["auto", "producer"] = "auto"
     seed_bad_claim: bool = False
+    seed_bad_claim_at_ms: int = Field(default=720_000, ge=0)
     # descriptive fields from docs/architecture/12-api.md; stored with the match, not used by agents
     seed: int | None = None
     engine_version: str | None = None
@@ -127,7 +128,10 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(403, "forbidden_role", "this route needs the Producer or Admin role")
 
     @router.post("/matches", status_code=201)
-    async def create_match(body: MatchCreate) -> dict[str, Any]:
+    async def create_match(
+        body: MatchCreate,
+        x_matchcast_seed_bad_claim: str | None = Header(default=None),
+    ) -> dict[str, Any]:
         key = (body.session_id, body.match_id)
         if key in registry.flows:
             raise Problem(409, "match_exists", "match already exists")
@@ -147,7 +151,11 @@ def build_router(registry: Registry) -> APIRouter:
                 roster=body.roster,
                 names=names,
                 clubs=clubs,
-                agents=rules_agents(config.personas, seed_bad_claim=body.seed_bad_claim),
+                agents=rules_agents(
+                    config.personas,
+                    seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
+                    seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
+                ),
                 config=config,
             )
         except (ContractError, TypeError, KeyError) as error:
@@ -190,10 +198,8 @@ def build_router(registry: Registry) -> APIRouter:
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and persona and item.data["persona"] != persona)
 
-        status_name = "rules_fallback" if flow.agents.mode == "rules" else "live"
-
         async def body() -> AsyncIterator[str]:
-            yield StreamEvent("status", None, {"status": status_name}).encode()
+            yield StreamEvent("status", None, {"status": flow.status}).encode()
             yield StreamEvent("state", None, _state_json(flow)).encode()
             replay = [e for e in flow.hub.replay_after(last_event_id) if wanted(e)]
             if not follow:

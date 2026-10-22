@@ -159,7 +159,7 @@ def test_producer_approval_flow_and_role_gate(client: TestClient) -> None:
 
 
 def test_trace_lists_each_agent_step_for_a_line(client: TestClient) -> None:
-    create(client, seed_bad_claim=True)
+    create(client, seed_bad_claim=True, seed_bad_claim_at_ms=0)
     post_all(client)
     lines = client.get("/v1/matches/match-short/lines", params=Q).json()["items"]
     repaired = next(ln for ln in lines if ln["repair_of"])
