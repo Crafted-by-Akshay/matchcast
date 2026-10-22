@@ -9,17 +9,36 @@ const LV = (() => {
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
   const set = (s) => { if (s !== st) { st = s; onStatus(s); } };
 
-  // a prototype event to a contract event (only goal and shot carry what the contract needs; the rest are not sent)
+  // Watch events to the contract's event payloads (docs/contracts.md). Types the contract has no fields for here return null:
+  // tackles and pressure need a target player and a distance Watch does not record.
+  let teamIds = [];
+  const num = (v) => v != null && v !== '' && Number.isFinite(+v);
+  const clampX = (v, d) => Math.max(0, Math.min(105, num(v) ? +v : d)), clampY = (v, d) => Math.max(0, Math.min(68, num(v) ? +v : d));
+  let lastShot = null;   // Watch's goal events carry no position, so a goal takes the position of the shot before it
+  const pos = (x, y) => ({ x: clampX(x, 52.5), y: clampY(y, 34), z: 0 });
+  const payloadOf = (ev, t, p) => {
+    const other = teamIds.find((id) => id !== t);
+    switch (ev.type) {
+      case 'goal': { const g = num(ev.x) ? ev : lastShot || ev; return { v: '1.0.0', o: { type: 'goal', player_id: p, team_id: t, own_goal: !!ev.ownGoal, position_unit: 'm', position: pos(g.x, g.y) } }; }
+      case 'shot': lastShot = ev; return { v: '1.0.0', o: { type: 'shot', player_id: p, team_id: t, position_unit: 'm', position: pos(ev.x, ev.y), on_target: ev.kind === 'penalty' || (+ev.xg || 0) > 0.1 } };
+      case 'pass': return ev.to && num(ev.x0) ? { v: '1.0.0', o: { type: 'pass', player_id: p, recipient_player_id: slug(ev.to), team_id: t, position_unit: 'm', start_position: pos(ev.x0, ev.y0), end_position: pos(ev.x1, ev.y1) } } : null;
+      case 'foul': return ev.on ? { v: '1.1.0', o: { type: 'foul', player_id: p, team_id: t, victim_player_id: slug(ev.on), advantage: false, position_unit: 'm', position: pos(ev.x, ev.y) } } : null;
+      case 'yellow_card': case 'red_card': {
+        const second = ev.type === 'red_card' && /second yellow|two yellow/i.test(ev.reason || '');
+        return { v: '1.1.0', o: { type: 'card', player_id: p, team_id: t, colour: ev.type === 'yellow_card' ? 'yellow' : second ? 'second_yellow' : 'red', reason: String(ev.reason || ev.type.replace('_', ' ')).slice(0, 256) } };
+      }
+      case 'turnover': return other && teamIds.includes(t) ? { v: '1.1.0', o: { type: 'possession_change', from_team_id: other, to_team_id: t, cause: 'loose_ball' } } : null;
+      default: return null;
+    }
+  };
   const toPacket = (ev, key, seq, iso) => {
     const t = ev.team ? slug(ev.team) : null, p = ev.player ? slug(ev.player) : null;
-    if (!t || !p || (ev.type !== 'goal' && ev.type !== 'shot')) return null;
-    const x = Math.max(0, Math.min(105, +ev.x || 52.5)), y = Math.max(0, Math.min(68, +ev.y || 34));
+    if (!t || !p) return null;
+    const m = payloadOf(ev, t, p);
+    if (!m) return null;
     const ms = Math.max(0, Math.round(ev.minute * 60000));
-    const payload = ev.type === 'goal'
-      ? { type: 'goal', player_id: p, team_id: t, own_goal: !!ev.ownGoal, position_unit: 'm', position: { x, y, z: 0 } }
-      : { type: 'shot', player_id: p, team_id: t, position_unit: 'm', position: { x, y, z: 0 }, on_target: ev.kind === 'penalty' || (+ev.xg || 0) > 0.1 };
-    return { kind: 'event', schema_version: '1.0.0', stream: key, event_id: 'e' + seq, stream_sequence: seq, revision: 0, event_time_ms: ms, emitted_at: iso,
-      clock: { period: ev.minute < 45 ? 1 : 2, period_elapsed_ms: ev.minute < 45 ? ms : ms - 45 * 60000 }, payload };
+    return { kind: 'event', schema_version: m.v, stream: key, event_id: 'e' + seq, stream_sequence: seq, revision: 0, event_time_ms: ms, emitted_at: iso,
+      clock: { period: ev.minute < 45 ? 1 : 2, period_elapsed_ms: ev.minute < 45 ? ms : ms - 45 * 60000 }, payload: m.o };
   };
 
   const url = (path, q) => api() + path + '?' + new URLSearchParams(Object.assign({ session_id: run.key.session_id }, q || {}));
@@ -28,6 +47,7 @@ const LV = (() => {
   // a new match from Watch: close the old stream, create the match, open the stream. Cold start is 'warming' until the first claim or 45 s.
   const begin = (matchKey, roster) => {
     stop();
+    teamIds = roster ? roster.teams.map(slug) : [];
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
     run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, sending: false };
