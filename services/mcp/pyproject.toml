@@ -1,0 +1,23 @@
+[project]
+name = "matchcast-mcp"
+version = "0.1.0"
+description = "MatchCast MCP tool server: time-scoped match data tools for agents and Copilot"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "duckdb>=2.0.0",
+    "matchcast-agents",
+    "matchcast-contracts",
+    "mcp>=2,<3",
+    "starlette",
+]
+
+[tool.uv.sources]
+matchcast-agents = { workspace = true }
+matchcast-contracts = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["matchcast_mcp"]

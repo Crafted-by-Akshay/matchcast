@@ -138,6 +138,8 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'EVENTHUB_FQDN', value: eventHubFqdn }
             { name: 'EVENTHUB_NAME', value: eventHubName }
             { name: 'MATCHCAST_STORE', value: 'table' }
+            // Easy Auth and the ingress already restrict Host; the FQDN is not known inside its own app
+            { name: 'MATCHCAST_MCP_ALLOWED_HOSTS', value: '*' }
           ])
           probes: [
             { type: 'Liveness', httpGet: { path: '/health', port: 8000 } }

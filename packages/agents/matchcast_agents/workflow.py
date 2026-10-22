@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from matchcast_contracts import ContractError, validate
+from opentelemetry import trace
 
 from . import recap as recap_mod
 from .context import MatchContext
@@ -21,6 +22,7 @@ from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
+from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, stream_key
 from .tools import InProcessTools, ToolError
 
@@ -106,6 +108,24 @@ class WorkflowConfig:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+_TRACER = trace.get_tracer("matchcast.agents")
+
+
+def _annotate(span: Any, method: str, result: Any) -> None:
+    """Attach the verdict or claim ids to the agent span so a claim ID finds its trace (PLT-8)."""
+    verdict = getattr(result, "verdict", None)
+    if method == "check" and verdict:
+        span.set_attribute("matchcast.verdict", verdict)
+        reason = getattr(result, "reason_code", None)
+        if reason:
+            span.set_attribute("matchcast.reason_code", reason)
+    if method == "analyse" and isinstance(result, list | tuple):
+        ids = [c.packet.get("claim_id") for c in result if hasattr(c, "packet")]
+        ids = [i for i in ids if i]
+        if ids:
+            span.set_attribute("matchcast.claim_ids", ids)
+
+
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -128,7 +148,9 @@ class MatchWorkflow:
         config: WorkflowConfig | None = None,
         safety: SafetyScreen | None = None,
         clock: Callable[[], datetime] = _utc_now,
+        stats_desk: StatsDesk | None = None,
     ) -> None:
+        self.stats_desk = stats_desk
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
@@ -143,6 +165,9 @@ class MatchWorkflow:
         self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
         self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
+        self.store.put_match(
+            self.sk, {"roster": self.roster, "names": self.names, "clubs": self.clubs}
+        )
         self._restore()
         self.stats = {
             "events": 0,
@@ -191,10 +216,17 @@ class MatchWorkflow:
 
     async def _call(self, agent: Any, method: str, subject: str, *args: Any, **kwargs: Any) -> Any:
         """Call an agent, then audit any rules fallback it made and publish the status change."""
-        try:
-            return await getattr(agent, method)(*args, **kwargs)
-        finally:
-            self._sync_status(agent, subject)
+        with _TRACER.start_as_current_span(f"invoke_agent {agent.agent_id}") as span:
+            span.set_attribute("gen_ai.agent.name", agent.agent_id)
+            span.set_attribute("matchcast.mode", getattr(agent, "mode", "live"))
+            span.set_attribute("matchcast.method", method)
+            span.set_attribute("matchcast.subject", subject)
+            try:
+                result = await getattr(agent, method)(*args, **kwargs)
+            finally:
+                self._sync_status(agent, subject)
+            _annotate(span, method, result)
+            return result
 
     def _sync_status(self, agent: Any, subject: str) -> None:
         take = getattr(agent, "take_fallbacks", None)
@@ -314,6 +346,34 @@ class MatchWorkflow:
             "possession": state.possession,
             "revision": state.revision,
         }
+
+    # ---- ask the match (AGT-16) ---------------------------------------------------------
+
+    async def ask(self, question: str, persona: str = "casual", assistant: Any = None) -> Any:
+        """Answer one fan question from the match tools and the knowledge base, with citations."""
+        from .ask import default_assistant
+
+        async with self._lock:
+            shield = await self.safety.shield(question)
+            if shield.attack_detected:
+                self._audit("system", "content-safety", "safety_blocked", "ask",
+                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+                raise WorkflowError("prompt_attack", "the question was flagged as a prompt attack")
+            result = await (assistant or default_assistant()).ask(self, question, persona)
+            self._audit(
+                "agent",
+                "assistant",
+                "ask_answered",
+                "ask",
+                {
+                    "intent": result.intent,
+                    "abstained": result.abstained,
+                    "dropped": result.dropped,
+                    "citations": [c["id"] for c in result.citations],
+                    "mode": result.mode,
+                },
+            )
+            return result
 
     def record_export(self, export_id: str, kind: str, sha256: str, rows: int) -> None:
         self._audit("person", "viewer", "export_created", export_id,
@@ -469,9 +529,41 @@ class MatchWorkflow:
         claims = await self._analyse(ctx, task, repair=False)
         if not claims:
             return
+        if task.priority == 1 and self.stats_desk is not None:
+            await self._ask_stats_desk(task, claims)
         drafts = await self._call(a.narrator, "write", task.moment_id, ctx, task, claims)
         for draft in drafts:
             await self._verify_line(ctx, task, claims, draft, attempt=0)
+
+    async def _ask_stats_desk(self, task: ProducerTask, claims: list[dict[str, Any]]) -> None:
+        """Priority 1 moments: compare the first team stat with the season over A2A (audited)."""
+        claim = next((c for c in claims if c["metric"].split(":")[0] in TEAM_METRICS), None)
+        if claim is None:
+            return
+        metric, _, team_id = claim["metric"].partition(":")
+        details: dict[str, Any] = {
+            "skill": "compare_to_season",
+            "metric": metric,
+            "value": claim["value"],
+            "claim_id": claim["claim_id"],
+            "team_id": team_id,
+            "as_of_ms": claim["snapshot"]["event_time_ms"],  # running total vs full-match season
+            "transport": getattr(self.stats_desk, "transport", "a2a"),
+        }
+        try:
+            result = await self.stats_desk.compare(  # type: ignore[union-attr]
+                metric, "team", claim["value"], team_id
+            )
+        except StatsDeskError as error:
+            self._audit(
+                "agent",
+                "producer",
+                "a2a_failed",
+                task.moment_id,
+                {**details, "error": str(error)[:200]},
+            )
+            return
+        self._audit("agent", "producer", "a2a_call", task.moment_id, {**details, "result": result})
 
     async def _analyse(
         self, ctx: MatchContext, task: ProducerTask, *, repair: bool
@@ -648,11 +740,15 @@ class MatchWorkflow:
 
     # ---- approval and publication ------------------------------------------------------
 
-    def _approve(self, line: LineRecord, actor_kind: str, actor_id: str) -> None:
+    def _approve(
+        self, line: LineRecord, actor_kind: str, actor_id: str, actor_name: str | None = None
+    ) -> None:
         line.status = "approved"
         line.decided_by = actor_id
         self._save_line(line)
         details: dict[str, Any] = {"persona": line.persona}
+        if actor_name:
+            details["actor_name"] = actor_name[:80]
         if actor_kind == "agent":
             details["mode"] = self.agents.mode
         self._audit(actor_kind, actor_id, "line_approved", line.line_id, details)
@@ -700,15 +796,23 @@ class MatchWorkflow:
             raise WorkflowError("not_found", f"unknown line {line_id}")
         return line
 
-    async def approve(self, line_id: str, actor_id: str = "producer") -> LineRecord:
+    async def approve(
+        self, line_id: str, actor_id: str = "producer", actor_name: str | None = None
+    ) -> LineRecord:
         async with self._lock:
             line = self._line(line_id)
             if line.status not in ("verified", "review"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
-            self._approve(line, "person", actor_id)
+            self._approve(line, "person", actor_id, actor_name)
             return line
 
-    async def kill(self, line_id: str, reason: str, actor_id: str = "producer") -> LineRecord:
+    async def kill(
+        self,
+        line_id: str,
+        reason: str,
+        actor_id: str = "producer",
+        actor_name: str | None = None,
+    ) -> LineRecord:
         async with self._lock:
             line = self._line(line_id)
             if line.status in ("published", "killed"):
@@ -716,11 +820,18 @@ class MatchWorkflow:
             line.status = "killed"
             line.decided_by = actor_id
             self._save_line(line)
-            self._audit("person", actor_id, "line_killed", line_id, {"reason": reason[:200]})
+            details = {"reason": reason[:200]}
+            if actor_name:
+                details["actor_name"] = actor_name[:80]
+            self._audit("person", actor_id, "line_killed", line_id, details)
             return line
 
     async def edit(
-        self, line_id: str, text: str, actor_id: str = "producer"
+        self,
+        line_id: str,
+        text: str,
+        actor_id: str = "producer",
+        actor_name: str | None = None,
     ) -> tuple[LineRecord, Verdict]:
         """Replace the text, run the Verifier again, and approve only if it passes."""
         async with self._lock:
@@ -747,7 +858,10 @@ class MatchWorkflow:
                 return line, verdict
             line.text, line.checks, line.reason_code = text, list(verdict.checks), None
             line.origin = "template"
-            self._audit("person", actor_id, "line_edited", line_id, {"persona": line.persona})
+            edited: dict[str, Any] = {"persona": line.persona}
+            if actor_name:
+                edited["actor_name"] = actor_name[:80]
+            self._audit("person", actor_id, "line_edited", line_id, edited)
             line.status = "verified"
-            self._approve(line, "person", actor_id)
+            self._approve(line, "person", actor_id, actor_name)
             return line, verdict

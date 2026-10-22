@@ -47,7 +47,7 @@ MCS.progress('Loading the stadium and players');
     const chips = mode() === 'casual' ? [] : c.chips;
     return '<p>' + esc(line(c)) + '</p><div class="mcx-r"><span class="mcx-t' + (ok ? '' : ' wait') + '" title="' + (ok ? 'Verified: recounted from the event log' : 'Awaiting review') + '">' + (ok ? '✓ Verified' : '● Awaiting review') + '</span>'
       + chips.map((x) => '<span class="mcx-ch">' + esc(x) + '</span>').join('') + (c.source === 'rules' ? '<span class="mcx-ch fb" title="Written by the in-page rules, not the model">Rules fallback</span>' : '')
-      + (tr(c) ? (tr(c).ok ? '<span class="mcx-ch" title="Translated by rules; the Verifier re-checked numbers and names">' + lang() + ' · translated ✓</span>' : '<span class="mcx-ch fb" title="' + esc(tr(c).reason) + '">Translation unavailable</span>') : '') + '<button class="mcx-b" data-why>Why?</button></div><div class="mcx-w" hidden></div>';
+      + (tr(c) ? (tr(c).ok ? '<span class="mcx-ch" title="Translated by rules; the Verifier re-checked numbers and names">' + lang() + ' · translated ✓</span>' : '<span class="mcx-ch fb" title="' + esc(tr(c).reason) + '">Translation unavailable</span>') : '') + '<button class="mcx-b" data-why>Why?</button><button class="mcx-b" data-how>How was this made?</button></div><div class="mcx-w" hidden></div>';
   };
   const why = (el, c) => {
     const w = el.querySelector('.mcx-w'); if (!w.hidden) { w.hidden = true; return; }
@@ -60,6 +60,7 @@ MCS.progress('Loading the stadium and players');
     if (!el) { el = document.createElement('div'); el.className = 'mcx-c'; el.dataset.id = c.id; host.prepend(el); cards.set(c.id + host.id, el); }
     el.classList.toggle('mine', mine(c)); el.innerHTML = html(c);
     el.querySelector('[data-why]').onclick = () => why(el, c);
+    el.querySelector('[data-how]').onclick = () => MCS.send({ type: 'trace', id: c.id });
     if (fade) { clearTimeout(el.t1); el.classList.remove('out'); el.t1 = setTimeout(() => el.classList.add('out'), 11400); clearTimeout(el.t2); el.t2 = setTimeout(() => { el.remove(); cards.delete(c.id + host.id); }, 12000); }
     return el;
   };
@@ -74,7 +75,7 @@ MCS.progress('Loading the stadium and players');
     tog.hidden = false; tog.textContent = 'Pulse log (' + kept.length + ')';
   });
   tog.onclick = () => { log.hidden = !log.hidden; };
-  window.__mcxCards = { kept, redraw: () => { for (const c of kept) { const el = cards.get(c.id + 'mcx-log'); if (el) { el.innerHTML = html(c); el.querySelector('[data-why]').onclick = () => why(el, c); el.classList.toggle('mine', mine(c)); } } } };
+  window.__mcxCards = { kept, redraw: () => { for (const c of kept) { const el = cards.get(c.id + 'mcx-log'); if (el) { el.innerHTML = html(c); el.querySelector('[data-why]').onclick = () => why(el, c); el.querySelector('[data-how]').onclick = () => MCS.send({ type: 'trace', id: c.id }); el.classList.toggle('mine', mine(c)); } } } };
 })();
 
 // ---- EXP-4: personalisation. The last watch mode is kept in localStorage and restored; the mode goes to the shell, and so to the api, as the viewer's persona.
