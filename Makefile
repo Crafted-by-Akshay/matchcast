@@ -1,4 +1,4 @@
-.PHONY: install lint typecheck test build contracts-generate contracts-check
+.PHONY: smoke-foundry install lint typecheck test build contracts-generate contracts-check
 
 install:
 	npm ci
@@ -25,3 +25,6 @@ contracts-generate:
 
 contracts-check:
 	npm run check:generated --workspace @matchcast/contracts
+
+smoke-foundry:
+	uv run --locked --group smoke python scripts/smoke_foundry.py
