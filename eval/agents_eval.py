@@ -14,8 +14,8 @@ What is measured, and what grades it:
 - Verifier: the real checks are replayed on mutated copies of every line the workflow verified
   (changed number, changed claim value, wrong unit, invented name, forged source, stale claim,
   overlong line). Catch rate is per mutation; false rejects are counted on untouched copies.
-  A teammate swapped in for the event's player is listed as a known gap: the Verifier checks the
-  moment's team and the event's players, not which teammate is right.
+  A teammate swapped in for the event's player is reported separately: the Verifier accepts only
+  the players the moment's event names.
   End to end, the seeded bad claim is injected at several match times and the audit chain must
   show it rejected and no shown line may carry a wrong claim.
 - Ask: the 40-question golden set (retrieval hit rate, unanswerable abstain rate, live answers
@@ -584,7 +584,7 @@ These are caught by a table lookup or a fixed threshold, so they sit outside the
 | --- | --- | --- | --- |
 {mut_rows(True)}
 
-**Known gaps.** Swapping the named player for a teammate who is not in the event is caught {blind["caught"]} of {blind["tried"]} times: the Verifier knows the moment's team and the players its event names, not which teammate the Narrator should have picked. Numbers written in the wrong order (a score of 0-1 for 1-0) are not caught either, because each claim backs a number but not its place in the sentence. The meaning check is the live Verifier's model step and is skipped in rules mode.
+**Wrong teammate.** Swapping the named player for a teammate who is not in the event is caught {blind["caught"]} of {blind["tried"]} times (the Verifier accepts only the players the moment's event names). **Known gaps.** Numbers written in the wrong order (a score of 0-1 for 1-0) are not caught, because each claim backs a number but not its place in the sentence. The meaning check is the live Verifier's model step and is skipped in rules mode.
 
 Seeded bad claim, end to end: injected at {s["trials"]} match times ({s["injected"]} took effect); the Verifier rejected the line for a number mismatch in {pct(s["caught_rate"])}, repair or abstain followed in {pct(s["repair_or_abstain_rate"])}, and {s["wrong_claims_shown_total"]} wrong claims were shown.
 

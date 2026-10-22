@@ -28,8 +28,8 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   const st = document.createElement('style');
   st.textContent = '@media (max-width:560px){'
     + '#mc-tele{left:8px!important;right:8px!important;top:8px!important;width:auto!important;max-height:2.4em!important;overflow:hidden!important}'
-    + '#mc-replay{left:8px!important;right:8px!important;top:64px!important;flex-wrap:wrap}'
-    + '#mc-l3{left:8px!important;right:8px!important;bottom:56px!important;max-width:none!important;font-size:13px!important}'
+    + '#mc-replay{left:8px!important;right:8px!important;top:64px!important;flex-wrap:nowrap!important;overflow-x:auto}'
+    + '#mc-l3{left:8px!important;right:8px!important;bottom:76px!important;max-width:none!important;font-size:13px!important}'
     + '#mc-onair{left:8px!important;right:8px!important;bottom:8px!important;flex-wrap:wrap}}';
   document.head.append(st);
   const live = bar.querySelector('#mc-replay-live');

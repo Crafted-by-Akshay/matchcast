@@ -27,6 +27,19 @@ Every Playwright spec runs in Chromium against the built unified app with the ap
 | Dependency scan | `docs/security-scan.md` | `npm audit`, `pip-audit` |
 | Judge path | `make judge-path` | local, no cloud calls |
 
+## Shared fakes
+
+| Fake | Where | Used for |
+| --- | --- | --- |
+| Azure network guard | `tests/e2e/fixtures.ts` (auto fixture, `azureHits`) | Any request to an Azure host fails the test; off for live runs |
+| Speech SDK and speechSynthesis | `fakeSpeechSdk` in `tests/e2e/fixtures.ts` | Token flow, voices per role and language, browser-voice fallback |
+| Table Storage, Blob | `packages/agents/tests/fake_tables.py` | Store contract, workflow, state writer |
+| Foundry completions | `fake_openai(outcome)` in `packages/agents/tests` | Agent resilience and live-agent paths |
+| Event Hubs producer, consumer, batch | `tests/test_eventhubs.py` | Ingest and the worker consumer |
+| api mocks in the browser | `page.route('http://api.test/...')` plus a `**/config.js` route | One-off replies per spec |
+
+Backend fakes live beside the tests that use them; moving them into one shared module is a follow-up for Quality (QUA-9 task 310).
+
 ## Not covered by the automated suite
 
 | Check | Why | Who and when |
