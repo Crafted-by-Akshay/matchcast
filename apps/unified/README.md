@@ -73,3 +73,6 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - Agents tab, Approval queue: **Demo** mode airs verified Broadcast lines at once. **Producer** mode holds each one until a person approves, edits or kills it. The signed-in producer is a simulated account (Planned: Entra ID).
 - Broadcast shows an approved line as a lower-third for 8 seconds and keeps the last five in the teleprompter list. A pending or killed line reaches no view, including Watch's Match Pulse.
 - Edit is re-verified: every number in the new text must already be in the verified line (or its minute), otherwise it is rejected and not aired. Approve, edit and kill each write `line_approved`, `line_edited` or `line_killed` to the audit chain with the person's name.
+
+## Wild-moment alerts (EXP-9)
+A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.

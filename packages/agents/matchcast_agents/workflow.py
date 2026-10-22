@@ -343,6 +343,10 @@ class MatchWorkflow:
             )
             return result
 
+    def record_export(self, export_id: str, kind: str, sha256: str, rows: int) -> None:
+        self._audit("person", "viewer", "export_created", export_id,
+                    {"kind": kind, "sha256": sha256, "rows": rows})  # fmt: skip
+
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
     async def recap(

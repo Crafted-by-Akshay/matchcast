@@ -338,3 +338,28 @@ def test_ask_refuses_attacks_long_questions_and_the_sixth_question_a_minute(
         assert ask(client, "What is offside?").status_code == 200
     limited = ask(client, "What is offside?")
     assert limited.status_code == 429 and limited.json()["code"] == "rate_limited"
+
+
+def test_exports_are_hash_stamped_downloadable_and_audited(client: TestClient) -> None:
+    import hashlib
+
+    create(client)
+    post_all(client)
+    made = client.post(
+        "/v1/matches/match-short/exports",
+        json={"session_id": "short", "kind": "claims_csv", "verdict": "verified"},
+    )
+    assert made.status_code == 201
+    info = made.json()
+    download = client.get(info["url"])
+    assert hashlib.sha256(download.content).hexdigest() == info["sha256"]
+    lines = download.text.splitlines()
+    assert lines[0].startswith("claim_id,metric,value") and len(lines) == info["rows"] + 1
+    events = client.post(
+        "/v1/matches/match-short/exports", json={"session_id": "short", "kind": "events_json"}
+    ).json()
+    assert events["rows"] == len(FIXTURE["events"])
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    assert [r["action"] for r in audit].count("export_created") == 2
+    assert verify_chain(audit)["valid"] is True
+    assert client.get("/v1/exports/nope").status_code == 404
