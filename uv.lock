@@ -9,6 +9,7 @@ members = [
     "matchcast-contracts",
     "matchcast-mcp",
     "matchcast-metrics",
+    "matchcast-recap",
     "matchcast-shared",
     "matchcast-worker",
     "matchcast-workspace",
@@ -659,6 +660,21 @@ requires-dist = [
 name = "matchcast-metrics"
 version = "0.1.0"
 source = { editable = "packages/metrics" }
+
+[[package]]
+name = "matchcast-recap"
+version = "0.1.0"
+source = { editable = "services/recap" }
+dependencies = [
+    { name = "azure-identity" },
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "azure-identity", specifier = ">=1.19,<2" },
+    { name = "httpx", specifier = ">=0.27,<1" },
+]
 
 [[package]]
 name = "matchcast-shared"
