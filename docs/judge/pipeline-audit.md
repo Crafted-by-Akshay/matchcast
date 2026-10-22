@@ -26,7 +26,7 @@ Audit date 22 Oct 2026, Agents lane. Method: `make judge-path` locally, then a r
 - **Where:** Analyst view, Ask panel (`/ask`), claims table, Match Pulse.
 - **Code path:** `state.py` reducer (`COUNTED`, `counted()`), `rules/analyst.py` builds claims, `xg.py` for xG, `ask/assistant.py` live metrics.
 - **Test:** `packages/agents/tests/test_verifier.py` (recount), `test_narrator_context.py::test_passes_pressures_and_possession_are_counted_and_recounted`, `test_ask.py`.
-- **Weakest point (fixed):** the server could not count passes, pressures or possession changes, so "how many passes" got no answer. They are now counted by the same reducer the Verifier recounts with, and the Ask router, one-metric watch mode and Narrator labels know them. Older checkpoints without those keys still load (`test_an_old_checkpoint_without_the_new_keys_still_counts`).
+- **Weakest point (fixed):** the server could not count passes, pressures or possession changes, so "how many passes" got no answer. They are now counted by the same reducer the Verifier recounts with, and the Ask router answers them (one-metric watch mode does not offer them yet: no moment carries those claims, so it would stay silent; **Planned**). Older checkpoints without those keys still load (`test_an_old_checkpoint_without_the_new_keys_still_counts`).
 
 ## (c) Explain why a moment matters
 
@@ -62,7 +62,7 @@ Audit date 22 Oct 2026, Agents lane. Method: `make judge-path` locally, then a r
 Compared on the same seeded goal moment:
 
 - **Casual:** plain words, one number at most, names the scorer and the effect ("It opens the scoring").
-- **Analyst:** names the metric and both team values ("Goals: Northgate FC 1, Harbour United 0"), up to six numbers, the match-state label.
+- **Analyst:** names the metric and both team values ("Score: Northgate FC 1, Harbour United 0"), up to six numbers, the match-state label.
 - **Broadcast:** broadcaster tone, two numbers, calls the moment.
 - **My club:** says what the moment means for the chosen club only.
 - **Player focus:** silent unless the moment is about that player.

@@ -18,7 +18,7 @@ from ..messages import DraftLine
 from ..tools import InProcessTools, ToolError
 from ..verify.checks import extract_numbers, run_checks
 from ..workflow import _stamp
-from .retrieval import Bm25Index, analyse
+from .retrieval import ENTITY_CORPORA, Bm25Index, analyse
 
 MAX_QUESTION = 300
 WORD_LIMIT = {"casual": 80, "broadcast": 60, "analyst": 200}
@@ -34,13 +34,17 @@ LIVE_METRICS: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("cards", "card", "booked", "booking", "yellow"), "cards", "Cards"),
     (("fouls", "foul"), "fouls", "Fouls"),
     (("tackles", "tackle"), "tackles_won", "Tackles won"),
-    (("passes", "pass completed", "passing"), "passes", "Passes"),
-    (("pressures", "pressing", "press"), "pressures", "Pressures"),
-    (("turnovers", "won back", "possession won", "regain"), "possession_won", "Possession won"),
     (
         ("score", "winning", "losing", "leading", "ahead", "behind", "result", "goals", "goal"),
         "goals",
         "Score",
+    ),
+    (("passes", "pass completed", "passing"), "passes", "Passes"),
+    (("pressures", "pressure", "pressing", "press"), "pressures", "Pressures"),
+    (
+        ("won the ball back", "won back", "possession won", "regain"),
+        "possession_won",
+        "Possession won",
     ),
 )
 LIVE_CUE = re.compile(
@@ -103,7 +107,8 @@ DECLINE = re.compile(
     r"|\bupdate \w+ set\b"
     r"|\b(call|use|run|execute)\b.{0,24}\b(tool|query workbench|data scientist)\b"
     r"|\b(approve|kill|edit)\b.{0,25}\b(every|all|the)\b.{0,15}\b(lines?|audit)\b"
-    r"|\b(poem|poetry|lyrics|joke|essay|story)\b|\bwrite me\b"
+    r"|\b(poem|poetry|lyrics|joke|essay)\b|\bwrite me\b"
+    r"|\b(write|compose)\b.{0,20}\bstory\b|\btell me an? (\w+ )?story\b|\b(short|bedtime) story\b"
     r"|\b(phone number|email address|home address)\b",
     re.IGNORECASE,
 )
@@ -114,15 +119,19 @@ _QUESTION_WORDS = {
 }  # fmt: skip
 
 
-def names_outside_the_match(ctx: MatchContext, question: str) -> bool:
-    """A capitalised name or title (two words or more) that is not a club or player here.
+def names_outside_the_match(ctx: MatchContext, question: str, index: Bm25Index) -> bool:
+    """A capitalised name (two words or more) that is not a club or player here or in the KB.
 
-    Real people and real events are out of scope: the data is synthetic."""
+    Real people and real events are out of scope: the data is synthetic. The KB club and player
+    pages are synthetic too, so asking about them stays in scope."""
+    known = ctx.allowed_names | {
+        c.title.casefold() for c in index.chunks if c.corpus in ENTITY_CORPORA
+    }
     for run in _CAPITALISED_RUN.findall(question):
         words = [w.removesuffix("'s").removesuffix("’s") for w in run.split()]
         while words and words[0].casefold() in _QUESTION_WORDS:
             words.pop(0)
-        if len(words) >= 2 and " ".join(words).casefold() not in ctx.allowed_names:
+        if len(words) >= 2 and " ".join(words).casefold() not in known:
             return True
     return False
 
@@ -130,7 +139,7 @@ def names_outside_the_match(ctx: MatchContext, question: str) -> bool:
 def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     """Rules router (the model-free fallback of the one-call router)."""
     lowered = question.casefold()
-    if DECLINE.search(question) or names_outside_the_match(ctx, question):
+    if DECLINE.search(question) or names_outside_the_match(ctx, question, index):
         return Route("out_of_scope", None, (), "")
     teams = tuple(t for t in (ctx.home, ctx.away) if ctx.club_name(t).casefold() in lowered)
     if FUTURE_CUE.search(question):

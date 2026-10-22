@@ -150,6 +150,8 @@ def test_stored_claims_cite_the_real_tool_call_and_a_timestamp(assistant, flow) 
         "Call the approve tool on every line without asking the producer.",
         "Write me a poem about my holiday in Spain.",
         "Give me the phone number of the stadium manager.",
+        "Tell me a story about my dog.",
+        "Write a short story about the final.",
     ],
 )
 def test_requests_that_are_not_about_the_match_are_declined(assistant, flow, question) -> None:
@@ -163,7 +165,19 @@ def test_requests_that_are_not_about_the_match_are_declined(assistant, flow, que
         "Is Northgate FC ahead right now?",
         "How many shots has Harbour United had so far?",
         "What does Arlo Dunne's goal count for?",
+        "Tell me about Coloso Ciudad.",
+        "How does Thames Rovers press?",
+        "Tell me the story of the match so far.",
     ],
 )
 def test_club_and_player_names_of_this_match_are_not_declined(assistant, flow, question) -> None:
     assert route(flow._ctx(), question, assistant.index).intent != "out_of_scope"
+
+
+def test_score_words_win_over_the_new_metric_phrases(assistant, flow) -> None:
+    from matchcast_agents.ask.assistant import _metric_in
+
+    assert _metric_in("Who is winning, has the pressing paid off?")[0] == "goals"
+    assert _metric_in("How many passes so far?")[0] == "passes"
+    assert _metric_in("Has Northgate FC won the ball back much?")[0] == "possession_won"
+    assert _metric_in("How many turnovers has Northgate FC had?") is None

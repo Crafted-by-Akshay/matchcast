@@ -22,10 +22,7 @@ NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1}
 
 # the metrics a one-metric watch mode can follow (the Narrator's LABELS has the same keys)
 WATCH_METRICS = frozenset(
-    {
-        "goals", "shots", "shots_on_target", "cards", "red_cards", "tackles_won", "fouls", "xg",
-        "passes", "pressures", "possession_won",
-    }
+    {"goals", "shots", "shots_on_target", "cards", "red_cards", "tackles_won", "fouls", "xg"}
 )
 MAX_WATCH_MODES = 8  # extra personas one match writes lines for
 

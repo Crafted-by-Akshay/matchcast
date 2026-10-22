@@ -14,9 +14,6 @@ LABELS = {
     "red_cards": "Red cards",
     "tackles_won": "Tackles won",
     "fouls": "Fouls",
-    "passes": "Passes",
-    "pressures": "Pressures",
-    "possession_won": "Possession won",
     "xg": "xG",
 }
 
