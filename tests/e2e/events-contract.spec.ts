@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Ajv from 'ajv';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { openShell } from './helpers';
 
 // EXP-4: every Watch event type we send is a valid contract event (packages/contracts schema v1.1), so the server Verifier sees the whole log.
