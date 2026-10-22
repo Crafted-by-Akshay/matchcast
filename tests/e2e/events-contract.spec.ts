@@ -11,8 +11,8 @@ const validate = new Ajv({ strict: false, allErrors: true }).compile({ ...schema
 
 const KEY = { tenant_id: 'demo', session_id: 's1', match_id: 'm1' };
 const SAMPLES: Record<string, any> = {
-  goal: { minute: 12.3, type: 'goal', team: 'Harbour United', player: 'A One', x: 100, y: 34, ownGoal: false },
   shot: { minute: 13, type: 'shot', team: 'Harbour United', player: 'A One', x: 90, y: 30, xg: 0.2, kind: 'open play' },
+  goal: { minute: 12.3, type: 'goal', team: 'Harbour United', player: 'A One', ownGoal: false },   // Watch's goals have no x or y
   pass: { minute: 14, type: 'pass', team: 'Harbour United', player: 'A One', to: 'B Two', x0: 40.1, y0: 20, x1: 55, y1: 22.5 },
   foul: { minute: 15, type: 'foul', team: 'Harbour United', player: 'A One', on: 'C Three', x: 30, y: 10, kind: 'tackle' },
   yellow_card: { minute: 15, type: 'yellow_card', team: 'Harbour United', player: 'A One', reason: 'a late tackle' },
@@ -37,9 +37,10 @@ test('events: each event type the shell sends validates against the contract; un
     const ok = validate(out[k]);
     expect(ok, k + ': ' + JSON.stringify(validate.errors)).toBe(true);
   }
+  expect(out.goal.payload.position, 'a goal takes the position of the shot before it').toEqual({ x: 90, y: 30, z: 0 });
   expect(out.second_yellow.payload.colour).toBe('second_yellow');
   expect(out.red_card.payload.colour).toBe('red');
-  expect(out.turnover.payload).toMatchObject({ from_team_id: 'travel-town', to_team_id: 'harbour-united', cause: 'interception' });
+  expect(out.turnover.payload).toMatchObject({ from_team_id: 'travel-town', to_team_id: 'harbour-united', cause: 'loose_ball' });
   expect(out.tackle, 'slide tackles have no target player in Watch, so they are not sent').toBeNull();
   expect(out.nopos, 'a pass without positions is not sent').toBeNull();
 });
