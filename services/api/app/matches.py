@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import hashlib
+import io
+import json
 import os
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.messages import LineRecord
@@ -89,6 +93,15 @@ class LineAction(BaseModel):
     reason: str | None = Field(default=None, max_length=200)
 
 
+class ExportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    kind: Literal["claims_csv", "events_json"]
+    verdict: Literal["verified", "rejected", "pending"] | None = None
+    agent: str | None = None
+    metric: str | None = None
+
+
 class RecapTrigger(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tenant_id: str = Field(default=TENANT, pattern=ID)
@@ -102,6 +115,7 @@ class Registry:
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
         self.require_role = require_role
+        self.exports: dict[str, tuple[bytes, str, str]] = {}
 
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))
@@ -121,6 +135,37 @@ def _claim_verdict(flow: MatchWorkflow, claim_id: str) -> str:
     if any(s in ("rejected", "abstained", "killed") for s in states):
         return "rejected"
     return "pending"
+
+
+def _claim_rows(
+    flow: MatchWorkflow, verdict: str | None, agent: str | None, metric: str | None
+) -> list[dict[str, Any]]:
+    rows = []
+    for row in flow.store.claims(flow.sk):
+        packet = row["packet"]
+        item = {**packet, "agent": row["agent"], "moment_id": row["moment_id"],
+                "verdict": _claim_verdict(flow, packet["claim_id"])}  # fmt: skip
+        if (verdict and item["verdict"] != verdict) or (agent and item["agent"] != agent):
+            continue
+        if metric and item["metric"] != metric:
+            continue
+        rows.append(item)
+    return rows
+
+
+CSV_COLUMNS = (
+    "claim_id", "metric", "value", "units", "derivation_version", "verdict", "agent",
+    "moment_id", "max_evidence_sequence",
+)  # fmt: skip
+
+
+def _claims_csv(rows: list[dict[str, Any]]) -> bytes:
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(CSV_COLUMNS)
+    for row in rows:
+        writer.writerow([row[c] for c in CSV_COLUMNS])
+    return out.getvalue().encode()
 
 
 def _state_json(flow: MatchWorkflow) -> dict[str, Any]:
@@ -247,16 +292,7 @@ def build_router(registry: Registry) -> APIRouter:
         cursor: int = Query(0, ge=0),
     ) -> dict[str, Any]:
         flow = registry.get(session_id, match_id)
-        rows = []
-        for row in flow.store.claims(flow.sk):
-            packet = row["packet"]
-            item = {**packet, "agent": row["agent"], "moment_id": row["moment_id"],
-                    "verdict": _claim_verdict(flow, packet["claim_id"])}  # fmt: skip
-            if (verdict and item["verdict"] != verdict) or (agent and item["agent"] != agent):
-                continue
-            if metric and item["metric"] != metric:
-                continue
-            rows.append(item)
+        rows = _claim_rows(flow, verdict, agent, metric)
         page = rows[cursor : cursor + limit]
         more = cursor + limit < len(rows)
         return {"items": page, "next_cursor": cursor + limit if more else None}
@@ -334,6 +370,36 @@ def build_router(registry: Registry) -> APIRouter:
             if r["subject_id"] in subjects
         ]  # fmt: skip
         return {"line": _line_json(line), "steps": steps}
+
+    @router.post("/matches/{match_id}/exports", status_code=201)
+    async def create_export(
+        match_id: str, body: ExportBody, _role: str | None = Depends(caller_role)
+    ) -> dict[str, Any]:
+        """A hash-stamped export of the claims ledger or the event log (7 days in Blob later)."""
+        flow = registry.get(body.session_id, match_id)
+        if body.kind == "claims_csv":
+            rows = _claim_rows(flow, body.verdict, body.agent, body.metric)
+            payload, media, ext = _claims_csv(rows), "text/csv", "csv"
+        else:
+            rows = flow.store.events(flow.sk)
+            payload, media, ext = json.dumps(rows, indent=1).encode(), "application/json", "json"
+        sha = hashlib.sha256(payload).hexdigest()
+        export_id = f"{body.kind}-{sha[:12]}"
+        registry.exports[export_id] = (payload, media, f"{match_id}.{ext}")
+        flow.record_export(export_id, body.kind, sha, len(rows))
+        return {"export_id": export_id, "url": f"/v1/exports/{export_id}", "sha256": sha,
+                "rows": len(rows)}  # fmt: skip
+
+    @router.get("/exports/{export_id}")
+    async def get_export(export_id: str) -> Response:
+        found = registry.exports.get(export_id)
+        if found is None:
+            raise Problem(404, "not_found", f"unknown export {export_id}")
+        payload, media, filename = found
+        return Response(
+            payload, media_type=media,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )  # fmt: skip
 
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:
