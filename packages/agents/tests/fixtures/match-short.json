@@ -1,0 +1,4656 @@
+{
+ "teams": {
+  "home": "Northgate FC",
+  "away": "Harbour United"
+ },
+ "names": {
+  "home1": "Arlo Dunne",
+  "home2": "Bram Ito",
+  "home3": "Cato Costa",
+  "home4": "Dev Hale",
+  "home5": "Emil Brandt",
+  "home6": "Finn Gale",
+  "home7": "Gus Ashby",
+  "home8": "Hugo Foss",
+  "home9": "Ivo Kerr",
+  "home10": "Joel Ellis",
+  "home11": "Kian Joss",
+  "away1": "Leo Dunne",
+  "away2": "Arlo Ito",
+  "away3": "Bram Costa",
+  "away4": "Cato Hale",
+  "away5": "Dev Brandt",
+  "away6": "Emil Gale",
+  "away7": "Finn Ashby",
+  "away8": "Gus Foss",
+  "away9": "Hugo Kerr",
+  "away10": "Ivo Ellis",
+  "away11": "Joel Joss"
+ },
+ "roster": {
+  "kind": "roster",
+  "schema_version": "1.1.0",
+  "stream": {
+   "tenant_id": "demo",
+   "session_id": "short",
+   "match_id": "match-short"
+  },
+  "pitch": {
+   "length_m": 105.0,
+   "width_m": 68.0
+  },
+  "ball_id": "ball-main",
+  "team_ids": [
+   "home",
+   "away"
+  ],
+  "players": [
+   {
+    "player_id": "home1",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home2",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home3",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home4",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home5",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home6",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home7",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home8",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home9",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home10",
+    "team_id": "home"
+   },
+   {
+    "player_id": "home11",
+    "team_id": "home"
+   },
+   {
+    "player_id": "away1",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away2",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away3",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away4",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away5",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away6",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away7",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away8",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away9",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away10",
+    "team_id": "away"
+   },
+   {
+    "player_id": "away11",
+    "team_id": "away"
+   }
+  ]
+ },
+ "events": [
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e1",
+   "stream_sequence": 1,
+   "revision": 0,
+   "event_time_ms": 0,
+   "emitted_at": "2026-10-22T10:00:00.000Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 0
+   },
+   "payload": {
+    "type": "period_boundary",
+    "boundary": "started"
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e2",
+   "stream_sequence": 2,
+   "revision": 0,
+   "event_time_ms": 6888,
+   "emitted_at": "2026-10-22T10:00:06.888Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 6888
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home3",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 52.5,
+     "y": 52.8,
+     "z": 0
+    },
+    "end_position": {
+     "x": 57.1,
+     "y": 18.4,
+     "z": 0
+    },
+    "duration_ms": 1211
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e3",
+   "stream_sequence": 3,
+   "revision": 0,
+   "event_time_ms": 13867,
+   "emitted_at": "2026-10-22T10:00:13.867Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 13867
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home4",
+    "team_id": "home",
+    "recipient_player_id": "home5",
+    "position_unit": "m",
+    "start_position": {
+     "x": 57.1,
+     "y": 53.1,
+     "z": 0
+    },
+    "end_position": {
+     "x": 63.9,
+     "y": 41.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e4",
+   "stream_sequence": 4,
+   "revision": 0,
+   "event_time_ms": 17951,
+   "emitted_at": "2026-10-22T10:00:17.951Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 17951
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away9",
+    "team_id": "away",
+    "target_player_id": "home2",
+    "outcome": "won",
+    "position_unit": "m",
+    "position": {
+     "x": 63.9,
+     "y": 31.2,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e5",
+   "stream_sequence": 5,
+   "revision": 0,
+   "event_time_ms": 18351,
+   "emitted_at": "2026-10-22T10:00:18.351Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 18351
+   },
+   "payload": {
+    "type": "possession_change",
+    "from_team_id": "home",
+    "to_team_id": "away",
+    "cause": "tackle"
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e6",
+   "stream_sequence": 6,
+   "revision": 0,
+   "event_time_ms": 25675,
+   "emitted_at": "2026-10-22T10:00:25.675Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 25675
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away3",
+    "team_id": "away",
+    "recipient_player_id": "away10",
+    "position_unit": "m",
+    "start_position": {
+     "x": 63.9,
+     "y": 8.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 62.9,
+     "y": 53.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e7",
+   "stream_sequence": 7,
+   "revision": 0,
+   "event_time_ms": 29390,
+   "emitted_at": "2026-10-22T10:00:29.390Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 29390
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away2",
+    "team_id": "away",
+    "recipient_player_id": "away10",
+    "position_unit": "m",
+    "start_position": {
+     "x": 62.9,
+     "y": 58.4,
+     "z": 0
+    },
+    "end_position": {
+     "x": 64.4,
+     "y": 24.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e8",
+   "stream_sequence": 8,
+   "revision": 0,
+   "event_time_ms": 33345,
+   "emitted_at": "2026-10-22T10:00:33.345Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 33345
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away7",
+    "team_id": "away",
+    "recipient_player_id": "away2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 64.4,
+     "y": 46.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 61.9,
+     "y": 50.3,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e9",
+   "stream_sequence": 9,
+   "revision": 0,
+   "event_time_ms": 36878,
+   "emitted_at": "2026-10-22T10:00:36.878Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 36878
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "away9",
+    "team_id": "away",
+    "position_unit": "m",
+    "position": {
+     "x": 8.9,
+     "y": 20.3,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e10",
+   "stream_sequence": 10,
+   "revision": 0,
+   "event_time_ms": 37778,
+   "emitted_at": "2026-10-22T10:00:37.778Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 37778
+   },
+   "payload": {
+    "type": "goal",
+    "player_id": "away9",
+    "team_id": "away",
+    "own_goal": false,
+    "position_unit": "m",
+    "position": {
+     "x": 8.9,
+     "y": 34.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e11",
+   "stream_sequence": 11,
+   "revision": 0,
+   "event_time_ms": 40325,
+   "emitted_at": "2026-10-22T10:00:40.325Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 40325
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home7",
+    "team_id": "home",
+    "recipient_player_id": "home4",
+    "position_unit": "m",
+    "start_position": {
+     "x": 52.5,
+     "y": 33.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 57.9,
+     "y": 41.3,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e12",
+   "stream_sequence": 12,
+   "revision": 0,
+   "event_time_ms": 47191,
+   "emitted_at": "2026-10-22T10:00:47.191Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 47191
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home1",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 84.7,
+     "y": 37.0,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e13",
+   "stream_sequence": 13,
+   "revision": 0,
+   "event_time_ms": 49734,
+   "emitted_at": "2026-10-22T10:00:49.734Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 49734
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away1",
+    "team_id": "away",
+    "target_player_id": "home4",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 57.9,
+     "y": 48.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e14",
+   "stream_sequence": 14,
+   "revision": 0,
+   "event_time_ms": 53557,
+   "emitted_at": "2026-10-22T10:00:53.557Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 53557
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home9",
+    "team_id": "home",
+    "recipient_player_id": "home11",
+    "position_unit": "m",
+    "start_position": {
+     "x": 57.9,
+     "y": 7.5,
+     "z": 0
+    },
+    "end_position": {
+     "x": 59.3,
+     "y": 22.9,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e15",
+   "stream_sequence": 15,
+   "revision": 0,
+   "event_time_ms": 56176,
+   "emitted_at": "2026-10-22T10:00:56.176Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 56176
+   },
+   "payload": {
+    "type": "foul",
+    "player_id": "away2",
+    "team_id": "away",
+    "victim_player_id": "home1",
+    "advantage": false,
+    "position_unit": "m",
+    "position": {
+     "x": 59.3,
+     "y": 57.3,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e16",
+   "stream_sequence": 16,
+   "revision": 0,
+   "event_time_ms": 59089,
+   "emitted_at": "2026-10-22T10:00:59.089Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 59089
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home9",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 90.8,
+     "y": 27.0,
+     "z": 0
+    },
+    "on_target": false
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e17",
+   "stream_sequence": 17,
+   "revision": 0,
+   "event_time_ms": 61752,
+   "emitted_at": "2026-10-22T10:01:01.752Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 61752
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home6",
+    "team_id": "home",
+    "recipient_player_id": "home11",
+    "position_unit": "m",
+    "start_position": {
+     "x": 59.3,
+     "y": 62.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 57.3,
+     "y": 42.2,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e18",
+   "stream_sequence": 18,
+   "revision": 0,
+   "event_time_ms": 69187,
+   "emitted_at": "2026-10-22T10:01:09.187Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 69187
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home11",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 57.3,
+     "y": 35.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 67.4,
+     "y": 33.1,
+     "z": 0
+    },
+    "duration_ms": 3919
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e19",
+   "stream_sequence": 19,
+   "revision": 0,
+   "event_time_ms": 73798,
+   "emitted_at": "2026-10-22T10:01:13.798Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 73798
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home7",
+    "team_id": "home",
+    "recipient_player_id": "home9",
+    "position_unit": "m",
+    "start_position": {
+     "x": 67.4,
+     "y": 25.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 77.8,
+     "y": 47.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e20",
+   "stream_sequence": 20,
+   "revision": 0,
+   "event_time_ms": 79227,
+   "emitted_at": "2026-10-22T10:01:19.227Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 79227
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home9",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 77.8,
+     "y": 21.9,
+     "z": 0
+    },
+    "end_position": {
+     "x": 81.1,
+     "y": 13.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e21",
+   "stream_sequence": 21,
+   "revision": 0,
+   "event_time_ms": 81795,
+   "emitted_at": "2026-10-22T10:01:21.795Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 81795
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home11",
+    "team_id": "home",
+    "recipient_player_id": "home8",
+    "position_unit": "m",
+    "start_position": {
+     "x": 81.1,
+     "y": 20.5,
+     "z": 0
+    },
+    "end_position": {
+     "x": 89.0,
+     "y": 62.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e22",
+   "stream_sequence": 22,
+   "revision": 0,
+   "event_time_ms": 88482,
+   "emitted_at": "2026-10-22T10:01:28.482Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 88482
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home2",
+    "team_id": "home",
+    "recipient_player_id": "home8",
+    "position_unit": "m",
+    "start_position": {
+     "x": 89.0,
+     "y": 58.8,
+     "z": 0
+    },
+    "end_position": {
+     "x": 91.6,
+     "y": 37.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e23",
+   "stream_sequence": 23,
+   "revision": 0,
+   "event_time_ms": 92229,
+   "emitted_at": "2026-10-22T10:01:32.229Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 92229
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home1",
+    "position_unit": "m",
+    "start_position": {
+     "x": 91.6,
+     "y": 34.1,
+     "z": 0
+    },
+    "end_position": {
+     "x": 97.7,
+     "y": 26.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e24",
+   "stream_sequence": 24,
+   "revision": 0,
+   "event_time_ms": 96242,
+   "emitted_at": "2026-10-22T10:01:36.242Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 96242
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home1",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 97.7,
+     "y": 11.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 44.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e25",
+   "stream_sequence": 25,
+   "revision": 0,
+   "event_time_ms": 98837,
+   "emitted_at": "2026-10-22T10:01:38.837Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 98837
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away6",
+    "team_id": "away",
+    "target_player_id": "home7",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 31.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e26",
+   "stream_sequence": 26,
+   "revision": 0,
+   "event_time_ms": 106312,
+   "emitted_at": "2026-10-22T10:01:46.312Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 106312
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home4",
+    "team_id": "home",
+    "recipient_player_id": "home8",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 58.4,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 62.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e27",
+   "stream_sequence": 27,
+   "revision": 0,
+   "event_time_ms": 109618,
+   "emitted_at": "2026-10-22T10:01:49.618Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 109618
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home8",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 84.3,
+     "y": 22.7,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e28",
+   "stream_sequence": 28,
+   "revision": 0,
+   "event_time_ms": 115146,
+   "emitted_at": "2026-10-22T10:01:55.146Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 115146
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home7",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 22.7,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 8.0,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e29",
+   "stream_sequence": 29,
+   "revision": 0,
+   "event_time_ms": 118436,
+   "emitted_at": "2026-10-22T10:01:58.436Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 118436
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "away8",
+    "team_id": "away",
+    "target_player_id": "home9",
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 17.9,
+     "z": 0
+    },
+    "distance_m": 1.1,
+    "closing_speed_mps": 2.9
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e30",
+   "stream_sequence": 30,
+   "revision": 0,
+   "event_time_ms": 122399,
+   "emitted_at": "2026-10-22T10:02:02.399Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 122399
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away8",
+    "team_id": "away",
+    "target_player_id": "home7",
+    "outcome": "won",
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 23.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e31",
+   "stream_sequence": 31,
+   "revision": 0,
+   "event_time_ms": 122799,
+   "emitted_at": "2026-10-22T10:02:02.799Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 122799
+   },
+   "payload": {
+    "type": "possession_change",
+    "from_team_id": "home",
+    "to_team_id": "away",
+    "cause": "tackle"
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e32",
+   "stream_sequence": 32,
+   "revision": 0,
+   "event_time_ms": 130185,
+   "emitted_at": "2026-10-22T10:02:10.185Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 130185
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away3",
+    "team_id": "away",
+    "recipient_player_id": "away9",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 17.9,
+     "z": 0
+    },
+    "end_position": {
+     "x": 88.4,
+     "y": 34.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e33",
+   "stream_sequence": 33,
+   "revision": 0,
+   "event_time_ms": 136451,
+   "emitted_at": "2026-10-22T10:02:16.451Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 136451
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "home7",
+    "team_id": "home",
+    "target_player_id": "away9",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 88.4,
+     "y": 34.9,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e34",
+   "stream_sequence": 34,
+   "revision": 0,
+   "event_time_ms": 139667,
+   "emitted_at": "2026-10-22T10:02:19.667Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 139667
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "away2",
+    "team_id": "away",
+    "position_unit": "m",
+    "position": {
+     "x": 18.7,
+     "y": 47.4,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e35",
+   "stream_sequence": 35,
+   "revision": 0,
+   "event_time_ms": 140567,
+   "emitted_at": "2026-10-22T10:02:20.567Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 140567
+   },
+   "payload": {
+    "type": "goal",
+    "player_id": "away2",
+    "team_id": "away",
+    "own_goal": false,
+    "position_unit": "m",
+    "position": {
+     "x": 18.7,
+     "y": 42.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e36",
+   "stream_sequence": 36,
+   "revision": 0,
+   "event_time_ms": 147624,
+   "emitted_at": "2026-10-22T10:02:27.624Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 147624
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home9",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 94.4,
+     "y": 28.8,
+     "z": 0
+    },
+    "on_target": false
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e37",
+   "stream_sequence": 37,
+   "revision": 0,
+   "event_time_ms": 151588,
+   "emitted_at": "2026-10-22T10:02:31.588Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 151588
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home11",
+    "team_id": "home",
+    "recipient_player_id": "home10",
+    "position_unit": "m",
+    "start_position": {
+     "x": 52.5,
+     "y": 61.1,
+     "z": 0
+    },
+    "end_position": {
+     "x": 65.6,
+     "y": 7.3,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e38",
+   "stream_sequence": 38,
+   "revision": 0,
+   "event_time_ms": 158605,
+   "emitted_at": "2026-10-22T10:02:38.605Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 158605
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home4",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 65.6,
+     "y": 21.5,
+     "z": 0
+    },
+    "end_position": {
+     "x": 73.3,
+     "y": 25.6,
+     "z": 0
+    },
+    "duration_ms": 1465
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e39",
+   "stream_sequence": 39,
+   "revision": 0,
+   "event_time_ms": 162191,
+   "emitted_at": "2026-10-22T10:02:42.191Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 162191
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "away3",
+    "team_id": "away",
+    "target_player_id": "home7",
+    "position_unit": "m",
+    "position": {
+     "x": 73.3,
+     "y": 37.7,
+     "z": 0
+    },
+    "distance_m": 1.8,
+    "closing_speed_mps": 5.5
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e40",
+   "stream_sequence": 40,
+   "revision": 0,
+   "event_time_ms": 167296,
+   "emitted_at": "2026-10-22T10:02:47.296Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 167296
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home9",
+    "team_id": "home",
+    "recipient_player_id": "home4",
+    "position_unit": "m",
+    "start_position": {
+     "x": 73.3,
+     "y": 44.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 67.9,
+     "y": 12.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e41",
+   "stream_sequence": 41,
+   "revision": 0,
+   "event_time_ms": 172627,
+   "emitted_at": "2026-10-22T10:02:52.627Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 172627
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home8",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 67.9,
+     "y": 12.5,
+     "z": 0
+    },
+    "end_position": {
+     "x": 75.7,
+     "y": 40.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e42",
+   "stream_sequence": 42,
+   "revision": 0,
+   "event_time_ms": 177182,
+   "emitted_at": "2026-10-22T10:02:57.182Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 177182
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 75.7,
+     "y": 41.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 72.1,
+     "y": 41.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e43",
+   "stream_sequence": 43,
+   "revision": 0,
+   "event_time_ms": 183725,
+   "emitted_at": "2026-10-22T10:03:03.725Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 183725
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home5",
+    "team_id": "home",
+    "recipient_player_id": "home2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 72.1,
+     "y": 37.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 84.4,
+     "y": 5.3,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e44",
+   "stream_sequence": 44,
+   "revision": 0,
+   "event_time_ms": 189344,
+   "emitted_at": "2026-10-22T10:03:09.344Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 189344
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home5",
+    "team_id": "home",
+    "recipient_player_id": "home2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 84.4,
+     "y": 36.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 81.3,
+     "y": 62.2,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e45",
+   "stream_sequence": 45,
+   "revision": 0,
+   "event_time_ms": 192938,
+   "emitted_at": "2026-10-22T10:03:12.938Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 192938
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home1",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 81.3,
+     "y": 11.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 91.4,
+     "y": 22.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e46",
+   "stream_sequence": 46,
+   "revision": 0,
+   "event_time_ms": 200142,
+   "emitted_at": "2026-10-22T10:03:20.142Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 200142
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home3",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 91.4,
+     "y": 61.4,
+     "z": 0
+    },
+    "end_position": {
+     "x": 102.1,
+     "y": 50.6,
+     "z": 0
+    },
+    "duration_ms": 1265
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e47",
+   "stream_sequence": 47,
+   "revision": 0,
+   "event_time_ms": 205647,
+   "emitted_at": "2026-10-22T10:03:25.647Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 205647
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home6",
+    "team_id": "home",
+    "recipient_player_id": "home1",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 31.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 14.9,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e48",
+   "stream_sequence": 48,
+   "revision": 0,
+   "event_time_ms": 211048,
+   "emitted_at": "2026-10-22T10:03:31.048Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 211048
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home1",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 56.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 7.9,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e49",
+   "stream_sequence": 49,
+   "revision": 0,
+   "event_time_ms": 216417,
+   "emitted_at": "2026-10-22T10:03:36.417Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 216417
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home5",
+    "team_id": "home",
+    "recipient_player_id": "home11",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 19.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 103.3,
+     "y": 24.9,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e50",
+   "stream_sequence": 50,
+   "revision": 0,
+   "event_time_ms": 219643,
+   "emitted_at": "2026-10-22T10:03:39.643Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 219643
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home5",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 10.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 51.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e51",
+   "stream_sequence": 51,
+   "revision": 0,
+   "event_time_ms": 226354,
+   "emitted_at": "2026-10-22T10:03:46.354Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 226354
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home7",
+    "team_id": "home",
+    "recipient_player_id": "home2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 54.8,
+     "z": 0
+    },
+    "end_position": {
+     "x": 97.2,
+     "y": 14.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e52",
+   "stream_sequence": 52,
+   "revision": 0,
+   "event_time_ms": 229840,
+   "emitted_at": "2026-10-22T10:03:49.840Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 229840
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away4",
+    "team_id": "away",
+    "target_player_id": "home8",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 97.2,
+     "y": 55.9,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e53",
+   "stream_sequence": 53,
+   "revision": 0,
+   "event_time_ms": 232373,
+   "emitted_at": "2026-10-22T10:03:52.373Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 232373
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home1",
+    "team_id": "home",
+    "recipient_player_id": "home11",
+    "position_unit": "m",
+    "start_position": {
+     "x": 97.2,
+     "y": 23.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 103.9,
+     "y": 24.3,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e54",
+   "stream_sequence": 54,
+   "revision": 0,
+   "event_time_ms": 237763,
+   "emitted_at": "2026-10-22T10:03:57.763Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 237763
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home5",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 39.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 18.2,
+     "z": 0
+    },
+    "duration_ms": 3030
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e55",
+   "stream_sequence": 55,
+   "revision": 0,
+   "event_time_ms": 245251,
+   "emitted_at": "2026-10-22T10:04:05.251Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 245251
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home11",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 23.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 26.9,
+     "z": 0
+    },
+    "duration_ms": 2248
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e56",
+   "stream_sequence": 56,
+   "revision": 0,
+   "event_time_ms": 251688,
+   "emitted_at": "2026-10-22T10:04:11.688Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 251688
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home11",
+    "team_id": "home",
+    "recipient_player_id": "home2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 54.8,
+     "z": 0
+    },
+    "end_position": {
+     "x": 96.0,
+     "y": 14.2,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e57",
+   "stream_sequence": 57,
+   "revision": 0,
+   "event_time_ms": 256838,
+   "emitted_at": "2026-10-22T10:04:16.838Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 256838
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home4",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 82.7,
+     "y": 33.1,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e58",
+   "stream_sequence": 58,
+   "revision": 0,
+   "event_time_ms": 257738,
+   "emitted_at": "2026-10-22T10:04:17.738Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 257738
+   },
+   "payload": {
+    "type": "goal",
+    "player_id": "home4",
+    "team_id": "home",
+    "own_goal": false,
+    "position_unit": "m",
+    "position": {
+     "x": 82.7,
+     "y": 27.2,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e59",
+   "stream_sequence": 59,
+   "revision": 0,
+   "event_time_ms": 264909,
+   "emitted_at": "2026-10-22T10:04:24.909Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 264909
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "home6",
+    "team_id": "home",
+    "target_player_id": "away5",
+    "position_unit": "m",
+    "position": {
+     "x": 52.5,
+     "y": 10.2,
+     "z": 0
+    },
+    "distance_m": 3.0,
+    "closing_speed_mps": 5.0
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e60",
+   "stream_sequence": 60,
+   "revision": 0,
+   "event_time_ms": 268835,
+   "emitted_at": "2026-10-22T10:04:28.835Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 268835
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "away8",
+    "team_id": "away",
+    "position_unit": "m",
+    "start_position": {
+     "x": 52.5,
+     "y": 31.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 46.8,
+     "y": 26.8,
+     "z": 0
+    },
+    "duration_ms": 4155
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e61",
+   "stream_sequence": 61,
+   "revision": 0,
+   "event_time_ms": 272451,
+   "emitted_at": "2026-10-22T10:04:32.451Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 272451
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away10",
+    "team_id": "away",
+    "recipient_player_id": "away2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 46.8,
+     "y": 17.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 49.7,
+     "y": 8.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e62",
+   "stream_sequence": 62,
+   "revision": 0,
+   "event_time_ms": 275267,
+   "emitted_at": "2026-10-22T10:04:35.267Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 275267
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away3",
+    "team_id": "away",
+    "recipient_player_id": "away11",
+    "position_unit": "m",
+    "start_position": {
+     "x": 49.7,
+     "y": 14.7,
+     "z": 0
+    },
+    "end_position": {
+     "x": 52.5,
+     "y": 52.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e63",
+   "stream_sequence": 63,
+   "revision": 0,
+   "event_time_ms": 279795,
+   "emitted_at": "2026-10-22T10:04:39.795Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 279795
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "away8",
+    "team_id": "away",
+    "position_unit": "m",
+    "position": {
+     "x": 10.5,
+     "y": 30.8,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e64",
+   "stream_sequence": 64,
+   "revision": 0,
+   "event_time_ms": 287281,
+   "emitted_at": "2026-10-22T10:04:47.281Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 287281
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "away4",
+    "team_id": "away",
+    "position_unit": "m",
+    "start_position": {
+     "x": 52.5,
+     "y": 58.9,
+     "z": 0
+    },
+    "end_position": {
+     "x": 45.7,
+     "y": 17.3,
+     "z": 0
+    },
+    "duration_ms": 3334
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e65",
+   "stream_sequence": 65,
+   "revision": 0,
+   "event_time_ms": 290914,
+   "emitted_at": "2026-10-22T10:04:50.914Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 290914
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away11",
+    "team_id": "away",
+    "recipient_player_id": "away1",
+    "position_unit": "m",
+    "start_position": {
+     "x": 45.7,
+     "y": 56.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 50.7,
+     "y": 48.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e66",
+   "stream_sequence": 66,
+   "revision": 0,
+   "event_time_ms": 295606,
+   "emitted_at": "2026-10-22T10:04:55.606Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 295606
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "away8",
+    "team_id": "away",
+    "position_unit": "m",
+    "position": {
+     "x": 11.2,
+     "y": 28.2,
+     "z": 0
+    },
+    "on_target": false
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e67",
+   "stream_sequence": 67,
+   "revision": 0,
+   "event_time_ms": 300866,
+   "emitted_at": "2026-10-22T10:05:00.866Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 300866
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away1",
+    "team_id": "away",
+    "recipient_player_id": "away9",
+    "position_unit": "m",
+    "start_position": {
+     "x": 50.7,
+     "y": 35.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 38.5,
+     "y": 20.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e68",
+   "stream_sequence": 68,
+   "revision": 0,
+   "event_time_ms": 307695,
+   "emitted_at": "2026-10-22T10:05:07.695Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 307695
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "away8",
+    "team_id": "away",
+    "position_unit": "m",
+    "start_position": {
+     "x": 38.5,
+     "y": 12.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 29.1,
+     "y": 41.5,
+     "z": 0
+    },
+    "duration_ms": 3170
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e69",
+   "stream_sequence": 69,
+   "revision": 0,
+   "event_time_ms": 311319,
+   "emitted_at": "2026-10-22T10:05:11.319Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 311319
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away8",
+    "team_id": "away",
+    "recipient_player_id": "away2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 29.1,
+     "y": 49.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 19.0,
+     "y": 32.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e70",
+   "stream_sequence": 70,
+   "revision": 0,
+   "event_time_ms": 316800,
+   "emitted_at": "2026-10-22T10:05:16.800Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 316800
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "home6",
+    "team_id": "home",
+    "target_player_id": "away6",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 19.0,
+     "y": 18.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e71",
+   "stream_sequence": 71,
+   "revision": 0,
+   "event_time_ms": 322072,
+   "emitted_at": "2026-10-22T10:05:22.072Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 322072
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away10",
+    "team_id": "away",
+    "recipient_player_id": "away9",
+    "position_unit": "m",
+    "start_position": {
+     "x": 19.0,
+     "y": 16.1,
+     "z": 0
+    },
+    "end_position": {
+     "x": 20.5,
+     "y": 27.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e72",
+   "stream_sequence": 72,
+   "revision": 0,
+   "event_time_ms": 324924,
+   "emitted_at": "2026-10-22T10:05:24.924Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 324924
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away7",
+    "team_id": "away",
+    "recipient_player_id": "away6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 20.5,
+     "y": 57.5,
+     "z": 0
+    },
+    "end_position": {
+     "x": 16.3,
+     "y": 19.0,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e73",
+   "stream_sequence": 73,
+   "revision": 0,
+   "event_time_ms": 328115,
+   "emitted_at": "2026-10-22T10:05:28.115Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 328115
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "away10",
+    "team_id": "away",
+    "position_unit": "m",
+    "start_position": {
+     "x": 16.3,
+     "y": 54.7,
+     "z": 0
+    },
+    "end_position": {
+     "x": 9.5,
+     "y": 22.8,
+     "z": 0
+    },
+    "duration_ms": 1359
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e74",
+   "stream_sequence": 74,
+   "revision": 0,
+   "event_time_ms": 335268,
+   "emitted_at": "2026-10-22T10:05:35.268Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 335268
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "home11",
+    "team_id": "home",
+    "target_player_id": "away10",
+    "position_unit": "m",
+    "position": {
+     "x": 9.5,
+     "y": 22.0,
+     "z": 0
+    },
+    "distance_m": 4.5,
+    "closing_speed_mps": 2.4
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e75",
+   "stream_sequence": 75,
+   "revision": 0,
+   "event_time_ms": 341071,
+   "emitted_at": "2026-10-22T10:05:41.071Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 341071
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "away9",
+    "team_id": "away",
+    "recipient_player_id": "away8",
+    "position_unit": "m",
+    "start_position": {
+     "x": 9.5,
+     "y": 6.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 12.3,
+     "y": 39.3,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e76",
+   "stream_sequence": 76,
+   "revision": 0,
+   "event_time_ms": 344629,
+   "emitted_at": "2026-10-22T10:05:44.629Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 344629
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "home5",
+    "team_id": "home",
+    "target_player_id": "away11",
+    "outcome": "won",
+    "position_unit": "m",
+    "position": {
+     "x": 12.3,
+     "y": 56.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e77",
+   "stream_sequence": 77,
+   "revision": 0,
+   "event_time_ms": 345029,
+   "emitted_at": "2026-10-22T10:05:45.029Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 345029
+   },
+   "payload": {
+    "type": "possession_change",
+    "from_team_id": "away",
+    "to_team_id": "home",
+    "cause": "tackle"
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e78",
+   "stream_sequence": 78,
+   "revision": 0,
+   "event_time_ms": 349759,
+   "emitted_at": "2026-10-22T10:05:49.759Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 349759
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home7",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 12.3,
+     "y": 19.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 19.2,
+     "y": 28.7,
+     "z": 0
+    },
+    "duration_ms": 3210
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e79",
+   "stream_sequence": 79,
+   "revision": 0,
+   "event_time_ms": 354296,
+   "emitted_at": "2026-10-22T10:05:54.296Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 354296
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home9",
+    "team_id": "home",
+    "recipient_player_id": "home10",
+    "position_unit": "m",
+    "start_position": {
+     "x": 19.2,
+     "y": 20.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 31.1,
+     "y": 30.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e80",
+   "stream_sequence": 80,
+   "revision": 0,
+   "event_time_ms": 357654,
+   "emitted_at": "2026-10-22T10:05:57.654Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 357654
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away4",
+    "team_id": "away",
+    "target_player_id": "home9",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 31.1,
+     "y": 27.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e81",
+   "stream_sequence": 81,
+   "revision": 0,
+   "event_time_ms": 363993,
+   "emitted_at": "2026-10-22T10:06:03.993Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 363993
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home4",
+    "team_id": "home",
+    "recipient_player_id": "home2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 31.1,
+     "y": 7.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 42.3,
+     "y": 54.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e82",
+   "stream_sequence": 82,
+   "revision": 0,
+   "event_time_ms": 367124,
+   "emitted_at": "2026-10-22T10:06:07.124Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 367124
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home8",
+    "team_id": "home",
+    "recipient_player_id": "home4",
+    "position_unit": "m",
+    "start_position": {
+     "x": 42.3,
+     "y": 19.9,
+     "z": 0
+    },
+    "end_position": {
+     "x": 47.1,
+     "y": 7.2,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e83",
+   "stream_sequence": 83,
+   "revision": 0,
+   "event_time_ms": 374047,
+   "emitted_at": "2026-10-22T10:06:14.047Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 374047
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home5",
+    "team_id": "home",
+    "recipient_player_id": "home10",
+    "position_unit": "m",
+    "start_position": {
+     "x": 47.1,
+     "y": 26.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 58.1,
+     "y": 53.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e84",
+   "stream_sequence": 84,
+   "revision": 0,
+   "event_time_ms": 378266,
+   "emitted_at": "2026-10-22T10:06:18.266Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 378266
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home5",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 87.9,
+     "y": 39.6,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e85",
+   "stream_sequence": 85,
+   "revision": 0,
+   "event_time_ms": 384794,
+   "emitted_at": "2026-10-22T10:06:24.794Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 384794
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home3",
+    "team_id": "home",
+    "recipient_player_id": "home7",
+    "position_unit": "m",
+    "start_position": {
+     "x": 58.1,
+     "y": 21.7,
+     "z": 0
+    },
+    "end_position": {
+     "x": 67.2,
+     "y": 17.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e86",
+   "stream_sequence": 86,
+   "revision": 0,
+   "event_time_ms": 388643,
+   "emitted_at": "2026-10-22T10:06:28.643Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 388643
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home11",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 67.2,
+     "y": 50.9,
+     "z": 0
+    },
+    "end_position": {
+     "x": 73.3,
+     "y": 23.1,
+     "z": 0
+    },
+    "duration_ms": 3852
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e87",
+   "stream_sequence": 87,
+   "revision": 0,
+   "event_time_ms": 392298,
+   "emitted_at": "2026-10-22T10:06:32.298Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 392298
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home5",
+    "team_id": "home",
+    "recipient_player_id": "home10",
+    "position_unit": "m",
+    "start_position": {
+     "x": 73.3,
+     "y": 54.1,
+     "z": 0
+    },
+    "end_position": {
+     "x": 76.7,
+     "y": 56.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e88",
+   "stream_sequence": 88,
+   "revision": 0,
+   "event_time_ms": 395794,
+   "emitted_at": "2026-10-22T10:06:35.794Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 395794
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home4",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 76.7,
+     "y": 10.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 78.5,
+     "y": 33.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e89",
+   "stream_sequence": 89,
+   "revision": 0,
+   "event_time_ms": 399496,
+   "emitted_at": "2026-10-22T10:06:39.496Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 399496
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "away5",
+    "team_id": "away",
+    "target_player_id": "home11",
+    "position_unit": "m",
+    "position": {
+     "x": 78.5,
+     "y": 36.0,
+     "z": 0
+    },
+    "distance_m": 0.9,
+    "closing_speed_mps": 4.7
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e90",
+   "stream_sequence": 90,
+   "revision": 0,
+   "event_time_ms": 402539,
+   "emitted_at": "2026-10-22T10:06:42.539Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 402539
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home5",
+    "position_unit": "m",
+    "start_position": {
+     "x": 78.5,
+     "y": 17.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 88.6,
+     "y": 16.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e91",
+   "stream_sequence": 91,
+   "revision": 0,
+   "event_time_ms": 407788,
+   "emitted_at": "2026-10-22T10:06:47.788Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 407788
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away2",
+    "team_id": "away",
+    "target_player_id": "home10",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 88.6,
+     "y": 52.0,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e92",
+   "stream_sequence": 92,
+   "revision": 0,
+   "event_time_ms": 410923,
+   "emitted_at": "2026-10-22T10:06:50.923Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 410923
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home5",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 81.9,
+     "y": 44.9,
+     "z": 0
+    },
+    "on_target": false
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e93",
+   "stream_sequence": 93,
+   "revision": 0,
+   "event_time_ms": 415041,
+   "emitted_at": "2026-10-22T10:06:55.041Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 415041
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home10",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 90.8,
+     "y": 21.4,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e94",
+   "stream_sequence": 94,
+   "revision": 0,
+   "event_time_ms": 418295,
+   "emitted_at": "2026-10-22T10:06:58.295Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 418295
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home1",
+    "position_unit": "m",
+    "start_position": {
+     "x": 88.6,
+     "y": 7.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 99.8,
+     "y": 47.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e95",
+   "stream_sequence": 95,
+   "revision": 0,
+   "event_time_ms": 424514,
+   "emitted_at": "2026-10-22T10:07:04.514Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 424514
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home1",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 85.0,
+     "y": 49.4,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e96",
+   "stream_sequence": 96,
+   "revision": 0,
+   "event_time_ms": 429264,
+   "emitted_at": "2026-10-22T10:07:09.264Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 429264
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home2",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 99.8,
+     "y": 59.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 6.2,
+     "z": 0
+    },
+    "duration_ms": 3095
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e97",
+   "stream_sequence": 97,
+   "revision": 0,
+   "event_time_ms": 435390,
+   "emitted_at": "2026-10-22T10:07:15.390Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 435390
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home7",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 84.5,
+     "y": 30.9,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e98",
+   "stream_sequence": 98,
+   "revision": 0,
+   "event_time_ms": 439096,
+   "emitted_at": "2026-10-22T10:07:19.096Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 439096
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home8",
+    "team_id": "home",
+    "recipient_player_id": "home5",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 16.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 97.6,
+     "y": 19.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e99",
+   "stream_sequence": 99,
+   "revision": 0,
+   "event_time_ms": 442270,
+   "emitted_at": "2026-10-22T10:07:22.270Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 442270
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home1",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 81.5,
+     "y": 44.6,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e100",
+   "stream_sequence": 100,
+   "revision": 0,
+   "event_time_ms": 446606,
+   "emitted_at": "2026-10-22T10:07:26.606Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 446606
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away9",
+    "team_id": "away",
+    "target_player_id": "home1",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 97.6,
+     "y": 7.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e101",
+   "stream_sequence": 101,
+   "revision": 0,
+   "event_time_ms": 453005,
+   "emitted_at": "2026-10-22T10:07:33.005Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 453005
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home5",
+    "position_unit": "m",
+    "start_position": {
+     "x": 97.6,
+     "y": 41.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 61.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e102",
+   "stream_sequence": 102,
+   "revision": 0,
+   "event_time_ms": 457443,
+   "emitted_at": "2026-10-22T10:07:37.443Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 457443
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home3",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 84.7,
+     "y": 38.0,
+     "z": 0
+    },
+    "on_target": false
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e103",
+   "stream_sequence": 103,
+   "revision": 0,
+   "event_time_ms": 461033,
+   "emitted_at": "2026-10-22T10:07:41.033Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 461033
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home8",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 28.6,
+     "z": 0
+    },
+    "end_position": {
+     "x": 96.7,
+     "y": 54.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e104",
+   "stream_sequence": 104,
+   "revision": 0,
+   "event_time_ms": 464334,
+   "emitted_at": "2026-10-22T10:07:44.334Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 464334
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home7",
+    "team_id": "home",
+    "recipient_player_id": "home1",
+    "position_unit": "m",
+    "start_position": {
+     "x": 96.7,
+     "y": 16.4,
+     "z": 0
+    },
+    "end_position": {
+     "x": 97.5,
+     "y": 19.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e105",
+   "stream_sequence": 105,
+   "revision": 0,
+   "event_time_ms": 471195,
+   "emitted_at": "2026-10-22T10:07:51.195Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 471195
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "away11",
+    "team_id": "away",
+    "target_player_id": "home8",
+    "position_unit": "m",
+    "position": {
+     "x": 97.5,
+     "y": 12.3,
+     "z": 0
+    },
+    "distance_m": 0.9,
+    "closing_speed_mps": 4.0
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e106",
+   "stream_sequence": 106,
+   "revision": 0,
+   "event_time_ms": 474025,
+   "emitted_at": "2026-10-22T10:07:54.025Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 474025
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home1",
+    "team_id": "home",
+    "recipient_player_id": "home2",
+    "position_unit": "m",
+    "start_position": {
+     "x": 97.5,
+     "y": 10.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 95.3,
+     "y": 57.5,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e107",
+   "stream_sequence": 107,
+   "revision": 0,
+   "event_time_ms": 478750,
+   "emitted_at": "2026-10-22T10:07:58.750Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 478750
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home1",
+    "position_unit": "m",
+    "start_position": {
+     "x": 95.3,
+     "y": 41.1,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 56.2,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e108",
+   "stream_sequence": 108,
+   "revision": 0,
+   "event_time_ms": 481963,
+   "emitted_at": "2026-10-22T10:08:01.963Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 481963
+   },
+   "payload": {
+    "type": "foul",
+    "player_id": "away11",
+    "team_id": "away",
+    "victim_player_id": "home6",
+    "advantage": false,
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 60.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e109",
+   "stream_sequence": 109,
+   "revision": 0,
+   "event_time_ms": 482763,
+   "emitted_at": "2026-10-22T10:08:02.763Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 482763
+   },
+   "payload": {
+    "type": "card",
+    "player_id": "away11",
+    "team_id": "away",
+    "colour": "red",
+    "reason": "Denying a clear goal-scoring chance"
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e110",
+   "stream_sequence": 110,
+   "revision": 0,
+   "event_time_ms": 489073,
+   "emitted_at": "2026-10-22T10:08:09.073Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 489073
+   },
+   "payload": {
+    "type": "foul",
+    "player_id": "away8",
+    "team_id": "away",
+    "victim_player_id": "home7",
+    "advantage": false,
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 14.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e111",
+   "stream_sequence": 111,
+   "revision": 0,
+   "event_time_ms": 489873,
+   "emitted_at": "2026-10-22T10:08:09.873Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 489873
+   },
+   "payload": {
+    "type": "card",
+    "player_id": "away8",
+    "team_id": "away",
+    "colour": "yellow",
+    "reason": "Foul on a player in possession"
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e112",
+   "stream_sequence": 112,
+   "revision": 0,
+   "event_time_ms": 495715,
+   "emitted_at": "2026-10-22T10:08:15.715Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 495715
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home3",
+    "team_id": "home",
+    "recipient_player_id": "home10",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 46.1,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 31.3,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e113",
+   "stream_sequence": 113,
+   "revision": 0,
+   "event_time_ms": 499597,
+   "emitted_at": "2026-10-22T10:08:19.597Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 499597
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home8",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 6.4,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 26.0,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e114",
+   "stream_sequence": 114,
+   "revision": 0,
+   "event_time_ms": 502192,
+   "emitted_at": "2026-10-22T10:08:22.192Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 502192
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home3",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 96.0,
+     "y": 22.3,
+     "z": 0
+    },
+    "on_target": true
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e115",
+   "stream_sequence": 115,
+   "revision": 0,
+   "event_time_ms": 506700,
+   "emitted_at": "2026-10-22T10:08:26.700Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 506700
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home7",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 84.4,
+     "y": 24.6,
+     "z": 0
+    },
+    "on_target": false
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e116",
+   "stream_sequence": 116,
+   "revision": 0,
+   "event_time_ms": 509237,
+   "emitted_at": "2026-10-22T10:08:29.237Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 509237
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 52.7,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 45.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e117",
+   "stream_sequence": 117,
+   "revision": 0,
+   "event_time_ms": 512441,
+   "emitted_at": "2026-10-22T10:08:32.441Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 512441
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home5",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 39.5,
+     "z": 0
+    },
+    "end_position": {
+     "x": 98.7,
+     "y": 58.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e118",
+   "stream_sequence": 118,
+   "revision": 0,
+   "event_time_ms": 518852,
+   "emitted_at": "2026-10-22T10:08:38.852Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 518852
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home1",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 98.7,
+     "y": 63.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 40.4,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e119",
+   "stream_sequence": 119,
+   "revision": 0,
+   "event_time_ms": 521889,
+   "emitted_at": "2026-10-22T10:08:41.889Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 521889
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home1",
+    "team_id": "home",
+    "recipient_player_id": "home11",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 44.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 15.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e120",
+   "stream_sequence": 120,
+   "revision": 0,
+   "event_time_ms": 526547,
+   "emitted_at": "2026-10-22T10:08:46.547Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 526547
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "away8",
+    "team_id": "away",
+    "target_player_id": "home2",
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 30.0,
+     "z": 0
+    },
+    "distance_m": 1.5,
+    "closing_speed_mps": 6.5
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e121",
+   "stream_sequence": 121,
+   "revision": 0,
+   "event_time_ms": 533694,
+   "emitted_at": "2026-10-22T10:08:53.694Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 533694
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "away7",
+    "team_id": "away",
+    "target_player_id": "home11",
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 17.3,
+     "z": 0
+    },
+    "distance_m": 1.2,
+    "closing_speed_mps": 2.6
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e122",
+   "stream_sequence": 122,
+   "revision": 0,
+   "event_time_ms": 538318,
+   "emitted_at": "2026-10-22T10:08:58.318Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 538318
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home8",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 19.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 103.9,
+     "y": 14.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e123",
+   "stream_sequence": 123,
+   "revision": 0,
+   "event_time_ms": 544088,
+   "emitted_at": "2026-10-22T10:09:04.088Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 544088
+   },
+   "payload": {
+    "type": "tackle",
+    "player_id": "away8",
+    "team_id": "away",
+    "target_player_id": "home7",
+    "outcome": "lost",
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 6.2,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e124",
+   "stream_sequence": 124,
+   "revision": 0,
+   "event_time_ms": 550115,
+   "emitted_at": "2026-10-22T10:09:10.115Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 550115
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home8",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 12.9,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 15.0,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e125",
+   "stream_sequence": 125,
+   "revision": 0,
+   "event_time_ms": 553447,
+   "emitted_at": "2026-10-22T10:09:13.447Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 553447
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "away7",
+    "team_id": "away",
+    "target_player_id": "home11",
+    "position_unit": "m",
+    "position": {
+     "x": 102,
+     "y": 35.1,
+     "z": 0
+    },
+    "distance_m": 3.3,
+    "closing_speed_mps": 6.0
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e126",
+   "stream_sequence": 126,
+   "revision": 0,
+   "event_time_ms": 556472,
+   "emitted_at": "2026-10-22T10:09:16.472Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 556472
+   },
+   "payload": {
+    "type": "shot",
+    "player_id": "home9",
+    "team_id": "home",
+    "position_unit": "m",
+    "position": {
+     "x": 91.5,
+     "y": 30.3,
+     "z": 0
+    },
+    "on_target": false
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e127",
+   "stream_sequence": 127,
+   "revision": 0,
+   "event_time_ms": 560375,
+   "emitted_at": "2026-10-22T10:09:20.375Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 560375
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home7",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 40.4,
+     "z": 0
+    },
+    "end_position": {
+     "x": 97.9,
+     "y": 32.8,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e128",
+   "stream_sequence": 128,
+   "revision": 0,
+   "event_time_ms": 562925,
+   "emitted_at": "2026-10-22T10:09:22.925Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 562925
+   },
+   "payload": {
+    "type": "pressure",
+    "player_id": "away4",
+    "team_id": "away",
+    "target_player_id": "home9",
+    "position_unit": "m",
+    "position": {
+     "x": 97.9,
+     "y": 48.5,
+     "z": 0
+    },
+    "distance_m": 0.8,
+    "closing_speed_mps": 5.0
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e129",
+   "stream_sequence": 129,
+   "revision": 0,
+   "event_time_ms": 568541,
+   "emitted_at": "2026-10-22T10:09:28.541Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 568541
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home7",
+    "team_id": "home",
+    "recipient_player_id": "home3",
+    "position_unit": "m",
+    "start_position": {
+     "x": 97.9,
+     "y": 49.1,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 25.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e130",
+   "stream_sequence": 130,
+   "revision": 0,
+   "event_time_ms": 571742,
+   "emitted_at": "2026-10-22T10:09:31.742Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 571742
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home3",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 59.9,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 38.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e131",
+   "stream_sequence": 131,
+   "revision": 0,
+   "event_time_ms": 577950,
+   "emitted_at": "2026-10-22T10:09:37.950Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 577950
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home7",
+    "team_id": "home",
+    "recipient_player_id": "home6",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 19.7,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 47.1,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e132",
+   "stream_sequence": 132,
+   "revision": 0,
+   "event_time_ms": 582388,
+   "emitted_at": "2026-10-22T10:09:42.388Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 582388
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home3",
+    "team_id": "home",
+    "recipient_player_id": "home8",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 61.9,
+     "z": 0
+    },
+    "end_position": {
+     "x": 98.2,
+     "y": 18.9,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e133",
+   "stream_sequence": 133,
+   "revision": 0,
+   "event_time_ms": 588893,
+   "emitted_at": "2026-10-22T10:09:48.893Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 588893
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home10",
+    "team_id": "home",
+    "recipient_player_id": "home5",
+    "position_unit": "m",
+    "start_position": {
+     "x": 98.2,
+     "y": 45.3,
+     "z": 0
+    },
+    "end_position": {
+     "x": 101.9,
+     "y": 30.7,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e134",
+   "stream_sequence": 134,
+   "revision": 0,
+   "event_time_ms": 595836,
+   "emitted_at": "2026-10-22T10:09:55.836Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 595836
+   },
+   "payload": {
+    "type": "carry",
+    "player_id": "home7",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+     "x": 101.9,
+     "y": 24.0,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 15.8,
+     "z": 0
+    },
+    "duration_ms": 3903
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e135",
+   "stream_sequence": 135,
+   "revision": 0,
+   "event_time_ms": 599315,
+   "emitted_at": "2026-10-22T10:09:59.315Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 599315
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home4",
+    "team_id": "home",
+    "recipient_player_id": "home8",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 17.8,
+     "z": 0
+    },
+    "end_position": {
+     "x": 105.0,
+     "y": 58.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e136",
+   "stream_sequence": 136,
+   "revision": 0,
+   "event_time_ms": 605677,
+   "emitted_at": "2026-10-22T10:10:05.677Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 605677
+   },
+   "payload": {
+    "type": "pass",
+    "player_id": "home5",
+    "team_id": "home",
+    "recipient_player_id": "home10",
+    "position_unit": "m",
+    "start_position": {
+     "x": 102,
+     "y": 52.2,
+     "z": 0
+    },
+    "end_position": {
+     "x": 103.7,
+     "y": 59.6,
+     "z": 0
+    }
+   }
+  },
+  {
+   "kind": "event",
+   "schema_version": "1.1.0",
+   "stream": {
+    "tenant_id": "demo",
+    "session_id": "short",
+    "match_id": "match-short"
+   },
+   "event_id": "e137",
+   "stream_sequence": 137,
+   "revision": 0,
+   "event_time_ms": 600000,
+   "emitted_at": "2026-10-22T10:10:00.000Z",
+   "clock": {
+    "period": 1,
+    "period_elapsed_ms": 600000
+   },
+   "payload": {
+    "type": "period_boundary",
+    "boundary": "ended"
+   }
+  }
+ ]
+}
