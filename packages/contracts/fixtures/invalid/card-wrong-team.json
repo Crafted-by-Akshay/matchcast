@@ -1,0 +1,25 @@
+{
+  "kind": "event",
+  "schema_version": "1.1.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-card",
+  "stream_sequence": 22,
+  "revision": 0,
+  "event_time_ms": 22000,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 22000
+  },
+  "payload": {
+    "type": "card",
+    "player_id": "away2",
+    "team_id": "home",
+    "colour": "yellow",
+    "reason": "Tactical foul to stop a counter-attack"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "kind": "event",
+  "schema_version": "1.1.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-tackle",
+  "stream_sequence": 20,
+  "revision": 0,
+  "event_time_ms": 20000,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 20000
+  },
+  "payload": {
+    "type": "tackle",
+    "player_id": "home1",
+    "team_id": "home",
+    "target_player_id": "away1",
+    "outcome": "won",
+    "position_unit": "m",
+    "position": {
+      "x": 50,
+      "y": 30,
+      "z": 0
+    }
+  }
+}

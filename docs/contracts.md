@@ -1,7 +1,7 @@
-# MatchCast wire contracts v1.0.0
+# MatchCast wire contracts v1.1.0
 
 These contracts implement the v1.1 **requirements** from MHACK832-23 and the
-readiness contract on MHACK832-1. The initial **wire schema** is `1.0.0`; the two
+readiness contract on MHACK832-1. The **wire schema** is `1.1.0` (initial release `1.0.0`); the two
 version numbers describe different things. This is a local contract definition,
 not evidence of a running football engine, verified broadcast, or cloud service.
 
@@ -63,6 +63,26 @@ Every top-level packet has `kind`, `schema_version`, and `stream`.
 | `state_revision` | `snapshot` reference to a committed state revision and evidence boundary |
 | `claim` | Source references/interval, numeric metric and units, derivation version, snapshot, evidence limit, approval status |
 | `publication` | Stable publication ID, claim IDs, state reference, persona/language, match time, wall-clock expiry, audio generation ID, text |
+
+### Event payload types
+
+All positions are metres on the ground (z=0) inside the roster pitch. Types marked
+1.1 need `schema_version: "1.1.0"`; a `1.0.0` packet carrying them is rejected with
+`unsupported_schema_version` at `/payload/type`. `player_id` is the acting player and
+`team_id` the actor's team unless stated.
+
+| `type` | Since | Fields |
+| --- | --- | --- |
+| `goal`, `pass`, `shot`, `period_boundary` | 1.0 | as in the schema |
+| `tackle` | 1.1 | `player_id`, `team_id`, `target_player_id` (opposing team), `outcome` (`won`/`lost`), `position` |
+| `foul` | 1.1 | `player_id`, `team_id`, `victim_player_id` (opposing team), `advantage` (bool), `position` |
+| `card` | 1.1 | `player_id`, `team_id`, `colour` (`yellow`/`second_yellow`/`red`), `reason` (1-256 chars) |
+| `carry` | 1.1 | `player_id`, `team_id`, `start_position`, `end_position`, `duration_ms` (integer, at least 1) |
+| `possession_change` | 1.1 | `from_team_id`, `to_team_id` (different, both in roster), `cause` (`tackle`/`interception`/`loose_ball`/`out_of_play`/`foul`) |
+| `pressure` | 1.1 | `player_id` (presser), `team_id`, `target_player_id` (opposing team), `position`, `distance_m` (at least 0), `closing_speed_mps` (at least 0) |
+
+Both versions are accepted by the validators, so old packets stay valid. `schema_version`
+in the contract above is a set (`SUPPORTED_VERSIONS`), and `SCHEMA_VERSION` is the newest.
 
 `fixtures/manifest.json` indexes shared positive/negative fixtures. `contexts.json`
 contains publication and correction reference-validation cases. These are small
@@ -235,7 +255,7 @@ review remain mandatory before actual publication/synthesis under v1.1.
 
 ## Versioning and compatibility
 
-Only wire `schema_version: "1.0.0"` is currently supported. Unknown or future
+Wire `schema_version` values `"1.0.0"` and `"1.1.0"` are currently supported. Unknown or future
 versions return `unsupported_schema_version` before payload interpretation; an
 unknown kind/type or extra property fails schema validation. Do not guess or
 silently downgrade. IDs, units, time semantics, sequence/revision meanings, and

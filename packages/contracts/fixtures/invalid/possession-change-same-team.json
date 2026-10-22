@@ -1,0 +1,24 @@
+{
+  "kind": "event",
+  "schema_version": "1.1.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-possession-change",
+  "stream_sequence": 24,
+  "revision": 0,
+  "event_time_ms": 24000,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 24000
+  },
+  "payload": {
+    "type": "possession_change",
+    "from_team_id": "away",
+    "to_team_id": "away",
+    "cause": "tackle"
+  }
+}
