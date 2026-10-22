@@ -54,6 +54,28 @@ def test_high_press_chaos_possession_and_quiet() -> None:
     )
 
 
+def test_rule_boundaries() -> None:
+    # throw-ins are in most windows, so on their own they do not make a set piece
+    assert scenes.classify([ev(0, "throw_in")]) != "set_piece"
+    assert scenes.classify([ev(0, "corner")]) == "set_piece"
+    # chaotic scramble starts at four turnovers (three are not enough)
+    four = [ev(i, "turnover", ownX=10) for i in range(4)]
+    assert scenes.classify(four) == "chaotic_scramble"
+    assert scenes.classify(four[:3]) != "chaotic_scramble"
+    # high press: two turnovers with at least one at ownX >= 66; one turnover or ownX 65 is not
+    assert scenes.classify([ev(0, "turnover", ownX=66), ev(1, "turnover", ownX=10)]) == "high_press"
+    assert scenes.classify([ev(0, "turnover", ownX=66)]) != "high_press"
+    assert scenes.classify([ev(0, "turnover", ownX=65), ev(1, "turnover", ownX=65)]) != "high_press"
+    # possession build-up: six passes and at most one turnover (five passes is a quiet spell)
+    six = [ev(i, "pass") for i in range(6)]
+    assert scenes.classify(six) == "possession_build_up"
+    assert scenes.classify(six[:5]) == "quiet_spell"
+    assert scenes.classify(six + [ev(7, "turnover"), ev(8, "turnover")]) != "possession_build_up"
+    # quiet spell: six events or fewer with no shot; seven is not
+    assert scenes.classify([ev(i, "take_on") for i in range(6)]) == "quiet_spell"
+    assert scenes.classify([ev(i, "take_on") for i in range(7)]) == ""
+
+
 def test_windows_cut_30_second_blocks_and_skip_empty_ones() -> None:
     events = [ev(0, "pass"), ev(10, "pass"), ev(31, "pass"), ev(95, "pass"), ev(96, "throw_in")]
     cut = scenes.windows(events)

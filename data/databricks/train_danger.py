@@ -25,8 +25,9 @@ import numpy as np
 import pyarrow.parquet as pq
 
 TYPES = ("pass", "turnover", "shot", "take_on", "slide_tackle", "aerial_duel", "foul", "corner",
-         "goal")  # fmt: skip
-NUMERIC = ("t_rel_s", "dist_m", "quality", "difficulty", "xg", "x", "y", "own_x", "stamina",
+         "freekick", "throw_in", "goal")  # fmt: skip
+# t_rel_s (seconds into the offline 30 s window) is left out: a live event has no such window
+NUMERIC = ("dist_m", "quality", "difficulty", "xg", "x", "y", "own_x", "stamina",
            "passes_prev_10s", "turnovers_prev_10s", "shots_prev_10s")  # fmt: skip
 SEED = 2026
 HOLDOUT_SHARE = 0.25
@@ -131,8 +132,10 @@ def main() -> int:
     onnx_ok = export_onnx(model, X.shape[1], out / "model.onnx")
     card["onnx"] = onnx_ok
     (out / "model-card.json").write_text(json.dumps(card, indent=2) + "\n")
-    # held-out probabilities let predict_danger be checked against this run to within 0.001
-    sample = np.flatnonzero(held)[:10]
+    # held-out rows let predict_danger be checked against this run (it agrees to about 1e-6): the
+    # five most dangerous rows and five more spread through the rest, so positives are covered
+    order = np.flatnonzero(held)[np.argsort(-p)]
+    sample = np.concatenate([order[:5], order[5 :: max(1, len(order) // 5)][:5]])
     (out / "heldout-sample.json").write_text(json.dumps(
         [{"features": X[i].tolist(), "p": round(float(model.predict_proba(X[i:i + 1])[0, 1]), 6)}
          for i in sample]) + "\n")  # fmt: skip

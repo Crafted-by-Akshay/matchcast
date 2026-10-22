@@ -6,7 +6,7 @@ Runs services/simulation/run.cjs for a block of match seeds starting at --seed, 
 30 s windows, labels each window with one of six scene families by fixed rules, then keeps the same
 number of scenes per family (round-robin over seeds, so every family gets at least count/6).
 Output is `scenes.parquet` (a row per event in a kept scene) and `manifest.json`.
-The same --seed gives byte-identical files.
+The same --seed gives byte-identical files for the same simulator build and pyarrow version.
 
 Label: `danger` is 1 when the event's team takes a shot in the 10 s after the event.
 """
