@@ -9,6 +9,7 @@ COPY packages packages
 COPY services/api services/api
 COPY services/worker services/worker
 COPY services/mcp services/mcp
+COPY services/recap services/recap
 COPY data/season data/season
 COPY data/models data/models
 RUN uv sync --locked --no-dev --package matchcast-api
