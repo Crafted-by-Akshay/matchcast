@@ -21,7 +21,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/matches` | anyone | `session_id, match_id, roster, names, clubs, approval_mode`, optional `seed_bad_claim`, `seed_bad_claim_at_ms`, and the descriptive `seed, engine_version, home_team_id, away_team_id, venue_id, kickoff_local` (accepted, not used by the api yet) | 201 `{stream, approval_mode, mode}` | 409 `match_exists`, 422 |
 | `GET /v1/matches/{match_id}` | anyone | `session_id` | 200 match + current state | 404 |
 | `POST /v1/matches/{match_id}/events` | anyone | `session_id`; `{events: [...]}` 1 to 50 contract events | 202 `{accepted, last_sequence}` | 422 invalid event (first bad index and validator message); 409 `sequence_gap` and 503 `publish_failed` are **Planned** with Event Hubs |
-| `GET /v1/matches/{match_id}/stream` | anyone | `session_id, persona, lang`; `Last-Event-ID` header | 200 `text/event-stream` | 404, 422 `contract_invalid` for an unknown persona, 429 watch-mode cap |
+| `GET /v1/matches/{match_id}/stream` | anyone | `session_id, persona, lang (en, es, hi)`; `Last-Event-ID` header | 200 `text/event-stream`; with `lang` a publication also carries `variants[lang]` when the checked translation passed (10 §4) | 404, 422 `contract_invalid` for an unknown persona or language, 429 watch-mode cap |
 | `GET /v1/matches/{match_id}/claims` | anyone | `session_id, verdict?, agent?, metric?, limit ≤ 500, cursor?` | 200 page | 404 |
 | `GET /v1/matches/{match_id}/lines` | Producer | `session_id, status?` | 200 page (the approval queue) | 403 |
 | `POST /v1/lines/{line_id}/approve` | Producer | `session_id, match_id` | 200 line (+ publication) | 403, 404, 409 not approvable |
@@ -29,12 +29,12 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/lines/{line_id}/kill` | Producer | `session_id, match_id, reason ≤ 200` | 200 | 403, 404 |
 | `GET /v1/matches/{match_id}/audit` | anyone | `session_id, from_seq?, limit ≤ 1000` | 200 records | 404 |
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
-| `POST /v1/matches/{match_id}/ask` | anyone | `session_id, question ≤ 300, persona` (`browser_session_id` and `lang` are **Planned**) | 200 `{answer, intent, abstained, citations[], mode}` (`claim_ids`, `verdict` and `trace_id` are **Planned**) | 400 shield, 429 |
+| `POST /v1/matches/{match_id}/ask` | anyone | `session_id, question ≤ 300, persona, lang (en, es, hi)` (`browser_session_id` is **Planned**) | 200 `{answer, intent, abstained, citations[], mode, lang, variants?}` (`claim_ids`, `verdict` and `trace_id` are **Planned**) | 400 shield, 429 |
 | `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300` | 200 `{target, reply, verdict, facts}` (rules-mode template replies; `audio_url` and `lang` are **Planned** with Speech) | 400 `prompt_attack`, 404 unknown target, 422, 429 |
 | `POST /v1/matches/{id}/vision/identify` | anyone | `session_id, crop (base64 PNG 128x128, ≤ 40 KB), track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}`. Plain base64 only (no `data:` prefix); a complete PNG, exactly 128x128. | 404, 413 (body over 64 KB or crop over 40 KB decoded), 422 (bad crop, or `crop` over 60,000 characters), 429 `rate_limited`/`vision_budget_used`, 502 `vision_unavailable` |
 | `GET /v1/exports/{export_id}` | anyone | none | 200 the file as an attachment | 404 |
 | `POST /v1/ds/ask` | anyone | `session_id, question ≤ 300` | 200 `{answer, verdict, sql, columns[], rows[], chart_spec}` | 400 `invalid_query`, 429, 503 |
-| `GET /v1/speech/token` | anyone | none | 200 `{token, region, expires_at}` | 429 (10 a minute per IP), 503 `not_ready` without a Speech resource. **Planned**: not built yet |
+| `GET /v1/speech/token` | anyone | none | 200 `{token, region, expires_at}` | 429 (10 a minute per IP), 503 `not_ready` without a Speech resource (a Speech-only token from the resource's `/sts/v1.0/issueToken`, exchanged with the api's managed identity, valid 10 minutes and cached 9; never the api's Entra token. Set by `SPEECH_ENDPOINT` and `SPEECH_REGION`. The rate limit keys on the caller: the rightmost `X-Forwarded-For` entry when `MATCHCAST_BEHIND_INGRESS=true` (set by Bicep; the ingress appends it, entries to its left are forgeable), otherwise the socket address) |
 | `GET /v1/audio/{publication_id}.{lang}.mp3` | anyone | `session_id, match_id` | 200 `audio/mpeg` | 404. **Planned** (server-side voice) |
 | `GET /v1/matches/{match_id}/recap/{persona}` | anyone | `session_id` | 200 recap | 404 not ready |
 | `POST /v1/matches/{match_id}/exports` | Viewer | `session_id, kind (claims_csv, events_json), verdict?, agent?, metric?` | 201 `{export_id, url, sha256, rows}` | 403 |
@@ -103,7 +103,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `/ask`, `/talk` | 5 a minute | `browser_session_id` (or IP) |
 | `/ds/ask` | 5 a minute | client address |
 | `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | one api process (a cost cap, shared by all callers) |
-| `/speech/token` | 10 a minute (**Planned**) | IP |
+| `/speech/token` | 10 a minute | IP |
 
 Limits are kept in memory in the single `api` replica (ADR-0005).
 

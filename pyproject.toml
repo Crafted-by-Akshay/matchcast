@@ -33,3 +33,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"eval/agents_eval.py" = ["E501"]  # the generated report is prose in a template

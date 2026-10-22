@@ -4,6 +4,16 @@
       "AskBody": {
         "additionalProperties": false,
         "properties": {
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "es",
+              "hi"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
           "persona": {
             "default": "casual",
             "enum": [
@@ -438,6 +448,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -2177,6 +2194,30 @@
           }
         },
         "summary": "Vision Identify",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/speech/token": {
+      "get": {
+        "description": "A short-lived Entra token for the browser's Speech SDK; never a key (EXP-16).",
+        "operationId": "speech_token_v1_speech_token_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Speech Token V1 Speech Token Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Speech Token",
         "tags": [
           "matches"
         ]

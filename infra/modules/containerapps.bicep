@@ -20,7 +20,14 @@ param mcpImage string
 param entraClientId string = ''
 param keyVaultUri string = ''
 param contentSafetyEndpoint string = ''
+param speechEndpoint string = ''
+param speechRegion string = ''
+param translatorEndpoint string = ''
+param translatorRegion string = ''
 param searchEndpoint string = ''
+
+@allowed(['direct', 'memory', 'eventhubs'])
+param pipelineMode string = 'direct'
 
 @description('True when Key Vault already holds srch-query-key; a Key Vault secret reference to a missing secret fails the revision.')
 param searchKeysInVault bool = false
@@ -140,6 +147,9 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
           resources: { cpu: json('0.5'), memory: '1Gi' }
           env: concat(commonEnv, authEnv, [
             { name: 'MATCHCAST_AGENT_MODE', value: 'rules' }
+            { name: 'MATCHCAST_PIPELINE', value: pipelineMode }
+            // The ingress is the only way in and appends the caller to X-Forwarded-For
+            { name: 'MATCHCAST_BEHIND_INGRESS', value: 'true' }
             { name: 'FOUNDRY_PROJECT_ENDPOINT', value: foundryProjectEndpoint }
             { name: 'FOUNDRY_MODEL_DEPLOYMENT', value: 'gpt-6-luna' }
             { name: 'FOUNDRY_EMBEDDING_DEPLOYMENT', value: 'text-embedding-3-small' }
@@ -149,6 +159,10 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'EVENTHUB_NAME', value: eventHubName }
             { name: 'MATCHCAST_STORE', value: 'table' }
             { name: 'CONTENT_SAFETY_ENDPOINT', value: contentSafetyEndpoint }
+            { name: 'SPEECH_ENDPOINT', value: speechEndpoint }
+            { name: 'SPEECH_REGION', value: speechRegion }
+            { name: 'TRANSLATOR_ENDPOINT', value: translatorEndpoint }
+            { name: 'TRANSLATOR_REGION', value: translatorRegion }
             { name: 'SEARCH_ENDPOINT', value: searchEndpoint }
             { name: 'SEARCH_INDEX', value: 'kb-matchcast-v1' }
             // Easy Auth and the ingress already restrict Host; the FQDN is not known inside its own app

@@ -67,6 +67,49 @@ def eventhub_consumer(
     )
 
 
+@lru_cache(maxsize=1)
+def credential_aio() -> Any:
+    """The async twin of ``credential()`` for the aio Event Hubs and Blob clients."""
+    from azure.identity.aio import DefaultAzureCredential as AsyncCredential
+
+    return AsyncCredential(managed_identity_client_id=os.environ.get("AZURE_CLIENT_ID") or None)
+
+
+def eventhub_producer_aio(fqdn: str | None = None, hub: str | None = None) -> Any:
+    from azure.eventhub.aio import EventHubProducerClient
+
+    return EventHubProducerClient(
+        fully_qualified_namespace=fqdn or _require("EVENTHUB_FQDN"),
+        eventhub_name=hub or os.environ.get("EVENTHUB_NAME", "match-events"),
+        credential=credential_aio(),
+    )
+
+
+def eventhub_consumer_aio(
+    fqdn: str | None = None,
+    hub: str | None = None,
+    consumer_group: str = "$Default",
+    checkpoint_container: str = "eh-checkpoints",
+    blob_url: str | None = None,
+) -> Any:
+    """Consumer with checkpoints in Blob ``eh-checkpoints`` (ADR-0006: everything on $Default)."""
+    from azure.eventhub.aio import EventHubConsumerClient
+    from azure.eventhub.extensions.checkpointstoreblobaio import BlobCheckpointStore
+
+    store = BlobCheckpointStore(
+        blob_account_url=blob_url or _require("STORAGE_BLOB_URL"),
+        container_name=checkpoint_container,
+        credential=credential_aio(),
+    )
+    return EventHubConsumerClient(
+        fully_qualified_namespace=fqdn or _require("EVENTHUB_FQDN"),
+        eventhub_name=hub or os.environ.get("EVENTHUB_NAME", "match-events"),
+        consumer_group=consumer_group,
+        credential=credential_aio(),
+        checkpoint_store=store,
+    )
+
+
 def foundry_token() -> None:
     """Obtain (and discard) a token for Azure AI. Raises if no credential works."""
     credential().get_token(FOUNDRY_SCOPE)
