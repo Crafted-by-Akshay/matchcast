@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "matchcast-local": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    },
+    "matchcast-demo": {
+      "type": "http",
+      "url": "https://<api-fqdn>/mcp"
+    }
+  }
+}

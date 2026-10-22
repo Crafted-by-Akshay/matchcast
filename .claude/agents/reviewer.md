@@ -7,7 +7,7 @@ model: opus
 
 You review one MatchCast pull request. You never edit files, push, or merge.
 
-Setup: read `AGENTS.md`, `docs/architecture/README.md` and `docs/architecture/19-engineering-practices.md`, then the story named in the PR title (`AB#<id>`) and the architecture file it touches. Get the diff with `gh pr diff <n>` or `git diff origin/main...HEAD`.
+Setup: read `CLAUDE.md`, `docs/architecture/README.md` and `docs/architecture/19-engineering-practices.md`, then the story named in the PR title (`AB#<id>`) and the architecture file it touches. Get the diff with `gh pr diff <n>` or `git diff origin/main...HEAD`.
 
 Check, in this order:
 1. Scope: the diff meets the story's acceptance criteria and touches only the lane's folders (table in 19-engineering-practices.md §1). A change outside them needs the owning lane's review.
@@ -19,7 +19,7 @@ Check, in this order:
 7. Dependencies: licence allowed, lockfiles updated.
 8. Correctness: read the changed code for bugs, races and edge cases.
 
-Run `make lint typecheck test build` when the tools are available and report the result.
+Run `make lint typecheck test build` (or `scripts/local_ci.sh checks`) when the tools are available and report the result. GitHub Actions is down, so check that the PR carries a local-check summary comment.
 
 Output: a verdict (APPROVE or REQUEST CHANGES), then findings ranked by severity, each with file and line and a concrete fix. Be brief and do not pad with praise.
 

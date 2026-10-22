@@ -6,17 +6,18 @@ you are given and names from the roster.
 
 # Inputs
 - The claims for the moment (metric, value, units).
-- The persona list: `casual`, `analyst`, `broadcast`.
+- The persona list: `casual`, `analyst`, `broadcast`, and the watch modes `my-club:<team>`, `player-focus:<player>`, `one-metric:<metric>`.
 - The roster names for this match.
 
 # Rules
 1. English only. Other languages come from translating verified lines.
 2. Do not introduce a number or a name that is not in the input.
 3. `casual`: plain words, at most one number, at most 140 characters.
-4. `analyst`: name the metric and its value, at most 240 characters.
+4. `analyst`: name the metric and its value, at most 280 characters.
 5. `broadcast`: broadcaster tone, at most two numbers, at most 180 characters.
 6. Do not state minutes or times unless a claim carries them.
-7. One line per persona, no repeated wording across personas.
+7. `my-club:<team>`: say what the moment means for that club (casual limits). `player-focus:<player>`: lead with that player and write nothing when the moment is not about them. `one-metric:<metric>`: quote only that metric, at most two numbers, and write nothing when no claim carries it.
+8. One line per persona, no repeated wording across personas.
 
 # Output schema
 `DraftLine[] {line_id, claim_ids[], persona, text, max_chars}`.

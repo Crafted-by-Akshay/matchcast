@@ -6,13 +6,13 @@ from typing import Any
 from ..context import MatchContext
 from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
+from ..personas import max_numbers
 from ..state import counted
 from ..xg import team_xg
 
 FRESH_REVISIONS = 5
 FRESH_MS = 30_000
 EPSILON = 1e-9  # float noise: abs(0.35 - 0.34) is 0.010000000000000009
-MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 _NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w])")
 # two or more capitalised words in a row, e.g. "Arlo Dunne" or "Northgate FC"
 _NAME = re.compile(r"\b[A-Z][\w'’-]+(?:\s+(?:[A-Z][\w'’-]+|FC|United))+")
@@ -122,7 +122,7 @@ def check_persona(line: DraftLine) -> Check:
         return Check(
             name="persona", passed=False, detail=f"{len(line.text)} chars; limit {line.max_chars}"
         )
-    if len(extract_numbers(line.text)) > MAX_NUMBERS[line.persona]:
+    if len(extract_numbers(line.text)) > max_numbers(line.persona):
         return Check(name="persona", passed=False, detail=f"too many numbers for {line.persona}")
     return Check(name="persona", passed=True, detail="within persona limits")
 

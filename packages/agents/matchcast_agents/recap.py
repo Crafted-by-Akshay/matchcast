@@ -9,7 +9,7 @@ from typing import Any
 
 from .context import MatchContext
 from .messages import DraftLine, Persona
-from .rules.narrator import MAX_CHARS
+from .personas import max_chars
 from .rules.producer import moment_score
 from .tools import InProcessTools
 
@@ -143,7 +143,7 @@ def sentences(
             claim_ids=tuple(by_metric[m]["claim_id"] for m in metrics),
             persona=persona,
             text=text,
-            max_chars=MAX_CHARS[persona],
+            max_chars=max_chars(persona),
         )
         for index, (text, metrics) in enumerate(drafts, start=1)
     ]

@@ -6,6 +6,8 @@ This file follows the [C4 model](https://c4model.com): level 1 shows MatchCast w
 
 ## 1. System context (C4 level 1)
 
+Exported image: [img/1-system-context.png](img/1-system-context.png) (regenerate with `scripts/export_diagrams.sh`).
+
 ```mermaid
 flowchart LR
   fan([Fan / judge<br/>browser]):::person
@@ -38,6 +40,8 @@ flowchart LR
 ```
 
 ## 2. Containers (C4 level 2)
+
+Exported image: [img/5-data-flow.png](img/5-data-flow.png) (regenerate with `scripts/export_diagrams.sh`).
 
 ```mermaid
 flowchart TB
