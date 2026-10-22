@@ -33,9 +33,13 @@ class AnalystRules:
     agent_id = "analyst"
 
     def __init__(
-        self, corrupt_first_claim: bool = False, failing_tools: frozenset[str] = frozenset()
+        self,
+        corrupt_first_claim: bool = False,
+        failing_tools: frozenset[str] = frozenset(),
+        corrupt_after_ms: int = 0,
     ) -> None:
         self._corrupt = corrupt_first_claim
+        self._corrupt_after_ms = corrupt_after_ms
         self._failing = failing_tools
 
     async def analyse(
@@ -53,7 +57,12 @@ class AnalystRules:
         claims = []
         for index, metric in enumerate(metrics[:3], start=1):
             value = result["values"][metric]["value"]
-            if self._corrupt and not repair and not claims:
+            if (
+                self._corrupt
+                and not repair
+                and not claims
+                and snapshot["event_time_ms"] >= self._corrupt_after_ms
+            ):
                 value += 1  # seeded bad claim: the Verifier must catch it and the repair fix it
                 self._corrupt = False
             packet = {

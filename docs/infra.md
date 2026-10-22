@@ -49,3 +49,23 @@ gh variable set FOUNDRY_PROJECT_ENDPOINT --body "<project endpoint>" -R Crafted-
 These are variables, not secrets (client, tenant and subscription IDs are not credentials). After the first workflow run pushes the images, make each GHCR package public (GitHub > Packages > matchcast-api, -web > Package settings > Change visibility) so Container Apps can pull without a registry secret.
 
 Not verified yet: the workflow has not run, the Dockerfiles were checked by running their steps by hand (no Docker daemon in the build session), and the `mcp` image waits for `services/mcp`.
+## Entra sign-in (PLT-5)
+Viewing stays open to everyone (Easy Auth is configured to allow anonymous requests). Producer routes need an Entra account with the `Producer` or `Admin` app role. Bicep adds Easy Auth to `web` and `api` and sets `MATCHCAST_EASY_AUTH=1` and `MATCHCAST_REQUIRE_ROLE=1` only when `ENTRA_CLIENT_ID` is set in the azd environment.
+
+One-time setup (Mac mini or portal; needs a tenant that allows app registrations, otherwise use the fallback below):
+```
+az ad app create --display-name matchcast-web --sign-in-audience AzureADMyOrg \
+  --app-roles '[{"allowedMemberTypes":["User"],"description":"Watch","displayName":"Viewer","id":"11111111-1111-4111-8111-111111111111","isEnabled":true,"value":"Viewer"},{"allowedMemberTypes":["User"],"description":"Approve, edit and kill lines","displayName":"Producer","id":"22222222-2222-4222-8222-222222222222","isEnabled":true,"value":"Producer"},{"allowedMemberTypes":["User"],"description":"Everything","displayName":"Admin","id":"33333333-3333-4333-8333-333333333333","isEnabled":true,"value":"Admin"}]' \
+  --web-redirect-uris "https://<web-fqdn>/.auth/login/aad/callback" "https://<api-fqdn>/.auth/login/aad/callback" \
+  --enable-id-token-issuance true
+az ad sp create --id <appId>
+# client secret into Key Vault (the one secret Easy Auth needs; Entra sign-in has no keyless option here)
+az role assignment create --assignee <your user> --role "Key Vault Secrets Officer" --scope <key vault id>
+az keyvault secret set --vault-name kv-matchcast-dev --name entra-client-secret --value "$(az ad app credential reset --id <appId> --query password -o tsv)"
+azd env set ENTRA_CLIENT_ID <appId> && azd provision
+```
+Then assign the judge account the `Producer` role in Entra admin centre > Enterprise applications > matchcast-web > Users and groups. Its password goes only into the private notes field of the submission form.
+
+Fallback if the tenant blocks app registrations: leave `ENTRA_CLIENT_ID` empty and use the signed demo code in the UI, labelled "Simulated sign-in", and record the reason here.
+
+Known exception to "no secret": `entra-client-secret` (Key Vault reference on the apps). Not yet run: the registration, the Easy Auth deployment and the sign-in flow need the Mac mini or portal.

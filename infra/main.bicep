@@ -15,6 +15,9 @@ param foundryAccountName string = 'matchcast-foundry'
 @description('Email for operational alerts (PLT-8). Empty skips the alert rules.')
 param alertEmail string = ''
 
+@description('Client ID of the Entra app registration matchcast-web (PLT-5). Empty leaves sign-in off.')
+param entraClientId string = ''
+
 @description('Container images. The defaults are a public placeholder; deploy (PLT-7) replaces them with ghcr.io/crafted-by-akshay/matchcast-* tags.')
 param webImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 param apiImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
@@ -71,6 +74,8 @@ module containerapps 'modules/containerapps.bicep' = {
     webImage: webImage
     apiImage: apiImage
     mcpImage: mcpImage
+    entraClientId: entraClientId
+    keyVaultUri: keyvault.outputs.uri
   }
 }
 

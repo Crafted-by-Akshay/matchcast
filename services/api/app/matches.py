@@ -8,7 +8,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
-from fastapi import APIRouter, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.hub import StreamEvent
@@ -17,10 +17,11 @@ from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.auth import PRODUCER_ROLES, caller_role
+
 TENANT = "demo"
 HEARTBEAT_S = 15
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
-PRODUCER_ROLES = ("Producer", "Admin")
 PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {"not_found": 404, "match_exists": 409, "forbidden_role": 403, "not_approvable": 409}
 
@@ -59,6 +60,7 @@ class MatchCreate(BaseModel):
     clubs: dict[str, str] = Field(default_factory=dict)
     approval_mode: Literal["auto", "producer"] = "auto"
     seed_bad_claim: bool = False
+    seed_bad_claim_at_ms: int = Field(default=720_000, ge=0)
     # descriptive fields from docs/architecture/12-api.md; stored with the match, not used by agents
     seed: int | None = None
     engine_version: str | None = None
@@ -127,7 +129,10 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(403, "forbidden_role", "this route needs the Producer or Admin role")
 
     @router.post("/matches", status_code=201)
-    async def create_match(body: MatchCreate) -> dict[str, Any]:
+    async def create_match(
+        body: MatchCreate,
+        x_matchcast_seed_bad_claim: str | None = Header(default=None),
+    ) -> dict[str, Any]:
         key = (body.session_id, body.match_id)
         if key in registry.flows:
             raise Problem(409, "match_exists", "match already exists")
@@ -147,7 +152,11 @@ def build_router(registry: Registry) -> APIRouter:
                 roster=body.roster,
                 names=names,
                 clubs=clubs,
-                agents=rules_agents(config.personas, seed_bad_claim=body.seed_bad_claim),
+                agents=rules_agents(
+                    config.personas,
+                    seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
+                    seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
+                ),
                 config=config,
             )
         except (ContractError, TypeError, KeyError) as error:
@@ -190,10 +199,8 @@ def build_router(registry: Registry) -> APIRouter:
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and persona and item.data["persona"] != persona)
 
-        status_name = "rules_fallback" if flow.agents.mode == "rules" else "live"
-
         async def body() -> AsyncIterator[str]:
-            yield StreamEvent("status", None, {"status": status_name}).encode()
+            yield StreamEvent("status", None, {"status": flow.status}).encode()
             yield StreamEvent("state", None, _state_json(flow)).encode()
             replay = [e for e in flow.hub.replay_after(last_event_id) if wanted(e)]
             if not follow:
@@ -246,7 +253,7 @@ def build_router(registry: Registry) -> APIRouter:
         match_id: str,
         session_id: str,
         status: str | None = None,
-        x_matchcast_role: str | None = Header(default=None),
+        x_matchcast_role: str | None = Depends(caller_role),
     ) -> dict[str, Any]:
         need_producer(x_matchcast_role)
         flow = registry.get(session_id, match_id)
@@ -274,19 +281,19 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/lines/{line_id}/approve")
     async def approve(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Header(default=None)
+        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
     ) -> dict[str, Any]:
         return await act(line_id, body, x_matchcast_role, "approve")
 
     @router.post("/lines/{line_id}/edit")
     async def edit(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Header(default=None)
+        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
     ) -> dict[str, Any]:
         return await act(line_id, body, x_matchcast_role, "edit")
 
     @router.post("/lines/{line_id}/kill")
     async def kill(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Header(default=None)
+        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
     ) -> dict[str, Any]:
         return await act(line_id, body, x_matchcast_role, "kill")
 
