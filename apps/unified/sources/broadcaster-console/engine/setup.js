@@ -45,6 +45,7 @@ function previewEnv() {
 }
 function chip(label, sub, on, dis, fn, title) { const b = document.createElement('button'); b.className = 'chip'; b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.innerHTML = '<b>' + label + '</b>' + (sub ? '<small>' + sub + '</small>' : ''); if (dis) { b.disabled = true; } if (title) b.title = title; b.onclick = fn; return b; }
 function renderSetup() {
+  if (SET.seed !== undefined) rollAuto();
   const st = SET.st, m = SET.month;
   // hero
   $('su-hero').style.setProperty('--g1', st.grad[0]); $('su-hero').style.setProperty('--g2', st.grad[1]);
@@ -81,6 +82,8 @@ function renderSetup() {
   previewEnv();
 }
 // ---- teams and tactics: formation and style per side, with a mini tactics board ----
+// 'Auto' formation and style come from the match seed's own stream, so the setup preview is what kick-off plays
+function rollAuto() { const R = subStream(SET.seed, 'tactics'); SET.tactics.forEach((tc) => { tc.pf = pickForm(R); tc.ps = pickStyle(R); }); }
 const resolvedTac = (ti) => { const t = SET.tactics[ti]; return { form: t.form === 'auto' ? t.pf : t.form, style: t.style === 'auto' ? t.ps : t.style }; };
 function boardSVG(ti, form, col) {
   const sl = FORMATIONS[form]; const X = (x) => 8 + x / 60 * 104, Y = (y) => 5 + y / 68 * 70;
@@ -136,7 +139,7 @@ function lineUp(team) {
 function kickOff() {
   seed = hash32(SET.seed + ':play'); wordsRnd = subStream(SET.seed, 'words'); initEnv(Object.assign({}, SET)); paintStadium(SET.st, SET.month); S.flip = 0;
   for (const p of players) { p.off = false; p.model.visible = true; p.yellows = 0; p.act = null; }
-  { const R = subStream(SET.seed, 'tactics'); SET.tactics.forEach((tc) => { tc.pf = pickForm(R); tc.ps = pickStyle(R); }); } // 'Auto' picks follow the match seed
+  rollAuto(); // 'Auto' picks follow the match seed
   setupTactics({ tactics: [resolvedTac(0), resolvedTac(1)] });
   Object.assign(S, { clock: 0, mclock: 0, half: 1, mscale: 45 / SET.half, stop: [0, 0], hold: null, over: false, ht: false, envAcc: 0, lastLogMin: 0, score: [0, 0], celebrate: 0, inspT: -99, cool: 0, insp: 0, goalsHalf: [0, 0] });
   Object.assign(STATS, { kinds: {}, xg: [0, 0], shots: [0, 0], poss: [0, 0], passes: [0, 0], done: [0, 0], goals: [], fouls: [0, 0], yellows: [0, 0], reds: [0, 0], offsides: [0, 0], onTarget: [0, 0] });

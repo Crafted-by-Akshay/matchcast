@@ -674,7 +674,7 @@ function strike(p) {
     const fate = shotFate(p, gk, plan.xg, !!plan.pen); const aim = fateAim(fate, gk); ball.beatUntil = fate === 'goal' ? S.t + 3 : 0; plan.fate = fate;
     let tz = aim.tz; let ty = aim.ty;
     let speed = placed ? 20 + rnd() * 4 : 25 + rnd() * 6; let curl = placed ? -farSide * dirOf(p.ti) * 9 : (rnd() - 0.5) * 4;
-    if (plan.pen) { farSide = rnd() < 0.5 ? 1 : -1; if (fate === 'goal') { tz = 34 + farSide * (1.6 + rnd() * 1.8); ty = rnd() < 0.7 ? 0.25 + rnd() * 0.6 : 1.3 + rnd() * 0.9; } speed = 21 + rnd() * 7; curl = 0; placed = true; gk.act = { type: 'dive', t: 0, dur: 1.5, side: rnd() < 0.5 ? 1 : -1, high: false }; gk.vel.copy(right(gk).multiplyScalar(gk.act.side * 3.2)); }
+    if (plan.pen) { farSide = rnd() < 0.5 ? 1 : -1; if (fate === 'goal') { tz = 34 + farSide * (1.6 + rnd() * 1.8); ty = rnd() < 0.7 ? 0.25 + rnd() * 0.6 : 1.3 + rnd() * 0.9; } speed = 21 + rnd() * 7; curl = 0; placed = true; gk.act = { type: 'dive', t: 0, dur: 1.5, side: fate === 'save' ? (Math.sign((tz - gk.pos2.y) * right(gk).y) || 1) : rnd() < 0.5 ? 1 : -1, high: false }; gk.vel.copy(right(gk).multiplyScalar(gk.act.side * 3.2)); }
     if (plan.fk) { if (fate === 'goal') { tz = 34 + farSide * (2.3 + rnd() * 1.2); ty = 1.85 + rnd() * 0.45; } speed = 23 + rnd() * 4; curl = -farSide * dirOf(p.ti) * 13; placed = true; }
     const sol = solveShot(from, new THREE.Vector3(gx, ty, tz), speed, curl);
     v = sol.v; w = sol.w; STATS.shots[p.ti]++; STATS.xg[p.ti] += plan.xg;
@@ -1360,7 +1360,13 @@ function refereeBall() {
     const crossed = gx === 0 ? b.x < -BR : b.x > 105 + BR;
     if (!crossed || ball.inNet) continue;
     const vetoed = S.shotInfo && S.t - S.shotInfo.t < 5 && S.shotInfo.fate && S.shotInfo.fate !== 'goal'; // the shot's drawn fate stands: no goal from a deflected miss or save
-    if (!vetoed && b.z > 30.34 + BR * 0.2 && b.z < 37.66 - BR * 0.2 && b.y < 2.44) { goal(goalOf(0).x === gx ? 0 : 1); ball.inNet = gx + 1; return; }
+    const mouth = b.z > 30.34 + BR * 0.2 && b.z < 37.66 - BR * 0.2 && b.y < 2.44;
+    if (vetoed && mouth) { // a drawn save or miss never shows the ball in the net: it comes back off the keeper, the post or the line
+      const gk = players.find((q) => q.gk && q.ti === (ownGoal(0).x === gx ? 0 : 1));
+      b.x = gx === 0 ? BR + 0.05 : 105 - BR - 0.05; ball.v.x = (gx === 0 ? 1 : -1) * Math.abs(ball.v.x) * 0.25; ball.v.y = Math.abs(ball.v.y) * 0.2 + 0.5; ball.v.z *= 0.4; if (gk) S.lastTouch = gk;
+      return;
+    }
+    if (!vetoed && mouth) { goal(goalOf(0).x === gx ? 0 : 1); ball.inNet = gx + 1; return; }
     const defTeam = ownGoal(0).x === gx ? 0 : 1; const last = S.lastTouch ? S.lastTouch.ti : 1 - defTeam;
     if (last === defTeam) { say('Corner to ' + TEAMS[1 - defTeam].club + '.'); deadBall('corner', 1 - defTeam, V2(gx === 0 ? 0.3 : 104.7, b.z < 34 ? 0.3 : 67.7)); }
     else { say('Goal kick.'); deadBall('goalkick', defTeam, V2(gx === 0 ? 5.5 : 99.5, b.z < 34 ? 28 : 40)); }
@@ -1681,7 +1687,7 @@ const clk = new THREE.Clock();
 let ledAcc = 0;
 function loop() { frame(Math.min(clk.getDelta(), 0.05), true); }
 function frame(dt, draw) {
-  const sim = S.paused || window.__mcHeadless ? 0 : dt * S.speed; // the headless runner steps the engine itself, on a fixed step
+  const sim = S.paused ? 0 : window.__mcHeadless ? (window.__mcDt || 0) : dt * S.speed; // headless: the runner steps the engine itself, and a test may drive frame() with a fixed budget through __mcDt
   if (!S.started && sim > 0) S.t += sim;
   applyWorldVisuals(sim);
   if (S.started && !S.over && players.length && sim > 0) {

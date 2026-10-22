@@ -42,7 +42,7 @@ const ENV = { set: null, wx: 'clear', minute: 0, local: 15, temp: 15, td: 8, rh:
 let wordsRnd = mulberry(1); // reseeded per match in kickOff
 let wrnd = mulberry(1); // reseeded per match so a setup + seed reproduces the same weather story
 const hash32 = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
-// one match seed, four named sub-streams (play, weather, words, visuals); no stream's draws change another's
+// one match seed, named sub-streams (play, words, tactics, setup); weather has its own mulberry(seed) in initEnv. No stream's draws change another's
 const subStream = (seed, name) => mulberry(hash32(seed + ':' + name));
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const wgauss = () => { let u = 0, v = 0; while (!u) u = wrnd(); while (!v) v = wrnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };

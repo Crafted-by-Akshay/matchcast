@@ -37,7 +37,7 @@ The engine code is shared, not copied. The headless runner imports the engine mo
 ## 4. Match clock (option A, condensed broadcast)
 
 - The engine simulates all 90 match minutes (plus added time) at real event density.
-- The broadcast director scores each passage of play: shot or goal 1.0, box entry 0.7, set piece 0.6, card 0.6, otherwise 0.1. A score of 0.5 or more plays live at the chosen speed; anything lower fast-forwards at 20x behind a wipe showing the minute range, for example 62' → 67'.
+- The broadcast director scores each passage of play: shot or goal 1.0, box entry 0.4 (cut: the attack is skipped, the shot that ends it plays live), set piece 0.6, card 0.6, otherwise 0.1. A score of 0.5 or more plays live at the chosen speed; anything lower fast-forwards at 40x behind a wipe showing the minute range, for example 62' → 67'.
 - A whole match at 1x lasts 8 to 12 real minutes.
 - Every event, including fast-forwarded ones, goes into the event log, the stats and the agents.
 - Fallback (option B), only if the headless timing test shows more than 60 s for 90 match minutes: 5-minute halves with shot and goal weights scaled to hit the goal and draw targets. The exported dataset still uses full density.
