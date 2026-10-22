@@ -24,8 +24,8 @@ test('seed and speed come from the URL; the bad-claim switch is on and reaches t
   await page.goto('/index.html?seed=2026&speed=4&seedBadClaim=1#agents', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
   expect(await page.evaluate(() => M.setup.seed)).toBe(2026);
-  const watch = await page.evaluate(() => new URLSearchParams(url('watch').split('?')[1]));
-  expect(Object.fromEntries(watch as any)).toMatchObject({ seed: '2026', speed: '4' });
+  const watch = await page.evaluate(() => Object.fromEntries(new URLSearchParams(url('watch').split('?')[1])));
+  expect(watch).toMatchObject({ seed: '2026', speed: '4' });
   expect(await page.evaluate(() => new URLSearchParams(url('broadcast').split('?')[1]).get('speed')), 'Broadcast keeps its own pace').toBeNull();
   await expect(page.locator('#ag-bad')).toBeChecked();
   expect(await page.evaluate(() => AG.seeding)).toBe(true);

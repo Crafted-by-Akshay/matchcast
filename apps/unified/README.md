@@ -171,3 +171,11 @@ The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which W
 ## Phone layout and Ask fixes (Broadcast)
 - At 560 px and below, buttons, selects and inputs in Broadcast and the Agents tab are at least 44 px (a checkbox is tapped through its 44 px label); the replay bar scrolls inside itself instead of wrapping. `tests/e2e/broadcast-mobile.spec.ts` checks no sideways scroll and 44 px targets at 390 px.
 - Broadcast's Ask the producer: the hold-to-talk mic is on the desk's real question box (`#bcd-q`; the old `#dk-q` box is not wired in Broadcast). Only the newest question writes its answer, a rate limit shows its message ("Slow down"), the shell waits at most 8 s for the api, and Broadcast has its own 5-a-minute budget. An answer the Verifier does not confirm still falls back to the desk's labelled answer (a product call, flagged).
+
+## Filming URL
+
+`/?seed=2026&speed=4&seedBadClaim=1#watch` makes takes repeatable (docs/judge/demo-fact-check.md).
+- `seed`: the shared match uses that simulator seed (same teams, so the match becomes a custom fixture).
+- `speed`: Watch plays at that speed (0.25 to 8; the speed buttons stay 0.25 to 2x). Broadcast keeps its own pace.
+- `seedBadClaim=1`: the Agents-tab switch "Seed a bad claim" is on from the start. The in-page Verifier gets a wrong score number at once (Simulated); the agent api gets `seed_bad_claim: true` when the match is created, so its Verifier rejects and repairs one claim from minute 12. The note next to the switch says which of the two applies (sent, will be sent, or this match was already created without it).
+- The same switch, turned on by hand before the kick-off, sends the same flag. Tested in `filming-url.spec.ts`.
