@@ -36,16 +36,19 @@ def test_create_inspect_and_duplicate_conflict_use_full_identity() -> None:
     assert created["state"] == {}
     assert created["state_revision"] == 0
     assert _inspect("tenant-1", "session-1", "match-shared").json() == created
-    assert client.post(
-        "/sessions",
-        json={
-            "stream": {
-                "tenant_id": "tenant-1",
-                "session_id": "session-1",
-                "match_id": "match-shared",
-            }
-        },
-    ).status_code == 409
+    assert (
+        client.post(
+            "/sessions",
+            json={
+                "stream": {
+                    "tenant_id": "tenant-1",
+                    "session_id": "session-1",
+                    "match_id": "match-shared",
+                }
+            },
+        ).status_code
+        == 409
+    )
 
 
 def test_unknown_session_operations_return_404() -> None:

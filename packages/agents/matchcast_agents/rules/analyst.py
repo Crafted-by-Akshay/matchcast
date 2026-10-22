@@ -6,21 +6,20 @@ from ..context import MatchContext
 from ..messages import ProducerTask
 
 DERIVATION_VERSION = "1.0.0"
+# {h} and {a} are the roster's first and second team, {t} the team of the picked event
 COUNT_METRICS = {
-    "goal": ("goals:home", "goals:away"),
+    "goal": ("goals:{h}", "goals:{a}"),
     "shot_on_target": ("shots:{t}", "shots_on_target:{t}"),
     "yellow_card": ("cards:{t}",),
     "red_card": ("red_cards:{t}", "cards:{t}"),
-    "summary": ("shots:home", "shots:away"),
-    "period_end": ("goals:home", "goals:away"),
+    "summary": ("shots:{h}", "shots:{a}"),
+    "period_end": ("goals:{h}", "goals:{a}"),
 }
 
 
 def metric_value(ctx: MatchContext, metric: str) -> int:
-    name, team = metric.split(":")
-    if name == "goals":
-        return ctx.state.score[team]
-    return ctx.state.counts[name][team]
+    name, team = metric.split(":", 1)
+    return ctx.state.count(name, team)
 
 
 class AnalystRules:
@@ -35,8 +34,10 @@ class AnalystRules:
     ) -> list[dict[str, Any]]:
         event = ctx.event(task.event_ids[0])
         assert event is not None
-        team = event["payload"].get("team_id", "home")
-        metrics = [m.format(t=team) for m in COUNT_METRICS.get(task.reason, ())]
+        team = event["payload"].get("team_id", ctx.home)
+        metrics = [
+            m.format(t=team, h=ctx.home, a=ctx.away) for m in COUNT_METRICS.get(task.reason, ())
+        ]
         snapshot = ctx.state.snapshot()
         claims = []
         for index, metric in enumerate(metrics[:3], start=1):

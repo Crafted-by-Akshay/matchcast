@@ -11,9 +11,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-_SCHEMA = json.loads(
-    files("matchcast_contracts").joinpath("schemas/v1.json").read_text()
-)
+_SCHEMA = json.loads(files("matchcast_contracts").joinpath("schemas/v1.json").read_text())
 _IDENTIFIER_PATTERN = _SCHEMA["definitions"]["Identifier"]["pattern"]
 
 

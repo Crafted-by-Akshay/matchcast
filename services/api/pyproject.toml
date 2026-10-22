@@ -6,11 +6,13 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "azure-identity>=1.19,<2",
     "fastapi>=0.115,<0.120",
+    "matchcast-agents",
     "matchcast-contracts",
     "uvicorn[standard]>=0.34,<1",
 ]
 
 [tool.uv.sources]
+matchcast-agents = { workspace = true }
 matchcast-contracts = { workspace = true }
 
 [build-system]

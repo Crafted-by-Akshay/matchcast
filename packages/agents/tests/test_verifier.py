@@ -58,21 +58,21 @@ def verdict(ctx, draft, claims):
 
 def test_correct_line_is_verified(match) -> None:
     ctx = context(match)
-    shots = ctx.state.counts["shots"]["home"]
+    shots = ctx.state.count("shots", "home")
     result = verdict(ctx, line(f"Northgate FC shots: {shots}."), [claim(ctx, "shots:home", shots)])
     assert result.verdict == "verified" and all(c.passed for c in result.checks)
 
 
 def test_claim_value_is_recomputed_from_the_log(match) -> None:
     ctx = context(match)
-    wrong = ctx.state.counts["shots"]["home"] + 1
+    wrong = ctx.state.count("shots", "home") + 1
     result = verdict(ctx, line(f"Northgate FC shots: {wrong}."), [claim(ctx, "shots:home", wrong)])
     assert (result.verdict, result.reason_code) == ("rejected", "number_mismatch")
 
 
 def test_number_missing_from_claims_is_rejected(match) -> None:
     ctx = context(match)
-    shots = ctx.state.counts["shots"]["home"]
+    shots = ctx.state.count("shots", "home")
     result = verdict(
         ctx, line(f"Northgate FC shots: {shots}, a record 77."), [claim(ctx, "shots:home", shots)]
     )
@@ -81,14 +81,14 @@ def test_number_missing_from_claims_is_rejected(match) -> None:
 
 def test_unknown_player_name_is_rejected(match) -> None:
     ctx = context(match)
-    shots = ctx.state.counts["shots"]["home"]
+    shots = ctx.state.count("shots", "home")
     result = verdict(ctx, line(f"Zed Quill has {shots} shots."), [claim(ctx, "shots:home", shots)])
     assert result.reason_code == "unknown_player"
 
 
 def test_persona_limits(match) -> None:
     ctx = context(match)
-    shots = ctx.state.counts["shots"]["home"]
+    shots = ctx.state.count("shots", "home")
     claims = [claim(ctx, "shots:home", shots)]
     long = verdict(ctx, line("Northgate FC " + "keep going " * 30, limit=100), claims)
     assert long.reason_code == "length_exceeded"
@@ -108,7 +108,7 @@ def test_future_or_missing_source_is_rejected(match) -> None:
 
 def test_old_claim_is_stale(match) -> None:
     old = context(match, upto=10)
-    stale = claim(old, "shots:home", old.state.counts["shots"]["home"])
+    stale = claim(old, "shots:home", old.state.count("shots", "home"))
     later = context(match, upto=60)
     result = verdict(later, line(f"Northgate FC shots: {int(stale['value'])}."), [stale])
     assert result.reason_code == "stale_state"
@@ -116,7 +116,7 @@ def test_old_claim_is_stale(match) -> None:
 
 def test_model_written_line_needs_review_not_verification(match) -> None:
     ctx = context(match)
-    shots = ctx.state.counts["shots"]["home"]
+    shots = ctx.state.count("shots", "home")
     result = verdict(
         ctx,
         line(f"Northgate FC shots: {shots}.", origin="model"),

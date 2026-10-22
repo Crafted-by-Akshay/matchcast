@@ -17,6 +17,14 @@ class MatchContext:
     personas: tuple[str, ...] = ("casual", "analyst")
     extra: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def home(self) -> str:
+        return self.roster["team_ids"][0]
+
+    @property
+    def away(self) -> str:
+        return self.roster["team_ids"][1]
+
     def player_name(self, player_id: str) -> str:
         return self.names.get(player_id, player_id)
 
