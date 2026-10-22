@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -22,6 +23,7 @@ from app.sessions import (
     SessionStore,
     StreamIdentity,
 )
+from app.status import dependency_status
 
 CredentialProbe = Callable[[], None]
 """Raises when no Entra credential can be obtained for Azure AI; never returns a token."""
@@ -72,6 +74,13 @@ def create_app(
     async def health() -> dict[str, str]:
         """Liveness only: does not require configuration or an external model."""
         return {"status": "healthy"}
+
+    @application.get("/v1/status", tags=["health"])
+    async def dependency_states() -> dict[str, Any]:
+        """Live, simulated, planned or unavailable per dependency, for the status pill and page."""
+        result: SettingsResult = application.state.settings_result
+        mode = result.settings.mode if result.settings is not None else "local"
+        return dependency_status(os.environ, mode)
 
     @application.get("/ready", tags=["health"])
     async def readiness(response: Response) -> dict[str, Any]:
