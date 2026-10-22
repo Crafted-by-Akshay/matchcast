@@ -52,7 +52,8 @@ resource fn 'Microsoft.Web/sites@2024-04-01' = {
           authentication: { type: 'UserAssignedIdentity', userAssignedIdentityResourceId: identityId }
         }
       }
-      scaleAndConcurrency: { maximumInstanceCount: 1, instanceMemoryMB: 2048 }
+      // 40 is the smallest maximum every API version accepts; events are rare and the api route is idempotent
+      scaleAndConcurrency: { maximumInstanceCount: 40, instanceMemoryMB: 2048 }
       runtime: { name: 'python', version: '3.12' }
     }
     siteConfig: {

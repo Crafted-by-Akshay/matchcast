@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -115,3 +116,17 @@ def test_connection_errors_are_retried() -> None:
 
     with pytest.raises(RuntimeError, match="after 3 tries"):
         client(handler).request_recap(MatchKey("demo", "s1", "m1"))
+
+
+SHORT_MATCH = (
+    Path(__file__).resolve().parents[3] / "packages/agents/tests/fixtures/match-short.json"
+)
+
+
+def test_the_short_demo_match_ends_in_period_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The 10-minute test match has one period: it needs RECAP_FINAL_PERIODS=1 to fire."""
+    bodies = [json.dumps(e) for e in json.loads(SHORT_MATCH.read_text())["events"]]
+    monkeypatch.delenv("RECAP_FINAL_PERIODS", raising=False)
+    assert full_time_matches(bodies) == []
+    monkeypatch.setenv("RECAP_FINAL_PERIODS", "1")
+    assert len(full_time_matches(bodies)) == 1
