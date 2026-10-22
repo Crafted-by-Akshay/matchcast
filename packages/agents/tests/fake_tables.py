@@ -66,6 +66,10 @@ class FakeTable:
         except KeyError:
             raise ResourceNotFoundError("no such entity") from None
 
+    def delete_entity(self, partition_key: str, row_key: str, **_: Any) -> None:
+        if self.rows.pop((partition_key, row_key), None) is None:
+            raise ResourceNotFoundError("no such entity")
+
     def query_entities(self, query_filter: str, parameters: dict[str, Any] | None = None, **_: Any):
         for entity in list(self.rows.values()):
             if _matches(entity, query_filter, parameters or {}):
