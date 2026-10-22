@@ -5,7 +5,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 COPY pyproject.toml uv.lock ./
-COPY packages/contracts packages/contracts
+COPY packages packages
 COPY services/api services/api
 COPY services/worker services/worker
 RUN uv sync --locked --no-dev --package matchcast-api
