@@ -54,9 +54,9 @@ Starting from the prototype values (0.04, 0.09, 0, 1) the engine produced about 
 
 ## Realism check
 
-`uv run python scripts/check_realism.py --matches 200` (targets in `data/calibration/targets.json`, sources and licences next to each). Engine "duel" = aerial duel + slide tackle + take-on + possession turnover. Each match is a different pair of season clubs.
+`make realism` (equivalent to `uv run python scripts/check_realism.py --matches 200`, about 1.5 to 2 h on 4 cores, not in CI yet; targets in `data/calibration/targets.json`, sources and licences next to each). Engine "duel" = aerial duel + slide tackle + take-on + possession turnover. Each match is a different pair of season clubs.
 
-Result of the validation run (seeds 1 to 200, half = 45, commit of PR #47; 200 full 90-minute matches):
+Result of one validation run (seeds 1 to 200, half = 45, commit of PR #47; 200 full 90-minute matches). **The run's `summary.json` was not committed, so this table is one unreproduced run until it is re-run with `make realism REALISM_ARGS="--out data/calibration/results/seeds-1-200"` and the summary is committed there** (in progress, the engine is seeded so the same numbers should come back; a difference would be a determinism bug):
 
 | Measure | Simulated | Target | Band | Result |
 | --- | --- | --- | --- | --- |
@@ -79,7 +79,7 @@ Engine faults found by these full-length runs and fixed in this PR: a kick-off c
 
 ## Match clock decision (option A or B)
 
-**Option A (condensed broadcast) stays.** Measured on this build environment (a 4-core cloud container, four matches at once): 90 match minutes headless take 94 s alone and 99 to 115 s with four running, over the 60 s target from ADR-0004. The Mac mini measurement is still to do because it is offline. Reason for keeping A: the 60 s limit protects batch generation, not live play. Watching a match needs the engine to step 40 times faster than real time during a fast-forward; the measured 47 to 57 times real time on one core leaves a thin margin over that, so the browser frame budget caps the fast-forward step count. The batch jobs (200-seed check, scenes) run at full density regardless. If DAT-10 cannot hold 30 fps at 40x in the browser, the live view falls back to option B and the dataset stays at full density.
+**Option A (condensed broadcast) stays.** Measured on this build environment (a 4-core cloud container, four matches at once; one run, no result file committed, see the Realism check section): 90 match minutes headless take 94 s alone and 99 to 115 s with four running, over the 60 s target from ADR-0004. The Mac mini measurement is still to do because it is offline. Reason for keeping A: the 60 s limit protects batch generation, not live play. Watching a match needs the engine to step 40 times faster than real time during a fast-forward; the measured 47 to 57 times real time on one core leaves a thin margin over that, so the browser frame budget caps the fast-forward step count. The batch jobs (200-seed check, scenes) run at full density regardless. If DAT-10 cannot hold 30 fps at 40x in the browser, the live view falls back to option B and the dataset stays at full density.
 
 ## Known limits
 
