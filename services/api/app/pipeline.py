@@ -73,20 +73,44 @@ class Pipeline:
             groups.setdefault(
                 (stream.get("session_id", ""), stream.get("match_id", "")), []
             ).append(event)
+        from app.matches import Problem
+
         for (session_id, match_id), batch in groups.items():
             try:
                 flow = await self.registry.flow_for(session_id, match_id)
-                await flow.ingest(batch)
-            except (
-                ContractError
-            ) as error:  # the edge validates, so this is a stale or foreign event
-                log.warning("dropping %d events of %s: %s", len(batch), match_id, error)
-            except LookupError:
+            except (Problem, LookupError):
                 log.warning("dropping %d events of unknown match %s", len(batch), match_id)
+                continue
+            try:
+                await flow.ingest(batch)
+            except ContractError as error:
+                # The edge validates, so this is a stale or foreign event. Ingest is all or
+                # nothing, so keep the valid events by trying them one at a time.
+                log.warning("batch of %s rejected (%s); retrying event by event", match_id, error)
+                for event in batch:
+                    try:
+                        await flow.ingest([event])
+                    except ContractError as single:
+                        log.warning("dropping event of %s: %s", match_id, single)
+
+    async def _supervise(self) -> None:
+        """Run the consumer, and start it again after a failure (RBAC still propagating, a
+        missing checkpoint container, a transport error) instead of dying silently."""
+        delay = 1.0
+        while True:
+            try:
+                await self._source.run(self.handle)
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 - keep consuming whatever the transport throws
+                log.exception("event consumer stopped; restarting in %.0f s", delay)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30.0)
 
     @asynccontextmanager
     async def running(self) -> AsyncIterator[None]:
-        task = asyncio.create_task(self._source.run(self.handle), name="match-events-consumer")
+        task = asyncio.create_task(self._supervise(), name="match-events-consumer")
         try:
             yield
         finally:

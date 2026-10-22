@@ -126,3 +126,26 @@ def test_the_pipeline_resumes_a_match_after_a_restart(monkeypatch: pytest.Monkey
         replies = post(second, events[60:])
         assert all(r.status_code == 202 for r in replies)
         wait_for_sequence(second, events[-1]["stream_sequence"])
+
+
+def test_consumer_restarts_after_a_failure(monkeypatch):
+    import asyncio
+
+    from app.pipeline import Pipeline
+
+    calls = []
+
+    class Flaky:
+        async def run(self, handler):
+            calls.append(1)
+            if len(calls) < 3:
+                raise RuntimeError("boom")
+
+    async def go():
+        pipeline = Pipeline(None, None, Flaky())
+        real_sleep = asyncio.sleep
+        monkeypatch.setattr("app.pipeline.asyncio.sleep", lambda _s: real_sleep(0))
+        await pipeline._supervise()
+
+    asyncio.run(go())
+    assert len(calls) == 3

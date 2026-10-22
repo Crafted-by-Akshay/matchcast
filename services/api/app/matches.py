@@ -437,7 +437,10 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/matches/{match_id}/events", status_code=202)
     async def post_events(match_id: str, session_id: str, body: EventBatch) -> dict[str, int]:
-        flow = await registry.flow_for(session_id, match_id)
+        if registry.pipeline is None:
+            flow = registry.get(session_id, match_id)
+        else:
+            flow = await registry.flow_for(session_id, match_id)
         try:
             if registry.pipeline is None:
                 return await flow.ingest(body.events)
