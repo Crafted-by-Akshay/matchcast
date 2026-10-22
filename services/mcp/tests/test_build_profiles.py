@@ -22,6 +22,11 @@ def built(tmp_path_factory) -> Path:
 
 
 def test_committed_pages_are_up_to_date(built) -> None:
+    def generated(root: Path) -> set[str]:
+        return {p.relative_to(root).as_posix() for c in build_profiles.GENERATED
+                for p in (root / c).glob("*.md")}  # fmt: skip
+
+    assert generated(built) == generated(ROOT / "kb")
     for path in built.rglob("*.md"):
         assert (ROOT / "kb" / path.relative_to(built)).read_text() == path.read_text(), path.name
 
@@ -53,8 +58,50 @@ def test_player_pages_cover_the_squads_and_use_season_totals(built) -> None:
     assert re.search(rf"{shots} shots", (built / "players/har-n-brennan.md").read_text())
 
 
+def test_a_stale_page_is_removed(tmp_path) -> None:
+    build_profiles.build(kb=tmp_path)
+    (tmp_path / "players/gone-player.md").write_text("old")
+    build_profiles.build(kb=tmp_path)
+    assert not (tmp_path / "players/gone-player.md").exists()
+
+
+def test_pages_add_no_banner_chunk(built) -> None:
+    assert all(
+        c.section or c.text.strip()
+        for c in load_kb(ROOT / "kb")
+        if c.corpus in {"clubs", "players"}
+    )
+    assert "<!--" not in (built / "clubs/har.md").read_text()
+
+
 def test_one_page_per_match_and_the_chunks_are_retrievable(built) -> None:
     assert len(list((built / "season").glob("*.md"))) == 28
     index = Bm25Index(load_kb(ROOT / "kb"))
     hit = index.search("who coaches Harbor City", k=3)
     assert any(h.chunk.id.startswith("clubs:har") for h in hit)
+
+
+def test_unnamed_questions_never_return_entity_pages() -> None:
+    index = Bm25Index(load_kb(ROOT / "kb"))
+    for question in ("what is pass completion", "possession", "home advantage", "average goals"):
+        assert not {h.chunk.corpus for h in index.search(question, k=8)} & {
+            "clubs",
+            "players",
+            "season",
+        }, question
+
+
+@pytest.mark.parametrize(
+    ("question", "prefix"),
+    [
+        ("how is average xG worked out", "metrics:xg"),
+        ("what is synthetic data", "app:"),
+        ("who coaches Harbor City", "clubs:har"),
+        ("tell me about N. Brennan", "players:har-n-brennan"),
+        ("what happened in M001", "season:m001"),
+    ],
+)
+def test_entity_pages_answer_only_when_named(question, prefix) -> None:
+    index = Bm25Index(load_kb(ROOT / "kb"))
+    top = index.search(question, k=3)
+    assert top and top[0].chunk.id.startswith(prefix), [h.chunk.id for h in top]
