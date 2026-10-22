@@ -61,7 +61,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 ## 4. MCP and A2A
 
 - MCP server: `services/mcp`, Streamable HTTP at `/mcp`. Tools and limits are listed in [04-agents.md](04-agents.md) §6. Internal callers (`api`) use the internal FQDN; Copilot uses the external route behind Easy Auth.
-- A2A: Stats Desk at `/a2a`, Agent Card at `/.well-known/agent-card.json` with name `matchcast-stats-desk`, one skill `compare_to_season`, input `{metric, team_id | player_id}`, output `{value, season_avg, rank, of: 28}`.
+- A2A: Stats Desk at `/a2a` on the `mcp` container only (not mounted on the public api; internal ingress), Agent Card at `/.well-known/agent-card.json` with name `MatchCast Stats Desk`, one skill `compare_to_season`, input `{skill, metric, scope (team|player), value, team_id?}`, output `{metric, scope, team_id, value, season_average, rank, of, matches}`. `of` counts the season's team (or player) match performances: 56 for teams, not matches. Bad input gets a JSON-RPC `-32602` error.
 
 ## 5. Event Hubs messages
 
