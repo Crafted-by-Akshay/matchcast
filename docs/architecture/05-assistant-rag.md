@@ -26,7 +26,7 @@ The source is markdown in the repo folder `kb/`, written by us and reviewed in p
 | `laws` | `kb/laws/` | Our own plain-English summary of each of the 17 Laws of the Game, with a link to the official IFAB text. No verbatim copying | 17 files |
 | `metrics` | `kb/metrics/` | Every metric: definition, formula, units, `derivation_version`, a worked example | 15 files |
 | `tactics` | `kb/tactics/` | 8 formations, 6 styles, phases of play, pressing, offside trap | 20 files |
-| `clubs`, `players` | `kb/clubs/`, `kb/players/` | Fictional club and player profiles generated from the engine rosters (`TEAMS` in the simulator and the season roster) by `scripts/build_profiles.py`: position, ratings, style, short bio | One file per club and per player |
+| `clubs`, `players` | `kb/clubs/`, `kb/players/` | Fictional club and player profiles generated from the engine rosters (`TEAMS` in the simulator and the season roster) by `scripts/build_profiles.py` (built; run `uv run python scripts/build_profiles.py` after the season changes, a test fails if the committed pages drift): position, ratings, style, short bio | One file per club and per player |
 | `season` | `kb/season/` | One summary per season match (28), from the recap function | 28 files |
 | `venues` | `kb/venues/` | The 5 fictional stadiums, climate and pitch | 5 files |
 | `app` | `kb/app/` | How to use MatchCast, what "Simulated" means, judge guide | 6 files |
