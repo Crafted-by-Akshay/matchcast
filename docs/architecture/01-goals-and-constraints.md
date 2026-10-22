@@ -15,7 +15,7 @@ MatchCast turns a synthetic football match into explained, verified, personalise
 | G3 | Every on-screen number and name is correct, or the line is not shown | Verifier pass rate and zero hallucinated numbers in the QUA-4 evaluation |
 | G4 | Football-realistic synthetic data | 9 realism targets in [06-simulation.md](06-simulation.md) pass over 200 seeds |
 | G5 | Live demo judges can open free until 10 Nov 2026, 11:59 pm PT (rules §4.8) | Logged-out release check (QUA-8) |
-| G6 | Total Azure spend about $49 worst case, hard cap $100 | `scripts/cost_today.sh`, budget alerts at $40 and $50 |
+| G6 | Total Azure spend about $49 worst case (about $60 with Translator, Vision and Content Safety under their hard caps, pending Akshay's OK on 22 Oct), hard cap $100 | `scripts/cost_today.sh`, budget alerts at $40 and $50 |
 
 ## 3. Stakeholders
 
@@ -53,7 +53,7 @@ Each target is testable. The test that proves it is named in the last column.
 | Q1 | Latency, live line | Event to verified line on screen: p95 ≤ 6 s with live agents; ≤ 1 s in rules mode | QUA-1 trace timings, App Insights workbook |
 | Q2 | Latency, priority 1 moment | Goal, red card or penalty: Producer task within 2 s of the event; Broadcast alert within 3 s | AGT-4, EXP-9 acceptance tests |
 | Q3 | Latency, Ask chatbot | Answer p95 ≤ 8 s; refusal or abstain message ≤ 8 s | `eval/ask_eval.py` |
-| Q4 | Latency, translation | Adds ≤ 1.5 s p95 to a line | App Insights span `translate` |
+| Q4 | Latency, translation | Translated line and voice follow the English line within 3 s p95 (EXP-17) | App Insights span `translate` |
 | Q5 | Latency, voice | First audio byte ≤ 2 s after publication | Span `synthesize` |
 | Q6 | Correctness | 0 hallucinated numbers or names per 100 published lines in QUA-4 arm B | `eval/compare.py` |
 | Q7 | Grounding, chatbot | ≥ 95% of answers pass the Verifier; hit@5 ≥ 0.9 on the golden set; 5 of 5 unanswerable questions abstain | `eval/ask_eval.py` |
@@ -62,7 +62,7 @@ Each target is testable. The test that proves it is named in the last column.
 | Q10 | Determinism | Same seed gives byte-identical event JSON | DAT-9 replay test |
 | Q11 | Realism | 9 targets inside their pass bands over 200 seeds | `scripts/check_realism.py` |
 | Q12 | First load | Watch interactive ≤ 4 s cold cache on 50 Mbps; other views lazy-load | EXP-15 timing test |
-| Q13 | Cold start | `api` from zero replicas to first answer ≤ 20 s, with "Warming up the match engine" shown | PLT-9 |
+| Q13 | Cold start | `api` from zero replicas to first claim ≤ 45 s, and ≤ 5 s when warm, with "Warming up the match engine" shown while cold | PLT-9, EXP-1 |
 | Q14 | Accessibility | Lighthouse accessibility ≥ 90 per view; WCAG AA contrast; live region announces lines | EXP-14 |
 | Q15 | Security | No secrets in repo or env vars; no high or critical dependency issues | QUA-7 scans |
 | Q16 | Cost | Month-to-date spend under $40 before 27 Oct; under $50 at shutdown | PLT-10 |

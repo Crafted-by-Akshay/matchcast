@@ -62,6 +62,7 @@ A lane edits only its own folders. A change outside them goes through a PR revie
 - A PR that changes behaviour updates the matching file in `docs/architecture/` in the same PR. The reviewer checks this.
 - A decision that changes a choice recorded here gets a new ADR in `adr/` (copy `adr/0000-template.md`). Old ADRs are never edited, only marked "Superseded by ADR-xxxx".
 - Diagrams are Mermaid in the markdown, so they diff and review like code. SUB-6 exports PNGs for the README.
+- A story that seems to need a new database follows [07-data-and-storage.md](07-data-and-storage.md) §12 and ADR-0015 first; no lane adds a database, queue or other paid service without an ADR that Akshay has approved.
 
 ## 6. Dependencies and licences
 

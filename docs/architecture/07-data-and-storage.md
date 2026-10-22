@@ -131,3 +131,30 @@ Catalog `matchcast`: schema `raw` (external volumes over Blob `scenes` and `seas
 - No personal data is generated: all players and clubs are fictional.
 - Personal data we do hold: the Producer's Entra display name and object ID in `audit`, and text that viewers type into Ask or Talk. `conversations` rows older than 24 hours are deleted by an hourly sweep in `api`. Vision crops are deleted after 1 day.
 - Everything is deleted at shutdown with `azd down --purge` on 11 Nov 2026 (runbook, PLT-10).
+
+## 11. Repository layer (how code reaches storage)
+
+No code outside the store modules imports an Azure storage SDK. This keeps tests fast and makes a later change of database a contained job.
+
+- One repository per table in §4 (`MatchRepo`, `EventRepo`, `StateRepo`, `ClaimRepo`, `LineRepo`, `PublicationRepo`, `AuditRepo`, `CheckpointRepo`, `ConversationRepo`), defined as Python `Protocol` classes in `packages/agents/matchcast_agents/store.py`.
+- Two implementations: `TableStore` (azure-data-tables with the managed identity, plus the Blob overflow rule) and `MemoryStore` (dictionaries, for unit tests and the local rules mode). The setting `MATCHCAST_STORE=table|memory` picks one; the default in Azure is `table`, locally and in CI it is `memory`.
+- The same contract test suite runs against both (see [16-testing-and-quality.md](16-testing-and-quality.md) §7): `TableStore` against Azurite, `MemoryStore` in process. A new store is allowed only when it passes that suite unchanged.
+
+## 12. If a feature needs a real database
+
+Table Storage, Blob and DuckDB cover every story in the backlog today (ADR-0007). When a new story looks like it needs a database, work through these questions in order and stop at the first yes:
+
+| # | Question | If yes |
+| --- | --- | --- |
+| 1 | Is every read by stream key, or by key and a sequence range? | New Table in §4 with `sk` as PartitionKey, plus a repository |
+| 2 | Is it analysis over finished matches? | Parquet in Blob and a DuckDB view in §6 |
+| 3 | Is it text or meaning search? | An index in AI Search ([05-assistant-rag.md](05-assistant-rag.md)) |
+| 4 | Is it a file, an image or audio? | A Blob container in §5 |
+
+Only if all four are no does it need a database. Signs of that: filters on non-key fields across live matches, a write that must change several rows at once or not at all, secondary indexes, or more than about 1,000 writes a second. Then:
+
+1. **Default choice: Azure Cosmos DB for NoSQL, serverless.** One container per table with partition key `/sk`, so the keys in §2 and the repositories keep their shape. Data-plane access by managed identity (built-in role Cosmos DB Built-in Data Contributor), local auth disabled, no keys. Serverless bills per request unit and per GB stored, so a demo-sized load is a few dollars at most over the whole period (check the Azure pricing page before accepting).
+2. **If joins or relational constraints are the need: Azure Database for PostgreSQL Flexible Server, Burstable B1ms**, Entra authentication only. It costs roughly $13 a month plus storage even when idle, so it is a second choice.
+3. **Process:** write an ADR (it changes cost, so Akshay decides), add `infra/modules/<db>.bicep` with the role assignment, implement the repository, pass the store contract suite, add a one-off copy script from Tables if data must move, and switch with `MATCHCAST_STORE`. The spend must still fit the $100 cap with the $40 and $50 alerts.
+
+The rule for this is ADR-0015.

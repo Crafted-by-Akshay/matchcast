@@ -49,17 +49,17 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | `status` | shell → all views | `live`, `rules_fallback`, `offline`, `warming_up` |
 | `persona`, `language` | any view → shell | viewer's choice, sent upstream as SSE query parameters |
 | `ask`, `talk` | any view → shell | request; reply arrives as `ask_reply`, `talk_reply` |
-| `approve`, `edit`, `kill` | Broadcast or Analyst → shell | claim or line ID |
+| `approve`, `edit`, `kill` | Broadcast or Analyst → shell | line ID (ADR-0013) |
 
 ## 3. Connection behaviour
 
 | Situation | What the viewer sees | What happens |
 | --- | --- | --- |
 | `MATCHCAST_API` empty at build | Status pill "Offline (simulated)" | `agents.js` rules in the page |
-| API cold (first request pending) | "Warming up the match engine" | Retry `/ready` every 2 s up to 30 s |
+| API cold (first request pending) | "Warming up the match engine" | Retry `/ready` every 2 s up to 45 s (Q13); after that, "Rules fallback" |
 | API live | "Live agents" | REST + SSE |
 | SSE drops | "Reconnecting" for up to 10 s | `EventSource` reconnects with `Last-Event-ID`; the server replays from `publications` and `audit` |
-| API down for over 30 s | "Rules fallback" | Switch to in-page rules; switch back when `/ready` returns 200 |
+| API down for over 30 s during a match | "Rules fallback" | Switch to in-page rules; switch back when `/ready` returns 200 |
 
 ## 4. Personalisation (stage e)
 

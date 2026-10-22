@@ -1,6 +1,6 @@
 # 13 Deployment, identity and operations
 
-Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: PLT-1 to PLT-11. Cost plan: `/mnt/project-files/matchcast-v2/plan/full-3-day-plan.md` (about $49 worst case).
+Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: PLT-1 to PLT-11. Cost plan: `/mnt/project-files/matchcast-v2/plan/full-3-day-plan.md` (about $49 worst case; about $60 with the Translator, Vision and Content Safety caps in PLT-10, pending Akshay's OK).
 
 ## 1. Azure topology
 
@@ -25,7 +25,7 @@ flowchart TB
         tr[tr-matchcast-dev]
         cv[cv-matchcast-dev]
         srch[srch-matchcast-dev Free]
-        dbw[dbw-matchcast Premium]
+        dbw[dbw-matchcast-dev Premium]
       end
       id[id-matchcast<br/>user-assigned identity]
     end
@@ -72,6 +72,7 @@ Rules: no output, parameter default or app setting holds a key or connection str
 | | Key Vault | Key Vault Secrets User (for `srch-admin-key` during KB ingestion) |
 | Databricks access connector | Storage containers `scenes`, `season`, `models` | Storage Blob Data Contributor |
 | Fabric workspace identity | Event Hubs namespace | Azure Event Hubs Data Receiver |
+| Entra app `matchcast-web` (Easy Auth on `web`, `api` and `/mcp`) | its own app roles | App roles `Viewer`, `Producer`, `Admin`; the judge account gets `Producer` (PLT-5) |
 | Akshay (Entra user) | Subscription | Owner (existing) |
 
 Key Vault secrets (the only ones): `srch-query-key`, `srch-admin-key`. Each is documented in `docs/infra.md` with the reason managed identity is not possible (AI Search Free tier).
@@ -96,8 +97,8 @@ Environment variables for `api` (no secrets except the Key Vault reference):
 flowchart LR
   pr[pull request] --> ci[ci.yml]
   subgraph ci_jobs[ci.yml jobs]
-    c1[checks: make lint typecheck test build]
-    c2[unified: build.py + Playwright tests]
+    c1[checks: make lint typecheck test build<br/>Azurite service for store tests]
+    c2[e2e: make e2e, Playwright Chromium<br/>report uploaded on failure]
     c3[bicep: az bicep build]
     c4[secrets: gitleaks]
     c5[openapi: schema drift]

@@ -7,11 +7,11 @@ Each flow is a sequence diagram plus numbered rules. Names in `code` are real en
 | Flow | Trigger | Budget |
 | --- | --- | --- |
 | [F1 Live match loop](#f1-live-match-loop) | Simulator emits an event | p95 ≤ 6 s to screen |
-| [F2 Claim lifecycle](#f2-claim-lifecycle-verify-repair-abstain-fallback) | Any claim | 1 repair maximum |
+| [F2 Line lifecycle](#f2-line-lifecycle-verify-repair-abstain-fallback) | Any drafted line | 1 repair maximum |
 | [F3 Producer approval](#f3-producer-approval) | Producer mode on | Human |
 | [F4 Ask the chatbot](#f4-ask-the-chatbot-rag--live-tools) | Viewer question | p95 ≤ 8 s |
 | [F5 Talk to a player by voice](#f5-talk-to-a-player-by-voice) | Push-to-talk | p95 ≤ 8 s |
-| [F6 Translation and voice](#f6-translation-and-voice-for-a-publication) | Verified publication | +1.5 s, first audio ≤ 2 s |
+| [F6 Translation and voice](#f6-translation-and-voice-for-a-publication) | Verified publication | translated line ≤ 3 s after English, first audio ≤ 2 s |
 | [F7 Vision identification](#f7-vision-identification-ocr) | Vision mode on | ≤ 15 OCR calls a minute |
 | [F8 Full-time recap](#f8-full-time-recap) | `period_boundary` full time | ≤ 60 s |
 | [F9 Cold start and resume](#f9-cold-start-and-resume-after-a-crash) | Replica start | ≤ 60 s to resume |
@@ -57,13 +57,12 @@ Rules:
 5. Tracking frames from the engine stay in the browser. Only semantic events cross the network.
 6. In rules mode (`MATCHCAST_AGENT_MODE=rules`) steps 10 to 12 run the deterministic implementations; everything else is identical.
 
-## F2 Claim lifecycle (verify, repair, abstain, fallback)
+## F2 Line lifecycle (verify, repair, abstain, fallback)
 
 ```mermaid
 stateDiagram-v2
-  [*] --> drafted: Analyst creates claim
-  drafted --> worded: Narrator writes lines
-  worded --> verifying
+  [*] --> drafted: Narrator writes a line from the Analyst's claims
+  drafted --> verifying
   verifying --> verified: all checks pass
   verifying --> review: meaning unclear (model check)
   verifying --> rejected: number, name, source or safety fails
@@ -81,9 +80,9 @@ stateDiagram-v2
 ```
 
 Rules:
-1. Every transition writes one audit record (`claim_created`, `claim_verified`, `claim_rejected`, `claim_repaired`, `claim_abstained`, `claim_approved`, `claim_killed`, `publication_sent`, `fallback_used`).
+1. The states are the `lines.status` values in [07-data-and-storage.md](07-data-and-storage.md) §4; verdicts and approvals belong to lines, not claims (ADR-0013). Every transition writes one audit record from the closed list in [04-agents.md](04-agents.md) §4 (`line_drafted`, `line_verified`, `line_review`, `line_rejected`, `line_repair_requested`, `line_abstained`, `line_approved`, `line_killed`, `publication_created`, `fallback_used`); the Analyst's claim writes `claim_created` first.
 2. Only `published` lines reach any screen, voice or translation.
-3. When a model call fails (timeout 20 s, 429 after one retry, 5xx, or the circuit is open), the same step runs its rules implementation, the claim's `derivation_version` gets the suffix `+rules`, and the audit action `fallback_used` is written. The UI shows the "Rules fallback" chip.
+3. When a model call fails (timeout 20 s, 429 after one retry, 5xx, or the circuit is open), the same step runs its rules implementation, the claim's or line's `derivation_version` gets the suffix `+rules`, and the audit action `fallback_used` is written. The UI shows the "Rules fallback" chip.
 4. Content Safety runs inside `verifying`; severity ≥ 2 in any category gives `rejected` with reason `unsafe_content`, and is never repaired.
 
 ## F3 Producer approval

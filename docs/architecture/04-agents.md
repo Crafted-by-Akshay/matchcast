@@ -72,6 +72,10 @@ RepairRequest  line_id, target analyst|narrator, verdict, attempt 1
 
 `reason_code` values: `number_mismatch`, `unknown_player`, `unknown_source`, `stale_state`, `unsupported_statement`, `unsafe_content`, `length_exceeded`, `citation_missing`.
 
+`fallback_reason` values (written with audit action `fallback_used`, ADR-0014): `timeout` (20 s), `rate_limited` (429 after one retry), `model_error` (5xx or invalid structured output), `circuit_open`, `tool_error` (an MCP tool call failed; the Analyst uses the in-process tool twin).
+
+Audit `action` values (closed list; add new ones here first): `event_rejected`, `moment_skipped`, `claim_created`, `line_drafted`, `line_verified`, `line_review`, `line_rejected`, `line_repair_requested`, `line_abstained`, `line_approved`, `line_edited`, `line_killed`, `publication_created`, `translation_rejected`, `fallback_used`, `recap_created`, `ask_answered`, `talk_answered`, `export_created`, `safety_blocked`.
+
 ## 5. Verifier checks (in order)
 
 | # | Check | Rule | Tolerance |
@@ -125,7 +129,7 @@ packages/agents/
     executors/         producer.py analyst.py narrator.py verifier.py publisher.py repair.py
     rules/             deterministic twins of each executor (ported from apps/unified/agents.js)
     tools/             MCP client wrapper, in-process fallback for tests
-    verify/            deterministic checks 1-7, number and name extraction
+    verify/            deterministic checks 1-7, number and name extraction (check 8 lives in executors/verifier.py)
     ask/               router, retrieval, answer assembly
     store.py           claims, publications, audit repositories (Table + in-memory)
     messages.py        workflow packets

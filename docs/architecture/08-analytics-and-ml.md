@@ -61,7 +61,7 @@ flowchart LR
 
 | Item | Value |
 | --- | --- |
-| Workspace | `dbw-matchcast`, Premium, East US 2 |
+| Workspace | `dbw-matchcast-dev`, Premium, East US 2 |
 | Compute | Single-node jobs cluster `Standard_D4ds_v5` (fallback `Standard_DS3_v2` if quota blocks it), auto-terminate when the run ends |
 | `train-danger` | Gradient-boosted classifier; label = a shot within the next 10 s; 80/20 split by match, not by row; logs params, AUC, Brier score, calibration plot; exports ONNX |
 | `fit-xg` | Logistic regression on angle and distance; logs log-loss and a reliability plot; writes `b0..b2` |

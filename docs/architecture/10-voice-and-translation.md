@@ -42,7 +42,7 @@ flowchart LR
 
 Rules:
 1. Only verified English text is ever translated. Agents always work in English.
-2. "Active viewer" means a browser that sent a heartbeat with that language in the last 30 s (SSE query parameter `lang`).
+2. "Active viewer" means a browser that sent a heartbeat with that language in the last 30 s (SSE query parameter `lang`). Translation also stops after 500,000 characters in total (`TRANSLATOR_MAX_CHARS`, about $5 at the S1 price); after that, lines stay English with the note "Translation paused".
 3. Translator resource `tr-matchcast-dev`, S1, with a custom subdomain so managed identity works (role Cognitive Services User).
 4. The re-check compares the sets of numbers (digits normalised from Devanagari to ASCII for Hindi) and names between English and the translation. Any difference drops that language for that line.
 5. Captions show in the chosen language. If a line has no variant in that language, the English line shows with a small "EN" tag.
