@@ -331,3 +331,62 @@ def test_live_mode_uses_the_model_client_and_audits_its_lines(client: TestClient
     lines = client.get("/v1/matches/match-short/lines", params=Q).json()["items"]
     assert lines and {ln["origin"] for ln in lines} == {"model"}
     assert client.get("/v1/matches/match-short", params=Q).json()["mode"] in ("live", "mixed")
+
+
+def test_easy_auth_approval_records_the_signed_in_name_in_the_audit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import base64
+    import json
+
+    claims = [
+        {"typ": "roles", "val": "Producer"},
+        {"typ": "name", "val": "Judge One"},
+        {
+            "typ": "http://schemas.microsoft.com/identity/claims/objectidentifier",
+            "val": "oid-judge-1",
+        },
+    ]
+    encoded = base64.b64encode(json.dumps({"claims": claims}).encode()).decode()
+    headers = {"X-MS-CLIENT-PRINCIPAL": encoded}
+    monkeypatch.setenv("MATCHCAST_EASY_AUTH", "1")
+    client.app.state.matches.require_role = True  # type: ignore[attr-defined]
+    create(client, approval_mode="producer")
+    events = FIXTURE["events"][:60]
+    client.post("/v1/matches/match-short/events", params=Q, json={"events": events[:50]})
+    client.post("/v1/matches/match-short/events", params=Q, json={"events": events[50:]})
+    queue = client.get("/v1/matches/match-short/lines", params=Q, headers=headers).json()["items"]
+    ids = {"session_id": "short", "match_id": "match-short"}
+    ok = client.post(f"/v1/lines/{queue[0]['line_id']}/approve", json=ids, headers=headers)
+    assert ok.status_code == 200
+
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    approved = [r for r in audit if r["action"] == "line_approved" and r["actor_kind"] == "person"]
+    assert approved[0]["actor_id"] == "oid-judge-1"
+    assert approved[0]["details"]["actor_name"] == "Judge One"
+    assert verify_chain(audit)["valid"] is True
+
+
+def test_exports_are_hash_stamped_downloadable_and_audited(client: TestClient) -> None:
+    import hashlib
+
+    create(client)
+    post_all(client)
+    made = client.post(
+        "/v1/matches/match-short/exports",
+        json={"session_id": "short", "kind": "claims_csv", "verdict": "verified"},
+    )
+    assert made.status_code == 201
+    info = made.json()
+    download = client.get(info["url"])
+    assert hashlib.sha256(download.content).hexdigest() == info["sha256"]
+    lines = download.text.splitlines()
+    assert lines[0].startswith("claim_id,metric,value") and len(lines) == info["rows"] + 1
+    events = client.post(
+        "/v1/matches/match-short/exports", json={"session_id": "short", "kind": "events_json"}
+    ).json()
+    assert events["rows"] == len(FIXTURE["events"])
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    assert [r["action"] for r in audit].count("export_created") == 2
+    assert verify_chain(audit)["valid"] is True
+    assert client.get("/v1/exports/nope").status_code == 404

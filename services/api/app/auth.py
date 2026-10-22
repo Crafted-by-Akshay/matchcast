@@ -12,12 +12,14 @@ import base64
 import binascii
 import json
 import os
+import re
 from dataclasses import dataclass
 
 from fastapi import Header
 
 PRODUCER_ROLES = ("Producer", "Admin")
 ROLE_CLAIM_TYPES = ("roles", "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 NAME_CLAIM_TYPES = ("name", "preferred_username")
 
 
@@ -93,3 +95,19 @@ def caller_role(
         )
     except PermissionError as error:
         raise Problem(401, "unauthenticated", "sign in to use this route") from error
+
+
+def caller_actor(
+    x_ms_client_principal: str | None = Header(default=None, include_in_schema=False),
+) -> tuple[str, str | None]:
+    """FastAPI dependency: (actor id, display name) recorded in the audit chain.
+
+    With Easy Auth on, the signed-in user's object id and name; otherwise the development
+    actor 'producer' with no name.
+    """
+    if easy_auth_enabled():
+        principal = parse_client_principal(x_ms_client_principal)
+        if principal is not None:
+            actor_id = principal.user_id if ID_PATTERN.match(principal.user_id) else "producer"
+            return actor_id, principal.name or None
+    return "producer", None

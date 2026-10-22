@@ -315,6 +315,10 @@ class MatchWorkflow:
             "revision": state.revision,
         }
 
+    def record_export(self, export_id: str, kind: str, sha256: str, rows: int) -> None:
+        self._audit("person", "viewer", "export_created", export_id,
+                    {"kind": kind, "sha256": sha256, "rows": rows})  # fmt: skip
+
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
     async def recap(
@@ -644,11 +648,15 @@ class MatchWorkflow:
 
     # ---- approval and publication ------------------------------------------------------
 
-    def _approve(self, line: LineRecord, actor_kind: str, actor_id: str) -> None:
+    def _approve(
+        self, line: LineRecord, actor_kind: str, actor_id: str, actor_name: str | None = None
+    ) -> None:
         line.status = "approved"
         line.decided_by = actor_id
         self._save_line(line)
         details: dict[str, Any] = {"persona": line.persona}
+        if actor_name:
+            details["actor_name"] = actor_name[:80]
         if actor_kind == "agent":
             details["mode"] = self.agents.mode
         self._audit(actor_kind, actor_id, "line_approved", line.line_id, details)
@@ -696,15 +704,23 @@ class MatchWorkflow:
             raise WorkflowError("not_found", f"unknown line {line_id}")
         return line
 
-    async def approve(self, line_id: str, actor_id: str = "producer") -> LineRecord:
+    async def approve(
+        self, line_id: str, actor_id: str = "producer", actor_name: str | None = None
+    ) -> LineRecord:
         async with self._lock:
             line = self._line(line_id)
             if line.status not in ("verified", "review"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
-            self._approve(line, "person", actor_id)
+            self._approve(line, "person", actor_id, actor_name)
             return line
 
-    async def kill(self, line_id: str, reason: str, actor_id: str = "producer") -> LineRecord:
+    async def kill(
+        self,
+        line_id: str,
+        reason: str,
+        actor_id: str = "producer",
+        actor_name: str | None = None,
+    ) -> LineRecord:
         async with self._lock:
             line = self._line(line_id)
             if line.status in ("published", "killed"):
@@ -712,11 +728,18 @@ class MatchWorkflow:
             line.status = "killed"
             line.decided_by = actor_id
             self._save_line(line)
-            self._audit("person", actor_id, "line_killed", line_id, {"reason": reason[:200]})
+            details = {"reason": reason[:200]}
+            if actor_name:
+                details["actor_name"] = actor_name[:80]
+            self._audit("person", actor_id, "line_killed", line_id, details)
             return line
 
     async def edit(
-        self, line_id: str, text: str, actor_id: str = "producer"
+        self,
+        line_id: str,
+        text: str,
+        actor_id: str = "producer",
+        actor_name: str | None = None,
     ) -> tuple[LineRecord, Verdict]:
         """Replace the text, run the Verifier again, and approve only if it passes."""
         async with self._lock:
@@ -743,7 +766,10 @@ class MatchWorkflow:
                 return line, verdict
             line.text, line.checks, line.reason_code = text, list(verdict.checks), None
             line.origin = "template"
-            self._audit("person", actor_id, "line_edited", line_id, {"persona": line.persona})
+            edited: dict[str, Any] = {"persona": line.persona}
+            if actor_name:
+                edited["actor_name"] = actor_name[:80]
+            self._audit("person", actor_id, "line_edited", line_id, edited)
             line.status = "verified"
-            self._approve(line, "person", actor_id)
+            self._approve(line, "person", actor_id, actor_name)
             return line, verdict
