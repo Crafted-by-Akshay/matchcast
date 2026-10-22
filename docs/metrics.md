@@ -19,3 +19,15 @@ A formula change bumps the version and regenerates `golden/golden.json`. Why the
 `golden/export_golden.cjs` writes 54 seeded cases with expected values from an independent JavaScript implementation of the formulas in the table. The xG curve and the pass-difficulty terms follow the prototype engine's curve and `passDifficulty` in `apps/unified/sources/3d-source/v2/explain.js`, with one change: the lane term is a distance to the pass line, because the engine's `laneSafety` needs player velocities that contract events do not carry (ADR-0016). The other formulas are new definitions. `uv run --all-packages pytest packages/metrics` requires every case to match within 0.001, calls `xg` twice for identical results, and checks the constants against `data/calibration/xg.json`.
 
 Python rounds half to even and JavaScript rounds half up, so the difficulty terms use `floor(v + 0.5)`.
+
+## Control, chaos and tempo (DAT-4)
+
+`matchcast_metrics.indices` (version 1.0.0) over a rolling 5-minute window of event dicts; `rolling_series` gives one point a minute for the sparkline.
+
+| Index | Range | Formula |
+| --- | --- | --- |
+| `control_index` | 0 to 100 | 35% possession stability (`1 - clamp((turnovers per minute - 1) / 5)`) + 35% pass completion (`clamp((rate - 0.6) / 0.32)`) + 30% territory (mean pass end of the team with most passes, 40 m to 80 m up the pitch) |
+| `chaos_index` | 0 to 100 | 40% turnover rate (6 a minute is full) + 30% duel density (12 a minute is full; slide tackles, take-ons, aerial duels) + 30% ball-direction entropy of passes in 8 bins |
+| `tempo` | passes per minute | Passes in the window over 5 |
+
+Acceptance test: in a synthetic 60-minute match with a scramble from minute 30 to 36, the chaos index in the scramble is at least 1.5 times the match average and control falls (`packages/metrics/tests/test_indices.py`). Exposing the indices through `get_metrics` and drawing the sparkline belong to the Agents and Experience lanes.
