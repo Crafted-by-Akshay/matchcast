@@ -65,6 +65,34 @@ def _state_repo() -> StateRepo | None:
     return MemoryStateRepo()
 
 
+class _Staged:
+    """Reducer writes held back until the workflow has taken the events (ADR-0017): the reducer
+    save is not the commit point, so a failed ingest leaves the table as it was and the redelivered
+    batch finds any held event still held."""
+
+    def __init__(self, repo: StateRepo) -> None:
+        self._repo = repo
+        self._latest: dict[str, Any] = {}
+        self._saves: list[tuple[str, Any]] = []
+
+    def get(self, sk: str) -> Any:
+        state = self._latest.get(sk)
+        return state.model_copy(deep=True) if state else self._repo.get(sk)
+
+    def save(self, sk: str, state: Any) -> None:
+        self._latest[sk] = state.model_copy(deep=True)
+        self._saves.append((sk, self._latest[sk]))
+
+    def flush(self) -> None:
+        for sk, state in self._saves:
+            self._repo.save(sk, state)
+        self._saves.clear()
+
+
+def _key(event: dict[str, Any]) -> tuple[str, int]:
+    return event["event_id"], event.get("revision", 0)
+
+
 class Pipeline:
     def __init__(
         self,
@@ -77,6 +105,7 @@ class Pipeline:
         self.publisher = publisher
         self._source = source
         self.state_repo = state_repo
+        self._locks: dict[str, asyncio.Lock] = {}
 
     @classmethod
     def build(cls, registry: Registry, mode: str | None = None) -> Pipeline | None:
@@ -92,24 +121,6 @@ class Pipeline:
         publisher = EventHubsPublisher(azure_clients.eventhub_producer_aio())
         source = EventHubsSource(azure_clients.eventhub_consumer_aio())
         return cls(registry, publisher, source, repo)
-
-    def _reduce(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Run the batch through the reducer; return what the workflow should see, in order."""
-        repo = self.state_repo
-        assert repo is not None
-        seen: dict[str, int] = {}
-        for event in batch:
-            if event.get("kind") == "event":
-                sk = stream_key(event)
-                if sk not in seen:
-                    state = repo.get(sk)
-                    seen[sk] = state.max_sequence if state else 0
-        _, applied = process_applied(repo, batch)
-        out = {e["event_id"]: e for e in applied}
-        for event in batch:
-            if event.get("kind") == "event" and event["stream_sequence"] <= seen[stream_key(event)]:
-                out.setdefault(event["event_id"], event)  # a duplicate: the workflow dedupes it
-        return sorted(out.values(), key=lambda e: e["stream_sequence"])
 
     async def publish(self, sk: str, events: list[dict[str, Any]]) -> None:
         await self.publisher.publish(sk, events)
@@ -131,9 +142,8 @@ class Pipeline:
                 log.warning("dropping %d events of unknown match %s", len(batch), match_id)
                 continue
             if self.state_repo is not None:
-                batch = await asyncio.to_thread(self._reduce, batch)
-                if not batch:
-                    continue
+                await self._handle_reduced(flow, match_id, batch)
+                continue
             try:
                 await flow.ingest(batch)
             except ContractError as error:
@@ -145,6 +155,42 @@ class Pipeline:
                         await flow.ingest([event])
                     except ContractError as single:
                         log.warning("dropping event of %s: %s", match_id, single)
+
+    def _reduce(self, staged: _Staged, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Run valid events through the reducer; return what the workflow should see, in order."""
+        before: dict[str, int] = {}
+        for event in batch:
+            sk = stream_key(event)
+            if sk not in before:
+                state = staged.get(sk)
+                before[sk] = state.max_sequence if state else 0
+        _, applied = process_applied(staged, batch)
+        out = {_key(e): e for e in applied}
+        for event in batch:  # a duplicate: the workflow dedupes it, and a replay must reach it
+            if event["stream_sequence"] <= before[stream_key(event)]:
+                out.setdefault(_key(event), event)
+        return sorted(out.values(), key=lambda e: e["stream_sequence"])
+
+    async def _handle_reduced(self, flow: Any, match_id: str, batch: list[dict[str, Any]]) -> None:
+        """ADR-0017: validate each event, reduce, give the workflow the result, then commit."""
+        valid = []
+        for event in batch:
+            try:
+                flow.validate_batch([event])
+                if not isinstance(event["stream_sequence"], int):
+                    raise TypeError("stream_sequence must be an integer")
+                valid.append(event)
+            except (ContractError, KeyError, TypeError) as error:
+                log.warning("dropping event of %s: %s", match_id, error)
+        if not valid:
+            return
+        lock = self._locks.setdefault(flow.sk, asyncio.Lock())
+        async with lock:
+            staged = _Staged(self.state_repo)  # type: ignore[arg-type]
+            out = await asyncio.to_thread(self._reduce, staged, valid)
+            if out:
+                await flow.ingest(out)
+            await asyncio.to_thread(staged.flush)
 
     async def _supervise(self) -> None:
         """Run the consumer, and start it again after a failure (RBAC still propagating, a
