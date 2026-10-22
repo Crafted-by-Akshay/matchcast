@@ -179,3 +179,6 @@ The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which W
 - `speed`: Watch plays at that speed (0.25 to 8; the speed buttons stay 0.25 to 2x). Broadcast keeps its own pace.
 - `seedBadClaim=1`: the Agents-tab switch "Seed a bad claim" is on from the start. The in-page Verifier gets a wrong score number at once (Simulated); the agent api gets `seed_bad_claim: true` when the match is created, so its Verifier rejects and repairs one claim from minute 12. The note next to the switch says which of the two applies (sent, will be sent, or this match was already created without it).
 - The same switch, turned on by hand before the kick-off, sends the same flag. Tested in `filming-url.spec.ts`.
+## Keyboard path and plain-words states (Broadcast)
+- `tests/e2e/broadcast-keyboard.spec.ts` walks the desk with Tab: every control is reachable and shows a focus ring. Broadcast has no popovers of its own, so there is no Escape path to test.
+- Below the tabs a line says where the agents' lines come from: "live from the api", "api did not answer, rules in this page", or "rules in this page (no api connected)" (the shell sends it with the status pill). With no speech in the browser, Speak is disabled with "Speech is not available here; the text still shows."
