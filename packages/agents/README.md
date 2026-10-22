@@ -64,3 +64,13 @@ A rejected line gets exactly one repair (number, source or freshness errors go t
 wording errors to the Narrator); a second rejection is `line_abstained` and nothing is published.
 `seed_bad_claim` corrupts the first claim at or after `seed_bad_claim_at_ms` (default minute 12);
 the api takes it from the match-create body or the `X-MatchCast-Seed-Bad-Claim: 1` header.
+
+## Checkpoint and resume (AGT-13)
+
+After every event the workflow writes a checkpoint (`processed_sequence`, the match state, and the
+Producer's memory). A new `MatchWorkflow` on the same store restores it, and the next `ingest`
+first finishes any stored event beyond the checkpoint, so a client that re-sends its batch after a
+crash gets the same claims, lines and publications as an uninterrupted run, with no claim id twice.
+Claim, line and publication writes are idempotent by id; a replayed step can append extra audit
+records, and the chain stays valid. The Table Storage checkpoint store (`checkpoints`, RowKey
+`<moment_id>:<executor>`) comes with DAT-2; the memory store is the reference implementation.

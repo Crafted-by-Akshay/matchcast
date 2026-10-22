@@ -1,0 +1,12 @@
+{
+  "model": "xg = 1 / (1 + exp(-(b0 + b1*angle_rad + b2*distance_m)))",
+  "b0": -1.464609,
+  "b1": 1.413822,
+  "b2": -0.089141,
+  "log_loss": 0.2889,
+  "log_loss_constant_baseline": 0.33438,
+  "open_play_shots": 43078,
+  "open_play_goals": 4492,
+  "source": "Wyscout soccer match event dataset, Pappalardo et al. 2019, CC BY 4.0",
+  "source_url": "https://doi.org/10.6084/m9.figshare.7770599"
+}
