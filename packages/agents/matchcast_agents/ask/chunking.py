@@ -3,6 +3,8 @@
 Sections split on H2 and H3. A chunk targets 350 tokens and never exceeds 500; the next chunk
 repeats the last 50 tokens of the previous one. A table is never split. A "token" here is a
 whitespace-separated word, which is close enough for sizing and keeps the build offline.
+Ids number chunks by position within a document, so editing a document renumbers its later chunks;
+re-ingestion replaces the whole document.
 """
 
 import re
@@ -114,8 +116,11 @@ def chunk_document(
             if current and size + tokens(block) > TARGET:
                 chunks.append(_make(chunks, current, corpus, slug, title, section, entities,
                                     source_path, version))  # fmt: skip
+                room = max(0, min(OVERLAP, MAX_TOKENS - tokens(block)))  # overlap + block <= MAX
                 tail = (
-                    " ".join(current[-1].split()[-OVERLAP:]) if not _is_table(current[-1]) else ""
+                    " ".join(current[-1].split()[-room:])
+                    if room and not _is_table(current[-1])
+                    else ""
                 )
                 current = [f"…{tail}"] if tail else []
             current.append(block)
