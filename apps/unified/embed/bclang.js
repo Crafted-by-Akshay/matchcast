@@ -86,3 +86,22 @@ window.__bcLang = { check: bcCheckTranslation, translate: bcTranslate };   // fo
 
 // the desk's own EN/ES/HI buttons tell the shell, which keeps the viewer's language for Watch, the voice and the on-air graphics
 (() => { const g = document.getElementById('bc-lang'); if (g) g.addEventListener('click', () => { if (typeof MCS !== 'undefined' && MCS.send) MCS.send({ type: 'lang', lang: BC.lang }); }); })();
+
+// ---- plain-words states: where the agents' lines come from (api live, rules fallback, offline), and speech that is not available here
+(() => {
+  const nav = document.getElementById('bc-tabs'); if (!nav) return;
+  const chip = document.createElement('span');
+  chip.id = 'mc-agentstate'; chip.setAttribute('role', 'status'); chip.style.cssText = 'margin-left:auto;align-self:center;padding:2px 8px;font:600 12px system-ui,sans-serif;color:#cfd8e8;white-space:nowrap';
+  chip.textContent = 'Agents: starting'; chip.style.display = 'block'; chip.style.margin = '2px 0 0'; nav.after(chip);   // outside the tablist, which may only hold tabs
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'agents') return;
+    const words = { live: 'Agents: live from the api', fallback: 'Agents: api did not answer, rules in this page', offline: 'Agents: rules in this page (no api connected)' };
+    chip.textContent = words[d.state] || 'Agents: ' + String(d.label || '').slice(0, 40); chip.title = String(d.hint || '').slice(0, 200);
+  });
+  const speakNote = () => {
+    const b = document.getElementById('sc-speak'); if (!b || b.dataset.checked) return; b.dataset.checked = '1';
+    if (!window.speechSynthesis) { b.disabled = true; b.title = 'This browser has no speech. Captions still show.'; b.insertAdjacentHTML('afterend', '<span class="bc-note" role="status"> Speech is not available here; the text still shows.</span>'); }
+  };
+  const pane = document.getElementById('pane-script'); if (pane) { new MutationObserver(speakNote).observe(pane, { childList: true, subtree: true }); speakNote(); }
+})();

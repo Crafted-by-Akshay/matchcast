@@ -171,3 +171,7 @@ The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which W
 ## Phone layout and Ask fixes (Broadcast)
 - At 560 px and below, buttons, selects and inputs in Broadcast and the Agents tab are at least 44 px (a checkbox is tapped through its 44 px label); the replay bar scrolls inside itself instead of wrapping. `tests/e2e/broadcast-mobile.spec.ts` checks no sideways scroll and 44 px targets at 390 px.
 - Broadcast's Ask the producer: the hold-to-talk mic is on the desk's real question box (`#bcd-q`; the old `#dk-q` box is not wired in Broadcast). Only the newest question writes its answer, a rate limit shows its message ("Slow down"), the shell waits at most 8 s for the api, and Broadcast has its own 5-a-minute budget. An answer the Verifier does not confirm still falls back to the desk's labelled answer (a product call, flagged).
+
+## Keyboard path and plain-words states (Broadcast)
+- `tests/e2e/broadcast-keyboard.spec.ts` walks the desk with Tab: every control is reachable and shows a focus ring. Broadcast has no popovers of its own, so there is no Escape path to test.
+- Below the tabs a line says where the agents' lines come from: "live from the api", "api did not answer, rules in this page", or "rules in this page (no api connected)" (the shell sends it with the status pill). With no speech in the browser, Speak is disabled with "Speech is not available here; the text still shows."
