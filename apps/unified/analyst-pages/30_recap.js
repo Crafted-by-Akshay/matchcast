@@ -21,8 +21,7 @@ async function rcLoad(card, r, tries) {
   let status = 0, rc = null;
   try { const res = await fetch(url); status = res.status; if (res.ok) rc = await res.json(); } catch (e) { status = -1; }
   if (!card.isConnected) return;
-  if (rc && typeof rc.text === 'string' && rc.text.trim()) { r.result = rc; return rcDraw(card, rc); }
-  if (rc) { card.innerHTML = '<h3>Full-time recap</h3><p class="muted">The agents wrote no sentence they could verify, so there is no recap.</p>'; return; }
+  if (rc && typeof rc === 'object') { r.result = rc; return rcDraw(card, rc); }
   if (status !== 404) { card.innerHTML = '<h3>Full-time recap</h3><p class="muted"><span class="chip">Unavailable</span> The api could not return the recap' + (status > 0 ? ' (HTTP ' + status + ')' : '') + '.</p>'; return; }
   if (tries < 12) { card.innerHTML = '<h3>Full-time recap</h3><p class="muted">Being written by the agents…</p>'; setTimeout(() => rcLoad(card, r, tries + 1), 5000); }
   else card.innerHTML = '<h3>Full-time recap</h3><p class="muted"><span class="chip">Planned</span> The recap is not ready. It is written by the api after full time.</p>';

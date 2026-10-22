@@ -171,6 +171,12 @@ test('match centre: with no verified sentence the card shows no recap text', asy
   await expect(f.locator('#rc-card')).not.toContainText('Only bad');
 });
 
+test('match centre: text without verified sentence rows, or malformed rows, shows no text', async ({ page }) => {
+  const f = await recapCard(page, 200, { text: 'Unchecked claim.', sentences: [null, { verdict: 'verified', text: 7 }, { verdict: 'verified' }] });
+  await expect(f.locator('#rc-card')).toContainText('No sentence passed the Verifier');
+  await expect(f.locator('#rc-card')).not.toContainText('Unchecked');
+});
+
 test('match centre: empty recap text and api errors are said plainly, not polled as "being written"', async ({ page }) => {
   const f = await recapCard(page, 200, { text: ' ', sentences: [] });
   await expect(f.locator('#rc-card')).toContainText('no recap');
