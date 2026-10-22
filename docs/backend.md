@@ -100,5 +100,11 @@ approve, edit or kill lines. Errors are RFC 9457 problems with a `code`.
   `forbidden_role`, Producer and Admin pass, and the `X-MatchCast-Role` header is ignored.
   Without Easy Auth (local mode) the `X-MatchCast-Role` header (`Producer` or `Admin`) is used.
   `app/auth.py` holds the parsing and the `caller_role` dependency.
-- Not built yet: `/ask`, `/talk`, `/ds/ask`, vision, speech, audio, recap and exports routes;
-  rate limits; `docs/api/openapi.json` snapshot.
+- Built since: `/ask`, `/talk` (5 a minute per browser session, shared), `/ds/ask` (5 a minute per
+  client), recap, exports, the per-minute `Retry-After: 60` on those 429s, the MCP tools at `/mcp`
+  (`MATCHCAST_TOOLS=mcp` routes the Analyst's `get_metrics` through them), the Stats Desk, and the
+  `docs/api/openapi.json` snapshot (`make openapi-generate`).
+- Not built yet: vision identify (Analyst lane, DAT-11), speech token and audio routes; the
+  Azure-backed pieces that need the Mac mini (embeddings and AI Search upload, live Foundry
+  validation, Table store under load, see doc 07 §11); the `ds_abstained` audit action (a contract
+  change that needs all lanes to agree).

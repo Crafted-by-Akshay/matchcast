@@ -1,0 +1,40 @@
+---
+title: Lombardia Nord
+entities: LOM
+generated: scripts/build_profiles.py
+---
+## Overview
+
+Lombardia Nord (LOM) are a fictional club from Milan, coached by Marco Vitale.
+Their strength rating is 1 on the league's scale. Everything here is synthetic.
+
+## Season record
+
+Played 7: won 0, drawn 2, lost 5. Goals for 2, against
+11. Average xG per match 0.45; average possession 51%.
+
+## Squad
+
+| Shirt | Player | Position | Rating |
+| --- | --- | --- | --- |
+| 1 | B. Belruda | GK | 86 |
+| 2 | R. Laucourt | RB | 87 |
+| 3 | J. Namlagu | LB | 88 |
+| 4 | D. Belruda | CB | 85 |
+| 5 | C. Torilito | CB | 84 |
+| 6 | J. Lunholm | DM | 85 |
+| 7 | D. Navvena | RW | 84 |
+| 8 | A. Ndulagu | CM | 88 |
+| 9 | T. Djedele | ST | 90 |
+| 10 | D. Ndubola | CM | 87 |
+| 11 | G. Inooka | LW | 84 |
+
+## Results
+
+- 2026-08-15: away against Ridgeview, 0-2 (loss)
+- 2026-08-22: away against Coloso Ciudad, 1-2 (loss)
+- 2026-08-29: away against Harbor City, 0-1 (loss)
+- 2026-09-05: home against Montaña CF, 0-0 (draw)
+- 2026-09-12: home against Thames Rovers, 0-1 (loss)
+- 2026-09-20: home against Navigli United, 1-1 (draw)
+- 2026-09-27: home against Guanabara FC, 0-4 (loss)

@@ -41,6 +41,10 @@ jobs:
       AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME || 'dev' }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'eastus2' }}
       FOUNDRY_PROJECT_ENDPOINT: ${{ vars.FOUNDRY_PROJECT_ENDPOINT }}
+      # Settings azd keeps per environment; a CI run starts from a fresh azd env, so they are repo variables
+      ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+      ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+      SEARCH_KEYS_IN_VAULT: ${{ vars.SEARCH_KEYS_IN_VAULT || 'false' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,10 +110,18 @@ jobs:
           azd env new "$AZURE_ENV_NAME" --subscription "$AZURE_SUBSCRIPTION_ID" --location "$AZURE_LOCATION" --no-prompt
           azd env set AZURE_RESOURCE_GROUP rg-matchcast
           azd env set FOUNDRY_PROJECT_ENDPOINT "$FOUNDRY_PROJECT_ENDPOINT"
+          azd env set ENTRA_CLIENT_ID "$ENTRA_CLIENT_ID"
+          azd env set ALERT_EMAIL "$ALERT_EMAIL"
+          azd env set SEARCH_KEYS_IN_VAULT "$SEARCH_KEYS_IN_VAULT"
           if [ -z "${SKIP_API_IMAGE:-}" ]; then azd env set API_IMAGE "$REGISTRY/matchcast-api:${{ steps.tag.outputs.sha }}"; fi
           if [ -z "${SKIP_WEB_IMAGE:-}" ]; then azd env set WEB_IMAGE "$REGISTRY/matchcast-web:${{ steps.tag.outputs.sha }}"; fi
           if [ -n "${MCP_IMAGE:-}" ]; then azd env set MCP_IMAGE "$MCP_IMAGE"; fi
           azd provision --no-prompt
+
+      - name: Deploy the recap function code
+        # fn-recap is a Functions app, not a container: its code goes up with `azd deploy recap`.
+        # It must not block the container deploy, so a failure is a warning and the smoke test still runs.
+        run: azd deploy recap --no-prompt || echo "::warning::azd deploy recap failed; the recap function runs its previous code"
 
       - name: Smoke test
         run: |

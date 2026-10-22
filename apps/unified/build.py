@@ -41,6 +41,19 @@ LANG_NEW = (
 LANG_NEW += """ + '</button>').join('')"""
 
 
+ASK_OLD = "  if (!typed || !SAMPLE) { chatAdd('ana', ruleAnswer(q)); return; }\n"
+ASK_NEW = """  if (!typed) { chatAdd('ana', ruleAnswer(q)); return; }
+  if (window.mcAsk) {
+    CP.busy = true; const out = chatAdd('ai', 'Checking with the agents…');
+    const a = await window.mcAsk(q); CP.busy = false;
+    const tick = a.verdict === 'verified' ? ' ✓ Verified' : '';
+    out.textContent = a.text + tick + (a.note ? ' (' + a.note + ')' : '');
+    return;
+  }
+  if (!SAMPLE) { chatAdd('ana', ruleAnswer(q)); return; }
+"""
+
+
 def sub(text, old, new, label):
     n = text.count(old)
     assert n == 1, label + ": expected 1 match, found " + str(n)
@@ -89,6 +102,8 @@ def build_watch():
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
     main = sub(main, LANG_OLD, LANG_NEW, "watch language labels")
+    # EXP-5: a typed question goes to the shell (the agents), not to a stand-in model
+    main = sub(main, ASK_OLD, ASK_NEW, "watch ask")
     head = sub(
         r(W + "head.html"),
         "<title>MatchCast 3D</title>",
@@ -167,6 +182,10 @@ def build_broadcast():
         + r(EMB + "hook.js")
         + "\n"
         + r(EMB + "broadcast.js")
+        + "\n"
+        + r(EMB + "replay.js")
+        + "\n"
+        + r(EMB + "onair.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
@@ -174,7 +193,7 @@ def build_broadcast():
 # ---------- Analyst: the enterprise console (same build as enterprise-console/build.py)
 # plus the shell hook
 def build_analyst():
-    pages = sorted(glob.glob(AS + "pages/*.js"))
+    pages = sorted(glob.glob(AS + "pages/*.js")) + sorted(glob.glob(U + "analyst-pages/*.js"))
     js = (
         r(AS + "core.js")
         + "\n"
@@ -255,6 +274,9 @@ def build(out_root):
     os.makedirs(out_root + "shared", exist_ok=True)
     shutil.copy(W + "players.json", out_root + "shared/players.json")
     shutil.copy(W + "intl.json", out_root + "shared/intl.json")
+    # optional Data platform assets (EXP-13): fabric-dashboard.mp4/.png, model-card.json
+    for f in sorted(glob.glob(U + "platform-assets/*")):
+        shutil.copy(f, out_root + "shared/" + os.path.basename(f))
     write(
         out_root + "shared/fixtures.json",
         json.dumps(fixtures(), ensure_ascii=False, separators=(",", ":")),
@@ -294,6 +316,8 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        for f in ["index.html", "contracts.js", "agents.js", "live.js", "config.js"]:
+        shell = ["index.html", "contracts.js", "agents.js", "live.js", "trace-panel.js"]
+        shell += ["voice.js", "voices.json"]
+        for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)
         print("local copy", dst)

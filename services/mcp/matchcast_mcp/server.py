@@ -8,13 +8,17 @@ package's ``InProcessTools``: the in-process and MCP paths cannot drift apart.
 import json
 from typing import Annotated, Any
 
+import duckdb
+from matchcast_agents.ask import default_assistant
 from matchcast_agents.context import MatchContext
 from matchcast_agents.state import MatchState, apply
-from matchcast_agents.store import MemoryStore, stream_key
+from matchcast_agents.store import Store, stream_key
 from matchcast_agents.tools import InProcessTools
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
+
+from .season import Season, SeasonError
 
 TENANT = "demo"
 MAX_RESULT_BYTES = 20_000
@@ -39,7 +43,7 @@ def _cap(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def create_server(store: MemoryStore) -> MCPServer:
+def create_server(store: Store, season: Season | None = None) -> MCPServer:
     server = MCPServer(
         "matchcast-tools",
         instructions=(
@@ -141,5 +145,56 @@ def create_server(store: MemoryStore) -> MCPServer:
         hi = target["event_time_ms"] + CLIP_RADIUS_MS
         clip = [e for e in ctx.events if lo <= e["event_time_ms"] <= hi]
         return _cap({"event_id": event_id, "from_ms": lo, "to_ms": hi, "events": clip})
+
+    loaded: list[Season] = [season] if season else []
+
+    def the_season() -> Season:
+        if loaded:
+            return loaded[0]
+        try:
+            loaded.append(Season())
+            return loaded[0]
+        except (SeasonError, duckdb.Error) as error:
+            raise ToolRefusal("season data is not available") from error
+
+    @server.tool()
+    def describe_views() -> dict[str, Any]:
+        """The season views a query_season SQL may read, with their columns and types."""
+        return _cap({"views": the_season().describe_views()})
+
+    @server.tool()
+    def query_season(
+        sql: Annotated[str, Field(max_length=2000, description="One SELECT over the season views")],
+    ) -> dict[str, Any]:
+        """Run one read-only SELECT over the 28-match season views (max 1,000 rows, 5 s)."""
+        try:
+            return _cap(the_season().query(sql))
+        except SeasonError as error:
+            raise ToolRefusal(str(error)) from error
+
+    @server.tool()
+    def search_kb(
+        query: Annotated[str, Field(max_length=300)],
+        corpus: str | None = None,
+        top: Annotated[int, Field(ge=1, le=8)] = 5,
+    ) -> dict[str, Any]:
+        """Search the football knowledge base (laws, metrics, tactics); chunks carry citable ids."""
+        index = default_assistant().index
+        hits = index.search(query, k=top, corpora={corpus} if corpus else None)
+        return _cap(
+            {
+                "chunks": [
+                    {
+                        "id": h.chunk.id,
+                        "corpus": h.chunk.corpus,
+                        "title": h.chunk.title,
+                        "section": h.chunk.section,
+                        "text": h.chunk.text,
+                        "score": round(h.score, 4),
+                    }
+                    for h in hits
+                ]
+            }
+        )
 
     return server

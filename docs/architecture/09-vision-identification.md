@@ -53,6 +53,8 @@ Rules:
 
 Response `200`: `{ "shirt": "10" | null, "confidence": 0.0-1.0, "source": "azure_read", "elapsed_ms": n }`. `429` above the budget. `api` calls Image Analysis 4.0 with feature `read` using `id-matchcast` (role Cognitive Services User).
 
+Status (22 Oct): the route and its budget are built (`services/api/app/vision.py`, tests in `tests/test_api_vision.py`). The reader calls Image Analysis 4.0 over REST with a managed-identity token when `VISION_ENDPOINT` is set (the `cv-matchcast-dev` resource is Azure-blocked until PLT-3); otherwise it answers `source: unavailable` and never invents a number. Crops are not stored yet (the Blob `vision/` debug copy is Planned).
+
 ## 5. Accuracy panel (Analyst view, Tracking lab)
 
 Shown live and saved per match: detection recall, identity accuracy (glyph only vs glyph + OCR), position error (median metres), pass detection precision and recall, ball speed error (km/h). The before/after identity number is the headline for the video.
@@ -66,3 +68,10 @@ Shown live and saved per match: detection recall, identity accuracy (glyph only 
 | OCR calls a minute | 0 | ≤ 15 |
 
 If the target is missed, we report the measured number. We never round it up.
+
+## OCR route behaviour (task 275)
+
+- `VISION_ENDPOINT` unset means no resource: the route answers `source: unavailable` and the glyph reader works alone. A value that is not an `https://<resource>.cognitiveservices.azure.com` host (or `.cognitive.microsoft.com`) stops the api at startup. The managed-identity token is never sent across a redirect.
+- Budget is per api process and shared by every caller; one viewer can use all 15 a minute. This is a cost cap (ADR-0010), not fairness. With more than one replica the ceiling is the sum.
+- A call that reaches Azure is charged even if Azure fails. A failure to get a token is refunded. Failures are logged by type only, never with the token or the image.
+- Crops are validated before any budget is taken: complete PNG (IHDR CRC, IEND), 128x128, at most 40 KB.

@@ -6,6 +6,8 @@ a hash-chained audit record (ADR-0013: lines carry verdicts and approvals).
 """
 
 import asyncio
+import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -18,13 +20,22 @@ from . import recap as recap_mod
 from .context import MatchContext
 from .hub import StreamHub
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
+from .personas import MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
-from .store import MemoryStore, stream_key
-from .tools import InProcessTools, ToolError
+from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
+from .store import MemoryStore, Store, stream_key
+from .tools import InProcessTools, ToolCall, ToolError
 
+STATS_DESK_BUDGET_S = 2.0
+
+TALK_PHRASES = {
+    "shots on target": "shots_on_target", "shots": "shots", "goals": "goals",
+    "tackles won": "tackles_won", "fouls": "fouls", "cards": "cards",
+}  # fmt: skip
+TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 
@@ -86,6 +97,7 @@ def rules_agents(
     seed_bad_claim: bool = False,
     seed_bad_claim_at_ms: int = 720_000,
     failing_tools: frozenset[str] = frozenset(),
+    tool_call: ToolCall | None = None,
 ) -> AgentSet:
     return AgentSet(
         ProducerRules(personas),
@@ -93,6 +105,7 @@ def rules_agents(
             corrupt_first_claim=seed_bad_claim,
             failing_tools=failing_tools,
             corrupt_after_ms=seed_bad_claim_at_ms,
+            tool_call=tool_call,
         ),
         NarratorRules(),
         VerifierRules(),
@@ -104,7 +117,17 @@ class WorkflowConfig:
     approval_mode: str = "auto"  # auto | producer
     publication_ttl_s: int = 30
     personas: tuple[Persona, ...] = ("casual", "analyst")
+    # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
+    orchestrator: str = field(
+        default_factory=lambda: os.environ.get("MATCHCAST_ORCHESTRATOR", "af")
+    )
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.orchestrator not in ("af", "native"):
+            raise ValueError(
+                f"MATCHCAST_ORCHESTRATOR must be af or native, not {self.orchestrator!r}"
+            )
 
 
 _TRACER = trace.get_tracer("matchcast.agents")
@@ -141,13 +164,16 @@ class MatchWorkflow:
         roster: dict[str, Any],
         names: dict[str, str] | None = None,
         clubs: dict[str, str] | None = None,
-        store: MemoryStore | None = None,
+        store: Store | None = None,
         hub: StreamHub | None = None,
         agents: AgentSet | None = None,
         config: WorkflowConfig | None = None,
         safety: SafetyScreen | None = None,
         clock: Callable[[], datetime] = _utc_now,
+        stats_desk: StatsDesk | None = None,
     ) -> None:
+        self.stats_desk = stats_desk
+        self._verified_claims: dict[str, dict[str, Any]] = {}
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
@@ -162,6 +188,7 @@ class MatchWorkflow:
         self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
         self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
+        self.extra_personas: list[str] = []
         self.store.put_match(
             self.sk, {"roster": self.roster, "names": self.names, "clubs": self.clubs}
         )
@@ -313,15 +340,46 @@ class MatchWorkflow:
         await self._process_event(event)
         self._checkpoint(event["stream_sequence"])
 
+    def add_persona(self, persona: str) -> bool:
+        """Write lines for a viewer's watch mode from the next moment on.
+
+        False when it is not a real club, player or metric of this match, or when the match
+        already writes for MAX_WATCH_MODES extra modes (each costs a Narrator call a moment).
+        Modes are kept until the match ends and are not checkpointed: a reconnecting viewer
+        adds theirs again.
+        """
+        if not known(persona, self.clubs, self.names):
+            return False
+        if persona in (*self.config.personas, *self.extra_personas):
+            return True
+        if len(self.extra_personas) >= MAX_WATCH_MODES:
+            return False
+        self.extra_personas.append(persona)
+        return True
+
     async def _process_event(self, event: dict[str, Any]) -> None:
         self.stats["events"] += 1
         state = apply(self.store.get_state(self.sk), event)
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
+        if self.config.orchestrator == "af":
+            from .af_graph import run_event  # Agent Framework is imported only when selected
+
+            await run_event(self, ctx, event)
+            return
+        decision = await self._decide(ctx, event)
+        if isinstance(decision, ProducerTask):
+            await self._run_moment(ctx, decision)
+
+    async def _decide(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
+        """The Producer: one task for a moment worth a line, or None after auditing a skip."""
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
+        if isinstance(decision, ProducerTask) and self.extra_personas:
+            both = dict.fromkeys([*decision.personas, *self.extra_personas])
+            decision = decision.model_copy(update={"personas": tuple(both)})
         if isinstance(decision, Skip):
             self.stats["skipped"] += 1
             if decision.reason in AUDIT_SKIPPED:
@@ -331,9 +389,9 @@ class MatchWorkflow:
                     decision.moment_id,
                     reason=decision.reason,
                 )
-            return
+            return None
         self.stats["moments"] += 1
-        await self._run_moment(ctx, decision)
+        return decision
 
     def _state_json(self, state: MatchState) -> dict[str, Any]:
         return {
@@ -375,6 +433,63 @@ class MatchWorkflow:
     def record_export(self, export_id: str, kind: str, sha256: str, rows: int) -> None:
         self._audit("person", "viewer", "export_created", export_id,
                     {"kind": kind, "sha256": sha256, "rows": rows})  # fmt: skip
+
+    # ---- talk to a player or the producer (EXP-16) ---------------------------------------
+
+    async def talk(self, target: str, utterance: str) -> dict[str, Any]:
+        """A role agent answers from its own facts; the reply is checked before it is returned."""
+        from .roles import player_reply, producer_reply
+        from .verify import extract_names
+
+        async with self._lock:
+            shield = await self.safety.shield(utterance)
+            if shield.attack_detected:
+                self._audit("system", "content-safety", "safety_blocked", "talk",
+                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+                raise WorkflowError("prompt_attack", "the utterance was flagged as a prompt attack")
+            ctx = self._ctx()
+            if target == "producer":
+                reply, facts = producer_reply(ctx, utterance)
+            elif target in ctx.names or any(
+                e["payload"].get("player_id") == target for e in ctx.events
+            ):
+                reply, facts = player_reply(ctx, target, utterance)
+            else:
+                raise WorkflowError("not_found", f"unknown talk target {target}")
+            numbers_ok = self._talk_numbers_ok(ctx, target, reply)
+            names_ok = all(n.casefold() in ctx.allowed_names for n in extract_names(reply))
+            words = len(reply.split())
+            verdict = "verified" if numbers_ok and names_ok and words <= 60 else "rejected"
+            if verdict == "rejected":
+                reply, facts = "I can't confirm that from the match data yet.", {}
+            self._audit("agent", f"talk-{target}", "talk_answered", "talk",
+                        {"target": target, "verdict": verdict, "facts": facts})  # fmt: skip
+            return {"target": target, "reply": reply, "verdict": verdict, "facts": facts}
+
+    @staticmethod
+    def _talk_numbers_ok(ctx: MatchContext, target: str, reply: str) -> bool:
+        """Every number must be one the log gives, attached to the metric it names.
+
+        Recounted from the stored events here, not taken from the facts the role agent built.
+        """
+        from .state import counted
+        from .verify import extract_numbers
+        from .verify.checks import recompute
+
+        numbers = extract_numbers(reply)
+        if target == "producer":
+            upto = ctx.state.max_sequence
+            goals = {recompute(ctx.events, f"goals:{t}", upto) for t in (ctx.home, ctx.away)}
+            return all(n in goals for n in numbers)
+        recount = dict.fromkeys(TALK_PHRASES.values(), 0)
+        for event in ctx.events:
+            p = event["payload"]
+            if p.get("player_id") == target and p["type"] not in ("correction", "retraction"):
+                for metric, _team in counted(p):
+                    if metric in recount:
+                        recount[metric] += 1
+        named = [(float(m.group(1)), TALK_PHRASES[m.group(2)]) for m in TALK_RE.finditer(reply)]
+        return len(named) == len(numbers) and all(recount[k] == n for n, k in named)
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
@@ -522,13 +637,72 @@ class MatchWorkflow:
     # ---- one moment through the graph --------------------------------------------------
 
     async def _run_moment(self, ctx: MatchContext, task: ProducerTask) -> None:
-        a = self.agents
         claims = await self._analyse(ctx, task, repair=False)
         if not claims:
             return
-        drafts = await self._call(a.narrator, "write", task.moment_id, ctx, task, claims)
+        drafts = await self._narrate(ctx, task, claims)
+        await self._verify_drafts(ctx, task, claims, drafts)
+        await self._desk_after_verify(task)
+
+    async def _narrate(
+        self, ctx: MatchContext, task: ProducerTask, claims: list[dict[str, Any]]
+    ) -> list[DraftLine]:
+        return await self._call(self.agents.narrator, "write", task.moment_id, ctx, task, claims)
+
+    async def _verify_drafts(
+        self,
+        ctx: MatchContext,
+        task: ProducerTask,
+        claims: list[dict[str, Any]],
+        drafts: list[DraftLine],
+    ) -> None:
+        """Verifier, repair router and approval for every draft of the moment."""
+        self._verified_claims = {}
         for draft in drafts:
             await self._verify_line(ctx, task, claims, draft, attempt=0)
+
+    def _wants_desk(self, task: ProducerTask) -> bool:
+        return task.priority == 1 and self.stats_desk is not None
+
+    async def _desk_after_verify(self, task: ProducerTask) -> None:
+        if not self._wants_desk(task):
+            return
+        # After verification: only a claim that backs a verified line is ever sent to the desk.
+        checked = list(self._verified_claims.values())
+        try:
+            await asyncio.wait_for(self._ask_stats_desk(task, checked), STATS_DESK_BUDGET_S)
+        except TimeoutError:
+            self._audit("agent", "producer", "a2a_failed", task.moment_id, {"error": "time budget"})
+
+    async def _ask_stats_desk(self, task: ProducerTask, claims: list[dict[str, Any]]) -> None:
+        """Priority 1 moments: compare the first team stat with the season over A2A (audited)."""
+        claim = next((c for c in claims if c["metric"].split(":")[0] in TEAM_METRICS), None)
+        if claim is None:
+            return
+        metric, _, team_id = claim["metric"].partition(":")
+        details: dict[str, Any] = {
+            "skill": "compare_to_season",
+            "metric": metric,
+            "value": claim["value"],
+            "claim_id": claim["claim_id"],
+            "team_id": team_id,
+            "as_of_ms": claim["snapshot"]["event_time_ms"],  # running total vs full-match season
+            "transport": getattr(self.stats_desk, "transport", "a2a"),
+        }
+        try:
+            result = await self.stats_desk.compare(  # type: ignore[union-attr]
+                metric, "team", claim["value"], team_id
+            )
+        except StatsDeskError as error:
+            self._audit(
+                "agent",
+                "producer",
+                "a2a_failed",
+                task.moment_id,
+                {**details, "error": str(error)[:200]},
+            )
+            return
+        self._audit("agent", "producer", "a2a_call", task.moment_id, {**details, "result": result})
 
     async def _analyse(
         self, ctx: MatchContext, task: ProducerTask, *, repair: bool
@@ -643,6 +817,9 @@ class MatchWorkflow:
         )
         if record.status == "verified":
             self.stats["verified"] += 1
+            for claim in claims:
+                if claim["claim_id"] in record.claim_ids:
+                    self._verified_claims[claim["claim_id"]] = claim
             if self.config.approval_mode == "auto":
                 self._approve(record, "agent", a.producer.agent_id)
 

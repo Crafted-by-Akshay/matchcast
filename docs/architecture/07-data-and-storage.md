@@ -66,12 +66,12 @@ A **claim** is one measured fact (Analyst). A **line** is the Narrator's text fo
 
 ## 4. Tables
 
-All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A string column is at most 60 KB; anything larger goes to Blob `overflow/{prefix}/{table}/{RowKey}.json` and the column holds `blob:<path>`.
+All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A string property holds at most 64 KB of UTF-16 (32,768 units; the code uses 32,000); anything larger goes to Blob `overflow/{prefix}/{table}/{RowKey}.<sha256 prefix>.json` and the column holds `blob:<path>`.
 
 | Table | PartitionKey | RowKey | Columns | Written by | Read by |
 | --- | --- | --- | --- | --- | --- |
 | `matches` | `tenant_id` | `session_id|match_id` | seed, engine_version, home_team_id, away_team_id, venue_id, kickoff_local, approval_mode (`auto`, `producer`), status (`scheduled`, `live`, `full_time`, `abandoned`), languages_active (JSON), score_home, score_away, created_at, ended_at | `api` | all |
-| `events` | `sk` | `stream_sequence` (10 digits) | event_id, kind, revision, event_time_ms, period, team_id, player_id, payload (JSON), emitted_at, ingested_at | `api` consumer | `mcp`, `api` |
+| `events` | `sk` | `stream_sequence` (10 digits) `.` `revision` (4 digits) | event_id, kind, revision, event_time_ms, period, team_id, player_id, payload (JSON), emitted_at, ingested_at | `api` consumer | `mcp`, `api` |
 | `matchstate` | `sk` | `current` or `rev:<revision 10 digits>` | revision, last_sequence, state (JSON), updated_at | `api` consumer (only writer) | `mcp`, `api` |
 | `claims` | `sk` | `claim_id` | moment_id, agent, metric, value, units, source_event_ids (JSON), tool_call_ids (JSON), formula_inputs (JSON), derivation_version, snapshot_revision, verdict, reason_code, approval_status, created_at | workflow | `api`, `mcp` (`get_evidence`) |
 | `lines` | `sk` | `line_id` | claim_ids (JSON), persona, text, status (`drafted`, `verifying`, `verified`, `review`, `rejected`, `repairing`, `abstained`, `approved`, `killed`, `published`), reason_code, checks (JSON), repair_of, created_at, decided_by | workflow, Producer actions | `api` |
@@ -80,10 +80,12 @@ All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A
 | `checkpoints` | `sk` | `<moment_id>:<executor>` | checkpoint (JSON), created_at | workflow | workflow on resume |
 | `conversations` | `sk|browser_session_id` | `turn` (4 digits) | question, persona, answer, citations (JSON), verdict, created_at | `api /ask` | `api /ask` |
 
+Built today (`packages/agents/matchcast_agents/tables.py`, AGT-3 and AGT-13): `TableStore` implements the repositories for `matches`, `events`, `matchstate`, `claims`, `lines`, `publications`, `recaps`, `checkpoints` and `audit` with the keys above. Each row stores the whole record as JSON in a `doc` column beside its key columns (`event_id` and `revision` on events, `revision` and `last_sequence` on matchstate, `processed_sequence` on checkpoints), and a value over 32,000 UTF-16 units goes to the `overflow` container as described (`build_store` creates the container if it is missing). Claims, lines and publications also carry `ord` (a zero-padded nanosecond clock) so lists keep insertion order. The checkpoint is one row per match (`current`) holding the processed sequence, the state and the Producer memory, which is what the workflow resumes from. Events are keyed by `stream_sequence` and `revision` (see below for the duplicate marker rows). `conversations` has no repository yet.
+
 Write rules:
 1. Idempotent keys: `claim_id = sha256(sk, moment_id, agent, derivation_version)[:24]`; `line_id = sha256(claim_ids, persona, attempt)[:24]`; `publication_id = sha256(line_id)[:24]`. Upserts with the same key are safe on replay.
 2. `audit.sequence` is assigned by a single writer per match (the `api` replica) with an optimistic insert; a 409 Conflict means another writer won, so re-read the tail and retry once.
-3. `matchstate/current` is updated with an ETag check (`If-Match`), so a stale writer fails instead of overwriting.
+3. `matchstate/current` is updated with an ETag check (`If-Match`), so a stale writer fails instead of overwriting. `TableStore.put_state` is a plain upsert today (one writer, ADR-0005); the check comes with a second writer.
 
 ## 5. Blob containers
 
@@ -106,12 +108,14 @@ The `mcp` container opens an in-memory DuckDB at start, reads the season Parquet
 
 | View | Grain | Key columns |
 | --- | --- | --- |
-| `matches` | one row per match | match_id, date, home_team_id, away_team_id, score_home, score_away, venue_id, weather |
+| `matches` | one row per match | match_id, date, home_team_id, away_team_id, score_home, score_away, venue (stadium name) |
 | `events` | one row per event | match_id, stream_sequence, kind, team_id, player_id, x, y, event_time_ms, outcome, xg |
 | `players` | one row per player | player_id, team_id, name, shirt, position, rating |
-| `team_match_stats` | team × match | goals, shots, xg, passes, pass_pct, duels, possession_pct, ppda |
-| `player_match_stats` | player × match | minutes, goals, shots, xg, passes, key_passes, tackles, distance_km |
+| `team_match_stats` | team × match | match_id, team_id, side, goals, shots, xg, passes, passes_completed, possession_pct, fouls, yellow_cards, red_cards, offsides |
+| `player_match_stats` | player × match | match_id, player (name), team_id, passes, passes_completed, tackles, shots, xg, distance_km |
 | `player_vectors` | one row per player | per-90 vector of 12 metrics, used for similarity |
+
+Built today (`scripts/export_season.py`, 28 matches, `data/season/v1/*.parquet`): `matches`, `team_match_stats` and `player_match_stats`, with exactly the columns shown for them above. `events`, `players` and `player_vectors` are planned. The tests in `services/mcp/tests/test_export_season.py` keep the exported columns and the queryable metrics in step.
 
 ## 7. Event Hubs
 
@@ -120,7 +124,7 @@ The `mcp` container opens an in-memory DuckDB at start, reads the season Parquet
 
 ## 8. Fabric Eventhouse
 
-Table `events` (KQL): `tenant_id: string, session_id: string, match_id: string, stream_sequence: long, event_id: string, kind: string, team_id: string, player_id: string, x: real, y: real, event_time_ms: long, period: int, payload: dynamic, ingested_at: datetime`. Queries for the four dashboard tiles are in `data/fabric/queries.kql`.
+Table `events` (KQL): `tenant_id: string, session_id: string, match_id: string, stream_sequence: long, event_id: string, revision: int, kind: string, team_id: string, player_id: string, x: real, y: real, event_time_ms: long, period: int, payload: dynamic, ingested_at: datetime`. Queries for the four dashboard tiles are in `data/fabric/queries.kql`.
 
 ## 9. Databricks Unity Catalog
 
@@ -137,7 +141,9 @@ Catalog `matchcast`: schema `raw` (external volumes over Blob `scenes` and `seas
 No code outside the store modules imports an Azure storage SDK. This keeps tests fast and makes a later change of database a contained job.
 
 - One repository per table in §4 (`MatchRepo`, `EventRepo`, `StateRepo`, `ClaimRepo`, `LineRepo`, `PublicationRepo`, `AuditRepo`, `CheckpointRepo`, `ConversationRepo`), defined as Python `Protocol` classes in `packages/agents/matchcast_agents/store.py`.
-- Two implementations: `TableStore` (azure-data-tables with the managed identity, plus the Blob overflow rule) and `MemoryStore` (dictionaries, for unit tests and the local rules mode). The setting `MATCHCAST_STORE=table|memory` picks one; the default in Azure is `table`, locally and in CI it is `memory`.
+- Two implementations: `TableStore` (azure-data-tables with the managed identity, plus the Blob overflow rule) and `MemoryStore` (dictionaries, for unit tests and the local rules mode). The setting `MATCHCAST_STORE=table|memory` picks one; the default in Azure is `table`, locally and in CI it is `memory`. The api's `Registry` reads the setting (`build_store()`), so the MCP tools, the workflow and the routes share that one store.
+
+`table` mode behaviour (fixed 22 Oct after the Agents-lane review): `build_store()` returns `BufferedTableStore`, a memory cache in front of `TableStore` with one ordered write-behind thread, so the Azure SDK's synchronous calls never block the event loop; reads are served from memory and a match is loaded from the tables once (`hydrate`, run off the loop by `POST /v1/matches`). A failed background write is raised from the next store call and `flush()` waits for the queue. The cost is that the last few writes are lost if the process dies; checkpoints are written after the events they cover, in the same queue, so the Event Hubs replay fills the gap. Creating a match whose `session_id`/`match_id` is already stored answers `409 match_exists` instead of resuming over the old rows. Events are keyed `stream_sequence.revision` (for example `0000000012.0000`), so a correction that keeps its sequence is kept beside revision 0, and a marker row per `(event_id, revision)` in partition `<sk>#ids` stops a re-send under another sequence from being stored twice. Rows written before this key change (`0000000012`, no revision suffix) are not read specially; no table was deployed with them, and a deployed table from before 22 Oct must be emptied. After a failed background write every store change raises (before memory is touched) until the process restarts, which is the signal to look at storage.
 - The same contract test suite runs against both (see [16-testing-and-quality.md](16-testing-and-quality.md) §7): `TableStore` against Azurite, `MemoryStore` in process. A new store is allowed only when it passes that suite unchanged.
 
 ## 12. If a feature needs a real database

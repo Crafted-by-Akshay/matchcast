@@ -20,6 +20,8 @@ Each flow is a sequence diagram plus numbered rules. Names in `code` are real en
 
 ## F1 Live match loop
 
+Exported image: [img/3-life-of-one-claim.png](img/3-life-of-one-claim.png) (regenerate with `scripts/export_diagrams.sh`).
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -229,7 +231,7 @@ sequenceDiagram
   A-->>A: SSE recap_ready
 ```
 
-The function holds no agent logic. It only triggers the `api`, so all agent code lives in one place.
+The function holds no agent logic. It only triggers the `api`, so all agent code lives in one place. Full time is `period_boundary` `ended` in the final period (`RECAP_FINAL_PERIODS`, default 2: the contract has no `full_time` phase); the Functions host keeps its own checkpoints in the storage account, not in `eh-checkpoints/recap`.
 
 ## F9 Cold start and resume after a crash
 

@@ -1,0 +1,95 @@
+// Fabric Eventhouse `matchcast` (DAT-7): run these commands once, in order, in the KQL database.
+// The Eventstream reads Event Hubs `match-events` ($Default group, Entra auth) and delivers the raw
+// JSON (`matchcast.event/1`, packages/contracts) into events_raw with the mapping below. An update
+// policy flattens it into `events`, the table in docs/architecture/07 section 8.
+// Not run against a live Eventhouse yet: verify with data/fabric/README.md once the workspace exists.
+
+// 1. Landing table. One column per top-level field we keep, the payload as dynamic.
+.create-merge table events_raw (
+    record_kind: string,
+    tenant_id: string,
+    session_id: string,
+    match_id: string,
+    stream_sequence: long,
+    event_id: string,
+    revision: int,
+    event_time_ms: long,
+    period: int,
+    payload: dynamic
+)
+
+// 2. JSON ingestion mapping, named in the Eventstream destination settings.
+.create-or-alter table events_raw ingestion json mapping 'events_raw_mapping'
+```[
+  {"column":"record_kind",     "path":"$.kind",                  "datatype":"string"},
+  {"column":"tenant_id",       "path":"$.stream.tenant_id",      "datatype":"string"},
+  {"column":"session_id",      "path":"$.stream.session_id",     "datatype":"string"},
+  {"column":"match_id",        "path":"$.stream.match_id",       "datatype":"string"},
+  {"column":"stream_sequence", "path":"$.stream_sequence",       "datatype":"long"},
+  {"column":"event_id",        "path":"$.event_id",              "datatype":"string"},
+  {"column":"revision",        "path":"$.revision",              "datatype":"int"},
+  {"column":"event_time_ms",   "path":"$.event_time_ms",         "datatype":"long"},
+  {"column":"period",          "path":"$.clock.period",          "datatype":"int"},
+  {"column":"payload",         "path":"$.payload",               "datatype":"dynamic"}
+]```
+
+// 3. Query table (docs/architecture/07 section 8).
+.create-merge table events (
+    tenant_id: string,
+    session_id: string,
+    match_id: string,
+    stream_sequence: long,
+    event_id: string,
+    revision: int,
+    kind: string,
+    team_id: string,
+    player_id: string,
+    x: real,
+    y: real,
+    event_time_ms: long,
+    period: int,
+    payload: dynamic,
+    ingested_at: datetime
+)
+
+// 4. Flatten. Only match events (the hub also carries claims, lines and audit records).
+//    Passes and carries have no single position, so x and y are the start position.
+.create-or-alter function with (docstring = 'matchcast.event/1 to the events table', folder = 'matchcast')
+ExpandEvents() {
+    events_raw
+    | where record_kind == "event" and isnotempty(tostring(payload.type))
+    | project
+        tenant_id,
+        session_id,
+        match_id,
+        stream_sequence,
+        event_id,
+        revision,
+        kind = tostring(payload.type),
+        team_id = tostring(payload.team_id),
+        player_id = tostring(payload.player_id),
+        x = todouble(coalesce(payload.position.x, payload.start_position.x)),
+        y = todouble(coalesce(payload.position.y, payload.start_position.y)),
+        event_time_ms,
+        period,
+        payload,
+        ingested_at = now()
+}
+
+.alter table events policy update
+@'[{"IsEnabled": true, "Source": "events_raw", "Query": "ExpandEvents()", "IsTransactional": false}]'
+
+// 5. Dashboards read the latest revision of each event, without retractions. A correction or retraction
+//    is a new row with a higher revision (docs/contracts.md), so counting `events` directly would inflate.
+.create-or-alter function with (docstring = 'latest revision of each event, retractions removed', folder = 'matchcast')
+EventsLatest() {
+    events
+    | summarize arg_max(revision, *) by tenant_id, session_id, match_id, event_id
+    | where kind != "retraction"
+}
+
+// 6. The raw table is only a landing zone: keep one day.
+.alter-merge table events_raw policy retention softdelete = 1d recoverability = disabled
+
+// 7. Check after a replay at 4x (acceptance criterion of DAT-7). Compare with the replay's published count.
+// EventsLatest() | where match_id == "<match>" | count

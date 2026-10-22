@@ -19,22 +19,31 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
-from matchcast_agents.store import MemoryStore
+from matchcast_agents.personas import ALIASES, normalise
+from matchcast_agents.statsdesk import StatsDeskError
+from matchcast_agents.store import stream_key
+from matchcast_agents.tables import build_store
+from matchcast_agents.tools import ToolCall
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
+from matchcast_mcp.season import Season, SeasonError
+from matchcast_mcp.server import create_server
+from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
+from app.vision import VISION_MAX_BODY, VisionError, VisionService
 
 TENANT = "demo"
 HEARTBEAT_S = 15
 ASK_PER_MINUTE = 5
+DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
-PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {
     "not_found": 404,
     "match_exists": 409,
@@ -53,8 +62,16 @@ def pretty(identifier: str) -> str:
 class Problem(Exception):
     """Rendered as RFC 9457 application/problem+json."""
 
-    def __init__(self, status: int, code: str, detail: str, path: str | None = None):
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        detail: str,
+        path: str | None = None,
+        retry_after: int | None = None,
+    ):
         self.status, self.code, self.detail, self.path = status, code, detail, path
+        self.retry_after = retry_after
 
 
 def problem_response(error: Problem) -> JSONResponse:
@@ -67,7 +84,10 @@ def problem_response(error: Problem) -> JSONResponse:
         "path": error.path,
         "trace_id": uuid.uuid4().hex,
     }
-    return JSONResponse(body, status_code=error.status, media_type="application/problem+json")
+    headers = {"Retry-After": str(error.retry_after)} if error.retry_after else None
+    return JSONResponse(
+        body, status_code=error.status, media_type="application/problem+json", headers=headers
+    )
 
 
 class MatchCreate(BaseModel):
@@ -118,11 +138,59 @@ class ExportBody(BaseModel):
     metric: str | None = None
 
 
+class VisionIdentify(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    crop: str = Field(min_length=1, max_length=60_000)  # base64 PNG, 128x128, at most 40 KB decoded
+    track_id: str = Field(min_length=1, max_length=64)
+    team_hint: Literal["home", "away"]
+
+
+class DsAsk(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    question: str = Field(min_length=1, max_length=300)
+
+
+class TalkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    target: str = Field(pattern=ID)
+    utterance: str = Field(min_length=1, max_length=300)
+
+
 class RecapTrigger(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tenant_id: str = Field(default=TENANT, pattern=ID)
     session_id: str = Field(pattern=ID)
     match_id: str = Field(pattern=ID)
+    final: bool = False  # full time after extra time: write the recaps again over the first ones
+
+
+class _LocalStatsDesk:
+    """The Stats Desk skill called in-process; the mcp container serves the same over A2A."""
+
+    transport = "in_process"
+
+    def __init__(self, season: Season) -> None:
+        self.season = season
+        self._season = season
+
+    async def compare(
+        self, metric: str, scope: str, value: float, team_id: str | None = None
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(self._season.compare, metric, scope, value, team_id)
+        except SeasonError as error:
+            raise StatsDeskError(str(error)) from error
+
+
+def _local_stats_desk() -> _LocalStatsDesk | None:
+    try:
+        return _LocalStatsDesk(Season())
+    except Exception:  # noqa: BLE001 - no season Parquet in this image
+        logging.getLogger(__name__).warning("season data missing; Stats Desk disabled")
+        return None
 
 
 class Registry:
@@ -130,11 +198,18 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
-        self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
+        self.create_lock = asyncio.Lock()  # the stored-match check awaits, so creates take turns
+        self.store = (
+            build_store()
+        )  # MATCHCAST_STORE=table|memory; one store for every match, so the MCP tools see them all
         self.require_role = require_role
+        self.stats_desk = _local_stats_desk()
         self._model_client: ModelClient | None = None
         self.asked: dict[str, deque[float]] = {}
         self.exports: dict[str, tuple[bytes, str, str]] = {}
+        self.season = self.stats_desk.season if self.stats_desk else None
+        self.ds_asked: dict[str, deque[float]] = {}
+        self.vision = VisionService()
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -152,9 +227,26 @@ class Registry:
     def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
         """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
         client = self.model_client()
+        tool_call = self.tool_call()
         if client is None:
-            return rules_agents(personas, **seed)
-        return live_agents(client, personas, **seed)
+            return rules_agents(personas, tool_call=tool_call, **seed)
+        return live_agents(client, personas, tool_call=tool_call, **seed)
+
+    def tool_call(self) -> ToolCall | None:
+        """With MATCHCAST_TOOLS=mcp the Analyst calls the MCP tools in memory, against this
+        process's store. A separate `mcp` container needs the shared store first (DAT-2)."""
+        if os.environ.get("MATCHCAST_TOOLS") != "mcp":
+            return None
+        server = create_server(self.store)
+
+        async def call(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+            async with Client(server) as client:
+                result = await client.call_tool(tool, arguments)
+            if result.is_error or result.structured_content is None:
+                raise RuntimeError(f"{tool} returned an error")
+            return result.structured_content
+
+        return call
 
     def model_client(self) -> ModelClient | None:
         if self._model_client is None and os.environ.get("MATCHCAST_AGENT_MODE") == "live":
@@ -164,6 +256,19 @@ class Registry:
                 logging.getLogger(__name__).warning("live mode requested; using rules agents")
         return self._model_client
 
+    def allow_ds(self, client: str, now: float | None = None) -> bool:
+        """At most DS_PER_MINUTE Data Scientist questions per client per rolling minute."""
+        now = time.monotonic() if now is None else now
+        for key in [k for k, w in self.ds_asked.items() if not w or now - w[-1] >= 60]:
+            del self.ds_asked[key]
+        window = self.ds_asked.setdefault(client, deque())
+        while window and now - window[0] >= 60:
+            window.popleft()
+        if len(window) >= DS_PER_MINUTE:
+            return False
+        window.append(now)
+        return True
+
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))
         if flow is None:
@@ -171,12 +276,19 @@ class Registry:
         return flow
 
 
+def _is_stored(store: Any, sk: str) -> bool:
+    hydrate = getattr(store, "hydrate", None)
+    if hydrate is not None:
+        hydrate(sk)
+    return store.get_match(sk) is not None
+
+
 def _line_json(line: LineRecord) -> dict[str, Any]:
     return line.model_dump()
 
 
-def _claim_verdict(flow: MatchWorkflow, claim_id: str) -> str:
-    states = [ln.status for ln in flow.store.lines(flow.sk) if claim_id in ln.claim_ids]
+def _claim_verdict(lines: list[LineRecord], claim_id: str) -> str:
+    states = [ln.status for ln in lines if claim_id in ln.claim_ids]
     if any(s in ("verified", "approved", "published") for s in states):
         return "verified"
     if any(s in ("rejected", "abstained", "killed") for s in states):
@@ -188,10 +300,11 @@ def _claim_rows(
     flow: MatchWorkflow, verdict: str | None, agent: str | None, metric: str | None
 ) -> list[dict[str, Any]]:
     rows = []
+    lines = list(flow.store.lines(flow.sk))  # read once: a durable store scans a partition per call
     for row in flow.store.claims(flow.sk):
         packet = row["packet"]
         item = {**packet, "agent": row["agent"], "moment_id": row["moment_id"],
-                "verdict": _claim_verdict(flow, packet["claim_id"])}  # fmt: skip
+                "verdict": _claim_verdict(lines, packet["claim_id"])}  # fmt: skip
         if (verdict and item["verdict"] != verdict) or (agent and item["agent"] != agent):
             continue
         if metric and item["metric"] != metric:
@@ -238,38 +351,46 @@ def build_router(registry: Registry) -> APIRouter:
         body: MatchCreate,
         x_matchcast_seed_bad_claim: str | None = Header(default=None),
     ) -> dict[str, Any]:
-        key = (body.session_id, body.match_id)
-        if key in registry.flows:
-            raise Problem(409, "match_exists", "match already exists")
-        stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": body.match_id}
-        if body.roster.get("stream") != stream:
-            raise Problem(
-                422, "contract_invalid", "roster stream must match this match", "/roster/stream"
-            )
-        config = WorkflowConfig(approval_mode=body.approval_mode)
-        players = body.roster.get("players")
-        teams = body.roster.get("team_ids")
-        try:
-            names = {p["player_id"]: pretty(p["player_id"]) for p in players or []} | body.names
-            clubs = {team: pretty(team) for team in teams or []} | body.clubs
-            flow = MatchWorkflow(
-                stream=stream,
-                roster=body.roster,
-                names=names,
-                clubs=clubs,
-                agents=registry.agents_for(
-                    config.personas,
-                    seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
-                    seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
-                ),
-                config=config,
-                store=registry.store,
-            )
-        except (ContractError, TypeError, KeyError) as error:
-            raise Problem(
-                422, "contract_invalid", str(error), getattr(error, "path", "/roster")
-            ) from error
-        registry.flows[key] = flow
+        async with registry.create_lock:
+            key = (body.session_id, body.match_id)
+            if key in registry.flows:
+                raise Problem(409, "match_exists", "match already exists")
+            stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": body.match_id}
+            # A match an earlier process stored is not started again over its rows (07 §11).
+            # The store reads Table Storage, so it runs off the event loop.
+            if await asyncio.to_thread(_is_stored, registry.store, stream_key(stream)):
+                raise Problem(
+                    409, "match_exists", "match already exists in the store; use a new id"
+                )
+            if body.roster.get("stream") != stream:
+                raise Problem(
+                    422, "contract_invalid", "roster stream must match this match", "/roster/stream"
+                )
+            config = WorkflowConfig(approval_mode=body.approval_mode)
+            players = body.roster.get("players")
+            teams = body.roster.get("team_ids")
+            try:
+                names = {p["player_id"]: pretty(p["player_id"]) for p in players or []} | body.names
+                clubs = {team: pretty(team) for team in teams or []} | body.clubs
+                flow = MatchWorkflow(
+                    stream=stream,
+                    roster=body.roster,
+                    names=names,
+                    clubs=clubs,
+                    agents=registry.agents_for(
+                        config.personas,
+                        seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
+                        seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
+                    ),
+                    config=config,
+                    store=registry.store,
+                    stats_desk=registry.stats_desk,
+                )
+            except (ContractError, TypeError, KeyError) as error:
+                raise Problem(
+                    422, "contract_invalid", str(error), getattr(error, "path", "/roster")
+                ) from error
+            registry.flows[key] = flow
         return {"stream": stream, "approval_mode": body.approval_mode, "mode": flow.agents.mode}
 
     @router.get("/matches/{match_id}")
@@ -300,7 +421,12 @@ def build_router(registry: Registry) -> APIRouter:
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
         flow = registry.get(session_id, match_id)
-        persona = PERSONA_ALIASES.get(persona or "", persona)
+        if persona:
+            persona = normalise(persona, flow.clubs, flow.names)
+            if persona is None:
+                raise Problem(422, "contract_invalid", "unknown persona for this match")
+            if not flow.add_persona(persona):  # a watch mode gets lines from the next moment on
+                raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and persona and item.data["persona"] != persona)
@@ -467,10 +593,65 @@ def build_router(registry: Registry) -> APIRouter:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )  # fmt: skip
 
+    @router.post("/matches/{match_id}/vision/identify")
+    async def vision_identify(
+        match_id: str, body: VisionIdentify, request: Request
+    ) -> dict[str, Any]:
+        """Second opinion on a shirt number from a torso crop (DAT-11); budgeted, never stored."""
+        registry.get(body.session_id, match_id)
+        try:
+            return await asyncio.to_thread(registry.vision.identify, body.crop)
+        except VisionError as error:
+            raise Problem(
+                error.status, error.code, error.detail, retry_after=error.retry_after
+            ) from error
+
+    @router.post("/ds/ask")
+    async def ds_ask(body: DsAsk, request: Request) -> dict[str, Any]:
+        """Data Scientist: a season question, answered from one verified SELECT (F10)."""
+        if registry.season is None:
+            raise Problem(503, "not_ready", "the season data is not loaded")
+        if not registry.allow_ds(request.client.host if request.client else "local"):
+            raise Problem(
+                429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute", retry_after=60
+            )
+        try:
+            result = await asyncio.to_thread(ds_ask_season, body.question, registry.season)
+        except SeasonError as error:
+            raise Problem(400, "invalid_query", str(error)) from error
+        stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": "season"}
+        registry.store.append_audit(
+            stream_key(stream), stream=stream, actor_kind="agent", actor_id="data-scientist",
+            action="ds_answered" if result.verdict == "verified" else "ds_unverified",
+            subject_id="ds-ask",
+            details={"verdict": result.verdict, "sql": result.sql, "mismatch": result.mismatch},
+            time=_now(),
+        )  # fmt: skip
+        return {
+            "answer": result.answer,
+            "verdict": result.verdict,
+            "sql": result.sql,
+            "columns": result.columns,
+            "rows": result.rows,
+            "chart_spec": result.chart_spec,
+        }
+
+    @router.post("/matches/{match_id}/talk")
+    async def talk(match_id: str, body: TalkBody) -> dict[str, Any]:
+        flow = registry.get(body.session_id, match_id)
+        if not registry.allow_ask(body.session_id):  # /ask and /talk share one budget
+            raise Problem(
+                429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
+            )
+        try:
+            return await flow.talk(body.target, body.utterance)
+        except WorkflowError as error:
+            raise Problem(STATUS[error.code], error.code, str(error)) from error
+
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:
         flow = registry.get(session_id, match_id)
-        recap = flow.store.get_recap(flow.sk, PERSONA_ALIASES.get(persona, persona))
+        recap = flow.store.get_recap(flow.sk, ALIASES.get(persona, persona))
         if recap is None:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
         return recap
@@ -479,7 +660,9 @@ def build_router(registry: Registry) -> APIRouter:
     async def ask(match_id: str, body: AskBody) -> dict[str, Any]:
         flow = registry.get(body.session_id, match_id)
         if not registry.allow_ask(body.session_id):
-            raise Problem(429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute")
+            raise Problem(
+                429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
+            )
         try:
             result = await flow.ask(body.question, body.persona)
         except WorkflowError as error:
@@ -507,7 +690,7 @@ def build_internal_router(registry: Registry) -> APIRouter:
             raise Problem(403, "forbidden_role", "this route needs the recap function identity")
         flow = registry.get(body.session_id, body.match_id)
         try:
-            recaps = await flow.recap()
+            recaps = await flow.recap(force=body.final)
         except WorkflowError as error:
             raise Problem(503, error.code, str(error)) from error
         return {"match_id": body.match_id, "personas": sorted(recaps)}
@@ -529,6 +712,16 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     @app.exception_handler(Problem)
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
         return problem_response(error)
+
+    @app.middleware("http")
+    async def vision_body_limit(request: Request, call_next: Any) -> Any:
+        """The vision route is anonymous: refuse an oversize body before it is buffered."""
+        size = request.headers.get("content-length", "0")
+        if request.url.path.endswith("/vision/identify") and (
+            not size.isdigit() or int(size) > VISION_MAX_BODY
+        ):
+            return problem_response(Problem(413, "crop_too_large", "request body is too large"))
+        return await call_next(request)
 
     @app.exception_handler(404)
     async def unknown_path(_request: Request, _error: Exception) -> JSONResponse:
@@ -556,7 +749,10 @@ def _mount_mcp(app: FastAPI, registry: Registry) -> None:
 
     app.router.lifespan_context = lifespan
     taken = {getattr(r, "path", None) for r in app.router.routes}
-    # only the MCP (and A2A) paths join the api, so unknown paths still return Problem JSON
+    # only the MCP paths join the api (A2A stays on the mcp container, which is not public), so
+    # unknown paths still return Problem JSON
     app.router.routes.extend(
-        r for r in mcp_app.router.routes if getattr(r, "path", None) not in taken
+        r
+        for r in mcp_app.router.routes
+        if getattr(r, "path", None) not in taken and str(getattr(r, "path", "")).startswith("/mcp")
     )

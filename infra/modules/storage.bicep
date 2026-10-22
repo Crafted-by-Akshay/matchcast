@@ -9,6 +9,7 @@ var tableNames = [
   'claims'
   'lines'
   'publications'
+  'recaps'
   'audit'
   'checkpoints'
   'conversations'
@@ -25,6 +26,7 @@ var containerNames = [
   'exports'
   'overflow'
   'eh-checkpoints'
+  'app-package'
 ]
 
 resource st 'Microsoft.Storage/storageAccounts@2023-05-01' = {

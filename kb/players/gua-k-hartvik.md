@@ -1,0 +1,13 @@
+---
+title: K. Hartvik
+entities: gua-k-hartvik, GUA
+generated: scripts/build_profiles.py
+---
+## Profile
+
+K. Hartvik wears number 10 for Guanabara FC (GUA) and plays as CM.
+Rating 90. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 235 passes (80% completed), 50 tackles, 2 shots, 0.27 xG, 4.9 km on average per match.

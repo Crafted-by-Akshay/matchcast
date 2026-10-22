@@ -13,12 +13,20 @@ and an `up_to_sequence` and is refused beyond the stored state, so nothing can r
 | `get_metrics` | `up_to_sequence`, `names` (`goals:<team_id>`, `shots:...`) | value, units, `derivation_version` |
 | `get_evidence` | `claim_id` | claim, tool call ids, formula inputs, source events |
 | `get_replay_clip` | `up_to_sequence`, `event_id` | events within 5 s of the event |
+| `describe_views` | none (not match-scoped) | season views with columns and types |
+| `query_season` | `sql` (one SELECT, max 1,000 rows, 5 s) | columns, rows, `sql_hash`, `elapsed_ms` |
+| `search_kb` | `query`, `corpus?`, `top` (1 to 8) | chunks with id, corpus, title, section, text, score (BM25 over `kb/` today; AI Search once ingested) |
 
-Results are capped at 20 KB. Not built yet: `predict_danger` (needs the danger model), `query_season`
-and `describe_views` (season Parquet, DAT-2 and AGT-11), `search_kb` (AGT-16), and the
-`window_s`, `team_id`, `player_id` arguments of `get_metrics` (DAT-3 metrics). The agents still call
-the in-process twins in `matchcast_agents.tools`; switching them to an MCP client
-(`MATCHCAST_TOOLS=inproc|mcp`) needs the shared store from DAT-2.
+Results are capped at 20 KB. The season and knowledge tools are not match-scoped: they read static, synthetic data. Not built
+yet: `predict_danger` (needs the danger model) and the
+`window_s`, `team_id`, `player_id` arguments of `get_metrics` (DAT-3 metrics). By default the agents call
+the in-process twins in `matchcast_agents.tools`. `MATCHCAST_TOOLS=mcp` makes the Analyst's
+`get_metrics` lookup go through an in-memory MCP client over the api's own store (the matches live in
+that process, ADR-0005); calling the `mcp` container over HTTP waits for the shared store from DAT-2.
+The claims are identical either way (a test compares them), and a failed or
+malformed MCP reply is a tool error: no claim and a `fallback_used` audit record. The Narrator,
+Verifier, Ask and `/talk` still read the stores directly; the Verifier always recounts from the
+events, never from a tool.
 
 ## Where it runs
 

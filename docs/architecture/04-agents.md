@@ -15,22 +15,24 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: AGT-3 to AGT-15, 
 
 | Agent | Job | Input | Output | Tools | Model settings | Fallback (rules) | Prompt |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Producer | Picks the moment, sets priority, routes to personas, skips quiet play | Last 30 s of events, state, `moment_score`, active personas | `ProducerTask` or `Skip{reason}` | `get_state`, `get_metrics(moment_score)`, A2A `compare_to_season` (priority 1 only) | temperature 0.1, max 300 output tokens | Threshold rule: score ≥ 60 or priority kind | `packages/agents/prompts/producer.md` |
-| Analyst | Turns events into 1 to 3 claims with evidence | `ProducerTask` | `ClaimPacket[]` (status pending) | `get_state`, `get_events`, `get_metrics`, `get_evidence`, `predict_danger`, `query_season` | temperature 0.1, max 600 | Metric templates per event kind | `prompts/analyst.md` |
+| Producer | Picks the moment, sets priority, routes to personas, skips quiet play | Last 30 s of events, state, `moment_score`, active personas | `ProducerTask` or `Skip{reason}` | none today: the rules Producer reads the state in process (a live Producer is **Planned**; its prompt exists). The Stats Desk call is made by the workflow after verification, not by the Producer | temperature 0.1, max 300 output tokens | Threshold rule: score ≥ 60 or priority kind | `packages/agents/prompts/producer.md` |
+| Analyst | Turns events into 1 to 3 claims with evidence | `ProducerTask` | `ClaimPacket[]` (status pending) | `get_metrics` today (all numbers and xG). The MCP server also serves `get_state`, `get_events`, `get_evidence`, `query_season` and `search_kb`, which the Analyst does not call yet; `predict_danger` is **Planned** | temperature 0.1, max 600 | Metric templates per event kind | `prompts/analyst.md` |
 | Narrator | Writes one line per persona and language-neutral English | Claims + personas | `DraftLine[]` | none | temperature 0.6, max 400 | Templated lines per persona | `prompts/narrator.md` |
-| Verifier | Checks every number, name, source, freshness, meaning and safety | Claims + lines + state | `Verdict` per line | `get_state`, `get_events`, `get_metrics` (recompute), Content Safety | temperature 0, max 300 (model step only) | Deterministic checks alone; `review` instead of model meaning check | `prompts/verifier.md` |
+| Verifier | Checks every number, name, source, freshness, meaning and safety | Claims + lines + state | `Verdict` per line | recounts every number from the stored events in process (`verify/checks.py`), never through a tool the Analyst could have influenced; Content Safety | temperature 0, max 300 (model step only) | Deterministic checks alone; `review` instead of model meaning check | `prompts/verifier.md` |
 
 On-demand agents (never on the live loop):
 
 | Agent | Where | Job | Tools | Verified by |
 | --- | --- | --- | --- | --- |
-| Data Scientist | Analyst view, `POST /v1/ds/ask` | Answers season questions with SQL, a table and a chart | `query_season`, `describe_views` | Verifier re-runs the SQL |
-| Stats Desk (A2A partner) | `mcp` container, path `/a2a`, Agent Card at `/.well-known/agent-card.json` | `compare_to_season(metric, team or player)`: value, season average, rank of 28 | DuckDB over `season/v1` | Deterministic, no model |
-| Player persona (talk) | `POST /v1/matches/{id}/talk` | In-character reply ≤ 60 words using only that player's stats | `get_metrics(player_id)` | Verifier |
+| Data Scientist | Analyst view, `POST /v1/ds/ask` | Answers season questions with SQL, a table and a chart | `query_season`, `describe_views` (in process, and as MCP tools on the `mcp` container) | Verifier re-runs the SQL and compares every cell |
+| Stats Desk (A2A partner) | `mcp` container, path `/a2a`, Agent Card at `/.well-known/agent-card.json` | `compare_to_season(metric, scope, value, team_id?)`: value, season average, rank among the season's team or player match performances (`of` counts those rows, 56 for teams, not matches). The api calls the same skill in process today and audits `transport: in_process`; `a2a` once the `mcp` container serves it | DuckDB over `season/v1` | Deterministic, no model. Called for priority 1 moments only, after a line is verified, for a claim behind a verified line, within a 2 s budget; failures are audited as `a2a_failed` |
+| Player persona (talk) | `POST /v1/matches/{id}/talk` | First-person reply ≤ 60 words using only that player's own counts (or the producer's score and key moment); template replies in rules mode, a Foundry persona is **Planned** | counts recounted from the event log | Reply checked before it is returned: each number must equal the log's count for the metric it names, names in the roster; otherwise "I can't confirm that from the match data yet." |
 | Recap mode | `POST /internal/v1/recaps` | Full-time recap per persona | Same as the core four | Verifier per sentence; a failing sentence is dropped |
 | Ask pipeline | `POST /v1/matches/{id}/ask` | Chatbot answers | Router + AI Search + core tools | Verifier, see [05-assistant-rag.md](05-assistant-rag.md) |
 
 ## 3. Workflow graph (Microsoft Agent Framework)
+
+Exported image: [img/2-agent-workflow.png](img/2-agent-workflow.png) (regenerate with `scripts/export_diagrams.sh`).
 
 ```mermaid
 flowchart LR
@@ -52,9 +54,9 @@ flowchart LR
   TR --> SSE([SSE publication])
 ```
 
-- Built with Agent Framework `WorkflowBuilder`: one executor per box. Edges carry Pydantic models generated from the contracts.
-- Checkpointing: after every executor, state is saved to Table `checkpoints` (PartitionKey `match_id`, RowKey `<moment_id>:<executor>`), see AGT-13.
-- Concurrency: one workflow run per moment; at most 2 runs per match at once; priority 1 moments pre-empt by starting immediately (the older run continues).
+- Built with Agent Framework `WorkflowBuilder` (`packages/agents/matchcast_agents/af_graph.py`, package `agent-framework-core`): executors Producer, Analyst, Narrator, Verifier and Stats Desk, edges carrying small dataclasses, the Stats Desk edge conditional on priority 1. The repair router and the approval step run inside the Verifier executor, where the one-repair rule lives. It is the default (`MATCHCAST_ORCHESTRATOR=af`); `native` runs the same steps as plain calls, and a test checks the two give identical claims, lines and audit records (actor, action, subject and details). A new workflow is built per event because Agent Framework refuses concurrent runs on one instance. Checkpointing is our own Table store (AGT-13), not the framework's. The publisher and translate steps are not executors yet.
+- Checkpointing: once per event (after the graph run, not after every executor) the processed sequence, the match state and the Producer's memory are saved as one checkpoint row per stream (`put_checkpoint`; Table `checkpoints`, PartitionKey the stream key), and a restart resumes from it, see AGT-13.
+- Concurrency: today events of one match are processed one at a time under a lock, so there is one run per moment and no pre-emption; overlapping runs (at most 2 per match, priority 1 first) are **Planned**.
 - Rate rule: at most one Producer task per 8 s of match time, except priority 1 (goal, red card, penalty, own goal).
 
 ## 4. Packet shapes
@@ -72,9 +74,9 @@ RepairRequest  line_id, target analyst|narrator, verdict, attempt 1
 
 `reason_code` values: `number_mismatch`, `unknown_player`, `unknown_source`, `stale_state`, `unsupported_statement`, `unsafe_content`, `length_exceeded`, `citation_missing`.
 
-`fallback_reason` values (written with audit action `fallback_used`, ADR-0014): `timeout` (20 s), `rate_limited` (429 after one retry), `model_error` (5xx or invalid structured output), `circuit_open`, `tool_error` (an MCP tool call failed; the Analyst uses the in-process tool twin).
+`fallback_reason` values (written with audit action `fallback_used`, ADR-0014): `timeout` (20 s), `rate_limited` (429 after one retry), `model_error` (5xx or invalid structured output), `circuit_open`, `tool_error` (a tool call failed, in process or over MCP: the Analyst makes no claim for that moment, so no line is written and no number is guessed).
 
-Audit `action` values (closed list; add new ones here first): `event_rejected`, `moment_skipped`, `claim_created`, `line_drafted`, `line_verified`, `line_review`, `line_rejected`, `line_repair_requested`, `line_abstained`, `line_approved`, `line_edited`, `line_killed`, `publication_created`, `translation_rejected`, `fallback_used`, `recap_created`, `ask_answered`, `talk_answered`, `export_created`, `safety_blocked`.
+Audit `action` values (closed list; add new ones here first): `event_rejected`, `moment_skipped`, `claim_created`, `line_drafted`, `line_verified`, `line_review`, `line_rejected`, `line_repair_requested`, `line_abstained`, `line_approved`, `line_edited`, `line_killed`, `publication_created`, `translation_rejected`, `fallback_used`, `recap_created`, `ask_answered`, `talk_answered`, `export_created`, `safety_blocked`, `a2a_call`, `a2a_failed`, `ds_answered`, `ds_unverified`.
 
 ## 5. Verifier checks (in order)
 
@@ -93,19 +95,19 @@ Checks 1 to 7 are deterministic and run first. Check 8 runs only if 1 to 7 pass.
 
 ## 6. Tools (MCP server)
 
-All tools are served by `services/mcp` over Streamable HTTP; until a shared store exists (DAT-2) the api mounts the same app at `/mcp` (ADR-0005). Every call carries `match_id` and `up_to_sequence`, so an agent can never read the future. Each result is at most 20 KB.
+All tools are served by `services/mcp` over Streamable HTTP; until a shared store exists (DAT-2) the api mounts the same app at `/mcp` (ADR-0005). Every match tool takes `session_id` and `up_to_sequence` as well as `match_id` (`describe_views`, `query_season` and `search_kb` are not match-scoped), so an agent can never read the future. Each result is at most 20 KB.
 
 | Tool | Parameters | Returns | Source |
 | --- | --- | --- | --- |
-| `get_state` | match_id, up_to_sequence | score, clock, possession, players on pitch, cards, last 10 events | Table `matchstate` |
+| `get_state` | match_id, up_to_sequence | score, clock, possession, revision, last 10 event ids (players on pitch and cards are **Planned**) | the store's match state |
 | `get_events` | match_id, from_seq, to_seq, kinds[] (max 200) | contract events | Table `events` |
-| `get_metrics` | match_id, names[], window_s, team_id?, player_id? | values with units and `derivation_version` | `packages/metrics` on `events` |
-| `get_evidence` | claim_id | source events, tool calls, formula inputs | Tables `claims`, `events` |
-| `get_replay_clip` | event_id | event window ±5 s for the explain replay | Table `events` |
-| `predict_danger` | match_id, event_id | probability of a shot within 10 s, model version | ONNX from Blob `models/danger/` |
+| `get_metrics` | match_id, up_to_sequence, names[] as `<metric>:<team_id>` (`window_s`, `player_id` are **Planned**) | values with units and `derivation_version` | counts from the match state, xG from `xg.py` |
+| `get_evidence` | claim_id (plus `session_id`, `up_to_sequence`) | source events, tool calls, formula inputs | Tables `claims`, `events` |
+| `get_replay_clip` | event_id (plus `session_id`, `up_to_sequence`) | event window ±5 s for the explain replay | Table `events` |
+| `predict_danger` | match_id, event_id | probability of a shot within 10 s, model version | **Planned** (needs the danger model, ONNX from Blob `models/danger/`) |
 | `query_season` | sql (SELECT only), limit ≤ 1,000 | rows, columns, sql_hash, elapsed_ms | DuckDB over Blob `season/v1/*.parquet` |
 | `describe_views` | none | allowed views and columns | DuckDB catalogue |
-| `search_kb` | query, corpus?, top ≤ 8 | chunks with ids and scores | AI Search `kb-matchcast-v1` |
+| `search_kb` | query, corpus?, top ≤ 8 | chunks with ids and scores | BM25 over `kb/` today; AI Search `kb-matchcast-v1` once ingested (**Planned**, needs embeddings) |
 
 Copilot Agent Mode uses the same server through the external route (Easy Auth), configured in `.vscode/mcp.json` (AGT-10, PLT-11).
 
@@ -118,23 +120,33 @@ Copilot Agent Mode uses the same server through the external route (Easy Auth), 
 
 ## 8. Prompts
 
-Each prompt file has these sections, in this order: `# Role`, `# Inputs`, `# Rules` (numbered, testable), `# Output schema`, `# Examples` (2 good, 1 bad with the reason). The first line is `version: <semver>`. The version goes into `derivation_version` as `<agent>@<version>`, for example `narrator@1.2.0`. A prompt change that alters output needs a minor version bump and a re-run of `eval/compare.py`.
+Each prompt file has these sections, in this order: `# Role`, `# Inputs`, `# Rules` (numbered, testable), `# Output schema`, `# Examples` (2 good, 1 bad with the reason). The first line is `version: <semver>`. Claims carry the metric formula's `derivation_version` (the contract pattern is `x.y.z`, so `<agent>@<version>` does not fit); recording the prompt version in the audit trail is **Planned**. A prompt change that alters output needs a minor version bump and a re-run of `eval/compare.py`. Prompt files today: `producer.md`, `analyst.md`, `narrator.md`, `verifier.md` (the live Analyst, Narrator and Verifier load theirs; the Producer is rules only); `router.md`, `ds.md` and `player.md` are **Planned**.
 
 ## 9. Package layout
 
 ```text
 packages/agents/
   matchcast_agents/
-    workflow.py        WorkflowBuilder graph, edges, checkpoint store
-    executors/         producer.py analyst.py narrator.py verifier.py publisher.py repair.py
-    rules/             deterministic twins of each executor (ported from apps/unified/agents.js)
-    tools/             MCP client wrapper, in-process fallback for tests
-    verify/            deterministic checks 1-7, number and name extraction (check 8 lives in executors/verifier.py)
-    ask/               router, retrieval, answer assembly
-    store.py           claims, publications, audit repositories (Table + in-memory)
+    workflow.py        MatchWorkflow: ingest, steps, repair, approval, talk, recap, checkpoint
+    af_graph.py        the Agent Framework WorkflowBuilder graph over those steps
+    rules/             deterministic Producer, Analyst, Narrator and Verifier
+    live/              Foundry model client and the model-backed Analyst, Narrator, Verifier
+    resilience.py      timeouts, one retry on 429, circuit breaker, rules fallback
+    verify/            deterministic checks 1-7 (check 8, meaning, is the live Verifier's model step)
+    tools/             in-process tools and the MCP client path for the Analyst
+    ask/               chunking, BM25 retrieval, router rules and answer assembly
+    roles/             player and producer chat replies for /talk
+    data_scientist.py  season questions, SQL re-run check
+    statsdesk.py       A2A client for the Stats Desk
+    personas.py        persona and watch-mode names
+    safety.py          Content Safety and Prompt Shields clients, local screens
+    store.py tables.py repositories: in-memory and Table Storage
     messages.py        workflow packets
-  prompts/             producer.md analyst.md narrator.md verifier.md router.md ds.md player.md
-  tests/               unit tests per executor, fixtures/match-short.json
+    context.py state.py  per-event context and the match state the agents read
+    xg.py metrics_spec.py  the xG model and the metric definitions with units
+    recap.py hub.py    full-time recap and the stream hub for SSE
+  prompts/             producer.md analyst.md narrator.md verifier.md
+  tests/               unit tests, fixtures/match-short.json
 ```
 
 ## 10. How this proves multi-agent value (judging)

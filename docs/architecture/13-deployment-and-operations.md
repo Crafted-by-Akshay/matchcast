@@ -4,6 +4,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: PLT-1 to PLT-11. 
 
 ## 1. Azure topology
 
+Exported image: [img/4-azure-deployment.png](img/4-azure-deployment.png) (regenerate with `scripts/export_diagrams.sh`).
+
 ```mermaid
 flowchart TB
   subgraph sub[Subscription: Azure subscription 1]
@@ -38,7 +40,7 @@ flowchart TB
   evh --> fabric
 ```
 
-Everything except the Foundry resource (created by hand on 21 Oct) and Fabric is in Bicep. Region parameter `location` defaults to `eastus2`; the resource group stays in East US.
+Everything except the Foundry resource (created by hand on 21 Oct) and Fabric is in Bicep as the target design. Today the Bicep modules cover monitoring, identity, Key Vault, storage, Event Hubs, Container Apps (web, api, mcp), Content Safety, AI Search Free, the recap Function app, alerts, workbook and roles; the Speech, Translator, Vision and Databricks boxes are not in Bicep yet; their stories add them, so the diagram shows the target design. Region parameter `location` defaults to `eastus2`; the resource group stays in East US.
 
 ## 2. Infrastructure as code
 
@@ -89,9 +91,11 @@ Key Vault secrets (the only ones): `srch-query-key`, `srch-admin-key`. Each is d
 | Probes | liveness `/health`, readiness `/ready` | `/health` | `/` |
 
 Environment variables for `api` (no secrets except the Key Vault reference):
-`MATCHCAST_MODE=cloud`, `MATCHCAST_AGENT_MODE=live|rules`, `AZURE_CLIENT_ID`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT=gpt-6-luna`, `FOUNDRY_EMBEDDING_DEPLOYMENT=text-embedding-3-small`, `STORAGE_TABLE_URL`, `STORAGE_BLOB_URL`, `EVENTHUB_FQDN`, `EVENTHUB_NAME=match-events`, `MCP_URL`, `SEARCH_ENDPOINT`, `SEARCH_INDEX=kb-matchcast-v1`, `SEARCH_QUERY_KEY` (secretRef to `srch-query-key`), `CONTENT_SAFETY_ENDPOINT`, `SPEECH_RESOURCE_ID`, `SPEECH_REGION=eastus2`, `TRANSLATOR_ENDPOINT`, `VISION_ENDPOINT`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `CORS_ORIGINS=https://<web-fqdn>`. The old `MATCHCAST_MODEL_ENDPOINT` and `MATCHCAST_MODEL_API_KEY` are removed (PLT-2).
+`MATCHCAST_MODE=cloud`, `MATCHCAST_AGENT_MODE=live|rules`, `MATCHCAST_TOOLS=inproc|mcp`, `MATCHCAST_ORCHESTRATOR=af|native`, `AZURE_CLIENT_ID`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT=gpt-6-luna`, `FOUNDRY_EMBEDDING_DEPLOYMENT=text-embedding-3-small`, `STORAGE_TABLE_URL`, `STORAGE_BLOB_URL`, `EVENTHUB_FQDN`, `EVENTHUB_NAME=match-events`, `MCP_URL`, `SEARCH_ENDPOINT`, `SEARCH_INDEX=kb-matchcast-v1`, `SEARCH_QUERY_KEY` (secretRef to `srch-query-key`), `CONTENT_SAFETY_ENDPOINT`, `SPEECH_RESOURCE_ID`, `SPEECH_REGION=eastus2`, `TRANSLATOR_ENDPOINT`, `VISION_ENDPOINT`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `CORS_ORIGINS=https://<web-fqdn>`. The old `MATCHCAST_MODEL_ENDPOINT` and `MATCHCAST_MODEL_API_KEY` are removed (PLT-2).
 
 ## 5. CI/CD
+
+Exported image: [img/7-ci-cd.png](img/7-ci-cd.png) (regenerate with `scripts/export_diagrams.sh`).
 
 ```mermaid
 flowchart LR

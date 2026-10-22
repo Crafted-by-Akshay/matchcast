@@ -7,6 +7,7 @@ function bcEmbedStart(q) {
   const go = () => { if (q.get('seed')) { MCS.apply(q); bcNewMatch(q.get('seed')); } else bcNewMatch(); MCS.started(); };
   if (MCS.clubs.ready) go(); else MCS.clubs.load.then(go);
 }
+MCS.ptt($('dk-q'), $('dk-askf'));   // EXP-16: push-to-talk for Ask the producer
 $('bc-new').addEventListener('click', () => setTimeout(() => MCS.started(), 0));   // after the desk's own handler has set the new seed
 MCS.loop();
 
@@ -60,6 +61,14 @@ function consumerStep(dt, snap) {
     const p = players[i]; if (!p || p.off) return;
     p.pos2.x += (q[0] + q[2] * age - p.pos2.x) * k; p.pos2.y += (q[1] + q[3] * age - p.pos2.y) * k;
     p.vel.set(q[2], q[3]);
+    // the action pose (kick, slide, header, dive, celebration): take Watch's when a new frame arrives, then run its clock here because the desk does not step the match
+    if (p._actFrame !== CONS.n) {
+      p._actFrame = CONS.n;
+      const a = q[5];
+      if (a) { if (snap || !p.act || p.act.type !== a.type || Math.abs(p.act.t - a.t) > 0.35) { a.plan = { lofted: a.lofted }; p.act = a; } }
+      else if (p.act && (snap || p.act.t >= p.act.dur * 0.9)) p.act = null;
+    } else if (snap && !q[5] && p.act) p.act = null;
+    if (p.act && !snap) { p.act.t += dt; if (p.act.t >= p.act.dur) p.act = null; }
     let dy = q[4] - p.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); p.yaw += dy * k;
   });
   const kb = snap ? 1 : Math.min(1, dt * 14);
@@ -69,20 +78,22 @@ function consumerStep(dt, snap) {
 // ---- lower-third and teleprompter (EXP-7): only lines the shell has approved for air reach here
 const mcL3 = document.createElement('div');
 mcL3.id = 'mc-l3'; mcL3.setAttribute('role', 'status'); mcL3.hidden = true;
-mcL3.style.cssText = 'position:fixed;left:24px;bottom:84px;max-width:60%;padding:10px 16px;background:rgba(10,20,40,.92);color:#fff;border-left:4px solid #3aa0ff;font:600 15px system-ui,sans-serif;z-index:30;border-radius:4px';
+mcL3.style.cssText = 'position:absolute;left:12px;bottom:100px;max-width:60%;padding:10px 16px;background:rgba(10,20,40,.92);color:#fff;border-left:4px solid #3aa0ff;font:600 15px system-ui,sans-serif;z-index:10;border-radius:4px';
 const mcTele = document.createElement('ol');
 mcTele.id = 'mc-tele'; mcTele.setAttribute('aria-label', 'Teleprompter: approved lines');
-mcTele.style.cssText = 'position:fixed;right:12px;top:64px;width:300px;margin:0;padding:8px 8px 8px 28px;background:rgba(10,20,40,.85);color:#e8eefc;font:13px system-ui,sans-serif;z-index:30;border-radius:4px;max-height:40%;overflow:auto';
-document.body.append(mcL3, mcTele);
+mcTele.style.cssText = 'position:absolute;right:10px;top:44px;width:280px;margin:0;padding:8px 8px 8px 28px;background:rgba(10,20,40,.85);color:#e8eefc;font:13px system-ui,sans-serif;border-radius:4px;max-height:40%;overflow:auto;z-index:10'; mcTele.hidden = true;
+// bc.css hides every direct child of body except #bc, #stage and #load, so on-air graphics sit inside the live view
+(document.getElementById('bc-view') || document.body).append(mcL3, mcTele);
 let mcL3Timer = 0; const mcAired = [];
 window.addEventListener('message', (e) => {
   const d = e.data || {};
-  if (d.src !== 'matchcast-shell' || d.type !== 'air' || !d.line) return;
+  // only the shell (the parent window) may put a line on air: the approval gate lives there
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'air' || !d.line) return;
   const l = d.line; if (mcAired.some((x) => x.id === l.id)) return;
   mcAired.push(l); if (mcAired.length > 5) mcAired.shift();
   mcL3.textContent = (l.alert ? 'ALERT · ' + l.alert + (l.verdict === 'verified' ? ' · verified' : '') + ' · ' : '') + Math.floor(l.minute) + "' " + l.text; mcL3.hidden = false;
   mcL3.style.borderLeftColor = l.alert ? '#ff4d4d' : '#3aa0ff';
   mcL3.dataset.alert = l.alert || '';
   clearTimeout(mcL3Timer); mcL3Timer = setTimeout(() => { mcL3.hidden = true; }, 8000);
-  mcTele.innerHTML = ''; for (const x of mcAired.slice().reverse()) { const li = document.createElement('li'); li.textContent = x.text; mcTele.append(li); }
+  mcTele.hidden = false; mcTele.innerHTML = ''; for (const x of mcAired.slice().reverse()) { const li = document.createElement('li'); li.textContent = x.text; mcTele.append(li); }
 });

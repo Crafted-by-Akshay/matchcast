@@ -1,4 +1,4 @@
-.PHONY: smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
+.PHONY: openapi-generate smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
 
 install:
 	npm ci
@@ -19,6 +19,10 @@ test:
 
 build:
 	npm run build
+
+# Refresh docs/api/openapi.json after a route change; the openapi CI job fails on any drift.
+openapi-generate:
+	PYTHONPATH=services/api uv run --locked --all-packages python -c "import json; from app.main import app; print(json.dumps(app.openapi(), indent=2, sort_keys=True))" > docs/api/openapi.json
 
 contracts-generate:
 	npm run generate --workspace @matchcast/contracts

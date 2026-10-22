@@ -14,6 +14,7 @@ services/simulation/     Data         headless engine runner (Node 22)
 packages/contracts/      Agents       JSON Schema, generated TS, validators (change needs all-lane agreement)
 packages/agents/         Agents       workflow, executors, prompts, rules, ask
 packages/metrics/        Data         metric functions + golden tests
+packages/shared/         Platform     Azure client factories (shared credential) and telemetry setup used by api and agents
 kb/                      Agents       knowledge base markdown
 data/                    Data         calibration targets, Databricks bundle, Fabric KQL
 scripts/                 Data/Platform batch tools (fit_xg, check_realism, build_kb, cost_today, smoke_cloud)

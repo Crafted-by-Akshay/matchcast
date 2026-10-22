@@ -3,7 +3,7 @@
 Bicep under `infra/`, driven by `azd` (`azure.yaml`). Design: `docs/architecture/13-deployment-and-operations.md`.
 
 ## What the template creates
-Log Analytics + Application Insights, `id-matchcast`, Key Vault (RBAC), Storage (9 tables, 10 containers, lifecycle rules), Event Hubs Basic with hub `match-events`, Container Apps environment with `web`, `api`, `mcp`, and the role assignments for `id-matchcast`. Foundry is hand-made and passed in by parameter.
+Log Analytics + Application Insights, `id-matchcast`, Key Vault (RBAC), Storage (10 tables, 10 containers, lifecycle rules), Event Hubs Basic with hub `match-events`, Container Apps environment with `web`, `api`, `mcp`, Azure AI Content Safety (`cs-matchcast-<env>`, S0, local auth off) and AI Search Free (`srch-matchcast-<env>-<suffix>`) from `modules/ai.bicep`, the recap Function app `fn-matchcast-dev-recap-<suffix>` on Flex Consumption (`modules/function.bicep`), and the role assignments for `id-matchcast` (including Cognitive Services User on Content Safety and Blob Data Owner and Queue Data Contributor on storage for the Functions host). Foundry is hand-made and passed in by parameter.
 
 ## Run it (Mac mini, `az login` done)
 ```
@@ -18,7 +18,7 @@ Until each service has a Dockerfile, apps start from a public placeholder image 
 - No app setting holds a key or connection string in plain text. The App Insights connection string (not a credential) is stored as the Container Apps secret `appinsights-connection` and referenced by `APPLICATIONINSIGHTS_CONNECTION_STRING` with `secretRef`.
 - The api scales on the Event Hubs backlog (KEDA `azure-eventhub`, threshold 50, `$Default`, identity-based, checkpoints in `eh-checkpoints`) and on HTTP, between 0 and 1 replicas (PLT-9).
 - Alert rules (errors, agent latency, fallback spike) deploy only when `ALERT_EMAIL` is set: `azd env set ALERT_EMAIL <address>`. The workbook `MatchCast agents` deploys always (PLT-8). Its queries use the span names from doc 15 and show data once the services emit them.
-- Cognitive Services User roles for Content Safety, Speech, Translator and Vision are added by the stories that create those resources.
+- `modules/ai.bicep` holds the Cognitive Services accounts in one list (`accounts`); Content Safety is in it, and Speech, Translator and Vision are added to the list by the stories that create them (their Cognitive Services User role follows from the `cognitiveNames` output). Custom subdomains and the search name carry a 5-character suffix from `uniqueString(resourceGroup().id)` because those names are global; use the `CONTENT_SAFETY_ENDPOINT`, `SEARCH_SERVICE` and `SEARCH_ENDPOINT` outputs, not guessed names.
 - Run time and resource list from the first `azd up`: to be recorded after the Mac mini run.
 
 ## Deploy on merge (PLT-7)
@@ -35,7 +35,7 @@ SPID=$(az ad sp show --id "$APP" --query id -o tsv)
 az ad app federated-credential create --id "$APP" --parameters '{"name":"matchcast-production","issuer":"https://token.actions.githubusercontent.com","subject":"repo:Crafted-by-Akshay/matchcast:environment:production","audiences":["api://AzureADTokenExchange"]}'
 az role assignment create --assignee-object-id "$SPID" --assignee-principal-type ServicePrincipal --role Contributor --scope /subscriptions/$SUB/resourceGroups/rg-matchcast
 # Role Based Access Control Administrator, limited to the roles in infra/modules/roles.bicep
-ROLES="53ca6127-db72-4b80-b1b0-d745d6d5456d,0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3,ba92f5b4-2d11-453d-a403-e96b0029c9fe,2b629674-e913-4c01-ae53-ef4638d8f975,a638d3c7-ab3a-418d-83e6-5f17a39d4fde,4633458b-17de-406a-b5cd-9c4a5b5cd8ee"
+ROLES="53ca6127-db72-4b80-b1b0-d745d6d5456d,0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3,ba92f5b4-2d11-453d-a403-e96b0029c9fe,2b629674-e913-4c01-ae53-ef4638d8f975,a638d3c7-ab3a-418d-83e6-5f17a39d4fde,4633458b-17de-406a-b5cd-9c4a5b5cd8ee,a97b65f3-24c7-4388-baec-2e87135dc908,b7e6dc6d-f1e8-4753-8033-0f276bb0955b,974c5e8b-45b9-4653-ba55-5f855dd0fb88"
 COND=$(cat <<EOF
 ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {$ROLES})) AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {$ROLES}))
 EOF
@@ -77,7 +77,25 @@ Fallback if the tenant blocks app registrations: leave `ENTRA_CLIENT_ID` empty a
 Known exception to "no secret": `entra-client-secret` (Key Vault reference on the apps). Not yet run: the registration, the Easy Auth deployment and the sign-in flow need the Mac mini or portal.
 
 ## Scaling proof (PLT-9)
-KEDA rule `match-events-backlog` (threshold 50 unprocessed events) wakes the api from 0. To record the graph: in one shell run `scripts/watch_replicas.sh replicas.csv 1200 5`, in another publish 500 events in 10 s with the replay publisher (DAT-1, 4x mode), then plot `replicas.csv` and commit the image under `docs/evidence/`. Expected: 0 to 1 within 60 s, back to 0 within 10 minutes of the last event. Waiting on DAT-1's replay publisher and the first deployed api image.
+KEDA rule `match-events-backlog` (threshold 50 unprocessed events) wakes the api from 0. To record the graph: in one shell run `scripts/watch_replicas.sh replicas.csv 1200 5`, in another publish 500 events in 10 s with the replay publisher (DAT-1, 4x mode), then plot `replicas.csv` and commit the image under `docs/evidence/`. Expected: 0 to 1 within 60 s, back to 0 within 10 minutes of the last event. For a local baseline or a spike without the replay publisher, `scripts/load_test.py --base <api url> --matches 8 --repeat 2` replays the ten-minute fixture into independent matches and prints events a second and p50/p95 latency (local api, rules mode, 8 matches at once: about 230 events/s, p50 1.1 s, p95 2.1 s per request, single process, measured 22 Oct). Waiting on DAT-1's replay publisher and the first deployed api image.
 
 ## Secret scan proof (PLT-4)
 CI job `secrets` runs gitleaks on the history, then `scripts/gitleaks_proof.sh`, which builds a throwaway repo, checks a clean commit passes, then commits a fake AWS key (assembled at run time, never stored in the repo) and requires the scan to fail. Run it locally with `scripts/gitleaks_proof.sh path/to/gitleaks`.
+
+## AI Search keys (AGT-16)
+AI Search Free has no managed identity (ADR-0009), so the two keys are the only stored secrets. They never appear in Bicep, outputs or the repo:
+1. `azd provision` creates the service. The `postprovision` hook runs `scripts/set_search_secrets.sh`, which reads the keys with `az` and writes `srch-admin-key` and `srch-query-key` to Key Vault.
+2. Writing needs **Key Vault Secrets Officer** on the vault for whoever runs the hook (Akshay on the Mac mini, once: `az role assignment create --assignee <you> --role "Key Vault Secrets Officer" --scope <vault id>`). The hook is `continueOnError`, so provisioning still succeeds without it; run the script by hand afterwards.
+3. The script saves `SEARCH_KEYS_IN_VAULT=true` in the azd environment of the machine that ran it. The next `azd provision` there gives the api the Key Vault reference `SEARCH_QUERY_KEY` (a reference to a missing secret would fail the revision, so it is off until the secret exists). The CI deploy starts from a fresh azd environment, so also set the repo variable once the secrets exist: `gh variable set SEARCH_KEYS_IN_VAULT --body true`. `ENTRA_CLIENT_ID` and `ALERT_EMAIL` are repo variables for the same reason (`gh variable set ENTRA_CLIENT_ID --body <app id>`), otherwise a merge to main would turn sign-in and alerts off.
+4. `scripts/build_kb.py` reads `srch-admin-key` through the OIDC identity's Key Vault access (Key Vault Secrets User).
+Not verified: no live provision yet (`az bicep build` passes with no warnings on Bicep 0.48).
+
+**Re-run the role setup once.** The condition on the deploy identity's Role Based Access Control Administrator assignment lists the allowed roles. Cognitive Services User (`a97b65f3-...`, AGT-12), Storage Blob Data Owner (`b7e6dc6d-...`) and Storage Queue Data Contributor (`974c5e8b-...`, AGT-15) were added to that list, so update the assignment with the `COND` block above (`az role assignment update` on it, or delete and recreate it) before the next deploy, or the role assignment for Content Safety is refused.
+
+## Recap function (AGT-15)
+`services/recap` is a Python v2 Azure Functions app: an Event Hubs trigger on `match-events` (`$Default`, identity-based `EVENTHUB__*` settings, retry 3 x 10 s) that spots the end of the final period (`RECAP_FINAL_PERIODS`, default `2`; use `2,4` if extra time is played, `1` for the one-period test match). With `2,4` the end of period 2 writes a regulation-time recap, since the function cannot know whether extra time follows, and the end of period 4 is sent with `final: true`, which makes the api write the recaps again over it. The duplicate guard (skip personas that already have a recap) works against the api's store, which a single replica holds in memory and reads through from Table Storage (ADR-0005) and calls `POST /internal/v1/recaps` on the api, which writes the recaps (03 F8). It holds no agent logic.
+- Hosting: Flex Consumption (`FC1`), maximum instance count 40 (the lowest value older API versions accept; the trigger only fires at full time, so it stays at 0 to 1 in practice), no key or connection string; deployment package in the `app-package` container, host state and checkpoints in the storage account under `AzureWebJobsStorage__*`. The checkpoints are the Functions host's own (`azure-webjobs-eventhub`), not `eh-checkpoints/recap` as the first design said.
+- Code goes up with `azd deploy recap` (the deploy workflow runs it after provisioning; a failure is a warning).
+- The one plain connection string is `APPLICATIONINSIGHTS_CONNECTION_STRING` (an ingestion id, not a credential), as on the container apps before they reference it as a secret.
+- Sign-in: when `ENTRA_CLIENT_ID` is set, the function asks for a token for `api://<client id>/.default` and the api route needs the Producer role, so the identity `id-matchcast` must be assigned the `Producer` app role of `matchcast-web` (Entra step, with the judge account; one command, `az rest` on `appRoleAssignedTo`). With sign-in off no token is sent.
+- Not verified: no live provision or deploy yet; the function logic is tested with a mock api (`services/recap/tests`).
