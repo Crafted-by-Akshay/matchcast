@@ -63,3 +63,17 @@ def test_indices_are_bounded_and_empty_safe():
     assert 0 <= control_index([], MIN) <= 100
     assert chaos_index([], MIN) == 0.0
     assert tempo([], MIN) == 0.0
+
+
+def mirror(events):
+    out = []
+    for e in events:
+        if e["type"] == "pass":
+            e = {**e, "x0": 105 - e["x0"], "x1": 105 - e["x1"], "attack_x": 0}
+        out.append(e)
+    return out
+
+
+def test_control_is_the_same_when_the_team_attacks_the_other_way():
+    events = calm(random.Random(3), 0, 5 * MIN)
+    assert math.isclose(control_index(events, 5 * MIN), control_index(mirror(events), 5 * MIN))

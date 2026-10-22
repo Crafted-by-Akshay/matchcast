@@ -31,3 +31,5 @@ Python rounds half to even and JavaScript rounds half up, so the difficulty term
 | `tempo` | passes per minute | Passes in the window over 5 |
 
 Acceptance test: in a synthetic 60-minute match with a scramble from minute 30 to 36, the chaos index in the scramble is at least 1.5 times the match average and control falls (`packages/metrics/tests/test_indices.py`). Exposing the indices through `get_metrics` and drawing the sparkline belong to the Agents and Experience lanes.
+
+Inputs and limits. The indices read engine-style event dicts (`team`, `x0`/`x1`, `completed`, `attack_x`), not contract v1.1 events: the contract `pass` has no `completed` flag and no attack direction, so the Agents lane needs a small adapter before the completion and territory terms can be fed from contract events. In the first four minutes `tempo` and `chaos_index` divide by the full 5-minute window, so they read low early on.

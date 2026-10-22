@@ -164,3 +164,14 @@ Only if all four are no does it need a database. Signs of that: filters on non-k
 3. **Process:** write an ADR (it changes cost, so Akshay decides), add `infra/modules/<db>.bicep` with the role assignment, implement the repository, pass the store contract suite, add a one-off copy script from Tables if data must move, and switch with `MATCHCAST_STORE`. The spend must still fit the $100 cap with the $40 and $50 alerts.
 
 The rule for this is ADR-0015 (accepted by Akshay, 22 Oct 2026).
+
+
+## 13. Reducer semantics (DAT-2)
+
+`services/worker/matchcast_worker/reducer.py` folds events into a `StreamState`. Sequences start at 1.
+
+- Duplicates and replays: an event with `stream_sequence` at or below `max_sequence` changes nothing and emits no revision.
+- Gaps and out-of-order delivery: an event ahead of the next expected sequence is held in `pending`; `missing()` names the gap. It is applied, with its successors, when the gap fills. If more than 500 events are held, the gap is given up and recorded in `skipped`.
+- Corrections and retractions replace or remove a ledger entry whose `target_revision` matches; score, counts and possession are rebuilt from the entries in force. One for an unknown or already-revised target is a no-op that still counts as a revision.
+- Known debt: the full ledger lives inside the state and every revision is saved, so storage grows with the square of the event count. The Table Storage repository must keep ledger entries in their own rows (RowKey = event id) and store only counters in the state rows; the in-memory repository used in tests does not.
+- `matchcast_agents.state.apply` and `_count` here are the same counting rule twice; the workflow still uses `apply`. Make one call the other when the reducer is wired into the consumer.

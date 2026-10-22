@@ -40,7 +40,8 @@ class MemoryStateRepo:
 
 def process(repo: StateRepo, events: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """The consumer's core step: reduce each event into its stream's state, save, and return one
-    StateRevisionPacket per state change. Duplicates and stale events produce no packet."""
+    StateRevisionPacket per revision. Duplicates, stale events and events held behind a gap
+    produce no packet."""
     packets = []
     for event in events:
         if event.get("kind") != "event":
@@ -51,5 +52,6 @@ def process(repo: StateRepo, events: Iterable[dict[str, Any]]) -> list[dict[str,
         if nxt is state:
             continue
         repo.save(sk, nxt)
-        packets.append(revision_packet(nxt, event))
+        if nxt.revision != state.revision:
+            packets.append(revision_packet(nxt, event))
     return packets

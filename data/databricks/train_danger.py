@@ -23,8 +23,6 @@ from pathlib import Path
 
 import numpy as np
 import pyarrow.parquet as pq
-from sklearn.ensemble import HistGradientBoostingClassifier
-from sklearn.metrics import brier_score_loss, roc_auc_score
 
 TYPES = ("pass", "turnover", "shot", "take_on", "slide_tackle", "aerial_duel", "foul", "corner",
          "goal")  # fmt: skip
@@ -95,9 +93,16 @@ def main() -> int:
     ap.add_argument("--version", default="1")
     a = ap.parse_args()
 
+    from sklearn.ensemble import HistGradientBoostingClassifier
+    from sklearn.metrics import brier_score_loss, roc_auc_score
+
     X, y, seeds, phases, kinds = load(a.scenes)
     names = feature_names(phases, kinds)
     held = split_by_match(seeds)
+    if held.all() or not held.any():
+        raise SystemExit("need scenes from at least two matches to hold one out")
+    if len(set(y[held].tolist())) < 2 or len(set(y[~held].tolist())) < 2:
+        raise SystemExit("both sides of the split need danger and non-danger rows")
     model = HistGradientBoostingClassifier(
         max_iter=200, learning_rate=0.06, max_depth=4, l2_regularization=1.0, random_state=SEED
     ).fit(X[~held], y[~held])
@@ -141,7 +146,11 @@ def main() -> int:
                                "seed": SEED})
             mlflow.log_metrics({k: v for k, v in metrics.items() if isinstance(v, float)})
             mlflow.log_artifacts(str(out))
-            mlflow.sklearn.log_model(model, "model", registered_model_name=UC_MODEL)  # type: ignore[attr-defined]
+            mlflow.set_registry_uri("databricks-uc")
+            signature = mlflow.models.infer_signature(X[held][:5], p[:5])
+            mlflow.sklearn.log_model(
+                model, "model", signature=signature, registered_model_name=UC_MODEL
+            )  # type: ignore[attr-defined]
     print(json.dumps(metrics))
     return 0
 
