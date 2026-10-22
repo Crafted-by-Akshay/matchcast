@@ -94,3 +94,13 @@ MCS.progress('Loading the stadium and players');
     tell();
   }, 300);
 })();
+
+// ---- EXP-2: Watch is the only engine. Four times a second it sends the pitch state (22 players, the ball, score, clock, stats) for the shell to hand to Broadcast.
+(() => {
+  const r2 = (x) => Math.round(x * 100) / 100;
+  setInterval(() => {
+    if (!MCS.framed || !S.started || !players.length) return;
+    MCS.send({ type: 'frame', setup: MCS.setup(), frame: { mclock: S.mclock, half: S.half, ht: !!S.ht, over: !!S.over, paused: !!S.paused, speed: S.speed, mscale: S.mscale, score: S.score.slice(), stats: JSON.parse(JSON.stringify(STATS)),
+      ball: [r2(ball.p.x), r2(ball.p.y), r2(ball.p.z)], players: players.map((p) => [r2(p.pos2.x), r2(p.pos2.y), r2(p.vel.x), r2(p.vel.y), r2(p.yaw)]) } });
+  }, 250);
+})();

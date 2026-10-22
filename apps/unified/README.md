@@ -45,6 +45,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - `tests/e2e/pulse.spec.ts` (was `watch.cjs`): Match Pulse cards (tick, chips, Rules fallback chip, Why?, last 10), Casual v Analyst text and chips, Player focus lead, mode saved and restored after reload, Planned language labels.
 - `tests/e2e/connection.spec.ts` (was `connection.cjs`): live, rules fallback and offline against a mock api (drives the shell directly).
 - `tests/e2e/unified.spec.ts` (run with `make e2e`; was `unified.cjs`): headless Chromium. Checks the season loads, Watch and Broadcast start on the shared fixture with its clubs, the Analyst routes to it, switching keeps Watch running, Watch's events reach the agents, the audit chain verifies, the Broadcast scoreboard shows Watch's score, full time reaches the Analyst, a fixture change reloads Watch, the keyboard shortcuts work (1 to 4), and the phone layout has no horizontal scroll. Saves screenshots.
+- `tests/e2e/cross-view.spec.ts` (EXP-2): Watch paused then Broadcast opened (same minute, score, paused), Broadcast replays events, Analyst pill score and last five events, Broadcast follows once Watch resumes.
 
 ## Match Pulse and watch modes (EXP-3, EXP-4)
 - The shell posts one card per agent line to Watch (`type: 'pulse'`). Watch shows it for 12 s, keeps the last 10 in a scrollable log, and marks each with the Verifier's tick (green) or an amber dot, plus a 'Rules fallback' chip when the in-page rules wrote it. 'Why?' lists the cited events; the 3D replay with highlights is Planned.
@@ -56,6 +57,12 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - `trace-panel.js` (`TP`): 'How was this made?' on any line (a Match Pulse card or the Agents tab's Provenance) opens a timeline: Producer task, Analyst claim with its tool names, Narrator draft, Verifier verdict and repair, Producer approval and publication, each with its time and 'rules' or 'model'. Rules steps carry no tokens. Data is the claim's own trace (`agents.js`) and its audit records.
 - 'Seed a bad claim' (Agents tab) makes the next score claim wrong so the Verifier rejects and repairs it; the trace shows the reason and the repair. Lines from the api show what the stream carried until the server trace summaries (AGT-3) are added to it.
 
+
+## One match source (EXP-2)
+- Watch is the only engine. Four times a second it sends the pitch state (22 players' positions, velocities and headings, the ball, score, clock, pause, speed and stats) and the shell forwards it to Broadcast, along with Watch's events.
+- Broadcast runs in consumer mode (`window.MC_CONSUMER`, `consumerStep` in `embed/broadcast.js`, patched into `stepSim` by `build.py`): it moves its players and ball toward the latest frame, takes the score, minute, half and stats from it, and replays Watch's events onto its own event bus. Its desk modules (odds, calls, focus board, lower-thirds) read that. Its own play and pause buttons are disabled; Watch's controls drive the match.
+- The Analyst's live pill shows the same score and minute and lists the last five events in its tooltip.
+- Known gaps: Broadcast shows running and positioning but not kick, tackle or fall animations (the frames carry no action state); the Analyst's season pages are still recorded runs, only the live pill follows Watch.
 ## Claims ledger (EXP-10)
 - The Agents tab's claims table is the ledger: time, metric, value, units, agent, source (model or rules), verdict, reason, approval; newest first. Filters for verdict, agent and metric. A row opens its provenance (source events, audit records, trace). 'Export CSV' downloads the filtered rows and shows the file's SHA-256, which equals `shasum -a 256` of the download.
 - It lives in the shell's Agents tab, not inside the Analyst view (the enterprise console's own ledger page still shows its prototype data). Tool calls per claim are in the trace panel (EXP-6).
