@@ -7,6 +7,7 @@ dependencies = [
     "azure-identity>=1.19,<2",
     "fastapi>=0.115,<0.120",
     "matchcast-agents",
+    "matchcast-mcp",
     "matchcast-contracts",
     "matchcast-shared",
     "uvicorn[standard]>=0.34,<1",
@@ -14,6 +15,7 @@ dependencies = [
 
 [tool.uv.sources]
 matchcast-agents = { workspace = true }
+matchcast-mcp = { workspace = true }
 matchcast-contracts = { workspace = true }
 matchcast-shared = { workspace = true }
 

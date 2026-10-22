@@ -143,6 +143,9 @@ class MatchWorkflow:
         self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
         self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
+        self.store.put_match(
+            self.sk, {"roster": self.roster, "names": self.names, "clubs": self.clubs}
+        )
         self._restore()
         self.stats = {
             "events": 0,
