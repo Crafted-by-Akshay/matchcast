@@ -104,7 +104,7 @@ const AG = (() => {
 
   // wild moments are deterministic triggers; the Producer makes them priority 1 and the line still goes through the Verifier
   const ALERTS = { red_card: 'Red card', turning_point: 'Turning point' };
-  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, alert: c.alert || null, verdict: c.verdict });
+  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, alert: c.alert || null, verdict: c.verdict, tr: c.airText ? null : (c.tr || null) });   // an edited line has no checked translation
   const nums = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
   // a person's action on a queued line; every one lands in the audit chain with the person's name
   const act = (id, who, action, detail, fn) => {
@@ -240,5 +240,5 @@ const AG = (() => {
     c.source = src; changed();
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  return { ask, approve, kill, edit, checkTranslation, ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();

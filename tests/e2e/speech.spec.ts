@@ -79,3 +79,22 @@ test('speech: Azure push-to-talk fills Ask the producer; a verified answer is sp
   await expect.poll(() => page.evaluate(() => (window as any).__said)).toEqual(['It is 1-0.']);
   expect(errs).toEqual([]);
 });
+
+test('speech: Watch talk-to-player uses Azure push-to-talk when available, the browser mic otherwise', async ({ page }) => {
+  test.setTimeout(420_000);
+  const errs = collectErrors(page);
+  await page.addInitScript(() => { (window as any).__brStarts = 0; (window as any).SpeechRecognition = class { start() { (window as any).__brStarts++; } stop() { /* */ } }; });
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const w = await viewFrame(page, 'watch');
+  await expect.poll(() => w.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
+  await w.evaluate(() => { (window as any).__sent = []; document.getElementById('tk-form')!.addEventListener('submit', (e) => { e.stopImmediatePropagation(); e.preventDefault(); (window as any).__sent.push((document.getElementById('tk-q') as HTMLInputElement).value); }, true); });
+  await page.evaluate(() => { SPX.listen = async () => 'press higher'; });
+  await w.locator('#tk-mic').dispatchEvent('click');
+  await expect.poll(() => w.evaluate(() => (window as any).__sent)).toEqual(['press higher']);
+  // Azure unavailable (null): the browser recognition starts instead
+  await page.evaluate(() => { SPX.listen = async () => null; });
+  await w.locator('#tk-mic').dispatchEvent('click');
+  await expect.poll(() => w.evaluate(() => (window as any).__brStarts)).toBe(1);   // the browser recognition really started
+  expect(errs).toEqual([]);
+});

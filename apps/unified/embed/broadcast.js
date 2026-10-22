@@ -104,9 +104,20 @@ window.addEventListener('message', (e) => {
   if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'air' || !d.line) return;
   const l = d.line; if (mcAired.some((x) => x.id === l.id)) return;
   mcAired.push(l); if (mcAired.length > 5) mcAired.shift();
-  mcL3.textContent = (l.alert ? 'ALERT · ' + l.alert + (l.verdict === 'verified' ? ' · verified' : '') + ' · ' : '') + Math.floor(l.minute) + "' " + l.text; mcL3.hidden = false;
+  mcL3.textContent = (l.alert ? 'ALERT · ' + l.alert + (l.verdict === 'verified' ? ' · verified' : '') + ' · ' : '') + Math.floor(l.minute) + "' " + mcTx(l); mcL3.hidden = false;
   mcL3.style.borderLeftColor = l.alert ? '#ff4d4d' : '#3aa0ff';
   mcL3.dataset.alert = l.alert || '';
   clearTimeout(mcL3Timer); mcL3Timer = setTimeout(() => { mcL3.hidden = true; }, 8000);
-  mcTele.hidden = false; mcTele.innerHTML = ''; for (const x of mcAired.slice().reverse()) { const li = document.createElement('li'); li.textContent = x.text; mcTele.append(li); }
+  mcPaintTele();
+});
+// the viewer's language (EN, ES, HI) from the shell: an on-air line shows its Verifier-checked translation, or English with a note when it has none
+let mcLang = 'en';
+const mcTx = (l) => { if (mcLang === 'en') return l.text; const t = l.tr && l.tr[mcLang]; return t && t.ok && t.text ? t.text : l.text + ' (English: no checked ' + mcLang.toUpperCase() + ' translation)'; };
+function mcPaintTele() { mcTele.hidden = false; mcTele.innerHTML = ''; for (const x of mcAired.slice().reverse()) { const li = document.createElement('li'); li.textContent = mcTx(x); mcTele.append(li); } }
+window.addEventListener('message', (e) => {
+  const d = e.data || {};
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !['en', 'es', 'hi'].includes(d.lang)) return;
+  mcLang = d.lang;
+  if (typeof BC !== 'undefined' && BC.lang !== d.lang) { BC.lang = d.lang; if (typeof bcPaintScript === 'function') bcPaintScript(); }
+  if (mcAired.length) mcPaintTele();
 });

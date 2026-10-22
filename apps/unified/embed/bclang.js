@@ -52,6 +52,7 @@ bcLine = function (ev) {
     if (!text) { line.tr[lang] = { ok: false, reason: 'no template for this line' }; return; }
     const v = bcCheckTranslation(line.en, text, names);
     line.tr[lang] = { ok: v.ok, reason: v.reason };
+    if (!v.ok && typeof MCS !== 'undefined' && MCS.send) MCS.send({ type: 'audit', action: 'translation_rejected', id: 'desk-' + line.min + '-' + line.type, lang, reason: v.reason, minute: line.min });   // the shell writes it to the audit chain
     if (v.ok) line[lang] = text;
   });
   return line;
@@ -80,3 +81,6 @@ window.__bcLang = { check: bcCheckTranslation, translate: bcTranslate };   // fo
   // scrollable panes must be reachable by keyboard
   document.querySelectorAll('.bc-pane').forEach((p) => { p.tabIndex = 0; p.setAttribute('role', 'region'); p.setAttribute('aria-label', 'Desk panel: ' + p.id.replace(/^pane-/, '')); });
 })();
+
+// the desk's own EN/ES/HI buttons tell the shell, which keeps the viewer's language for Watch, the voice and the on-air graphics
+(() => { const g = document.getElementById('bc-lang'); if (g) g.addEventListener('click', () => { if (typeof MCS !== 'undefined' && MCS.send) MCS.send({ type: 'lang', lang: BC.lang }); }); })();
