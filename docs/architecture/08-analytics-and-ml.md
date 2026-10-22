@@ -39,7 +39,7 @@ What is real and what is labelled, so nothing is ambiguous in the demo:
 | Dashboards | Real, built from saved queries | Browser storage per viewer | none |
 | xG model lab | Real | `xg.json` + MLflow run metrics in `models/danger/*/model-card.json` | none |
 | Player similarity | Real | Cosine similarity over `player_vectors` | none |
-| Danger model card | Real | `model-card.json` from Blob | none |
+| Danger model card | Real (Planned in the UI until DAT-6 ships it) | `model-card.json` from Blob | none |
 | Tracking lab | Real | Vision accuracy panel ([09-vision-identification.md](09-vision-identification.md)) | none |
 | Notebooks | Not connected | Static example | "Simulated" |
 | Connectors | Not connected | Static list | "Simulated" |

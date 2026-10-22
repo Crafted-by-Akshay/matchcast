@@ -1,10 +1,12 @@
 """Typed packets handed between workflow executors (docs/architecture/04-agents.md §4)."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-Persona = Literal["casual", "analyst", "broadcast"]
+from .personas import PATTERN
+
+Persona = Annotated[str, StringConstraints(pattern=PATTERN)]
 Priority = Literal[1, 2, 3]
 VerdictName = Literal["verified", "review", "rejected"]
 ReasonCode = Literal[
