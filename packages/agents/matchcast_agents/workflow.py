@@ -234,6 +234,13 @@ class MatchWorkflow:
         self.hub.publish("audit", f"audit:{record['sequence']}", record)
         return record
 
+    def record_translation_rejected(self, publication_id: str, lang: str, reason: str) -> None:
+        """A translation failed its re-check or its service; the viewer keeps the English."""
+        self._audit(
+            "system", "translator", "translation_rejected", publication_id,
+            {"language": lang, "reason": reason},
+        )  # fmt: skip
+
     def _agent(self, action: str, agent: Any, subject: str, **details: Any) -> None:
         extra = {"mode": getattr(agent, "mode", "live"), **details}
         self._audit("agent", agent.agent_id, action, subject, extra)

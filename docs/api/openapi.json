@@ -4,6 +4,16 @@
       "AskBody": {
         "additionalProperties": false,
         "properties": {
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "es",
+              "hi"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
           "persona": {
             "default": "casual",
             "enum": [

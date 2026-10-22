@@ -28,6 +28,7 @@ from matchcast_agents.statsdesk import StatsDeskError
 from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
+from matchcast_agents.translate import LANGUAGES, TranslationService
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
@@ -128,6 +129,7 @@ class AskBody(BaseModel):
     session_id: str = Field(pattern=ID)
     question: str = Field(min_length=1, max_length=300)
     persona: Literal["casual", "analyst", "broadcast"] = "casual"
+    lang: Literal["en", "es", "hi"] = "en"
 
 
 class ExportBody(BaseModel):
@@ -212,6 +214,7 @@ class Registry:
         self.ds_asked: dict[str, deque[float]] = {}
         self.vision = VisionService()
         self.speech = SpeechTokenService()
+        self.translation = TranslationService()
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -341,6 +344,11 @@ def _state_json(flow: MatchWorkflow) -> dict[str, Any]:
     }
 
 
+def _names(flow: MatchWorkflow) -> list[str]:
+    """Player and club names the Translator must leave alone and the re-check must find."""
+    return [*flow.names.values(), *flow.clubs.values()]
+
+
 def build_router(registry: Registry) -> APIRouter:
     router = APIRouter(prefix="/v1", tags=["matches"])
 
@@ -423,6 +431,8 @@ def build_router(registry: Registry) -> APIRouter:
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
         flow = registry.get(session_id, match_id)
+        if lang not in LANGUAGES:
+            raise Problem(422, "contract_invalid", "lang must be en, es or hi", "/lang")
         if persona:
             persona = normalise(persona, flow.clubs, flow.names)
             if persona is None:
@@ -433,13 +443,27 @@ def build_router(registry: Registry) -> APIRouter:
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and persona and item.data["persona"] != persona)
 
+        async def localised(item: StreamEvent) -> StreamEvent:
+            """The publication with a checked `variants[lang]`, or untouched (English)."""
+            if lang == "en" or item.event != "publication":
+                return item
+            data = item.data
+            variant = await registry.translation.variant(
+                data["publication_id"], data["text"], lang, _names(flow)
+            )
+            if variant.text is None:
+                if variant.reason not in ("unavailable", "paused", "unsupported"):
+                    flow.record_translation_rejected(data["publication_id"], lang, variant.reason)
+                return item
+            return StreamEvent(item.event, item.id, {**data, "variants": {lang: variant.text}})
+
         async def body() -> AsyncIterator[str]:
             yield StreamEvent("status", None, {"status": flow.status}).encode()
             yield StreamEvent("state", None, _state_json(flow)).encode()
             replay = [e for e in flow.hub.replay_after(last_event_id) if wanted(e)]
             if not follow:
                 for item in replay:
-                    yield item.encode()
+                    yield (await localised(item)).encode()
                 return
             source = flow.hub.subscribe(replay).__aiter__()
             while True:
@@ -449,7 +473,7 @@ def build_router(registry: Registry) -> APIRouter:
                     yield StreamEvent("heartbeat", None, {"time": _now()}).encode()
                     continue
                 if wanted(item):
-                    yield item.encode()
+                    yield (await localised(item)).encode()
 
         return StreamingResponse(
             body(),
@@ -684,13 +708,24 @@ def build_router(registry: Registry) -> APIRouter:
             result = await flow.ask(body.question, body.persona)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
-        return {
+        reply: dict[str, Any] = {
             "answer": result.answer,
             "intent": result.intent,
             "abstained": result.abstained,
             "citations": result.citations,
             "mode": result.mode,
+            "lang": "en",
         }
+        if body.lang != "en" and not result.abstained:
+            key = "ask-" + hashlib.sha256(result.answer.encode()).hexdigest()[:12]
+            variant = await registry.translation.variant(
+                key, result.answer, body.lang, _names(flow)
+            )
+            if variant.text is not None:
+                reply["variants"] = {body.lang: variant.text}
+            elif variant.reason not in ("unavailable", "paused", "unsupported"):
+                flow.record_translation_rejected(key, body.lang, variant.reason or "rejected")
+        return reply
 
     return router
 
