@@ -64,7 +64,7 @@ flowchart LR
 | --- | --- |
 | Workspace | `dbw-matchcast-dev`, Premium, East US 2 |
 | Compute | Single-node jobs cluster `Standard_D4ds_v5` (fallback `Standard_DS3_v2` if quota blocks it), auto-terminate when the run ends |
-| `train-danger` | Gradient-boosted classifier trained on the scene dataset (`scripts/generate_scenes.py`: 30 s windows of headless matches in six families, the same number per family, one row per event). Label `danger` = the event's own team takes a shot in the next 10 s; the features (passes, turnovers and shots in the previous 10 s, position, xG) look back only, so the label never leaks into them (`tests/test_scenes.py`); 80/20 split by match, not by row; logs params, AUC, Brier score, calibration plot; exports ONNX |
+| `train-danger` | Gradient-boosted classifier trained on the scene dataset (`scripts/generate_scenes.py`: 30 s windows of headless matches in six families, the same number per family, one row per event). Label `danger` = the event's own team takes a shot in the next 10 s; the features (passes, turnovers and shots in the previous 10 s, position, xG) look back only (no event after the one being scored); the family is not a feature and `t_rel_s` is dropped because a live event has no scene window into them (`tests/test_scenes.py`); 75/25 split by match (whole matches held out), not by row; logs params, AUC, Brier score, calibration plot; exports ONNX |
 | `fit-xg` | Logistic regression on angle and distance; logs log-loss and a reliability plot; writes `b0..b2` |
 | Code | `data/databricks/train_danger.py`, `data/databricks/fit_xg.py` in the repo, deployed as a Databricks Asset Bundle `data/databricks/databricks.yml` |
 | After the runs | Stop all compute; record run URLs and metrics in `docs/data.md` |
