@@ -23,6 +23,9 @@ param webImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 param apiImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 param mcpImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
+@description('True once scripts/set_search_secrets.sh has stored srch-query-key in Key Vault (the post-provision hook sets it for the next provision).')
+param searchKeysInVault string = 'false'
+
 var name = 'matchcast-${environmentName}'
 var tags = {
   project: 'matchcast'
@@ -54,6 +57,11 @@ module eventhubs 'modules/eventhubs.bicep' = {
   params: { name: name, location: location, tags: tags }
 }
 
+module ai 'modules/ai.bicep' = {
+  name: 'ai'
+  params: { name: name, location: location, tags: tags }
+}
+
 module containerapps 'modules/containerapps.bicep' = {
   name: 'containerapps'
   params: {
@@ -76,6 +84,9 @@ module containerapps 'modules/containerapps.bicep' = {
     mcpImage: mcpImage
     entraClientId: entraClientId
     keyVaultUri: keyvault.outputs.uri
+    contentSafetyEndpoint: ai.outputs.contentSafetyEndpoint
+    searchEndpoint: ai.outputs.searchEndpoint
+    searchKeysInVault: searchKeysInVault == 'true'
   }
 }
 
@@ -103,6 +114,7 @@ module roles 'modules/roles.bicep' = {
     eventHubNamespaceName: eventhubs.outputs.name
     keyVaultName: keyvault.outputs.name
     foundryAccountName: foundryAccountName
+    cognitiveNames: ai.outputs.cognitiveNames
   }
 }
 
@@ -112,3 +124,6 @@ output API_URI string = 'https://${containerapps.outputs.apiFqdn}'
 output STORAGE_ACCOUNT string = storage.outputs.name
 output EVENTHUB_NAMESPACE string = eventhubs.outputs.name
 output KEY_VAULT string = keyvault.outputs.name
+output SEARCH_SERVICE string = ai.outputs.searchName
+output SEARCH_ENDPOINT string = ai.outputs.searchEndpoint
+output CONTENT_SAFETY_ENDPOINT string = ai.outputs.contentSafetyEndpoint

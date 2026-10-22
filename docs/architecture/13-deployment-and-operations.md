@@ -40,7 +40,7 @@ flowchart TB
   evh --> fabric
 ```
 
-Everything except the Foundry resource (created by hand on 21 Oct) and Fabric is in Bicep as the target design. Today the Bicep modules cover monitoring, identity, Key Vault, storage, Event Hubs, Container Apps (web, api, mcp), alerts, workbook and roles; the Speech, Translator, Vision, Content Safety, AI Search, Databricks and recap Function boxes are not in Bicep yet; their stories add them, so the diagram shows the target design. Region parameter `location` defaults to `eastus2`; the resource group stays in East US.
+Everything except the Foundry resource (created by hand on 21 Oct) and Fabric is in Bicep as the target design. Today the Bicep modules cover monitoring, identity, Key Vault, storage, Event Hubs, Container Apps (web, api, mcp), Content Safety, AI Search Free, alerts, workbook and roles; the Speech, Translator, Vision, Databricks and recap Function boxes are not in Bicep yet; their stories add them, so the diagram shows the target design. Region parameter `location` defaults to `eastus2`; the resource group stays in East US.
 
 ## 2. Infrastructure as code
 
