@@ -53,7 +53,7 @@ const MCS = (() => {
   const loop = () => {
     if (!framed) return;
     setInterval(() => {
-      if (S.over && !sentOver) { sentOver = true; send({ type: 'fulltime', setup: setup(), score: S.score.slice(), dataset: dataset() }); }
+      if (S.over && !sentOver && !window.MC_CONSUMER) { sentOver = true; send({ type: 'fulltime', setup: setup(), score: S.score.slice(), dataset: dataset() }); }
       if (!S.over) sentOver = false;
       if (S.started) live('tick');
     }, 1000);
