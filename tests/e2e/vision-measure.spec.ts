@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import fs from 'node:fs';
 
 // DAT-11 task 279 (harness):  the Vision tracker's accuracy on 3 seeds per camera, measured against engine truth. A capture costs about 6.5 s in software WebGL (the sandbox), so 5 minutes of match is hours; run it on a machine with a GPU (the Mac mini). It only runs

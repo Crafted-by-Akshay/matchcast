@@ -67,6 +67,8 @@ window.__bcLang = { check: bcCheckTranslation, translate: bcTranslate };   // fo
 (() => {
   const st = document.createElement('style');
   st.textContent = '.bc-btn.pri,.bc-seg button[aria-pressed="true"]{color:#06121F !important}.bc-foot,.src,.bc-src{color:#9aa7bf !important}';
+  // phones: 44 px tap targets (a checkbox is tapped through its 44 px label)
+  st.textContent += '@media (max-width:560px){button,select,input:not([type=checkbox]),textarea{min-height:44px;min-width:44px}.mcx-ptt{min-height:44px !important;min-width:44px !important}input[type=checkbox]{width:24px;height:24px}label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}';
   document.head.appendChild(st);
   const lum = (hex) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()); if (!m) return null; const v = [0, 2, 4].map((i) => { const c = parseInt(m[1].slice(i, i + 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
   const ink = () => {

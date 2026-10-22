@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, stepSim, viewFrame } from './helpers';
 
 declare const AG: any;

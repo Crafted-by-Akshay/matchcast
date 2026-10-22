@@ -227,7 +227,7 @@ def test_xg_is_direction_free_so_second_half_shots_count_fully() -> None:
     assert first == second and first > 0.05
 
 
-def test_a_player_must_belong_to_the_moments_team(match) -> None:
+def test_a_player_must_be_one_the_moments_event_names(match) -> None:
     index = next(i for i, e in enumerate(match["events"]) if e["payload"]["type"] == "shot")
     ctx = context(match, upto=index + 1)
     payload = match["events"][index]["payload"]
@@ -250,7 +250,8 @@ def test_a_player_must_belong_to_the_moments_team(match) -> None:
         for p in ctx.roster["players"]
         if p["team_id"] == team and p["player_id"] != shooter
     )
-    assert verdict(ctx, line(text(mate)), claims).verdict == "verified"  # a known gap, see eval
+    teammate = verdict(ctx, line(text(mate)), claims)  # right team, wrong player
+    assert (teammate.verdict, teammate.reason_code) == ("rejected", "unknown_player")
 
 
 def test_team_rule_leaves_summaries_period_ends_and_whole_names_alone(match) -> None:

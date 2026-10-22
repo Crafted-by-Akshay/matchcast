@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
@@ -16,9 +16,9 @@ test('on-air log lists only approved lines and exports JSON whose hash matches t
   await page.click('#tab-agents');
   await page.selectOption('#aq-mode', 'producer');
   await page.evaluate(() => {
-    AG.reset('k3', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k3', [{ minute: 10.1, type: 'goal', team: 'ars', player: 'A One', score: '1-0', data: {} }], []);
-    AG.onWatch('k3', [{ minute: 20.2, type: 'goal', team: 'che', player: 'C One', score: '1-1', data: {} }], []);
+    AG.reset('k3', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch('k3', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
+    AG.onWatch('k3', [{ minute: 20.2, type: 'goal', team: 'cco', player: 'C One', score: '1-1', data: {} }], []);
   });
   await expect.poll(() => page.locator('#aq-list li[data-id]').count()).toBe(2);
   // approve the first, kill the second
@@ -35,7 +35,7 @@ test('on-air log lists only approved lines and exports JSON whose hash matches t
   const j = JSON.parse(text);
   expect(j.schema).toBe('matchcast.onair/1');
   expect(j.lines).toHaveLength(1);
-  expect(j.lines[0].text).toContain('Arsenal');
+  expect(j.lines[0].text).toContain('Thames Rovers');
   const sha = createHash('sha256').update(text).digest('hex');
   await expect(bc.locator('#mc-onair-hash')).toContainText(sha.slice(0, 16));
   expect(text).not.toContain('forged');

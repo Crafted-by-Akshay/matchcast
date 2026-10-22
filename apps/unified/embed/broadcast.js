@@ -121,3 +121,34 @@ window.addEventListener('message', (e) => {
   if (typeof BC !== 'undefined' && BC.lang !== d.lang) { BC.lang = d.lang; if (typeof bcPaintScript === 'function') bcPaintScript(); }
   if (mcAired.length) mcPaintTele();
 });
+
+// ---- EXP-8/16: Ask the producer goes to the shell's verified path first (the api's /ask, or the in-page Verifier recount) so a verified answer can be spoken;
+// an answer the Verifier cannot confirm falls back to the desk's own answer, which stays labelled as not checked. The desk pane is redrawn often and binds `bcAsk` each time, so it is replaced here.
+if (MCS.framed) {
+  const bcAskLocal = bcAsk; let n = 0, latest = null; const pending = new Map();
+  const finish = (id, shown) => {   // only the newest question may write; a verified answer shows, anything else falls back to the desk's own, if the field still holds that question
+    const p = pending.get(id); if (!p) return; pending.delete(id);
+    if (id !== latest) return;
+    if (shown) { $('bcd-ans').textContent = shown.text; $('bcd-ai').textContent = shown.tag; return; }
+    if ($('bcd-q').value.trim() === p.q) bcAskLocal(); else $('bcd-ans').textContent = 'Ask again to get an answer.';
+  };
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'answer' || !pending.has(d.id)) return;
+    const a = d.answer || {};
+    if (a.note === 'rate limit' && a.text) finish(d.id, { text: String(a.text), tag: 'Slow down' });
+    else if (a.verdict === 'verified' && a.text) finish(d.id, { text: String(a.text).trim(), tag: 'Verified by the Verifier' + (a.note ? ' · ' + a.note : '') });
+    else finish(d.id, null);
+  });
+  bcAsk = function () {
+    const text = $('bcd-q').value.trim(); if (!text) { $('bcd-ans').textContent = 'Type or say a question first.'; return; }
+    if (!S.started) { bcAskLocal(); return; }
+    const id = 'b' + Date.now().toString(36) + (++n); latest = id; pending.set(id, { q: text });
+    $('bcd-ans').textContent = 'Checking with the Verifier…'; $('bcd-ai').textContent = '';
+    MCS.send({ type: 'ask', id, q: text });
+    setTimeout(() => finish(id, null), 9000);   // no answer in time: the desk's own
+  };
+  // the mic: the desk pane is redrawn often, so it is attached whenever a fresh question box appears
+  const attachMic = () => { const q = $('bcd-q'); if (q && !q.dataset.ptt) MCS.ptt(q, { requestSubmit: () => bcAsk() }, BC.lang === 'es' ? 'es-ES' : BC.lang === 'hi' ? 'hi-IN' : 'en-GB'); };
+  const pane = $('pane-desk'); if (pane) { new MutationObserver(attachMic).observe(pane, { childList: true, subtree: true }); attachMic(); }
+}

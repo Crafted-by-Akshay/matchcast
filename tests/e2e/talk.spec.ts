@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { openShell, ready, viewFrame } from './helpers';
 
 // EXP-16: push-to-talk for Ask the producer in Broadcast, and the Game mode label in Watch. Speech recognition is faked.
@@ -13,12 +13,12 @@ test('talk: holding the mic in Broadcast fills Ask the producer and submits it; 
   await openShell(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
-  await bc.evaluate(() => { (window as any).__submitted = []; document.getElementById('dk-askf')!.addEventListener('submit', (e) => { e.stopImmediatePropagation(); e.preventDefault(); (window as any).__submitted.push((document.getElementById('dk-q') as HTMLInputElement).value); }, true); });
-  const mic = bc.locator('.mcx-ptt');
+  await bc.locator('#bc-tabs button[data-p="desk"]').click();
+  const mic = bc.locator('#pane-desk .mcx-ptt');
   await expect(mic).toHaveCount(1);
   await mic.dispatchEvent('pointerdown');
   await mic.dispatchEvent('pointerup');
-  await expect.poll(() => bc.evaluate(() => (window as any).__submitted)).toEqual(['what was the key moment']);
+  await expect(bc.locator('#bcd-q')).toHaveValue('what was the key moment');
   // only a short-lived token may ever reach the browser, never a Speech key
   expect(await bc.evaluate(() => document.documentElement.outerHTML)).not.toMatch(/subscription-?key|Ocp-Apim/i);
   await page.click('#tab-watch');

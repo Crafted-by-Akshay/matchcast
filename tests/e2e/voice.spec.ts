@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell } from './helpers';
 
 // EXP-8: captions match the line and still show when muted; audio is skipped for stale lines. Speech is stubbed.
@@ -16,15 +16,15 @@ test('voice: captions match the spoken text; muted still captions; stale lines a
   const errs = collectErrors(page);
   await openShell(page, 'agents');
   // muted by default: the caption shows, nothing is spoken
-  await page.evaluate(() => VC.say('Goal for Arsenal (A One) at 10\'.'));
-  await expect(page.locator('#vc-bar')).toHaveText('Goal for Arsenal (A One) at 10\'.');
+  await page.evaluate(() => VC.say('Goal for Thames Rovers (A One) at 10\'.'));
+  await expect(page.locator('#vc-bar')).toHaveText('Goal for Thames Rovers (A One) at 10\'.');
   expect(await page.evaluate(() => (window as any).__spoken.length)).toBe(0);
   // voice on: the same text is spoken
   await page.click('#voice-btn');
   await expect(page.locator('#voice-btn')).toHaveText('Voice: on');
-  await page.evaluate(() => VC.say('Arsenal 1–0 Chelsea.'));
-  await expect.poll(() => page.evaluate(() => (window as any).__spoken)).toEqual(['Arsenal 1–0 Chelsea.']);
-  await expect(page.locator('#vc-bar')).toHaveText('Arsenal 1–0 Chelsea.');
+  await page.evaluate(() => VC.say('Thames Rovers 1–0 Coloso Ciudad.'));
+  await expect.poll(() => page.evaluate(() => (window as any).__spoken)).toEqual(['Thames Rovers 1–0 Coloso Ciudad.']);
+  await expect(page.locator('#vc-bar')).toHaveText('Thames Rovers 1–0 Coloso Ciudad.');
   await expect(page.locator('#voice-src')).toHaveText('Browser voice (simulated)');
   // the same claim is spoken once
   await page.evaluate(() => { VC.say('Once.', { id: 'c9' }); VC.say('Once.', { id: 'c9' }); });
@@ -39,8 +39,8 @@ test('voice: captions match the spoken text; muted still captions; stale lines a
 test('voice: a verified goal line from the agents is captioned', async ({ page }) => {
   await openShell(page, 'agents');
   await page.evaluate(() => {
-    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'ars', player: 'A One', score: '1-0', data: {} }], []);
+    AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });
   await expect(page.locator('#vc-bar')).toContainText('A One');
 });

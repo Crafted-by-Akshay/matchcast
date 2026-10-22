@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell } from './helpers';
 
 // EXP-6: the trace panel. The shell is driven the way Watch drives it (a start and a batch of events), as in connection.spec.ts.
@@ -8,11 +8,11 @@ test('trace panel: four agents in order with durations, tools, and the seeded ba
   const errs = collectErrors(page);
   await openShell(page, 'agents');
   await page.evaluate(() => {
-    const key = 'k1', names = { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' };
+    const key = 'k1', names = { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' };
     AG.reset(key, names);
-    AG.onWatch(key, [{ minute: 10.1, type: 'goal', team: 'ars', player: 'A One', score: '1-0', data: {} }], []);   // a normal goal
+    AG.onWatch(key, [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);   // a normal goal
     AG.seedBad(true);
-    AG.onWatch(key, [{ minute: 20.2, type: 'goal', team: 'che', player: 'C One', score: '1-1', data: {} }], []);   // the next score claim is stated wrongly
+    AG.onWatch(key, [{ minute: 20.2, type: 'goal', team: 'cco', player: 'C One', score: '1-1', data: {} }], []);   // the next score claim is stated wrongly
   });
   await expect.poll(() => page.evaluate(() => AG.run.claims.filter((c: any) => c.kind === 'score' && c.verdict === 'verified').length)).toBe(2);
 

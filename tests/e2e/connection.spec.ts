@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { createServer, type Server } from 'node:http';
 import { collectErrors } from './helpers';
 
@@ -36,10 +36,10 @@ async function drive(page: Page, api: string) {
   await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
   // drive the shell the way Watch does (its start and one batch of events); the 3D engine is too slow in headless software rendering
   await page.evaluate(() => {
-    const key = 'k1', names = { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' };
-    const roster = { teams: ['ars', 'che'], players: [{ name: 'A One', team: 'ars' }, { name: 'C One', team: 'che' }] };
+    const key = 'k1', names = { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' };
+    const roster = { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }, { name: 'C One', team: 'cco' }] };
     AG.reset(key, names); LV.begin(key, roster);
-    const batch = [{ minute: 12.3, type: 'shot', team: 'ars', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'open play', data: {} }, { minute: 12.4, type: 'goal', team: 'ars', player: 'A One', score: '1-0' }];
+    const batch = [{ minute: 12.3, type: 'shot', team: 'thr', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'open play', data: {} }, { minute: 12.4, type: 'goal', team: 'thr', player: 'A One', score: '1-0' }];
     AG.onWatch(key, batch, []); LV.events(batch);
   });
 }

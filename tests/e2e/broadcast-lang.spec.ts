@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // Broadcast desk script: English, Spanish and Hindi (Tamil is out until a native speaker reviews it); every translation is re-checked.

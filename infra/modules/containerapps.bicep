@@ -148,6 +148,8 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
           env: concat(commonEnv, authEnv, [
             { name: 'MATCHCAST_AGENT_MODE', value: 'rules' }
             { name: 'MATCHCAST_PIPELINE', value: pipelineMode }
+            // ADR-0017: one writer of matchstate per mode; the reducer owns it whenever events go through the hub
+            { name: 'MATCHCAST_STATE_WRITER', value: pipelineMode == 'direct' ? 'workflow' : 'reducer' }
             // The ingress is the only way in and appends the caller to X-Forwarded-For
             { name: 'MATCHCAST_BEHIND_INGRESS', value: 'true' }
             { name: 'FOUNDRY_PROJECT_ENDPOINT', value: foundryProjectEndpoint }
