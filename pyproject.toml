@@ -16,6 +16,9 @@ dev = [
     "pytest>=8.3,<9",
     "ruff>=0.11,<1",
 ]
+smoke = [
+    "azure-ai-projects>=1.0,<2",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
