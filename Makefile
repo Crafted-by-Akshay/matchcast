@@ -1,4 +1,4 @@
-.PHONY: openapi-generate smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
+.PHONY: judge-path openapi-generate smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
 
 install:
 	npm ci
@@ -44,3 +44,6 @@ e2e-live:
 
 smoke-foundry:
 	uv run --locked --group smoke python scripts/smoke_foundry.py
+
+judge-path:
+	uv run python scripts/judge_path.py
