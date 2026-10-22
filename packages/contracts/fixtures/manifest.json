@@ -24,7 +24,8 @@
     "card.json",
     "carry.json",
     "possession-change.json",
-    "pressure.json"
+    "pressure.json",
+    "audit-record.json"
   ],
   "invalid": [
     {
@@ -500,6 +501,18 @@
       "file": "invalid/card-unknown-colour.json",
       "code": "invalid_schema",
       "with_roster": true
+    },
+    {
+      "file": "invalid/audit-details-too-large.json",
+      "code": "details_too_large",
+      "with_roster": false,
+      "path": "/details"
+    },
+    {
+      "file": "invalid/audit-first-not-genesis.json",
+      "code": "invalid_chain",
+      "with_roster": false,
+      "path": "/prev_hash"
     }
   ]
 }

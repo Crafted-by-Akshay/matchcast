@@ -4,7 +4,7 @@
  * MatchCast wire contracts v1.1.0. Contextual validation is specified in docs/contracts.md.
  */
 export type MatchCastContract =
-  Roster | EventEnvelope | TrackingFrame | StateRevisionPacket | ClaimPacket | PublicationPacket;
+  Roster | EventEnvelope | TrackingFrame | StateRevisionPacket | ClaimPacket | PublicationPacket | AuditRecord;
 export type SchemaVersion = "1.0.0" | "1.1.0";
 export type Identifier = string;
 export type Sequence = number;
@@ -26,6 +26,7 @@ export type ClaimPacket = {
   max_evidence_sequence: Counter;
   approval_status: "pending" | "approved" | "rejected" | "retracted";
 };
+export type Sha256 = string;
 
 export interface Roster {
   kind: "roster";
@@ -268,4 +269,41 @@ export interface PublicationPacket {
   expires_at: Timestamp;
   audio_generation_id: Identifier | null;
   text: string;
+}
+export interface AuditRecord {
+  kind: "audit_record";
+  schema_version: SchemaVersion;
+  stream: StreamIdentity;
+  audit_id: Identifier;
+  sequence: Sequence;
+  time: Timestamp;
+  actor_kind: "agent" | "person" | "system";
+  actor_id: Identifier;
+  action:
+    | "event_rejected"
+    | "moment_skipped"
+    | "claim_created"
+    | "line_drafted"
+    | "line_verified"
+    | "line_review"
+    | "line_rejected"
+    | "line_repair_requested"
+    | "line_abstained"
+    | "line_approved"
+    | "line_edited"
+    | "line_killed"
+    | "publication_created"
+    | "translation_rejected"
+    | "fallback_used"
+    | "recap_created"
+    | "ask_answered"
+    | "talk_answered"
+    | "export_created"
+    | "safety_blocked";
+  subject_id: Identifier;
+  details: {
+    [k: string]: unknown;
+  };
+  prev_hash: Sha256;
+  hash: Sha256;
 }
