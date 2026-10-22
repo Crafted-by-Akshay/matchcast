@@ -14,14 +14,27 @@ from typing import Any
 
 LIVE, SIMULATED, PLANNED, UNAVAILABLE = "live", "simulated", "planned", "unavailable"
 
-# (key, label, environment variable that points at the Azure resource)
-_RESOURCES = (
-    ("speech", "Azure AI Speech", "SPEECH_ENDPOINT"),
-    ("translator", "Azure AI Translator", "TRANSLATOR_ENDPOINT"),
-    ("vision", "Azure AI Vision", "VISION_ENDPOINT"),
-    ("content_safety", "Azure AI Content Safety", "CONTENT_SAFETY_ENDPOINT"),
-    ("search", "Azure AI Search", "SEARCH_ENDPOINT"),
+# Provisioned by Bicep but not called by any app code yet: shown as planned, whatever the settings.
+_NOT_WIRED = (
+    ("content_safety", "Azure AI Content Safety"),
+    ("search", "Azure AI Search"),
 )
+
+
+def _speech_ok(env: Mapping[str, str]) -> bool:
+    from app.speech import SpeechTokenService
+
+    return SpeechTokenService(env.get("SPEECH_ENDPOINT", ""), env.get("SPEECH_REGION", "")).ready
+
+
+def _vision_ok(env: Mapping[str, str]) -> bool:
+    from app.vision import check_endpoint
+
+    try:
+        check_endpoint(env.get("VISION_ENDPOINT", "").strip())
+    except ValueError:
+        return False
+    return True
 
 
 def _item(key: str, label: str, state: str, detail: str) -> dict[str, str]:
@@ -34,7 +47,14 @@ def dependency_status(env: Mapping[str, str], mode: str) -> dict[str, Any]:
     items: list[dict[str, str]] = []
 
     if env.get("MATCHCAST_AGENT_MODE") == "live" and env.get("FOUNDRY_PROJECT_ENDPOINT"):
-        items.append(_item("agents", "Foundry agents", LIVE, "agents call the Foundry model"))
+        items.append(
+            _item(
+                "agents",
+                "Foundry agents",
+                LIVE,
+                "configured; rules take over if a model call fails",
+            )
+        )
     else:
         items.append(_item("agents", "Foundry agents", SIMULATED, "rules agents, no model call"))
 
@@ -49,15 +69,30 @@ def dependency_status(env: Mapping[str, str], mode: str) -> dict[str, Any]:
     else:
         items.append(_item("stream", "Event Hubs", SIMULATED, f"in-process stream ({pipeline})"))
 
-    for key, label, variable in _RESOURCES:
-        if env.get(variable):
-            items.append(_item(key, label, LIVE, "resource configured"))
-        elif cloud:
-            items.append(_item(key, label, UNAVAILABLE, f"{variable} is not set"))
+    resources = (
+        ("speech", "Azure AI Speech", "SPEECH_ENDPOINT", _speech_ok),
+        ("translator", "Azure AI Translator", "TRANSLATOR_ENDPOINT", lambda e: True),
+        ("vision", "Azure AI Vision", "VISION_ENDPOINT", _vision_ok),
+    )
+    for key, label, variable, valid in resources:
+        if not env.get(variable):
+            state, detail = (
+                (UNAVAILABLE, f"{variable} is not set")
+                if cloud
+                else (
+                    SIMULATED,
+                    "not connected in local mode",
+                )
+            )
+        elif not valid(env):
+            state, detail = UNAVAILABLE, f"{variable} or its region is malformed"
         else:
-            items.append(_item(key, label, SIMULATED, "not connected in local mode"))
+            state, detail = LIVE, "resource configured"
+        items.append(_item(key, label, state, detail))
+    for key, label in _NOT_WIRED:
+        items.append(_item(key, label, PLANNED, "provisioned, not called by the app yet"))
 
-    if env.get("MATCHCAST_EASY_AUTH") == "1":
+    if env.get("MATCHCAST_EASY_AUTH") == "1" and env.get("MATCHCAST_REQUIRE_ROLE") == "1":
         items.append(_item("auth", "Entra sign-in", LIVE, "Easy Auth roles enforced"))
     else:
         items.append(_item("auth", "Entra sign-in", SIMULATED, "roles are simulated in the page"))
@@ -69,7 +104,6 @@ def dependency_status(env: Mapping[str, str], mode: str) -> dict[str, Any]:
         state: sum(1 for i in items if i["status"] == state)
         for state in (LIVE, SIMULATED, PLANNED, UNAVAILABLE)
     }
+    # Planned items are not built, so they do not decide the overall state of what is built.
     overall = UNAVAILABLE if counts[UNAVAILABLE] else (SIMULATED if counts[SIMULATED] else LIVE)
-    if counts[PLANNED] and overall == LIVE:
-        overall = PLANNED
     return {"mode": mode, "overall": overall, "counts": counts, "dependencies": items}

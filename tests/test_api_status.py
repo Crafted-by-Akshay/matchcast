@@ -23,11 +23,33 @@ def test_configured_resources_are_live():
         "MATCHCAST_STORE": "table",
         "MATCHCAST_PIPELINE": "eventhubs",
         "MATCHCAST_EASY_AUTH": "1",
-        "SPEECH_ENDPOINT": "https://s.invalid",
+        "MATCHCAST_REQUIRE_ROLE": "1",
+        "SPEECH_ENDPOINT": "https://sp-x.cognitiveservices.azure.com",
+        "SPEECH_REGION": "eastus2",
+        "TRANSLATOR_ENDPOINT": "https://tr-x.cognitiveservices.azure.com/",
+        "VISION_ENDPOINT": "https://cv-x.cognitiveservices.azure.com",
     }
     got = states(env, "cloud")
     assert got["agents"] == got["store"] == got["stream"] == got["auth"] == "live"
-    assert got["speech"] == "live"
+    assert got["speech"] == got["translator"] == got["vision"] == "live"
+
+
+def test_speech_needs_its_region_and_vision_a_valid_host():
+    base = {"SPEECH_ENDPOINT": "https://sp-x.cognitiveservices.azure.com"}
+    assert states(base, "cloud")["speech"] == "unavailable"
+    assert (
+        states({"VISION_ENDPOINT": "https://evil.example.com"}, "cloud")["vision"] == "unavailable"
+    )
+
+
+def test_content_safety_and_search_are_planned_even_when_configured():
+    env = {"CONTENT_SAFETY_ENDPOINT": "https://x", "SEARCH_ENDPOINT": "https://y"}
+    got = states(env, "cloud")
+    assert got["content_safety"] == got["search"] == "planned"
+
+
+def test_easy_auth_without_required_roles_is_not_live():
+    assert states({"MATCHCAST_EASY_AUTH": "1"}, "cloud")["auth"] == "simulated"
 
 
 def test_cloud_without_a_resource_is_unavailable_not_simulated():
