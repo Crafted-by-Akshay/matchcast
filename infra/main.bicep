@@ -87,6 +87,8 @@ module containerapps 'modules/containerapps.bicep' = {
     contentSafetyEndpoint: ai.outputs.contentSafetyEndpoint
     speechEndpoint: ai.outputs.speechEndpoint
     speechRegion: ai.outputs.speechRegion
+    translatorEndpoint: ai.outputs.translatorEndpoint
+    translatorRegion: ai.outputs.translatorRegion
     searchEndpoint: ai.outputs.searchEndpoint
     searchKeysInVault: searchKeysInVault == 'true'
   }
@@ -149,3 +151,5 @@ output SEARCH_ENDPOINT string = ai.outputs.searchEndpoint
 output CONTENT_SAFETY_ENDPOINT string = ai.outputs.contentSafetyEndpoint
 output SPEECH_ENDPOINT string = ai.outputs.speechEndpoint
 output SPEECH_REGION string = ai.outputs.speechRegion
+output TRANSLATOR_ENDPOINT string = ai.outputs.translatorEndpoint
+output TRANSLATOR_REGION string = ai.outputs.translatorRegion
