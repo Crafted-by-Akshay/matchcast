@@ -70,3 +70,28 @@ test('offline: Offline (simulated) and no api call', async ({ page }) => {
   expect(await page.evaluate(() => !LV.enabled)).toBe(true);
   expect(errs).toEqual([]);
 });
+
+test('status dialog: offline says everything is simulated', async ({ page }) => {
+  const errs = collectErrors(page);
+  await drive(page, '');
+  await page.locator('#status-btn').click();
+  await expect(page.locator('#status-dlg')).toBeVisible();
+  await expect(page.locator('#status-box')).toContainText('No api is configured');
+  expect(errs).toEqual([]);
+});
+
+test('status dialog: lists each dependency from /v1/status', async ({ page }) => {
+  const errs = collectErrors(page);
+  const doc = { mode: 'cloud', overall: 'simulated', counts: { live: 1, simulated: 1, planned: 1 }, dependencies: [
+    { key: 'a', label: 'Planned thing', status: 'planned', detail: 'not built' },
+    { key: 'b', label: 'Live thing', status: 'live', detail: 'configured' },
+    { key: 'c', label: 'Sim thing', status: 'simulated', detail: 'in memory' }] };
+  await page.route('**/v1/status', (rt) => rt.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(doc) }));
+  await drive(page, 'http://127.0.0.1:9');
+  await page.locator('#status-btn').click();
+  const items = page.locator('#status-box li');
+  await expect(items).toHaveCount(3);
+  await expect(items.first()).toContainText('Live thing');
+  await expect(items.last()).toContainText('Planned thing');
+  expect(errs.filter((e) => !/127\.0\.0\.1:9|ERR_|Failed to load resource/.test(e))).toEqual([]);
+});
