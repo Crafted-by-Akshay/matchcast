@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // Broadcast's on-air overlays (replay bar, on-air log, lower-third, teleprompter) must not cover each other, on a desktop or a phone.

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, viewFrame } from './helpers';
 
 // Broadcast draws the same action poses as Watch: Watch's frames carry each player's current action and Broadcast applies it.

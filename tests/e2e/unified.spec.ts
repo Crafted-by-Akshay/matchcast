@@ -1,4 +1,4 @@
-import { test, expect, type Frame, type Page } from '@playwright/test';
+import { test, expect, type Frame, type Page } from './fixtures';
 import { collectErrors, openShell, ready, stepSim, viewFrame } from './helpers';
 
 // Top-level consts of the shell and the Analyst frame, so they are not on window.

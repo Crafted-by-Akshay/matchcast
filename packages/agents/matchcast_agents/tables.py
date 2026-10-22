@@ -271,13 +271,14 @@ class BufferedTableStore:
     replay fills the gap.
     """
 
-    def __init__(self, backing: TableStore) -> None:
+    def __init__(self, backing: TableStore, *, write_state: bool = True) -> None:
         from concurrent.futures import ThreadPoolExecutor
         from threading import RLock
 
         from .store import MemoryStore
 
         self._t = backing
+        self._write_state = write_state  # False: the reducer owns the matchstate table (ADR-0017)
         self._m = MemoryStore()
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="table-writer")
         self._lock = RLock()
@@ -330,7 +331,10 @@ class BufferedTableStore:
             row = t.get_checkpoint(sk)
             if row is not None:
                 m.put_checkpoint(sk, row)
-            m.put_state(sk, t.get_state(sk))
+            if self._write_state:
+                m.put_state(sk, t.get_state(sk))
+            elif row is not None:  # the reducer's row may be ahead of what the workflow processed
+                m.put_state(sk, MatchState.model_validate(row["state"]))
             for doc in t.claims(sk):
                 m.put_claim(sk, doc["packet"], {k: v for k, v in doc.items() if k != "packet"})
             for line in t.lines(sk):
@@ -378,7 +382,8 @@ class BufferedTableStore:
         self._guard()
         self.hydrate(sk)
         self._m.put_state(sk, state)
-        self._write(self._t.put_state, sk, state.model_copy(deep=True))
+        if self._write_state:
+            self._write(self._t.put_state, sk, state.model_copy(deep=True))
 
     # ---- claims, lines, publications, recaps -------------------------------------------------
 
@@ -458,7 +463,10 @@ class BufferedTableStore:
 
 
 def build_store(kind: str | None = None) -> Any:
-    """``MATCHCAST_STORE=table|memory``: table in Azure, memory in tests and locally."""
+    """``MATCHCAST_STORE=table|memory``: table in Azure, memory in tests and locally.
+
+    ``MATCHCAST_STATE_WRITER=reducer`` stops the workflow writing ``matchstate`` (ADR-0017); its
+    working state stays in memory and in the checkpoint."""
     from .store import MemoryStore
 
     kind = kind or os.environ.get("MATCHCAST_STORE", "memory")
@@ -475,4 +483,7 @@ def build_store(kind: str | None = None) -> Any:
         pass
     store = TableStore(azure_clients.table_service_client(), container)
     store.ensure_tables()
-    return BufferedTableStore(store)
+    writer = os.environ.get("MATCHCAST_STATE_WRITER", "workflow")
+    if writer not in ("workflow", "reducer"):
+        raise ValueError(f"MATCHCAST_STATE_WRITER must be workflow or reducer, not {writer!r}")
+    return BufferedTableStore(store, write_state=writer == "workflow")

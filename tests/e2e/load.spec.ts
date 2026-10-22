@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { openShell, ready, viewFrame } from './helpers';
 
 // Ported from apps/unified/tests/lazy.cjs and timing.cjs, in one cold-cache run so the 3D engine loads once.

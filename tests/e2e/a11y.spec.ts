@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { openShell } from './helpers';
 
 // Shell chrome only (top bar, fixture picker, tabs). The three views are canvas-heavy and get

@@ -46,6 +46,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: QUA-1 to QUA-9, D
 - **What it runs against:** `webServer` starts `make serve-e2e`, which builds the unified app with `--api http://localhost:8000` and starts `api` with `MATCHCAST_MODE=local`, `MATCHCAST_AGENT_MODE=rules`, `MATCHCAST_STORE=memory`. Foundry, Speech, Translator, Vision and AI Search are replaced by fakes in local mode; the browser Speech SDK is replaced by a stub through `page.addInitScript`. CI never calls Azure.
 - **Determinism:** fixed seed and speed in the URL (`?seed=2026&speed=4`), `?seedBadClaim=1` for the repair path. Wait for DOM state or bus messages, never fixed sleeps.
 - **Live mode:** specs tagged `@live` also run against the deployed URL with `E2E_BASE_URL` (read-only checks, used by QUA-8 and after deploys).
+- **Network guard:** specs import `test` from `tests/e2e/fixtures.ts`, which blocks requests to Azure hosts (`azure.com`, `cognitiveservices.azure.com`, `openai.azure.com`, `search.windows.net`) and fails the test that made one. Fake the call instead. The guard is off for live runs (`E2E_BASE_URL`).
 - **On failure:** screenshot, video and trace kept and uploaded by CI as the `playwright-report` artefact. One retry in CI, none locally; a test that passes only on retry is reported as flaky and fixed, never skipped.
 - **Time budget:** each spec under 3 minutes; the whole e2e job under 10 minutes.
 - **Commands:** `make e2e` (Chromium), `make e2e-webkit`, `make e2e-live E2E_BASE_URL=https://…`.

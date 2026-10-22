@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, stepSim, viewFrame } from './helpers';
 
 // Broadcast instant replay: the desk buffers Watch's frames and plays the last seconds back, then returns to live.

@@ -1,4 +1,4 @@
-import { test, expect, type Frame, type Page } from '@playwright/test';
+import { test, expect, type Frame, type Page } from './fixtures';
 import { collectErrors, openShell, viewFrame } from './helpers';
 
 // Ported from apps/unified/tests/watch.cjs (EXP-3 Match Pulse, EXP-4 watch modes).
