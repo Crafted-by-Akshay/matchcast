@@ -6,7 +6,8 @@
 #   analyst/     enterprise console (enterprise-console/src + data)
 #   shared/      players.json, intl.json and fixtures.json (the season, read by the shell)
 #   index.html   the shell, written by hand
-# Usage: python3 build.py            -> files to publish (three.js from jsdelivr)
+# Usage: python3 build.py [--api <url>]  -> files to publish (three.js from jsdelivr);
+#        --api points the shell at the live agent api (rewrites config.js)
 #        python3 build.py <dir>      -> also writes a copy in <dir>, three.js served locally (tests)
 import glob
 import json
@@ -249,20 +250,31 @@ def build(out_root):
     )
 
 
+CONFIG = (
+    "// MATCHCAST_API is the live agent api base URL. Empty keeps the in-page rules agents\n"
+    '// ("Offline (simulated)"). build.py --api <url> rewrites this file.\n'
+    "window.MATCHCAST_API = %s;\n"
+)
+
 if __name__ == "__main__":
+    args = sys.argv[1:]
+    api = ""
+    if "--api" in args:
+        k = args.index("--api")
+        api = args[k + 1].rstrip("/")
+        del args[k : k + 2]
+        assert api.startswith(("http://", "https://")), "--api needs an http(s) URL"
+    open(U + "config.js", "w").write(CONFIG % json.dumps(api))
     build(U)
-    if len(sys.argv) > 1:
+    if args:
         # local test copy: three.js from node_modules, no Google Fonts
-        dst = sys.argv[1].rstrip("/") + "/"
+        dst = args[0].rstrip("/") + "/"
         build(dst)
         for f in ["watch/index.html", "broadcast/index.html", "analyst/index.html"]:
             t = open(dst + f, encoding="utf-8").read().replace(CDN, "/node_modules/three/")
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
-        for f in [
-            "index.html",
-            "contracts.js",
-            "agents.js",
-        ]:  # the shell and its scripts, hand-written
+        # the shell and its scripts, hand-written
+        for f in ["index.html", "contracts.js", "agents.js", "live.js", "config.js"]:
             shutil.copy(U + f, dst + f)
         print("local copy", dst)

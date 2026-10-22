@@ -6,7 +6,8 @@ const MCS = (() => {
   const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ src: 'matchcast', view: MCS.view }, msg), '*'); };
   const setup = () => ({ h: TEAMS[0].key, a: TEAMS[1].key, seed: SET.seed, st: STADIUMS.indexOf(SET.st), month: SET.month, kick: SET.kickStr, half: SET.half,
     f0: resolvedTac(0).form, s0: resolvedTac(0).style, f1: resolvedTac(1).form, s1: resolvedTac(1).style });
-  const live = (type) => send({ type, setup: setup(), started: !!S.started, over: !!S.over, score: S.score.slice(), minute: Math.floor(ENV.minute || 0) });
+  const roster = () => ({ teams: [TEAMS[0].key, TEAMS[1].key], players: players.map((q) => ({ name: q.name, team: q.T.key })) });   // for the api's match roster
+  const live = (type) => send({ type, roster: type === 'start' ? roster() : undefined, setup: setup(), started: !!S.started, over: !!S.over, score: S.score.slice(), minute: Math.floor(ENV.minute || 0) });
   // the setup the shell asked for: the same seed, teams, stadium, month, kick-off, half length and formations as the season fixture
   let want = null;
   const apply = (Q) => {

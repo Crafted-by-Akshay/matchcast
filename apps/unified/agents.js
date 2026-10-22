@@ -70,7 +70,7 @@ const AG = (() => {
       say('Producer', c.minute, c.id + ' held: ' + v.reason, 'warn');
     }
   };
-  const claim = (kind, minute, evidence, inputs, extra) => { run.n++; return MCC.claim(Object.assign({ id: 'c' + run.n, kind, minute, agent: 'analyst', evidence, inputs }, extra)); };
+  const claim = (kind, minute, evidence, inputs, extra) => { run.n++; return MCC.claim(Object.assign({ id: 'c' + run.n, kind, minute, agent: 'analyst', evidence, inputs, source: 'rules' }, extra)); };
 
   // Watch's batch: the events first (so every recount sees the whole batch), then the moments, then the claims
   const onWatch = (key, events, moments) => {
@@ -96,6 +96,22 @@ const AG = (() => {
   };
 
   // a new match from Watch (its start, or a fixture change) starts a new run, and the audit chain starts again with it
+  // a claim or line from the live api (live.js): shown beside the rules claims, tagged with where it came from ('model' when the api says live, else 'rules')
+  const ingest = (d, status) => {
+    if (!run || !d) return;
+    const src = status === 'live' ? 'model' : 'rules', last = run.events.length ? run.events[run.events.length - 1].minute : 0;
+    const id = d.claim_id || (d.claim_ids && d.claim_ids[0]) || d.publication_id || d.line_id;
+    if (!id) return;
+    let c = run.claims.find((x) => x.id === id);
+    if (!c) {
+      c = MCC.claim({ id, kind: d.metric || 'line', minute: last, agent: 'analyst', evidence: [], inputs: d.metric ? { metric: d.metric, value: d.value, units: d.units } : {}, source: src, api: true });
+      run.claims.push(c); run.stat.claims++;
+    }
+    if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; }
+    if (d.text) { c.text = d.text; run.stat.lines++; say('Narrator', c.minute, c.id + ' · ' + d.text, ''); }
+    if (d.status === 'approved') c.route = 'fan';
+    c.source = src; changed();
+  };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  return { reset, onWatch, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { reset, onWatch, ingest, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();
