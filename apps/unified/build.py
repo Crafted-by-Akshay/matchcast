@@ -294,6 +294,13 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        for f in ["index.html", "contracts.js", "agents.js", "live.js", "config.js"]:
+        for f in [
+            "index.html",
+            "contracts.js",
+            "agents.js",
+            "live.js",
+            "trace-panel.js",
+            "config.js",
+        ]:
             shutil.copy(U + f, dst + f)
         print("local copy", dst)
