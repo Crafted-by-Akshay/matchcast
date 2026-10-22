@@ -46,8 +46,13 @@ jobs:
       - run: make build
 
   e2e:
+    name: e2e (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,12 +81,12 @@ jobs:
           # playwright.config.ts defaults to the cloud sandbox path in CI; use the runner's install.
           CHROMIUM_PATH=$(node -e "console.log(require('@playwright/test').chromium.executablePath())")
           export CHROMIUM_PATH
-          make e2e
+          make e2e E2E_ARGS="--shard=${{ matrix.shard }}/2"
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
@@ -112,6 +117,8 @@ jobs:
         run: |
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
           ./gitleaks detect --source . --log-opts="HEAD" --redact --no-banner --verbose
+      - name: Prove the scan fails on a fake key
+        run: scripts/gitleaks_proof.sh ./gitleaks
 
   openapi:
     runs-on: ubuntu-latest
