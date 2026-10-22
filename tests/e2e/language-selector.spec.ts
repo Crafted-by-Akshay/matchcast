@@ -50,3 +50,22 @@ test('language selector: voice speaks the checked translation, falls back to Eng
   await expect.poll(() => page.evaluate(() => MCC.records().some((r: any) => r.action === 'translation_rejected' && r.ref === 'desk-12-goal'))).toBe(true);
   expect(errs).toEqual([]);
 });
+
+test('language selector: a translation the Verifier rejects is spoken in English, never the bad Spanish', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openShell(page, 'agents');
+  await page.click('#lang-sel button[data-lang="es"]');
+  await page.evaluate(() => {
+    const w = window as any; w.__said = []; const say = VC.say; VC.say = (t: string, o: any) => { w.__said.push([t, o.lang]); return say(t, o); };
+    AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    // the translator changes the score, so the re-check rejects it
+    AG.setTranslator((x: any) => x.kind === 'score' ? 'Gol de Thames Rovers (A One) en el min 10. Thames Rovers 2–0 Coloso Ciudad.' : null);
+    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
+  });
+  await expect.poll(() => page.evaluate(() => (window as any).__said.length)).toBeGreaterThan(0);
+  const said = await page.evaluate(() => (window as any).__said);
+  expect(said.some(([t, l]: string[]) => l === 'en' && t.includes('Goal for Thames Rovers')), 'the English line is spoken').toBe(true);
+  expect(said.some(([t, l]: string[]) => l === 'es' || t.includes('2–0')), 'the rejected translation is never spoken').toBe(false);
+  expect(await page.evaluate(() => MCC.records().some((r: any) => r.action === 'translation_rejected'))).toBe(true);
+  expect(errs).toEqual([]);
+});

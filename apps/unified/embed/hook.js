@@ -14,6 +14,7 @@ const MCS = (() => {
     SET.seed = +Q.get('seed'); SET.st = STADIUMS[+Q.get('st') || 0]; SET.month = +Q.get('month') || 0;
     SET.kickStr = Q.get('kick') || SET.kickStr; SET.kick = parseHM(SET.kickStr); SET.half = +Q.get('half') || SET.half;
     SET.weather = 'auto'; SET.dynamic = true;
+    if (+Q.get('speed') > 0) S.speed = clamp(+Q.get('speed'), 0.25, 8);   // the filming URL's playback speed (Watch only reads it; the buttons stay 0.25 to 2x)
     [0, 1].forEach((ti) => { SET.tactics[ti].form = Q.get('f' + ti) || 'auto'; SET.tactics[ti].style = Q.get('s' + ti) || 'auto'; });
     if (Q.get('h') && Q.get('a')) want = [Q.get('h'), Q.get('a')];
   };
