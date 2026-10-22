@@ -84,7 +84,7 @@ Audit `action` values (closed list; add new ones here first): `event_rejected`, 
 | 2 | Freshness | Claim snapshot revision ≥ current revision − 5 and match time within 30 s | as stated |
 | 3 | Numbers | Every number in the line appears in a claim, and each claim value is recomputed with `get_metrics` | counts 0; ratios 0.01; km/h 0.5; metres 0.5 |
 | 4 | Names | Every player or club name is in the roster for this match | exact, case-insensitive |
-| 5 | Persona rules | Length limit and number limit per persona (casual ≤ 1 number) | exact |
+| 5 | Persona rules | Length limit and number limit per persona: casual 140 chars, 1 number; analyst 280 chars, 6 numbers; broadcast 180 chars, 2 numbers; the watch modes `my-club:<team>`, `player-focus:<player>` and `one-metric:<metric>` use casual, casual and analyst character limits and 1, 1 and 2 numbers | exact |
 | 6 | Citations (Ask only) | Every sentence carries `[kb:…]` or `[claim:…]` | exact |
 | 7 | Safety | Content Safety text:analyze, all categories severity < 2 | as stated |
 | 8 | Meaning (model) | Does the line say only what the claims support? Returns supported, unclear or unsupported | unclear gives `review` |

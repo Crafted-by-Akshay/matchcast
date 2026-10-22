@@ -1,0 +1,84 @@
+"""Narrator on the model: one line per persona, from claims and roster names only (AGT-6)."""
+
+import json
+from typing import Any
+
+from ..context import MatchContext
+from ..messages import DraftLine, ProducerTask
+from ..personas import max_chars, slug
+from ..resilience import ModelError
+from .client import ModelClient, prompt
+
+SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["lines"],
+    "properties": {
+        "lines": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["persona", "text"],
+                "properties": {"persona": {"type": "string"}, "text": {"type": "string"}},
+            },
+        }
+    },
+}
+
+
+class LiveNarrator:
+    mode = "live"
+    agent_id = "narrator"
+
+    def __init__(self, client: ModelClient) -> None:
+        self._client = client
+
+    async def write(
+        self,
+        ctx: MatchContext,
+        task: ProducerTask,
+        claims: list[dict[str, Any]],
+        *,
+        attempt: int = 0,
+    ) -> list[DraftLine]:
+        event = ctx.event(task.event_ids[0]) or {"payload": {}}
+        payload = event["payload"]
+        facts = {
+            "moment": task.reason,
+            "claims": [
+                {"metric": c["metric"], "value": c["value"], "units": c["units"]} for c in claims
+            ],
+            "player": ctx.player_name(payload["player_id"]) if "player_id" in payload else None,
+            "clubs": {t: ctx.club_name(t) for t in (ctx.home, ctx.away)},
+            "personas": list(task.personas),
+            "limits": {p: max_chars(p) for p in task.personas},
+        }
+        if attempt:
+            facts["note"] = "A previous draft failed verification; stay closer to the claims."
+        answer = await self._client.complete(
+            prompt("narrator"),
+            json.dumps(facts),
+            SCHEMA,
+            temperature=0.6,
+            max_tokens=400,
+        )
+        ids = tuple(c["claim_id"] for c in claims)
+        lines = []
+        for row in answer.get("lines", []):
+            persona, text = row.get("persona"), (row.get("text") or "").strip()
+            if persona not in task.personas or not text:
+                continue
+            lines.append(
+                DraftLine(
+                    line_id=f"line-{task.moment_id}-{slug(persona)}-{attempt}",
+                    claim_ids=ids,
+                    persona=persona,
+                    text=text,
+                    max_chars=max_chars(persona),
+                    origin="model",
+                )
+            )
+        if not lines:
+            raise ModelError("the Narrator returned no usable line")
+        return lines

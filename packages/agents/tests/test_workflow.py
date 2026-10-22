@@ -177,3 +177,15 @@ def test_a_stats_desk_outage_is_audited_and_does_not_stop_lines(match) -> None:
     run(flow.ingest(match["events"]))
     actions = {r["action"] for r in flow.store.audit_records(flow.sk)}
     assert "a2a_failed" in actions and flow.store.lines(flow.sk)
+
+
+def test_shot_moments_carry_an_xg_claim_and_the_analyst_line_reads_it(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    claims = (
+        [c["packet"] for c in flow.store.claims(flow.sk)] if hasattr(flow.store, "claims") else []
+    )
+    xg = [c for c in claims if c["metric"].startswith("xg:")]
+    assert xg and all(c["units"] == "ratio" for c in xg)
+    texts = [ln.text for ln in flow.store.lines(flow.sk) if ln.persona == "analyst"]
+    assert any("xG: " in t for t in texts)
