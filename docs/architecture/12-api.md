@@ -31,7 +31,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
 | `POST /v1/matches/{match_id}/ask` | anyone | `session_id, browser_session_id, question ≤ 300, persona, lang` | 200 `{answer, citations[], claim_ids[], verdict, trace_id}` | 400 shield, 429 |
 | `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300, lang` | 200 `{reply, audio_url, verdict}` | 400, 429 |
-| `POST /v1/ds/ask` | anyone | `question ≤ 300` | 200 `{answer, sql, rows[], chart_spec, verdict}` | 400, 429 |
+| `POST /v1/ds/ask` | anyone | `session_id, question ≤ 300` | 200 `{answer, verdict, sql, columns[], rows[], chart_spec}` | 400 `invalid_query`, 429, 503 |
 | `POST /v1/matches/{match_id}/vision/identify` | anyone | `session_id, crop, track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}` | 413, 429 |
 | `GET /v1/speech/token` | anyone | none | 200 `{token, region, expires_at}` | 429 (10 a minute per IP) |
 | `GET /v1/audio/{publication_id}.{lang}.mp3` | anyone | `session_id, match_id` | 200 `audio/mpeg` | 404 |
@@ -80,6 +80,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `match_exists` | 409 | `POST /v1/matches` for an existing stream key |
 | `not_found` | 404 | Unknown match, line, publication or recap |
 | `forbidden_role` | 403 | Producer route without the Producer or Admin role |
+| `invalid_query` | 400 | `/ds/ask` produced SQL the season guard refused |
 | `prompt_attack` | 400 | Prompt Shields flagged the input |
 | `rate_limited` | 429 | Over a limit in §7; `Retry-After` set |
 | `publish_failed` | 503 | Event Hubs publish failed; retry the same batch |

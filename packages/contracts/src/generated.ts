@@ -301,7 +301,9 @@ export interface AuditRecord {
     | "export_created"
     | "safety_blocked"
     | "a2a_call"
-    | "a2a_failed";
+    | "a2a_failed"
+    | "ds_answered"
+    | "ds_unverified";
   subject_id: Identifier;
   details: {
     [k: string]: unknown;
