@@ -31,6 +31,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
 | `POST /v1/matches/{match_id}/ask` | anyone | `session_id, browser_session_id, question ≤ 300, persona, lang` | 200 `{answer, citations[], claim_ids[], verdict, trace_id}` | 400 shield, 429 |
 | `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300` | 200 `{target, reply, verdict, facts}` (rules-mode template replies; `audio_url` and `lang` are **Planned** with Speech) | 400 `prompt_attack`, 404 unknown target, 422, 429 |
+| `POST /v1/matches/{id}/vision/identify` | anyone | `session_id, crop (base64 PNG 128x128, ≤ 40 KB), track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}` | 404, 413, 422, 429 `rate_limited`/`vision_budget_used`, 502 `vision_unavailable` |
 | `POST /v1/ds/ask` | anyone | `session_id, question ≤ 300` | 200 `{answer, verdict, sql, columns[], rows[], chart_spec}` | 400 `invalid_query`, 429, 503 |
 | `POST /v1/matches/{match_id}/vision/identify` | anyone | `session_id, crop, track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}` | 413, 429 |
 | `GET /v1/speech/token` | anyone | none | 200 `{token, region, expires_at}` | 429 (10 a minute per IP) |
@@ -95,6 +96,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `/events` | 20 batches a second | stream key |
 | `/ask`, `/talk` | 5 a minute | `browser_session_id` (or IP) |
 | `/ds/ask` | 5 a minute | IP |
+| `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | whole api |
 | `/vision/identify` | 15 a minute | stream key |
 | `/speech/token` | 10 a minute | IP |
 
