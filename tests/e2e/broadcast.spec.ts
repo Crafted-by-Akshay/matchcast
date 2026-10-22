@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // QUA-2: what a viewer of the Broadcast desk can actually SEE. approval.spec.ts checks the queue logic; this checks the pixels' owners:

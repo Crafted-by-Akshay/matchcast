@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { collectErrors, openShell, ready, stepSim, viewFrame } from './helpers';
 
 // DAT-11 task 275, browser side: torso crops for the api's OCR second opinion go through the shell to /vision/identify.

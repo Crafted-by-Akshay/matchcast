@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell } from './helpers';
 
 // EXP-17: Spanish and Hindi lines keep the English line's numbers and names; a bad translation is rejected and audited.

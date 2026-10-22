@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell } from './helpers';
 
 // EXP-6: the trace panel. The shell is driven the way Watch drives it (a start and a batch of events), as in connection.spec.ts.

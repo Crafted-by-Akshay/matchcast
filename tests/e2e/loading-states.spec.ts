@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { openShell } from './helpers';
 
 // EXP-15: a view that cannot start says why, and a slow start offers a reload instead of a spinner for ever.

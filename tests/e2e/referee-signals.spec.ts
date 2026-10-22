@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, viewFrame } from './helpers';
 
 // Broadcast shows the referee and assistants where Watch has them and with the same signal or flag; Watch's frames carry them.
