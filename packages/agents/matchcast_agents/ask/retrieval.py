@@ -29,6 +29,11 @@ def analyse(text: str) -> list[str]:
     return words
 
 
+# Generated entity pages (clubs, players, season matches) only answer when the query names them,
+# so "average xG" finds the metric page, not seven club records.
+ENTITY_CORPORA = frozenset({"clubs", "players", "season"})
+
+
 @dataclass(frozen=True)
 class Hit:
     chunk: Chunk
@@ -48,6 +53,12 @@ class Bm25Index:
         for terms in self._terms:
             frequency.update(terms.keys())
         n = len(chunks)
+        self._title_words = [
+            (set(analyse(c.title)) - {"season", "match"}) | set(analyse(" ".join(c.entity_ids)))
+            if c.corpus in ENTITY_CORPORA
+            else set()
+            for c in chunks
+        ]
         self._idf = {w: math.log(1 + (n - f + 0.5) / (f + 0.5)) for w, f in frequency.items()}
 
     def search(
@@ -59,10 +70,16 @@ class Bm25Index:
         entity_ids: set[str] | None = None,
     ) -> list[Hit]:
         words = analyse(query)
+        named = set(words)
         hits = []
-        for chunk, terms, length in zip(self.chunks, self._terms, self._lengths, strict=True):
+        for chunk, terms, length, title in zip(
+            self.chunks, self._terms, self._lengths, self._title_words, strict=True
+        ):
             if corpora and chunk.corpus not in corpora:
                 continue
+            if not corpora and not entity_ids and chunk.corpus in ENTITY_CORPORA:
+                if not title & named:
+                    continue
             if entity_ids and not entity_ids & set(chunk.entity_ids):
                 continue
             score = 0.0
