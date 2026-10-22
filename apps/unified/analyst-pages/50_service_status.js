@@ -27,7 +27,7 @@ async function ssLoad() {
     SS.doc = doc;
   } else SS.doc = { none: true, api: !!api };
   SS.loading = false;
-  if (SS.doc.none) setTimeout(() => { SS.doc = undefined; }, 30000); // a failed answer is retried on a later redraw
+  if (SS.doc.none) { const failed = SS.doc; setTimeout(() => { if (SS.doc === failed) SS.doc = undefined; }, 30000); } // a failed answer is retried on a later redraw
   document.querySelectorAll('#ss-card').forEach(ssPaint);
 }
 function ssPaint(card) {
@@ -47,7 +47,7 @@ function ssPaint(card) {
   const tb = t.createTBody();
   for (const d of doc.dependencies) {
     const r = tb.insertRow(); r.insertCell().textContent = d.label;
-    const chip = document.createElement('span'); chip.className = 'chip ' + (tone[d.status] || ''); chip.textContent = Object.prototype.hasOwnProperty.call(lbl, d.status) ? lbl[d.status] : 'Unknown'; r.insertCell().append(chip);
+    const chip = document.createElement('span'); chip.className = 'chip ' + (Object.prototype.hasOwnProperty.call(tone, d.status) ? tone[d.status] : ''); chip.textContent = Object.prototype.hasOwnProperty.call(lbl, d.status) ? lbl[d.status] : 'Unknown'; r.insertCell().append(chip);
     r.insertCell().textContent = d.detail;
   }
   const sum = document.createElement('p'); sum.className = 'muted'; sum.textContent = 'Api mode ' + doc.mode + '. Counts: ' + Object.entries(doc.counts || {}).filter(([, n]) => n).map(([k, n]) => n + ' ' + k).join(', ') + '.';

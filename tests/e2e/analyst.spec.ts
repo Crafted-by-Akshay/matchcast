@@ -269,6 +269,7 @@ test('service status: odd entries are skipped, labels escaped, unknown states sa
   const card = f.locator('#ss-card');
   await expect(card.locator('tbody tr')).toHaveCount(2);
   await expect(card.locator('tr', { hasText: 'Odd' })).toContainText('Unknown');
+  await expect(card.locator('tr', { hasText: 'Odd' }).locator('.chip')).toHaveAttribute('class', 'chip ');
   await expect(card.locator('b')).toHaveCount(0);
   await expect(card.locator('tr', { hasText: 'Unreachable' })).toContainText('Unavailable');
   expect(errs.filter((e) => !/api\.test/.test(e))).toEqual([]);
@@ -290,4 +291,5 @@ test('service status: Run checks again asks the api again', async ({ page }) => 
   const before = hits.n;
   await f.locator('#pf-rc').click();
   await expect.poll(() => hits.n, { timeout: 20_000 }).toBeGreaterThan(before);
+  await expect(f.locator('#ss-card tbody tr')).toHaveCount(2);
 });
