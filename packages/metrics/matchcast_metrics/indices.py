@@ -2,7 +2,8 @@
 
 Events are dicts with `type` and `t_ms`. A pass also has `team`, `completed`, `x0`, `y0`,
 `x1`, `y1` and `attack_x` (the x of the goal that team attacks). Turnovers are
-`type == "turnover"`; duels are `slide_tackle`, `take_on`, `aerial_duel` or `duel`. Formulas are in docs/metrics.md.
+`type == "turnover"`; duels are `slide_tackle`, `take_on`, `aerial_duel` or `duel`.
+Formulas are in docs/metrics.md.
 """
 
 from __future__ import annotations
