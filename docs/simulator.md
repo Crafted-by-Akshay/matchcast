@@ -46,7 +46,7 @@ At every strike the engine draws the shot's fate from the play stream: goal with
 | `longShot` | 0.05 | Chance per decision of an unforced shot from 16–27 m under no pressure |
 | `passBias` | 1.5 | A pass must beat the dribble option by this much |
 | `holdScale` | 1.5 | Scales how long a player holds the ball before a forced pass |
-| `xgScale` | 1.1 | Global multiplier on the goal probability, to offset shots blocked before they reach the goal |
+| `xgScale` | 0.9 | Global multiplier on the goal probability, to offset shots blocked before they reach the goal |
 | `skillCD` | 1.25 | Multiplier on the pause between a player's take-ons (keeps duels inside the band) |
 | `skillCD` | 1.25 | Multiplier on the pause between a player's take-ons (keeps duels inside the band) |
 | `boxFoul` | 0.65 | Multiplier on a defender's foul risk inside his own box (keeps penalties near 0.3 a match) |
@@ -57,7 +57,24 @@ Starting from the prototype values (0.04, 0.09, 0, 1) the engine produced about 
 
 `uv run python scripts/check_realism.py --matches 200` (targets in `data/calibration/targets.json`, sources and licences next to each). Engine "duel" = aerial duel + slide tackle + take-on + possession turnover. Each match is a different pair of season clubs.
 
-RESULTS_PLACEHOLDER
+Result of the validation run (seeds 1 to 200, half = 45, commit of PR #47; 200 full 90-minute matches):
+
+| Measure | Simulated | Target | Band | Result |
+| --- | --- | --- | --- | --- |
+| Goals per match | 2.865 | 2.66 | 2.3 to 3.0 | ok |
+| Share of draws | 0.260 | 0.24 | 0.18 to 0.30 | ok |
+| Share of 0-0 | 0.070 | 0.07 | 0.03 to 0.12 | ok |
+| Shots per match | 27.9 | 25 | 20 to 30 | ok |
+| Goals per shot | 0.103 | 0.11 | 0.08 to 0.13 | ok |
+| Passes per match | 920 | 840 | 700 to 1000 | ok |
+| Duels per match | 562 | 470 | 380 to 560 | marginal miss |
+| Share of goals in 76'-90' | 0.215 | 0.215 | 0.17 to 0.26 | ok |
+| Penalty goals as share of goals | 0.112 | 0.068 | 0.03 to 0.11 | marginal miss |
+| Watch length at 1x, condensed (minutes) | 9.6 | 10 | 8 to 12 | ok |
+
+Eight of ten are inside their band. Duels are 2 above the top of the band (the standard error of a 200-match mean is about 3) and the penalty share is 0.2 points above it (the standard error is about 1.3 points on roughly 570 goals), so both are within one standard error of the edge; they are accepted rather than tuned further because another tuning round costs two hours of CPU for a difference the data cannot resolve. Seeds 1 to 32 ran in a first batch with `xgScale` set to 0.9 on the command line and seeds 33 to 200 with that value as the default; the runs are otherwise identical.
+
+Engine faults found by these full-length runs and fixed in this PR: a kick-off crash when a side had no midfielder left, and a free-kick taker who could not reach the ball freezing the match for up to 40 simulated minutes (a watchdog now moves the taker or hands over after 60 s). The runner records `director.longest` (the longest restart in the match) so a repeat shows up in the output.
 
 ## Match clock decision (option A or B)
 
