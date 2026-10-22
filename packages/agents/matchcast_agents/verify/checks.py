@@ -1,6 +1,7 @@
 """Pure checks on a line and its claims. Each returns one Check; the first failing one decides."""
 
 import re
+from collections import Counter
 from typing import Any
 
 from ..context import MatchContext
@@ -101,10 +102,15 @@ def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any
                     f"{claim['metric']} is {claim['value']} in the claim but {expected} in the log"
                 ),
             )
-    allowed = {float(c["value"]) for c in claims}
-    stray = [n for n in extract_numbers(line.text) if n not in allowed]
-    if stray:
-        return Check(name="numbers", passed=False, detail=f"{stray[0]:g} is not in any claim")
+    # each claim backs one number in the line: "Northgate FC 1, Harbour United 1" is refused
+    # when the claims are 0 and 1, which a plain set of allowed values would let through
+    spare = Counter(float(c["value"]) for c in claims)
+    for number in extract_numbers(line.text):
+        if spare[number] <= 0:
+            known = number in {float(c["value"]) for c in claims}
+            why = "is used more often than the claims allow" if known else "is not in any claim"
+            return Check(name="numbers", passed=False, detail=f"{number:g} {why}")
+        spare[number] -= 1
     return Check(
         name="numbers", passed=True, detail="claims recomputed from the log; line numbers match"
     )

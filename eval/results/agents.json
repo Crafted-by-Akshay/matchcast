@@ -1,0 +1,152 @@
+{
+  "agents": "rules",
+  "match": "match-short",
+  "producer": {
+    "must_cover_events": 4,
+    "must_cover_recall": 1.0,
+    "moments_picked": 17,
+    "key_moment_precision": 0.882,
+    "events_total": 137,
+    "events_skipped_share": 0.876
+  },
+  "analyst": {
+    "claims": 45,
+    "recounted": 34,
+    "claim_accuracy": 1.0,
+    "not_recounted_here": 11,
+    "xg_in_range": 1.0,
+    "with_source": 1.0,
+    "wrong": []
+  },
+  "narrator": {
+    "lines_shown": 34,
+    "faithful_rate": 1.0,
+    "within_length_rate": 1.0,
+    "persona_pairs": 17,
+    "personas_differ_rate": 1.0
+  },
+  "verifier": {
+    "pairs_replayed": 34,
+    "honest_lines_checked": 34,
+    "false_reject_rate_on_clean": 0.0,
+    "replay_drift": 0,
+    "mutations_tried": 189,
+    "catch_rate": 0.995,
+    "by_mutation": {
+      "claim_stale": {
+        "tried": 34,
+        "caught": 34,
+        "rate": 1.0
+      },
+      "claim_value_off_by_one": {
+        "tried": 34,
+        "caught": 34,
+        "rate": 1.0
+      },
+      "invented_player": {
+        "tried": 34,
+        "caught": 34,
+        "rate": 1.0
+      },
+      "line_too_long": {
+        "tried": 34,
+        "caught": 34,
+        "rate": 1.0
+      },
+      "number_in_text_changed": {
+        "tried": 19,
+        "caught": 18,
+        "rate": 0.947
+      },
+      "wrong_unit": {
+        "tried": 34,
+        "caught": 34,
+        "rate": 1.0
+      }
+    },
+    "known_blind_spot_other_team_player": {
+      "tried": 30,
+      "caught": 0,
+      "rate": 0.0
+    }
+  },
+  "seeded_bad_claim": {
+    "trials": 7,
+    "caught_rate": 1.0,
+    "wrong_claims_shown_total": 0,
+    "repair_or_abstain_rate": 1.0,
+    "detail": [
+      {
+        "inject_at_ms": 0,
+        "rejected": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 60000,
+        "rejected": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 150000,
+        "rejected": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 240000,
+        "rejected": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 330000,
+        "rejected": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 420000,
+        "rejected": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 510000,
+        "rejected": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      }
+    ]
+  },
+  "ask": {
+    "golden_questions": 40,
+    "by_kind": {
+      "both": {
+        "asked": 5,
+        "right": 5,
+        "rate": 1.0
+      },
+      "knowledge": {
+        "asked": 15,
+        "right": 15,
+        "rate": 1.0
+      },
+      "live": {
+        "asked": 15,
+        "right": 15,
+        "rate": 1.0
+      },
+      "unanswerable": {
+        "asked": 5,
+        "right": 5,
+        "rate": 1.0
+      }
+    },
+    "unanswerable_refusal_rate": 1.0,
+    "redteam_prompts_checked_here": 9,
+    "redteam_stopped_rate": 1.0,
+    "redteam_not_checked_here": 11
+  }
+}
