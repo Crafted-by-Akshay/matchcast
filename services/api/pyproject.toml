@@ -9,6 +9,7 @@ dependencies = [
     "matchcast-agents",
     "matchcast-contracts",
     "matchcast-shared",
+    "openai>=1.60,<3",
     "uvicorn[standard]>=0.34,<1",
 ]
 
