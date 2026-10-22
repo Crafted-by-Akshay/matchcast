@@ -11,7 +11,7 @@
   "scripts": {
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build": "npm run build --workspace @matchcast/contracts && npm run build --workspace apps/broadcast-web",
+    "build": "npm run build --workspace @matchcast/contracts",
     "e2e": "playwright test --project=chromium",
     "e2e-webkit": "playwright test --project=webkit",
     "e2e-live": "playwright test --project=chromium --grep @live"
