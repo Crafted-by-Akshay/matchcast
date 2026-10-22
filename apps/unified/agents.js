@@ -4,6 +4,7 @@
 const AG = (() => {
   const PICK = ['goal', 'red_card', 'big_chance', 'turning_point', 'milestone'];   // the moments the Producer airs
   let run = null, changed = () => {};
+  let mode = 'demo', onAir = () => {};   // demo: verified lines air at once; producer: a person approves each line first
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
     roll: { score: [0, 0], xg: [0, 0], nextXg: 5 },
@@ -48,6 +49,26 @@ const AG = (() => {
     return { verdict: 'verified', repaired: true, reason: 'differed from the event log; repaired from it once' };
   };
 
+  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text });
+  const nums = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
+  // a person's action on a queued line; every one lands in the audit chain with the person's name
+  const act = (id, who, action, detail, fn) => {
+    const c = run && run.claims.find((x) => x.id === id);
+    if (!c || c.approval !== 'pending') return { ok: false, reason: 'not waiting for approval' };
+    const r = fn(c); if (!r.ok) return r;
+    log(c, 'producer', action, Object.assign({ by: who }, detail)); changed();
+    return r;
+  };
+  const approve = (id, who) => act(id, who, 'line_approved', {}, (c) => { c.approval = 'approved'; c.approvedBy = who; onAir(air(c)); return { ok: true }; });
+  const kill = (id, who, reason) => act(id, who, 'line_killed', { reason: reason || '' }, (c) => { c.approval = 'killed'; c.approvedBy = who; return { ok: true }; });
+  // an edit may reword, but every number in it must already be in the verified line, so it cannot add a fact
+  const edit = (id, who, text) => act(id, who, 'line_edited', { text }, (c) => {
+    const ok = new Set(nums(c.text).concat(nums(min(c.minute))));
+    const bad = nums(text).filter((n) => !ok.has(n));
+    if (!text.trim() || bad.length) return { ok: false, reason: 'not aired: ' + (bad.length ? 'number ' + bad[0] + ' is not in the verified line' : 'empty line') };
+    c.airText = text.trim(); c.approval = 'approved'; c.approvedBy = who; onAir(air(c)); return { ok: true };
+  });
+
   // one claim through the pipeline: Analyst claims it, Narrator writes it, Verifier checks it, Producer routes or holds it
   const pipeline = (c) => {
     run.claims.push(c); run.stat.claims++;
@@ -62,8 +83,16 @@ const AG = (() => {
     if (v.verdict === 'verified') {
       run.stat.verified++;
       c.route = c.kind === 'xg_total' ? 'analyst' : c.kind === 'shot' ? 'fan' : 'broadcast';
-      log(c, 'producer', 'approve', { route: c.route });
-      say('Producer', c.minute, c.id + ' approved for the ' + c.route + ' view', 'ok');
+      if (c.route === 'broadcast' && mode === 'producer') {
+        c.approval = 'pending';
+        log(c, 'producer', 'queue', { route: c.route });
+        say('Producer', c.minute, c.id + ' queued for a person to approve', 'warn');
+      } else {
+        c.approval = 'approved';
+        log(c, 'producer', 'approve', { route: c.route });
+        say('Producer', c.minute, c.id + ' approved for the ' + c.route + ' view', 'ok');
+        if (c.route === 'broadcast') onAir(air(c));
+      }
     } else {
       run.stat.abstained++;
       log(c, 'producer', 'hold', { reason: v.reason });
@@ -113,5 +142,5 @@ const AG = (() => {
     c.source = src; changed();
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  return { reset, onWatch, ingest, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { approve, kill, edit, get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();

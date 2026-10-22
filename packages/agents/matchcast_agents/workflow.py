@@ -13,6 +13,7 @@ from typing import Any, Protocol
 
 from matchcast_contracts import ContractError, validate
 
+from . import recap as recap_mod
 from .context import MatchContext
 from .hub import StreamHub
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
@@ -21,7 +22,7 @@ from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
 from .store import MemoryStore, stream_key
-from .tools import ToolError
+from .tools import InProcessTools, ToolError
 
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
@@ -272,6 +273,149 @@ class MatchWorkflow:
             "possession": state.possession,
             "revision": state.revision,
         }
+
+    # ---- full-time recap (AGT-15) -------------------------------------------------------
+
+    async def recap(
+        self, personas: tuple[str, ...] = ("casual", "analyst", "broadcast"), *, force: bool = False
+    ) -> dict[str, dict[str, Any]]:
+        """Write, verify and store one recap per persona; a failing sentence is dropped."""
+        async with self._lock:
+            a = self.agents
+            ctx = self._ctx()
+            todo = [p for p in personas if force or self.store.get_recap(self.sk, p) is None]
+            if todo:
+                moments = recap_mod.pick_moments(ctx)
+                tools = InProcessTools(ctx, ctx.state.max_sequence)
+                try:
+                    claims = recap_mod.final_claims(ctx, tools)
+                except ToolError as error:
+                    self._agent(
+                        "fallback_used",
+                        a.analyst,
+                        "recap",
+                        fallback_reason="tool_error",
+                        tool=error.tool,
+                    )
+                    raise WorkflowError("recap_unavailable", str(error)) from error
+                packets = [c for c, _ in claims]
+                for packet, call_id in claims:
+                    validate(packet)
+                    self.store.put_claim(
+                        self.sk,
+                        packet,
+                        {
+                            "moment_id": "recap",
+                            "agent": a.analyst.agent_id,
+                            "created_at": _stamp(self._clock()),
+                            "tool_call_ids": [call_id],
+                            "formula_inputs": {"metric": packet["metric"], "tool": "get_metrics"},
+                        },
+                    )
+                    self._agent(
+                        "claim_created",
+                        a.analyst,
+                        packet["claim_id"],
+                        metric=packet["metric"],
+                        value=packet["value"],
+                        tool_call_ids=[call_id],
+                        recap=True,
+                    )
+                for persona in todo:
+                    await self._recap_persona(ctx, persona, packets, moments)  # type: ignore[arg-type]
+                self.hub.publish(
+                    "recap_ready", f"recap:{self.stream['match_id']}", {"personas": todo}
+                )
+            return {p: r for p in personas if (r := self.store.get_recap(self.sk, p))}
+
+    async def _recap_persona(
+        self,
+        ctx: MatchContext,
+        persona: Persona,
+        packets: list[dict[str, Any]],
+        moments: list[dict[str, Any]],
+    ) -> None:
+        a = self.agents
+        by_id = {c["claim_id"]: c for c in packets}
+        kept: list[tuple[int, str]] = []
+        rows: dict[int, dict[str, Any]] = {}
+        dropped = 0
+        for index, draft in enumerate(recap_mod.sentences(ctx, persona, packets, moments), 1):
+            self._agent(
+                "line_drafted",
+                a.narrator,
+                draft.line_id,
+                persona=persona,
+                claim_ids=list(draft.claim_ids),
+                recap=True,
+            )
+            claims = [by_id[c] for c in draft.claim_ids]
+            verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
+            verdict = await self._screen(draft, verdict)
+            if verdict.verdict == "rejected":
+                dropped += 1
+                self._agent(
+                    "line_rejected",
+                    a.verifier,
+                    draft.line_id,
+                    reason_code=verdict.reason_code,
+                    recap=True,
+                    checks=[c.model_dump() for c in verdict.checks if not c.passed],
+                )
+                self._agent(
+                    "line_abstained",
+                    a.producer,
+                    draft.line_id,
+                    reason_code=verdict.reason_code,
+                    recap=True,
+                )
+                continue
+            record = self._audit(
+                "agent",
+                a.verifier.agent_id,
+                "line_verified",
+                draft.line_id,
+                {
+                    "mode": getattr(a.verifier, "mode", "live"),
+                    "recap": True,
+                    "checks": [{"name": c.name, "passed": c.passed} for c in verdict.checks],
+                },
+            )
+            kept.append((index, draft.text))
+            rows[index] = {
+                "line_id": draft.line_id,
+                "text": draft.text,
+                "claim_ids": list(draft.claim_ids),
+                "verdict": verdict.verdict,
+                "audit_sequence": record["sequence"],
+            }
+        final = recap_mod.fit_words(kept, persona)
+        text = " ".join(t for _, t in final)
+        recap = {
+            "match_id": self.stream["match_id"],
+            "persona": persona,
+            "language": "en",
+            "text": text,
+            "word_count": len(text.split()),
+            "sentences": [rows[i] for i, _ in final],
+            "claim_ids": [c["claim_id"] for c in packets],
+            "state": packets[0]["snapshot"],
+            "created_at": _stamp(self._clock()),
+            "mode": self.agents.mode,
+        }
+        self.store.put_recap(self.sk, persona, recap)
+        self._audit(
+            "system",
+            "recap",
+            "recap_created",
+            f"recap-{persona}",
+            {
+                "persona": persona,
+                "words": recap["word_count"],
+                "sentences": len(final),
+                "dropped": dropped,
+            },
+        )
 
     # ---- one moment through the graph --------------------------------------------------
 
