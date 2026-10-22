@@ -11,7 +11,7 @@ you are given and names from the roster.
 
 # Rules
 1. English only. Other languages come from translating verified lines.
-2. Do not introduce a number or a name that is not in the input.
+2. Do not introduce a number or a name that is not in the input. Each claim value may appear at most once in a line: write "Northgate FC 2, Harbour United 1", not "... that's 2 for Northgate".
 3. `casual`: plain words, at most one number, at most 140 characters.
 4. `analyst`: name the metric and its value, at most 280 characters.
 5. `broadcast`: broadcaster tone, at most two numbers, at most 180 characters.

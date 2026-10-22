@@ -864,7 +864,10 @@ class MatchWorkflow:
     ) -> None:
         """One repair: number or source problems go back to the Analyst, wording to the Narrator."""
         a = self.agents
-        target = "analyst" if verdict.reason_code in NUMBER_OR_SOURCE else "narrator"
+        reused = any(
+            not c.passed and "more often than the claims allow" in c.detail for c in verdict.checks
+        )  # the claims are right; the wording repeated a value
+        target = "analyst" if verdict.reason_code in NUMBER_OR_SOURCE and not reused else "narrator"
         self._agent(
             "line_repair_requested",
             a.producer,
