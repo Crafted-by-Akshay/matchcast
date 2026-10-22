@@ -1,0 +1,144 @@
+"""The model client behind the live agents: structured JSON out, Entra ID auth, no API key.
+
+``FoundryModelClient`` talks to the gpt-6-luna deployment through the Azure OpenAI client with a
+bearer-token provider. Failures are mapped to the exceptions ``ResilientAgent`` understands, so a
+slow, throttled or malformed answer falls back to the rules twin. ``ScriptedModelClient`` replays
+recorded answers for tests and for running without quota.
+"""
+
+import json
+import os
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Protocol
+
+from ..resilience import ModelError, ModelRateLimited, ModelTimeout
+
+PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
+COGNITIVE_SCOPE = "https://cognitiveservices.azure.com/.default"
+API_VERSION = "2025-04-01-preview"
+
+
+def prompt(name: str) -> str:
+    """The prompt file for an agent, without its version line."""
+    text = (PROMPTS / f"{name}.md").read_text(encoding="utf-8")
+    return "\n".join(line for line in text.splitlines() if not line.startswith("version:")).strip()
+
+
+class ModelClient(Protocol):
+    async def complete(
+        self,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        *,
+        temperature: float = 0.1,
+        max_tokens: int = 400,
+    ) -> dict[str, Any]:
+        """One call that must return JSON matching ``schema`` (already parsed)."""
+        ...
+
+
+@dataclass
+class Usage:
+    calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+
+class FoundryModelClient:
+    """Azure OpenAI chat completions with a JSON-schema response format."""
+
+    def __init__(
+        self,
+        endpoint: str | None = None,
+        deployment: str | None = None,
+        *,
+        client: Any = None,
+    ) -> None:
+        self.deployment = deployment or os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-6-luna")
+        self.usage = Usage()
+        self._client = client or self._build(endpoint or os.environ["FOUNDRY_PROJECT_ENDPOINT"])
+
+    @staticmethod
+    def _build(endpoint: str) -> Any:
+        from azure.identity import get_bearer_token_provider
+        from matchcast_shared.azure_clients import credential
+        from openai import AsyncAzureOpenAI
+
+        return AsyncAzureOpenAI(
+            azure_endpoint=endpoint.split("/api/projects")[0],
+            api_version=API_VERSION,
+            azure_ad_token_provider=get_bearer_token_provider(credential(), COGNITIVE_SCOPE),
+        )
+
+    async def complete(
+        self,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        *,
+        temperature: float = 0.1,
+        max_tokens: int = 400,
+    ) -> dict[str, Any]:
+        try:
+            response = await self._client.chat.completions.create(
+                model=self.deployment,
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"name": "answer", "schema": schema, "strict": True},
+                },
+            )
+        except Exception as error:  # noqa: BLE001 - mapped to the resilience vocabulary
+            raise _map(error) from error
+        self.usage.calls += 1
+        if response.usage:
+            self.usage.prompt_tokens += response.usage.prompt_tokens
+            self.usage.completion_tokens += response.usage.completion_tokens
+        try:
+            data = json.loads(response.choices[0].message.content)
+        except (ValueError, TypeError, IndexError, AttributeError) as error:
+            raise ModelError("the model did not return JSON") from error
+        if not isinstance(data, dict):
+            raise ModelError("the model returned JSON that is not an object")
+        return data
+
+
+def _map(error: Exception) -> Exception:
+    name = type(error).__name__
+    if name == "RateLimitError":
+        retry = getattr(getattr(error, "response", None), "headers", {}).get("retry-after", "1")
+        try:
+            return ModelRateLimited(float(retry))
+        except ValueError:
+            return ModelRateLimited()
+    if name in ("APITimeoutError", "TimeoutError"):
+        return ModelTimeout()
+    return ModelError(f"{name}: {error}")
+
+
+@dataclass
+class ScriptedModelClient:
+    """Replays answers in order (or from a function); each answer may be an Exception to raise."""
+
+    answers: list[Any] | Callable[[str, str], Any] = field(default_factory=list)
+    calls: list[dict[str, Any]] = field(default_factory=list)
+
+    async def complete(
+        self,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        *,
+        temperature: float = 0.1,
+        max_tokens: int = 400,
+    ) -> dict[str, Any]:
+        self.calls.append({"system": system, "user": user, "schema": schema})
+        answer = self.answers(system, user) if callable(self.answers) else self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
