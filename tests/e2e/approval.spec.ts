@@ -36,7 +36,7 @@ test('approval queue: approve, wrong-number edit rejected, kill never airs, audi
   expect(errs).toEqual([]);
 });
 
-test('lower-third waits for approval in producer mode and airs at once in demo mode', async ({ page }) => {
+test('lower-third waits for approval in producer mode and airs at once in demo mode; red-card alerts', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'agents');
   await page.click('#tab-broadcast');
@@ -54,20 +54,15 @@ test('lower-third waits for approval in producer mode and airs at once in demo m
   await page.selectOption('#aq-mode', 'demo');
   await page.evaluate(() => AG.onWatch('k1', [{ minute: 30.3, type: 'goal', team: 'ars', player: 'A Two', score: '2-1', data: {} }], []));
   await expect(bc.locator('#mc-tele li')).toHaveCount(2, { timeout: 1000 });
-  expect(errs).toEqual([]);
-});
-
-test('wild moment: a red card alerts in Broadcast within 3 s with a verified line', async ({ page }) => {
-  const errs = collectErrors(page);
-  await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
-  await ready('broadcast')(page);
-  const bc = await viewFrame(page, 'broadcast');
-  await page.click('#tab-agents');
-  await page.evaluate(() => {
-    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k1', [], [{ id: 'm1', minute: 55, type: 'red_card', title: 'Red card for C One', why: 'Chelsea down to ten men at 55\'.' }]);
-  });
+  // a red card alerts within 3 s with a verified line, and a queued alert sits above an ordinary line
+  await page.evaluate(() => AG.onWatch('k1', [], [{ id: 'm1', minute: 55, type: 'red_card', title: 'Red card for C One', why: 'Chelsea down to ten men at 55\'.' }]));
   await expect(bc.locator('#mc-l3')).toContainText('ALERT · Red card · verified', { timeout: 3000 });
+  await page.selectOption('#aq-mode', 'producer');
+  await page.evaluate(() => {
+    AG.onWatch('k1', [{ minute: 60.1, type: 'goal', team: 'ars', player: 'A Three', score: '3-1', data: {} }], []);
+    AG.onWatch('k1', [], [{ id: 'm2', minute: 61, type: 'red_card', title: 'Second red', why: 'Another red card at 61\'.' }]);
+  });
+  await expect(page.locator('#aq-list li[data-id]')).toHaveCount(2);
+  await expect(page.locator('#aq-list li[data-id]').first()).toContainText('Second red');
   expect(errs).toEqual([]);
 });

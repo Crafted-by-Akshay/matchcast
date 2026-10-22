@@ -80,7 +80,7 @@ window.addEventListener('message', (e) => {
   if (d.src !== 'matchcast-shell' || d.type !== 'air' || !d.line) return;
   const l = d.line; if (mcAired.some((x) => x.id === l.id)) return;
   mcAired.push(l); if (mcAired.length > 5) mcAired.shift();
-  mcL3.textContent = (l.alert ? 'ALERT · ' + l.alert + ' · verified · ' : '') + Math.floor(l.minute) + "' " + l.text; mcL3.hidden = false;
+  mcL3.textContent = (l.alert ? 'ALERT · ' + l.alert + (l.verdict === 'verified' ? ' · verified' : '') + ' · ' : '') + Math.floor(l.minute) + "' " + l.text; mcL3.hidden = false;
   mcL3.style.borderLeftColor = l.alert ? '#ff4d4d' : '#3aa0ff';
   mcL3.dataset.alert = l.alert || '';
   clearTimeout(mcL3Timer); mcL3Timer = setTimeout(() => { mcL3.hidden = true; }, 8000);
