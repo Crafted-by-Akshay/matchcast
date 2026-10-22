@@ -1,0 +1,32 @@
+{
+  "kind": "event",
+  "schema_version": "1.1.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-pressure",
+  "stream_sequence": 25,
+  "revision": 0,
+  "event_time_ms": 25000,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 25000
+  },
+  "payload": {
+    "type": "pressure",
+    "player_id": "home1",
+    "team_id": "home",
+    "target_player_id": "away1",
+    "position_unit": "m",
+    "position": {
+      "x": 52,
+      "y": 31,
+      "z": 0
+    },
+    "distance_m": 1.8,
+    "closing_speed_mps": 3.4
+  }
+}
