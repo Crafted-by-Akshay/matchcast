@@ -76,9 +76,9 @@ const LV = (() => {
     r.sending = true;
     try {
       if (!r.created) {
-        r.bad = badClaim;   // the api takes the demo switch at match creation only
+        const bad = badClaim;   // the api takes the demo switch at match creation only
         const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-        if (res.ok || res.status === 409) r.created = true; else throw new Error('create ' + res.status);
+        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored
       }
       const batch = r.queue.slice(0, BATCH);
       const res = await post('/v1/matches/' + r.id + '/events', { events: batch });
@@ -150,6 +150,6 @@ const LV = (() => {
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
     begin, events, stop, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
-    get badState() { return !badClaim ? 'off' : !run || !run.created ? 'pending' : run.bad ? 'sent' : 'late'; },   // pending: goes with the match; late: this match was created without it
+    get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

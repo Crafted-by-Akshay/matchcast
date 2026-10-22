@@ -37,6 +37,14 @@ test('seed and speed come from the URL; the bad-claim switch is on and reaches t
   await expect.poll(() => created.length).toBe(1);
   expect(created[0].seed_bad_claim).toBe(true);
   await expect(page.locator('#ag-bad-note')).toContainText('Sent to the server Verifier');
+  // the flag does not leak: switching it off means the next match is created without it
+  await page.locator('#ag-bad').uncheck();
+  await page.evaluate(() => {
+    LV.begin('k2', { teams: ['ars', 'che'], players: [{ name: 'A One', team: 'ars' }, { name: 'C One', team: 'che' }] });
+    LV.events([{ minute: 1, type: 'shot', team: 'ars', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'open play' }]);
+  });
+  await expect.poll(() => created.length).toBe(2);
+  expect(created[1].seed_bad_claim, 'the second match has no bad claim').toBeUndefined();
   server.close();
 });
 

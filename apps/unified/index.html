@@ -647,7 +647,7 @@ function init(list) {
   M.setup = setupOf(best); M.fixture = best.id;
   // filming URL (?seed=2026&speed=4&seedBadClaim=1): the same match, pace and demo claim on every take
   const Q = new URLSearchParams(location.search);
-  if (/^\d+$/.test(Q.get('seed') || '')) { M.setup = Object.assign({}, M.setup, { seed: +Q.get('seed') }); M.fixture = fixtureOf(M.setup); }
+  if (/^\d{1,10}$/.test(Q.get('seed') || '') && +Q.get('seed') <= 4294967295) { M.setup = Object.assign({}, M.setup, { seed: +Q.get('seed') }); M.fixture = fixtureOf(M.setup); }
   if (+Q.get('speed') > 0) M.speed = Math.min(8, Math.max(0.25, +Q.get('speed')));
   for (const b of document.querySelectorAll('.switch [data-view]')) b.onclick = () => { if (location.hash.slice(1) !== b.dataset.view) location.hash = b.dataset.view; else show(b.dataset.view); };
   // arrow keys, Home and End move between the dashboard tabs (WAI-ARIA tabs pattern)
@@ -688,9 +688,9 @@ function init(list) {
   };
   // the in-page Verifier gets the wrong number at once (Simulated); the api's Verifier gets it with the match (POST /v1/matches seed_bad_claim, minute 12)
   const badNote = () => {
-    const b = LV.badState, on = $('ag-bad').checked;
+    const b = LV.badState, on = $('ag-bad').checked || b === 'sent';
     $('ag-bad-note').textContent = !on ? '' : !LV.enabled ? 'In-page Verifier only (Simulated): no agent api.'
-      : b === 'sent' ? 'Sent to the server Verifier with this match; it also happens in-page.'
+      : b === 'sent' ? 'Sent to the server Verifier with this match (it corrupts one claim from minute 12).'
       : b === 'late' ? 'In-page now. This match was already created, so the server Verifier gets it at the next match start.' : 'Will go to the server Verifier with the match (from minute 12) and happens in-page now.';
   };
   $('ag-bad').onchange = (e) => { AG.seedBad(e.target.checked); LV.seedBad(e.target.checked); badNote(); };
@@ -724,7 +724,7 @@ function init(list) {
     else { const t = prompt('Edit the line (numbers must already be in it)', c.text); if (t == null) return; res = AG.edit(id, PRODUCER, t); }
     $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
   };
-  AG.onChange(() => { $('ag-bad').checked = AG.seeding; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); });
+  AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
   const paintPill = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from

@@ -175,8 +175,8 @@ The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which W
 ## Filming URL
 
 `/?seed=2026&speed=4&seedBadClaim=1#watch` makes takes repeatable (docs/judge/demo-fact-check.md).
-- `seed`: the shared match uses that simulator seed (same teams, so the match becomes a custom fixture).
-- `speed`: Watch plays at that speed (0.25 to 8; the speed buttons stay 0.25 to 2x). Broadcast keeps its own pace.
+- `seed`: (0 to 4294967295) the shared match uses that simulator seed (same teams, so the match becomes a custom fixture).
+- `speed`: Watch plays at that speed (0.25 to 8; the speed buttons stay 0.25 to 2x). Broadcast keeps its own pace unless it is following Watch's frames, which carry Watch's speed.
 - `seedBadClaim=1`: the Agents-tab switch "Seed a bad claim" is on from the start. The in-page Verifier gets a wrong score number at once (Simulated); the agent api gets `seed_bad_claim: true` when the match is created, so its Verifier rejects and repairs one claim from minute 12. The note next to the switch says which of the two applies (sent, will be sent, or this match was already created without it).
 - The same switch, turned on by hand before the kick-off, sends the same flag. Tested in `filming-url.spec.ts`.
 ## Keyboard path and plain-words states (Broadcast)
