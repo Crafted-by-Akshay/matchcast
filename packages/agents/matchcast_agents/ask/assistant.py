@@ -93,9 +93,42 @@ def _metric_in(text: str) -> tuple[str, str] | None:
     )
 
 
+# Requests that are not questions about this match, whatever words they share with the KB:
+# actions on tools or data, creative writing, personal details.
+DECLINE = re.compile(
+    r"\b(drop table|delete from|insert into|truncate|select \*)|;\s*(update|delete|drop)\b"
+    r"|\bupdate \w+ set\b"
+    r"|\b(call|use|run|execute)\b.{0,24}\b(tool|query workbench|data scientist)\b"
+    r"|\b(approve|kill|edit)\b.{0,25}\b(every|all|the)\b.{0,15}\b(lines?|audit)\b"
+    r"|\b(poem|poetry|lyrics|joke|essay|story)\b|\bwrite me\b"
+    r"|\b(phone number|email address|home address)\b",
+    re.IGNORECASE,
+)
+_CAPITALISED_RUN = re.compile(r"\b[A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*)+")
+_QUESTION_WORDS = {
+    "is", "are", "was", "has", "have", "did", "does", "who", "what", "how", "where", "when",
+    "why", "which", "can", "will", "give", "tell", "explain", "show", "commentate",
+}  # fmt: skip
+
+
+def names_outside_the_match(ctx: MatchContext, question: str) -> bool:
+    """A capitalised name or title (two words or more) that is not a club or player here.
+
+    Real people and real events are out of scope: the data is synthetic."""
+    for run in _CAPITALISED_RUN.findall(question):
+        words = [w.removesuffix("'s").removesuffix("’s") for w in run.split()]
+        while words and words[0].casefold() in _QUESTION_WORDS:
+            words.pop(0)
+        if len(words) >= 2 and " ".join(words).casefold() not in ctx.allowed_names:
+            return True
+    return False
+
+
 def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     """Rules router (the model-free fallback of the one-call router)."""
     lowered = question.casefold()
+    if DECLINE.search(question) or names_outside_the_match(ctx, question):
+        return Route("out_of_scope", None, (), "")
     teams = tuple(t for t in (ctx.home, ctx.away) if ctx.club_name(t).casefold() in lowered)
     if FUTURE_CUE.search(question):
         return Route("abstain", None, teams, "")  # we never predict

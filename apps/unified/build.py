@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (the patch tables hold whole source lines that must match exactly)
 # Builds the unified MatchCast app. Nothing in the source folders is edited: each view is read
 # from its
 # source, patched in memory by the asserted replacements below, and written under unified/.
@@ -157,6 +158,20 @@ def build_broadcast():
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "broadcast half chips")
     main = sub(main, LANG_OLD, LANG_NEW, "broadcast language labels")
     main = sub(main, "bcNewMatch(q.get('seed'));", "bcEmbedStart(q);", "broadcast start")
+    # decided languages are English, Spanish and Hindi; the desk's Tamil drafts are dropped (embed/bclang.js writes and re-checks es and hi)
+    for a, c, label in [
+        ("bcEsc(BC.lang === 'ta' ? last.ta : last.en)", "bcEsc(bcTx(last))", "broadcast strip text"),
+        ("const L = lang === 'ta' ? 'ta-IN' : 'en-GB', u =", "const L = ({ es: 'es-ES', hi: 'hi-IN' })[lang] || 'en-GB', u =", "broadcast speech language"),
+        ("(BC.lang === 'ta' ? 'தமிழ் · drafted' : 'English · Tamil drafted')", "bcLangTag()", "broadcast teleprompter tag"),
+        ("Tamil lines are drafted and need a native-speaker check before air.", "Spanish and Hindi lines are written by rules from the English line and the Verifier re-checks names and numbers; Tamil is out until a native speaker reviews it.", "broadcast teleprompter note"),
+        ("bcSpeak(BC.lang === 'ta' ? l.ta : l.en, BC.lang)", "bcSpeak(bcTx(l), BC.lang)", "broadcast speak"),
+        ("const ta = BC.lang === 'ta', L = BC.script", "const ta = false, L = BC.script", "broadcast paint flag"),
+        ("(ta ? L.ta : L.en)", "bcTx(L)", "broadcast now line"),
+        ("N.map((x) => (ta ? x.ta : x.en))", "N.map((x) => bcTx(x))", "broadcast next lines"),
+        ("bcEsc(ta ? x.ta : x.en) + '<span class=\"src\">' + bcEsc(x.src) + '</span>", "bcEsc(bcTx(x)) + '<span class=\"src\">' + bcEsc(x.src + bcTrNote(x)) + '</span>", "broadcast line list"),
+        ("e(l.en) + '<br><small>' + e(l.ta) + '</small>'", "e(l.en) + '<br><small>' + e(l.es || '(English shown: not translated)') + '</small><br><small>' + e(l.hi || '(English shown: not translated)') + '</small>'", "broadcast export lines"),
+    ]:
+        main = sub(main, a, c, label)
     # EXP-2: consumer mode. The desk does not simulate in the unified app;
     # consumerStep (embed/broadcast.js) follows Watch.
     main = sub(
@@ -174,7 +189,12 @@ def build_broadcast():
     head = head.replace("</style>", r(BS + "bc.css") + "\n</style>", 1)
     return (
         head
-        + r(BS + "bc-body.html")
+        + sub(
+            r(BS + "bc-body.html"),
+            '<button data-l="ta" aria-pressed="false">தமிழ்</button>',
+            '<button data-l="es" aria-pressed="false">ES</button><button data-l="hi" aria-pressed="false">हिन्दी</button>',
+            "broadcast language buttons",
+        )
         + importmap()
         + '<script type="module">\n'
         + main
@@ -182,6 +202,8 @@ def build_broadcast():
         + r(EMB + "hook.js")
         + "\n"
         + r(EMB + "broadcast.js")
+        + "\n"
+        + r(EMB + "bclang.js")
         + "\n"
         + r(EMB + "replay.js")
         + "\n"
