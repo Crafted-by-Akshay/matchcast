@@ -2,6 +2,7 @@
 
 import asyncio
 
+import pytest
 from conftest import fixed_clock, run
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.messages import DraftLine
@@ -169,3 +170,78 @@ def test_unrepairable_line_is_abstained_after_exactly_one_repair(match) -> None:
     assert repairs and max(repairs.values()) == 1
     assert all(ln.status in ("rejected", "abstained") for ln in flow.store.lines(flow.sk))
     assert verify_chain(records)["valid"] is True
+
+
+def test_status_stays_fallback_while_any_wrapped_agent_is_on_rules(match) -> None:
+    base = rules_agents()
+    breaker = CircuitBreaker(FakeClock())
+    narrator = ResilientAgent(FakeNarrator([]), NarratorRules(), timeout_s=0.05, breaker=breaker)
+
+    class BrokenAnalyst:
+        """A live analyst whose model always fails, so its wrapper stays on rules."""
+
+        mode = "live"
+        agent_id = "analyst"
+
+        async def analyse(self, *a, **k):
+            raise ModelError()
+
+    stuck = ResilientAgent(
+        BrokenAnalyst(), base.analyst, timeout_s=0.05, breaker=CircuitBreaker(FakeClock())
+    )
+    agents = AgentSet(base.producer, stuck, narrator, base.verifier)
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], agents=agents, config=WorkflowConfig(), clock=fixed_clock(),
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    assert narrator.mode == "live" and stuck.mode == "rules"
+    assert flow.status == "rules_fallback"
+    assert [e.data["status"] for e in flow.hub.history() if e.event == "status"][-1] == (
+        "rules_fallback"
+    )
+
+
+def test_status_event_only_on_change_but_every_refusal_is_audited(match) -> None:
+    flow, _agent, _breaker = flow_with_narrator(match, FakeNarrator([ModelError()] * 50))
+    run(flow.ingest(match["events"]))
+    status_events = [e for e in flow.hub.history() if e.event == "status"]
+    audited = reasons(flow)
+    assert len(audited) > len(status_events) >= 1
+    assert len({(e.data["status"], e.data.get("reason")) for e in status_events}) == len(
+        status_events
+    )
+
+
+def test_cancelled_probe_does_not_wedge_the_breaker() -> None:
+    clock = FakeClock()
+    breaker = CircuitBreaker(clock)
+    for _ in range(3):
+        breaker.record_failure()
+    clock.now += 31
+    assert breaker.allow() is True and breaker.allow() is False  # one probe in flight
+    breaker.abandon_probe()
+    assert breaker.allow() is True
+
+
+def test_tool_error_leaves_the_breaker_untouched(match) -> None:
+    from matchcast_agents.tools import ToolError
+
+    class ToolFail:
+        mode = "live"
+        agent_id = "narrator"
+
+        async def write(self, *a, **k):
+            raise ToolError("get_metrics", "down")
+
+    clock = FakeClock()
+    breaker = CircuitBreaker(clock)
+    for _ in range(3):
+        breaker.record_failure()
+    clock.now += 31  # half open
+    agent = ResilientAgent(ToolFail(), NarratorRules(), breaker=breaker)
+    from matchcast_agents.tools import ToolError as TE
+
+    with pytest.raises(TE):
+        run(agent.write(None, None, []))
+    assert breaker.state == "half_open" and breaker.allow() is True

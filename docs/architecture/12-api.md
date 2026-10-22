@@ -53,7 +53,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `publication` | publication with the variant for `lang` (+ English) | `pub:<publication_id>` |
 | `audit` | audit record | `audit:<sequence>` |
 | `recap_ready` | personas available | `recap` |
-| `status` | `live`, `rules_fallback`, `warming_up` | none |
+| `status` | `{status, reason?}`: `live`, `rules_fallback` (with `reason` from the `fallback_reason` list in 04-agents.md §4) or `warming_up`. Sent only when the status or reason changes; every refusal is still audited as `fallback_used` | none |
 | `heartbeat` | server time | none, every 15 s |
 
 On reconnect with `Last-Event-ID`, the server replays publications and audit records after that point (at most 500), then continues live.
@@ -96,3 +96,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `/speech/token` | 10 a minute | IP |
 
 Limits are kept in memory in the single `api` replica (ADR-0005).
+
+## Seeded bad claim (demo cue)
+
+`POST /v1/matches` accepts `seed_bad_claim` (boolean) and `seed_bad_claim_at_ms` (match time, default 720000, minute 12). The header `X-MatchCast-Seed-Bad-Claim: 1` has the same effect as `seed_bad_claim: true`. From that match time the Analyst corrupts one claim number, the Verifier rejects the line, and the repair path runs once (04-agents.md §3).
