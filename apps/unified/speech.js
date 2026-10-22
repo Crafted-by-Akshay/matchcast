@@ -1,0 +1,60 @@
+// ---- unified console: Azure Speech in the browser (EXP-8 voices, EXP-16 talk).
+// GET {MATCHCAST_API}/v1/speech/token -> {token, region, expires_at}; the token is Speech-only and lasts 10 minutes, so it is refetched a minute before expiry.
+// 503 not_ready (no Speech resource) or 429 rate_limited (Retry-After) keep the browser voice; no key ever reaches the page.
+// The SDK is loaded only once a token was issued, so an offline console never calls out.
+const SPX = (() => {
+  const SDK_URL = 'https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@1.40.0/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js';
+  let tok = null, got = 0, inflight = null, sdkP = null, sdkBad = 0, blockedUntil = 0, state = 'unknown', reason = '', dest = null;
+  const api = () => (window.MATCHCAST_API || '').replace(/\/$/, '');
+  // the token's life is counted from when it arrived (the api issues 9 minutes), not from the server's clock
+  const fetchToken = async () => {
+    try {
+      const r = await fetch(api() + '/v1/speech/token');
+      if (r.status === 429) { blockedUntil = Date.now() + 1000 * (+r.headers.get('Retry-After') || 60); state = 'limited'; reason = 'rate limited'; return null; }
+      if (!r.ok) { blockedUntil = Date.now() + 60000; state = 'off'; reason = r.status === 503 ? 'no Speech resource configured' : 'token error ' + r.status; return null; }
+      tok = await r.json(); got = Date.now(); state = 'on'; reason = ''; return tok;
+    } catch (e) { blockedUntil = Date.now() + 60000; state = 'off'; reason = 'api unreachable'; return null; }
+  };
+  const token = async () => {
+    if (!api() || Date.now() < blockedUntil) return null;
+    if (tok && Date.now() - got < 8 * 60000) return tok;
+    tok = null; return inflight || (inflight = fetchToken().finally(() => { inflight = null; }));
+  };
+  const sdk = () => {
+    if (window.SpeechSDK) return Promise.resolve(window.SpeechSDK);
+    if (Date.now() < sdkBad) return Promise.reject(new Error('Speech SDK unavailable'));
+    return sdkP || (sdkP = new Promise((res, rej) => {
+      const s = document.createElement('script'); s.src = SDK_URL; s.onload = () => res(window.SpeechSDK); s.onerror = () => { sdkP = null; sdkBad = Date.now() + 60000; s.remove(); rej(new Error('Speech SDK failed to load')); };
+      document.head.append(s);
+    }));
+  };
+  const config = async (lang, voice) => {
+    const t = await token(); if (!t) return null;
+    const S = await sdk(), c = S.SpeechConfig.fromAuthorizationToken(t.token, t.region);   // token as issued, no prefix
+    c.speechRecognitionLanguage = lang; if (voice) c.speechSynthesisVoiceName = voice; return { S, c };
+  };
+  // speak text with a named voice; resolves true when Azure finished playing it, false when the caller should use the browser voice
+  const speak = async (text, voice, lang) => {
+    try {
+      const k = await config(lang || 'en-GB', voice); if (!k) return false;
+      const d = new k.S.SpeakerAudioDestination(), syn = new k.S.SpeechSynthesizer(k.c, k.S.AudioConfig.fromSpeakerOutput(d));
+      dest = d;
+      return await new Promise((res) => {
+        d.onAudioEnd = () => { syn.close(); if (dest === d) dest = null; res(true); };   // playback ended, not just synthesis
+        syn.speakTextAsync(text, (r) => { if (r.reason !== k.S.ResultReason.SynthesizingAudioCompleted) { syn.close(); if (dest === d) dest = null; if (r.reason === k.S.ResultReason.Canceled) tok = null; res(false); } },
+          () => { syn.close(); if (dest === d) dest = null; tok = null; res(false); });
+      });
+    } catch (e) { return false; }
+  };
+  const stop = () => { if (dest) { try { dest.pause(); dest.close(); } catch (e) { /* already closed */ } dest = null; } };
+  // one spoken phrase to text (push-to-talk); resolves the text, '' when nothing was recognised, or null when Azure is not available
+  const listen = async (lang) => {
+    try {
+      const k = await config(lang || 'en-GB'); if (!k) return null;
+      const rec = new k.S.SpeechRecognizer(k.c, k.S.AudioConfig.fromDefaultMicrophoneInput());
+      return await new Promise((res) => rec.recognizeOnceAsync((r) => { rec.close(); res(r.reason === k.S.ResultReason.RecognizedSpeech ? r.text : ''); }, () => { rec.close(); res(''); }));
+    } catch (e) { return null; }
+  };
+  return { token, speak, stop, listen, get state() { return state; }, get reason() { return reason; } };
+})();
+window.SPX = SPX;   // the Broadcast and Watch frames (same origin) reach it as window.parent.SPX
