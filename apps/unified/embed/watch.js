@@ -100,7 +100,7 @@ MCS.progress('Loading the stadium and players');
     clearInterval(go);
     if (saved && FAN_MODES.some((m) => m[0] === saved.mode)) {
       const p = saved.player ? players.find((q) => q.name === saved.player) : null;
-      _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric: FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric, lang: FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en', player: p || FAN.player }, 'restore');
+      _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric: FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
     }
     tell();
   }, 300);
@@ -136,14 +136,14 @@ MCS.progress('Loading the stadium and players');
   const mic = document.getElementById('tk-mic'), orig = mic && mic.onclick;
   let az = null; try { az = window.parent !== window && window.parent.SPX && typeof window.parent.SPX.listen === 'function' ? window.parent.SPX : null; } catch (e) { /* cross-origin parent */ }
   if (!mic || !az || !orig) return;
-  mic.hidden = false; mic.title = 'Talk to the player (Azure Speech when the api issues a token, otherwise browser speech recognition)';
+  mic.hidden = false; mic.title = 'Talk to the player (Azure Speech if the api has a Speech resource, otherwise the browser mic)';
   let busy = false;
   mic.addEventListener('click', (e) => {
     if (TK.rec) return;   // a browser recognition is running: the original handler stops it
     e.stopImmediatePropagation();
     if (busy) return;
     busy = true; mic.classList.add('live'); document.getElementById('tk-q').placeholder = 'Listening…';
-    az.listen('en-US').then((text) => {
+    az.listen(FAN.lang === 'es' ? 'es-ES' : FAN.lang === 'hi' ? 'hi-IN' : 'en-US').then((text) => {
       busy = false; mic.classList.remove('live'); document.getElementById('tk-q').placeholder = 'Talk to the player…';
       if (text) { document.getElementById('tk-q').value = text.slice(0, 300); document.getElementById('tk-form').requestSubmit(); return; }
       if (text === null && (window.SpeechRecognition || window.webkitSpeechRecognition)) orig.call(mic);   // Azure unavailable: the browser mic
@@ -156,5 +156,6 @@ MCS.progress('Loading the stadium and players');
 window.addEventListener('message', (e) => {
   const d = e.data || {};
   if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !['en', 'es', 'hi'].includes(d.lang)) return;
+  window.__shellLang = d.lang;   // the restore of Watch's saved settings below must not undo it
   if (FAN.lang !== d.lang) fanSet({ lang: d.lang }, 'shell');
 });

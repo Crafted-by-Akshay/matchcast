@@ -83,7 +83,7 @@ test('speech: Azure push-to-talk fills Ask the producer; a verified answer is sp
 test('speech: Watch talk-to-player uses Azure push-to-talk when available, the browser mic otherwise', async ({ page }) => {
   test.setTimeout(420_000);
   const errs = collectErrors(page);
-  await page.addInitScript(() => { (window as any).SpeechRecognition = class { start() { /* browser mic */ } stop() { /* */ } }; });
+  await page.addInitScript(() => { (window as any).__brStarts = 0; (window as any).SpeechRecognition = class { start() { (window as any).__brStarts++; } stop() { /* */ } }; });
   await openShell(page, 'watch');
   await ready('watch')(page);
   const w = await viewFrame(page, 'watch');
@@ -95,6 +95,6 @@ test('speech: Watch talk-to-player uses Azure push-to-talk when available, the b
   // Azure unavailable (null): the browser recognition starts instead
   await page.evaluate(() => { SPX.listen = async () => null; });
   await w.locator('#tk-mic').dispatchEvent('click');
-  await expect.poll(() => w.evaluate(() => document.getElementById('tk-mic')!.classList.contains('live'))).toBe(true);
+  await expect.poll(() => w.evaluate(() => (window as any).__brStarts)).toBe(1);   // the browser recognition really started
   expect(errs).toEqual([]);
 });
