@@ -25,7 +25,8 @@ from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, normalise
 from matchcast_agents.statsdesk import StatsDeskError
-from matchcast_agents.store import MemoryStore, stream_key
+from matchcast_agents.store import stream_key
+from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
@@ -187,7 +188,9 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
-        self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
+        self.store = (
+            build_store()
+        )  # MATCHCAST_STORE=table|memory; one store for every match, so the MCP tools see them all
         self.require_role = require_role
         self.stats_desk = _local_stats_desk()
         self._model_client: ModelClient | None = None
