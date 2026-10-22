@@ -107,6 +107,10 @@ The shell: arrow keys, Home and End move between the dashboard tabs (tab 1 to 4 
 - `analyst-pages/00_a11y.js` sets `lang`, redefines the light-theme `--good`/`--warn` tokens (the dark theme keeps its own) and darkens club crests that failed WCAG AA contrast, names unlabelled chart SVGs and makes `#main` keyboard-focusable. It exists because `sources/` is read only.
 - `tests/e2e/a11y-analyst.spec.ts` runs axe (WCAG 2 A/AA) on 13 Analyst pages in both the light and dark scheme and fails on any serious or critical violation (minor and moderate are not checked). Uses `@axe-core/playwright` (dev dependency). Watch and Broadcast are still to audit.
 
+## Full-time recap in the Analyst library (AGT-15, task 105)
+- At full time the shell adds `recap: { api, session_id, match_id }` to the import message it sends the Analyst (only when Watch is the source and an api is configured; `LV.key` exposes the run's key). `embed/analyst.js` stores it on the imported match.
+- `analyst-pages/30_recap.js` wraps the Match centre page: for such a match it shows a Full-time recap card from `GET /v1/matches/{id}/recap/analyst`, polling every 5 s for a minute ("Being written by the agents…"), then "Planned: not ready". It shows the Verifier tick only when every sentence has verdict `verified`, and "Rules fallback" when the api's mode is `rules`. Recorded season matches have no recap card. Watch and Broadcast recap cards belong to their lanes.
+
 ## Instant replay (Broadcast)
 - `embed/replay.js` (appended after `broadcast.js` by `build.py`) keeps the last 60 s of Watch's frames in Broadcast. The "Instant replay" bar on the live view plays back the last 10, 20 or 30 s at normal or half speed, with a red REPLAY tag and a Back to live button; it returns to live by itself at the end.
 - Only player and ball positions are replayed. Clock, score and stats stay live, events and agent lines are not replayed, and Watch keeps running underneath. The buttons stay disabled until two frames are buffered. The buffer is in the page, so it is empty after a reload. Test: `tests/e2e/replay.spec.ts`.
