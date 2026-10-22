@@ -32,12 +32,18 @@ case "$STEP" in
     run az containerapp update --resource-group "$RG" --name "$API_APP" --min-replicas 0
     ;;
   pause-fabric)
-    [ -n "$FABRIC_CAPACITY" ] || { echo "set FABRIC_CAPACITY to the capacity name (none if the trial is used)" >&2; exit 2; }
+    [ -n "$FABRIC_CAPACITY" ] || { echo "set FABRIC_CAPACITY to the capacity name, or to none if the trial is used" >&2; exit 2; }
+    if [ "$FABRIC_CAPACITY" = none ]; then echo "no paid capacity to pause"; exit 0; fi
     run az fabric capacity suspend --resource-group "$RG" --capacity-name "$FABRIC_CAPACITY"
     ;;
   cost-final)
-    mkdir -p docs/evidence
-    if [ -n "$EXECUTE" ]; then scripts/cost_today.sh | tee docs/evidence/cost-final.txt; else echo "[dry run] scripts/cost_today.sh | tee docs/evidence/cost-final.txt"; fi
+    ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+    if [ -n "$EXECUTE" ]; then
+      mkdir -p "$ROOT/docs/evidence"
+      "$ROOT/scripts/cost_today.sh" | tee "$ROOT/docs/evidence/cost-final.txt"
+    else
+      echo "[dry run] scripts/cost_today.sh | tee docs/evidence/cost-final.txt"
+    fi
     ;;
   stop-eventhubs)
     need_confirm stop-eventhubs
@@ -45,7 +51,9 @@ case "$STEP" in
     ;;
   teardown)
     need_confirm teardown
-    run azd down --purge --force
+    echo "azd down removes what the template created and purges soft-deleted AI resources."
+    echo "Never remove matchcast-foundry (hand-made) without Akshay's say-so; check the azd preview first."
+    run azd down -e "$ENV_NAME" --purge --force
     echo "then verify: az resource list --resource-group $RG -o table (only matchcast-foundry should remain)"
     ;;
   *)
