@@ -23,6 +23,7 @@ from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
+from matchcast_agents.personas import ALIASES, normalise
 from matchcast_agents.statsdesk import StatsDeskError
 from matchcast_agents.store import MemoryStore, stream_key
 from matchcast_agents.workflow import WorkflowError
@@ -38,7 +39,6 @@ HEARTBEAT_S = 15
 ASK_PER_MINUTE = 5
 DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
-PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {
     "not_found": 404,
     "match_exists": 409,
@@ -353,7 +353,12 @@ def build_router(registry: Registry) -> APIRouter:
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
         flow = registry.get(session_id, match_id)
-        persona = PERSONA_ALIASES.get(persona or "", persona)
+        if persona:
+            persona = normalise(persona, flow.clubs, flow.names)
+            if persona is None:
+                raise Problem(422, "contract_invalid", "unknown persona for this match")
+            if not flow.add_persona(persona):  # a watch mode gets lines from the next moment on
+                raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and persona and item.data["persona"] != persona)
@@ -551,7 +556,7 @@ def build_router(registry: Registry) -> APIRouter:
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:
         flow = registry.get(session_id, match_id)
-        recap = flow.store.get_recap(flow.sk, PERSONA_ALIASES.get(persona, persona))
+        recap = flow.store.get_recap(flow.sk, ALIASES.get(persona, persona))
         if recap is None:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
         return recap

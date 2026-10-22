@@ -18,6 +18,7 @@ from . import recap as recap_mod
 from .context import MatchContext
 from .hub import StreamHub
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
+from .personas import MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
@@ -165,6 +166,7 @@ class MatchWorkflow:
         self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
         self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
+        self.extra_personas: list[str] = []
         self.store.put_match(
             self.sk, {"roster": self.roster, "names": self.names, "clubs": self.clubs}
         )
@@ -316,6 +318,23 @@ class MatchWorkflow:
         await self._process_event(event)
         self._checkpoint(event["stream_sequence"])
 
+    def add_persona(self, persona: str) -> bool:
+        """Write lines for a viewer's watch mode from the next moment on.
+
+        False when it is not a real club, player or metric of this match, or when the match
+        already writes for MAX_WATCH_MODES extra modes (each costs a Narrator call a moment).
+        Modes are kept until the match ends and are not checkpointed: a reconnecting viewer
+        adds theirs again.
+        """
+        if not known(persona, self.clubs, self.names):
+            return False
+        if persona in (*self.config.personas, *self.extra_personas):
+            return True
+        if len(self.extra_personas) >= MAX_WATCH_MODES:
+            return False
+        self.extra_personas.append(persona)
+        return True
+
     async def _process_event(self, event: dict[str, Any]) -> None:
         self.stats["events"] += 1
         state = apply(self.store.get_state(self.sk), event)
@@ -325,6 +344,9 @@ class MatchWorkflow:
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
+        if isinstance(decision, ProducerTask) and self.extra_personas:
+            both = dict.fromkeys([*decision.personas, *self.extra_personas])
+            decision = decision.model_copy(update={"personas": tuple(both)})
         if isinstance(decision, Skip):
             self.stats["skipped"] += 1
             if decision.reason in AUDIT_SKIPPED:
