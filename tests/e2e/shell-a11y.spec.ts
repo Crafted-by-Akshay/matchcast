@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { readFileSync, existsSync } from 'node:fs';
 import { openShell } from './helpers';
 
@@ -16,10 +16,10 @@ test('shell: arrow keys move between tabs, a skip link exists, published lines a
   await expect(page.locator('a.skip')).toHaveAttribute('href', '#stage');
   // a published line goes to the polite live region
   await page.evaluate(() => {
-    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'ars', player: 'A One', score: '1-0', data: {} }], []);
+    AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });
-  await expect(page.locator('#sr-lines')).toContainText('Verified line: Goal for Arsenal');
+  await expect(page.locator('#sr-lines')).toContainText('Verified line: Goal for Thames Rovers');
   await expect(page.locator('#sr-lines')).toHaveAttribute('aria-live', 'polite');
 });
 
@@ -28,8 +28,8 @@ test('shell: no serious or critical axe violations on the Agents tab', async ({ 
   await openShell(page, 'agents');
   await page.addScriptTag({ content: readFileSync('node_modules/axe-core/axe.min.js', 'utf8') });
   await page.evaluate(() => {
-    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'ars', player: 'A One', score: '1-0', data: {} }], []);
+    AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });
   const bad = await page.evaluate(async () => {
     const r = await (window as any).axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] });

@@ -1,4 +1,4 @@
-import { test, expect, type Frame, type Page } from '@playwright/test';
+import { test, expect, type Frame, type Page } from './fixtures';
 import { collectErrors, openShell, ready, stepSim, viewFrame } from './helpers';
 
 // Top-level consts of the shell and the Analyst frame, so they are not on window.
@@ -97,7 +97,7 @@ test('a fixture change reloads Watch with the new seed; New match in Broadcast m
 
 test('keys 3 and 1 switch views', async () => {
   // keys are handled by the shell; after a view loads, focus can sit inside its iframe, which swallows them
-  const toShell = () => page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.focus(); });
+  const toShell = () => page.locator('#tab-watch').focus();   // a real focus in the shell document, even while a view is still loading
   await toShell();
   await page.keyboard.press('3'); await expect(page.locator('#v-broadcast')).toBeVisible({ timeout: 15_000 });
   await toShell(); await page.keyboard.press('1'); await expect(page.locator('#v-watch')).toBeVisible({ timeout: 15_000 });

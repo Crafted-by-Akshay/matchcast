@@ -46,4 +46,5 @@ smoke-foundry:
 	uv run --locked --group smoke python scripts/smoke_foundry.py
 
 judge-path:
+	uv sync --locked --all-packages
 	uv run python scripts/judge_path.py

@@ -149,3 +149,110 @@ def test_consumer_restarts_after_a_failure(monkeypatch):
 
     asyncio.run(go())
     assert len(calls) == 3
+
+
+def test_reducer_writer_delivers_a_shuffled_stream_to_the_workflow_in_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-0017: the reducer reorders and dedupes, so the workflow sees the stream in order."""
+    import random
+
+    events = FIXTURE["events"]
+    monkeypatch.setenv("MATCHCAST_PIPELINE", "direct")
+    direct = TestClient(create_app())
+    direct.post("/v1/matches", json=BODY)
+    post(direct, events)
+    expected = sorted(c["claim_id"] for c in claims(direct))
+
+    shuffled = list(events) + events[:20]
+    random.Random(3).shuffle(shuffled)
+    monkeypatch.setenv("MATCHCAST_PIPELINE", "memory")
+    monkeypatch.setenv("MATCHCAST_STATE_WRITER", "reducer")
+    with TestClient(create_app()) as piped:
+        piped.post("/v1/matches", json=BODY)
+        assert piped.app.state.matches.pipeline.state_repo is not None
+        post(piped, shuffled)
+        wait_for_sequence(piped, events[-1]["stream_sequence"])
+        assert sorted(c["claim_id"] for c in claims(piped)) == expected
+
+
+def test_workflow_writer_is_the_default_and_leaves_the_reducer_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MATCHCAST_PIPELINE", "memory")
+    monkeypatch.delenv("MATCHCAST_STATE_WRITER", raising=False)
+    with TestClient(create_app()) as piped:
+        assert piped.app.state.matches.pipeline.state_repo is None
+
+
+class _FakeFlow:
+    """Stands in for a match workflow: records what it is given, and can fail once."""
+
+    sk = "demo|short|match-short"
+
+    def __init__(self) -> None:
+        self.seen: list[int] = []
+        self.fail_next = False
+
+    def validate_batch(self, events: list[dict]) -> None:
+        from matchcast_contracts import ContractError
+
+        if events[0].get("bad"):
+            raise ContractError("invalid_schema", "/x", "bad")
+
+    async def ingest(self, events: list[dict]) -> dict:
+        if self.fail_next:
+            self.fail_next = False
+            raise RuntimeError("foundry hiccup")
+        self.seen += [e["stream_sequence"] for e in events]
+        return {"accepted": len(events)}
+
+
+def _handle(pipeline, flow, events):
+    import asyncio
+
+    async def go() -> None:
+        await pipeline._handle_reduced(flow, "match-short", events)
+
+    asyncio.run(go())
+
+
+def test_a_held_event_still_reaches_the_workflow_after_a_failed_ingest() -> None:
+    from app.pipeline import Pipeline
+    from matchcast_worker.repo import MemoryStateRepo
+
+    events = {e["stream_sequence"]: e for e in FIXTURE["events"][:8]}
+    pipeline = Pipeline(None, None, None, MemoryStateRepo())  # type: ignore[arg-type]
+    flow = _FakeFlow()
+    _handle(pipeline, flow, [events[1], events[2], events[4]])  # 4 is held behind 3
+    assert flow.seen == [1, 2]
+    flow.fail_next = True
+    with pytest.raises(RuntimeError):
+        _handle(pipeline, flow, [events[3]])  # closes the gap, then the workflow fails
+    _handle(pipeline, flow, [events[3]])  # the hub redelivers only this batch
+    assert flow.seen == [1, 2, 3, 4]
+
+
+def test_a_malformed_event_does_not_take_its_batch_down() -> None:
+    from app.pipeline import Pipeline
+    from matchcast_worker.repo import MemoryStateRepo
+
+    events = FIXTURE["events"][:3]
+    pipeline = Pipeline(None, None, None, MemoryStateRepo())  # type: ignore[arg-type]
+    flow = _FakeFlow()
+    junk = {**events[1], "bad": True}
+    nonum = {k: v for k, v in events[2].items() if k != "stream_sequence"}
+    _handle(pipeline, flow, [events[0], junk, nonum])
+    assert flow.seen == [1]
+
+
+def test_a_replayed_batch_reaches_the_workflow_again_so_it_can_dedupe() -> None:
+    from app.pipeline import Pipeline
+    from matchcast_worker.repo import MemoryStateRepo
+
+    events = FIXTURE["events"][:4]
+    pipeline = Pipeline(None, None, None, MemoryStateRepo())  # type: ignore[arg-type]
+    flow = _FakeFlow()
+    _handle(pipeline, flow, events)
+    _handle(pipeline, flow, events)  # the hub replays after a restart
+    assert flow.seen == [1, 2, 3, 4, 1, 2, 3, 4]  # the real workflow drops these in add_event

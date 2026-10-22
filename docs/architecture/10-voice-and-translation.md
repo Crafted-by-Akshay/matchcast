@@ -57,3 +57,6 @@ Built (22 Oct, `matchcast_agents/translate.py`): `GET /stream?lang=es|hi` adds `
 
 ## 6. Built in the browser (22 Oct)
 `apps/unified/speech.js` implements the token fetch (section 3) and both directions: synthesis with the role/language voice from `voices.json`, and push-to-talk recognition in Broadcast. It has only been tested against a fake api and a fake SDK until the Speech resource is deployed. The browser voice remains the labelled fallback.
+
+## 7. The console's language selector (22 Oct)
+The top-bar selector (EN, ES, HI) is the single viewer language. It re-opens the api stream with `lang` (section 4), switches Watch and Broadcast, and chooses the voice: the checked translation with its es/hi voice, else the English line. The desk's rules translations log `translation_rejected` through the shell. Not covered: the Analyst view and Ask answers are English only.

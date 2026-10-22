@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<!-- warm the 3D engine while the shell paints: Watch and Broadcast both import it; keep the version equal to CDN in build.py (EXP-15) -->
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" crossorigin>
 <title>MatchCast Console</title>
 <meta name="description" content="One console for MatchCast: the fan Watch view, the Analyst workspace and the Broadcast desk, on one shared season match.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,6 +49,8 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 #status-dlg::backdrop{background:rgba(0,0,0,.55)}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
+#lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+@media (max-width:560px){#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
@@ -126,6 +131,15 @@ button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visi
 .ag-recs{list-style:none;margin:0;padding:0;font:12px ui-monospace,Menlo,monospace;color:var(--muted);display:grid;gap:3px}
 .ag-note{margin:0;font-size:12px;color:var(--muted)}
 .empty{color:var(--muted)}
+/* ---- first-time tour (EXP-14 polish) ---- */
+dialog.tour{max-width:460px;width:calc(100% - 2 * var(--gut));background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+dialog.tour::backdrop{background:rgba(3,8,16,.7)}
+dialog.tour h2{margin:0 0 6px;font-size:17px}
+dialog.tour p{margin:0 0 10px;font-size:14px;line-height:1.5}
+dialog.tour .tour-n{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+dialog.tour .tour-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px}
+dialog.tour button{border:1px solid var(--line);background:var(--bg3);color:var(--text);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit;font-weight:600}
+dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-strong);color:var(--accent-ink)}
 @media (max-width:820px){ .ag-grid{grid-template-columns:1fr} }
 
 /* ---- narrow screens: the switcher scrolls, the match bar stacks ---- */
@@ -164,14 +178,27 @@ button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visi
     <button role="tab" id="tab-broadcast" data-view="broadcast" aria-controls="v-broadcast" aria-selected="false" title="Broadcast (3)">Broadcast <small>desk</small></button>
     <button role="tab" id="tab-agents" data-view="agents" aria-controls="v-agents" aria-selected="false" title="Agents (4)">Agents <small>pipeline</small></button>
   </nav>
+  <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
   <div class="status" aria-label="Environment">
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span>
+    <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
     <span class="pill" id="api-pill" role="status" title="">Offline (simulated)</span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
     <span class="pill">Browser prototype</span>
     <span class="pill warn">Azure parts simulated</span>
   </div>
 </header>
+
+<dialog class="tour" id="tour" aria-labelledby="tour-h" aria-describedby="tour-p">
+  <div class="tour-n" id="tour-n"></div>
+  <h2 id="tour-h"></h2>
+  <p id="tour-p"></p>
+  <div class="tour-row">
+    <button type="button" id="tour-skip">Close</button>
+    <button type="button" id="tour-back">Back</button>
+    <button type="button" id="tour-go" class="go" autofocus></button>
+  </div>
+</dialog>
 
 <section class="matchbar" aria-label="Shared match">
   <div class="fx">
@@ -282,7 +309,8 @@ function url(view) {
 
 // load a view with the shared match. Watch and Broadcast restart at kick-off when the match changed; Analyst routes.
 const since = {};
-function waitText(view, text) { const t = document.querySelector('#v-' + view + ' .wt'); if (t) t.textContent = text; since[view] = Date.now(); const b = document.querySelector('#v-' + view + ' .stall'); if (b) b.remove(); }
+function waitText(view, text) { const t = document.querySelector('#v-' + view + ' .wt'); if (t) t.textContent = text; }   // progress text; the slow-start timer (stallCheck) counts from when the view began loading
+function restartWait(view) { delete since[view]; const b = document.querySelector('#v-' + view + ' .stall'), m = document.querySelector('#v-' + view + ' .stallmsg'); if (b) b.remove(); if (m) m.remove(); }
 
 // loading states (EXP-15): no WebGL means Watch and Broadcast cannot draw, so say so once; a slow start gets a note and a reload button outside the live region
 const hasGL = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } })();
@@ -291,17 +319,17 @@ const NOGL = 'Your browser has WebGL off or unavailable. Try Chrome, Edge or Saf
 function stallCheck() {
   for (const v of ['watch', 'broadcast', 'analyst']) {
     const sec = $('v-' + v), w = sec && sec.querySelector('.wait'), btn = sec && sec.querySelector('.stall');
-    if (!sec || !w || !FR[v] || sec.hidden || sec.classList.contains('ready')) { delete since[v]; if (btn) btn.remove(); continue; }
+    if (!sec || !w || !FR[v] || sec.hidden || sec.classList.contains('ready')) { delete since[v]; if (btn) btn.remove(); const m0 = sec && sec.querySelector('.stallmsg'); if (m0) m0.remove(); continue; }
     if (v !== 'analyst' && !hasGL) {
       if (w.querySelector('b').textContent !== 'This view needs WebGL') { w.querySelector('b').textContent = 'This view needs WebGL'; w.querySelector('.wt').textContent = NOGL; w.querySelector('.bar').hidden = true; }
       continue;
     }
     since[v] = since[v] || Date.now();
-    if (Date.now() - since[v] > SLOW_MS && !btn) {
-      w.querySelector('.wt').textContent = 'Still loading. The first load is the slowest, and a busy machine takes longer.';
+    if (Date.now() - since[v] > SLOW_MS && !btn && !sec.querySelector('.stallmsg')) {
+      const m = document.createElement('span'); m.className = 'wt stallmsg'; m.textContent = 'Still loading. The first load is the slowest, and a busy machine takes longer.'; w.firstElementChild.appendChild(m);
       const b = document.createElement('button'); b.type = 'button'; b.className = 'pill stall'; b.textContent = 'Reload this view';
       b.style.cssText = 'position:absolute;left:50%;top:62%;transform:translateX(-50%);z-index:2';
-      b.onclick = () => { b.remove(); since[v] = Date.now(); waitText(v, 'Loading again'); try { FR[v].el.contentWindow.location.reload(); } catch (e) { FR[v].el.src = FR[v].el.src; } };
+      b.onclick = () => { restartWait(v); since[v] = Date.now(); waitText(v, 'Loading again'); try { FR[v].el.contentWindow.location.reload(); } catch (e) { FR[v].el.src = FR[v].el.src; } };
       sec.appendChild(b);
     }
   }
@@ -316,19 +344,20 @@ function ensure(view) {
     const el = document.createElement('iframe');
     el.title = view === 'watch' ? 'Watch: fan 3D match' : 'Broadcast: desk';
     el.setAttribute('allow', 'fullscreen');
+    if (window.mcHookKeys) window.mcHookKeys(el);
     el.src = url(view);
     $('v-' + view).appendChild(el);
     FR[view] = { el, key: want, ready: false, live: null, sent: null };
   } else if (FR[view].key !== want) {
     FR[view].key = want; FR[view].live = null; FR[view].sent = null; FR[view].el.src = url(view);
-    $('v-' + view).classList.remove('ready'); waitText(view, 'Loading the 3D engine');
+    $('v-' + view).classList.remove('ready'); waitText(view, 'Loading the 3D engine'); restartWait(view);
   }
 }
 
 // the Analyst loads its season only when it is opened, so Watch and Broadcast get the machine first
 function routeAnalyst() {
   if (!M.fixture) return;
-  if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe');
+  if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
     el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#match.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
   if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
     FR.analyst.route = M.fixture;
@@ -491,14 +520,15 @@ function cardOf(c) {
 }
 // ---------------------------------------------------------------- Ask (EXP-5)
 // 300 characters, 5 questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
-const askTimes = [];
-async function answerAsk(id, q) {
-  const reply = (answer) => { post('watch', { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
+const LANGS_OK = ['en', 'es', 'hi'];
+const askTimes = { watch: [], broadcast: [] };   // one budget per view
+async function answerAsk(id, q, to = 'watch') {
+  const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
-  const now = Date.now(); while (askTimes.length && now - askTimes[0] > 60000) askTimes.shift();
-  if (askTimes.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
-  askTimes.push(now);
-  if (LV.enabled && LV.status === 'live') { try { reply(await LV.ask(q)); return; } catch (e) { /* the api could not answer: the rules below do */ } }
+  const times = askTimes[to] || (askTimes[to] = []), now = Date.now(); while (times.length && now - times[0] > 60000) times.shift();
+  if (times.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
+  times.push(now);
+  if (LV.enabled && LV.status === 'live') { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
   const a = AG.ask(q);
   reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
 }
@@ -511,7 +541,7 @@ function pushCards() {
     if (sentCards.get(c.id) === sig) continue;
     sentCards.set(c.id, sig);
     post('watch', { src: 'matchcast-shell', type: 'pulse', card: cardOf(c) });
-    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); VC.say(c.text, { id: c.id, lang: 'en', at: c.airedAt, audio: c.audioUrl || null }); }
+    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); { const t = !c.airText && M.lang !== 'en' && c.tr && c.tr[M.lang] && c.tr[M.lang].ok && c.tr[M.lang].text; VC.say(t || c.airText || c.text, { id: c.id, lang: t ? M.lang : 'en', at: c.airedAt, audio: t ? null : (c.audioUrl || null) }); } }
     $('sr-lines').textContent = (c.verdict === 'verified' ? 'Verified line: ' : 'Line awaiting review: ') + c.text;   // screen readers hear each published line
   }
 }
@@ -528,7 +558,7 @@ window.addEventListener('message', (e) => {
     LV.identify(d.track_id, d.team_hint, d.crop).then((result) => reply({ result }), (err) => reply({ error: !err.status ? 'unavailable' : err.status === 429 ? 'rate_limited' : 'failed', retry_after: err.retry_after || 0 }));
     return;
   }
-  if (d.type === 'ask' && view === 'watch') { answerAsk(d.id, d.q); return; }
+  if (d.type === 'ask' && (view === 'watch' || view === 'broadcast')) { answerAsk(d.id, d.q, view); return; }
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
   if (d.type === 'vision' && view === 'watch') {   // Watch's pixel-only tracker, scored against engine truth (DAT-11); the Analyst's Tracking lab shows it
     M.vision = d.report; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'vision', report: d.report }); return;
@@ -543,8 +573,11 @@ window.addEventListener('message', (e) => {
     }
     return;
   }
+  if (d.type === 'lang' && LANGS_OK.includes(d.lang)) { window.setLang(d.lang, view); return; }   // the Broadcast desk's own language buttons
+  if (d.type === 'audit' && view === 'broadcast' && d.action === 'translation_rejected') { if (LANGS_OK.includes(d.lang) && d.lang !== 'en' && Number.isFinite(+d.minute)) AG.note('verifier', 'translation_rejected', String(d.id).slice(0, 60), { lang: d.lang, reason: String(d.reason).slice(0, 120) }, +d.minute); return; }
   if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
-  if (d.type === 'persona' && view === 'watch') { LV.persona(d.persona, d.lang); return; }   // the viewer's watch mode changed (EXP-4)
+  if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
+   // the viewer's watch mode changed (EXP-4)
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
@@ -561,6 +594,7 @@ window.addEventListener('message', (e) => {
     M.setup = s; M.fixture = fxId;
     if (view === 'watch' && M.vision) { M.vision = null; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'vision', report: null }); }   // a new Watch match: the old match's scores no longer apply
     $('v-' + view).classList.add('ready');
+    if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });   // a view that (re)loaded learns the viewer's language
     if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); }   // a new match from Watch starts a new agent run
     prefetchOthers();
     toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
@@ -618,11 +652,16 @@ function init(list) {
     if (to < 0) return;
     e.preventDefault(); location.hash = tabs[to].dataset.view; tabs[to].focus();
   });
-  document.addEventListener('keydown', (e) => {
-    if (e.target.closest && e.target.closest('input,select,textarea')) return;
+  // keys 1 to 4: the shell hears them itself, and from the views too (once a view has focus the shell never sees the key)
+  const shortcut = (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if ($('tour').open) return;
+    if (e.target.closest && e.target.closest('input,select,textarea,dialog,[role=dialog],[contenteditable]')) return;
     const map = { '1': 'watch', '2': 'analyst', '3': 'broadcast', '4': 'agents' };
     if (map[e.key]) location.hash = map[e.key];
-  });
+  };
+  document.addEventListener('keydown', shortcut);
+  window.mcHookKeys = (el) => el.addEventListener('load', () => { try { el.contentWindow.document.addEventListener('keydown', shortcut); } catch (e) { /* cross-origin: no shortcuts from inside */ } });
   window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'watch'));
   $('ag-prov').onclick = (e) => { const b = e.target.closest('.ag-how'); if (b) TP.open(b.dataset.id); };
   for (const id of ['lg-verdict', 'lg-agent', 'lg-metric']) $(id).onchange = renderAgents;
@@ -642,6 +681,18 @@ function init(list) {
     $('ag-verify-out').textContent = pre + (v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '… · in-page (simulated)' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count + ' · in-page (simulated)');
   };
   $('ag-bad').onchange = (e) => AG.seedBad(e.target.checked);
+  // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
+  M.lang = 'en'; M.persona = M.persona || 'fan';
+  const LANGS = ['en', 'es', 'hi'];
+  window.setLang = (l, from) => {
+    if (!LANGS.includes(l) || (l === M.lang && from)) return;   // the selector's own click always re-syncs the views
+    M.lang = l; try { localStorage.setItem('mc-lang', l); } catch (e) { /* storage may be blocked */ }
+    for (const b of document.querySelectorAll('#lang-sel button')) b.setAttribute('aria-pressed', String(b.dataset.lang === l));
+    for (const v of ['watch', 'broadcast']) if (v !== from) post(v, { src: 'matchcast-shell', type: 'lang', lang: l });
+    if (LV.enabled && from !== 'watch') LV.persona(M.persona, l);   // the api translates for the language the stream asks for
+  };
+  for (const b of document.querySelectorAll('#lang-sel button')) b.onclick = () => window.setLang(b.dataset.lang, null);
+  try { const sv = localStorage.getItem('mc-lang'); if (LANGS.includes(sv) && sv !== 'en') setTimeout(() => window.setLang(sv, null), 0); } catch (e) { /* storage may be blocked */ }
   const vb = $('voice-btn'), vshow = () => {
     vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
     $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') : '';
@@ -669,6 +720,36 @@ function init(list) {
   show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'watch');
 }
 
+// first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
+const TOUR = [
+  ['Watch', 'watch', 'A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Try the Copilot Ask tab: it answers only what the match data can prove.'],
+  ['Agents', 'agents', 'Four agents write lines about the match and a Verifier recounts every number from the event log before anything is shown. Switch the approval mode to Producer to approve, edit or kill a line yourself. Provenance on any row shows its source events and audit records.'],
+  ['Broadcast', 'broadcast', 'The broadcaster desk: lower-thirds and a teleprompter fed only by approved lines, instant replay, odds with the reasons on screen, and Ask the producer.'],
+  ['Analyst', 'analyst', 'The enterprise workspace for the same match: pre-match, live and post-match pages, players, reports and a data-science section.'],
+  ['Prove it', 'agents', 'The audit chain is tamper-evident: use Verify chain on the Agents tab and it recomputes every hash. Anything not really connected yet is labelled Simulated or Planned.']];
+let tourAt = 0;
+function tourShow(i) {
+  tourAt = Math.max(0, Math.min(TOUR.length - 1, i));
+  const [title, view, text] = TOUR[tourAt];
+  $('tour-n').textContent = 'Step ' + (tourAt + 1) + ' of ' + TOUR.length;
+  $('tour-h').textContent = title; $('tour-p').textContent = text;
+  $('tour-back').hidden = tourAt === 0;
+  $('tour-go').textContent = tourAt === TOUR.length - 1 ? 'Done' : 'Next';
+  if (location.hash.slice(1) !== view) location.replace('#' + view);   // the view behind the card is the one it talks about
+}
+function tourOpen() { const d = $('tour'); if (!d.open) d.showModal(); tourShow(0); }
+function tourInit() {
+  $('tour-btn').onclick = tourOpen;
+  $('tour-skip').onclick = () => $('tour').close();
+  $('tour-back').onclick = () => tourShow(tourAt - 1);
+  $('tour-go').onclick = () => {
+    if (tourAt === TOUR.length - 1) { $('tour').close(); return; }
+    tourShow(tourAt + 1);
+  };
+  if (/[?&]tour=1(&|$)/.test(location.search)) tourOpen();
+}
+
+tourInit();
 fetch('shared/fixtures.json').then((r) => r.json()).then(init).catch((err) => {
   $('meta').textContent = 'Could not load the season fixtures: ' + err.message;
 });
