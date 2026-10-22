@@ -91,7 +91,7 @@ Key Vault secrets (the only ones): `srch-query-key`, `srch-admin-key`. Each is d
 | Probes | liveness `/health`, readiness `/ready` | `/health` | `/` |
 
 Environment variables for `api` (no secrets except the Key Vault reference):
-`MATCHCAST_MODE=cloud`, `MATCHCAST_AGENT_MODE=live|rules`, `MATCHCAST_TOOLS=inproc|mcp`, `AZURE_CLIENT_ID`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT=gpt-6-luna`, `FOUNDRY_EMBEDDING_DEPLOYMENT=text-embedding-3-small`, `STORAGE_TABLE_URL`, `STORAGE_BLOB_URL`, `EVENTHUB_FQDN`, `EVENTHUB_NAME=match-events`, `MCP_URL`, `SEARCH_ENDPOINT`, `SEARCH_INDEX=kb-matchcast-v1`, `SEARCH_QUERY_KEY` (secretRef to `srch-query-key`), `CONTENT_SAFETY_ENDPOINT`, `SPEECH_RESOURCE_ID`, `SPEECH_REGION=eastus2`, `TRANSLATOR_ENDPOINT`, `VISION_ENDPOINT`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `CORS_ORIGINS=https://<web-fqdn>`. The old `MATCHCAST_MODEL_ENDPOINT` and `MATCHCAST_MODEL_API_KEY` are removed (PLT-2).
+`MATCHCAST_MODE=cloud`, `MATCHCAST_AGENT_MODE=live|rules`, `MATCHCAST_TOOLS=inproc|mcp`, `MATCHCAST_ORCHESTRATOR=af|native`, `AZURE_CLIENT_ID`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT=gpt-6-luna`, `FOUNDRY_EMBEDDING_DEPLOYMENT=text-embedding-3-small`, `STORAGE_TABLE_URL`, `STORAGE_BLOB_URL`, `EVENTHUB_FQDN`, `EVENTHUB_NAME=match-events`, `MCP_URL`, `SEARCH_ENDPOINT`, `SEARCH_INDEX=kb-matchcast-v1`, `SEARCH_QUERY_KEY` (secretRef to `srch-query-key`), `CONTENT_SAFETY_ENDPOINT`, `SPEECH_RESOURCE_ID`, `SPEECH_REGION=eastus2`, `TRANSLATOR_ENDPOINT`, `VISION_ENDPOINT`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `CORS_ORIGINS=https://<web-fqdn>`. The old `MATCHCAST_MODEL_ENDPOINT` and `MATCHCAST_MODEL_API_KEY` are removed (PLT-2).
 
 ## 5. CI/CD
 
