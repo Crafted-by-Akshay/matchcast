@@ -16,7 +16,11 @@
       el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:50;padding:6px 10px;border-radius:999px;background:#17283F;border:1px solid #FF7A2E;color:#E8EEF7;font:600 12px Inter,system-ui,sans-serif';
       document.body.appendChild(el); }
     el.hidden = !msg.on;
-    if (msg.on) el.textContent = 'Live from Watch · ' + msg.score.join('–') + ' · ' + (msg.over ? 'full time' : msg.minute + "'");
+    if (msg.on) {
+      el.textContent = 'Live from Watch · ' + msg.score.join('–') + ' · ' + (msg.over ? 'full time' : msg.minute + "'");
+      el.title = 'Last five events: ' + (msg.last || []).map((x) => Math.floor(x.minute) + "' " + x.type + (x.player ? ' ' + x.player : '')).join(' | ');
+      el.dataset.last = JSON.stringify(msg.last || []);
+    }
   };
   window.addEventListener('message', (e) => {
     const d = e.data || {};

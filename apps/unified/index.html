@@ -345,7 +345,8 @@ function paint() {
 function pushFeed() {
   const w = FR.watch && FR.watch.live;
   const on = !!(w && w.started && keyOf(w.setup) === keyOf(M.setup));
-  const msg = { src: 'matchcast-shell', type: 'feed', on, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over) };
+  const last = on && AG.run ? AG.run.events.slice(-5).map((e) => ({ minute: e.minute, type: e.type, player: e.player })) : [];
+  const msg = { src: 'matchcast-shell', type: 'feed', on, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over), last };
   post('broadcast', msg); post('analyst', msg);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -430,7 +431,12 @@ window.addEventListener('message', (e) => {
     return;
   }
   if (d.type === 'persona' && view === 'watch') { LV.persona(d.persona); return; }   // the viewer's watch mode changed (EXP-4)
-  if (d.type === 'events') { AG.onWatch(keyOf(d.setup), d.batch, d.moments); if (AG.run && AG.run.key === keyOf(d.setup)) LV.events(d.batch); return; }   // Watch's live events and moments
+  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
+  if (d.type === 'events') {
+    AG.onWatch(keyOf(d.setup), d.batch, d.moments);
+    if (AG.run && AG.run.key === keyOf(d.setup)) { LV.events(d.batch); post('broadcast', { src: 'matchcast-shell', type: 'events', batch: d.batch }); pushFeed(); }
+    return;
+  }   // Watch's live events and moments
   if (d.type === 'progress') { waitText(view, d.text); return; }
   const f = FR[view];
   if (d.setup) f.live = { setup: d.setup, started: !!d.started, over: !!d.over, score: d.score || [0, 0], minute: d.minute || 0 };

@@ -43,12 +43,19 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - `tests/e2e/pulse.spec.ts` (was `watch.cjs`): Match Pulse cards (tick, chips, Rules fallback chip, Why?, last 10), Casual v Analyst text and chips, Player focus lead, mode saved and restored after reload, Planned language labels.
 - `tests/e2e/connection.spec.ts` (was `connection.cjs`): live, rules fallback and offline against a mock api (drives the shell directly).
 - `tests/e2e/unified.spec.ts` (run with `make e2e`; was `unified.cjs`): headless Chromium. Checks the season loads, Watch and Broadcast start on the shared fixture with its clubs, the Analyst routes to it, switching keeps Watch running, Watch's events reach the agents, the audit chain verifies, the Broadcast scoreboard shows Watch's score, full time reaches the Analyst, a fixture change reloads Watch, the keyboard shortcuts work (1 to 4), and the phone layout has no horizontal scroll. Saves screenshots.
+- `tests/e2e/cross-view.spec.ts` (EXP-2): Watch paused then Broadcast opened (same minute, score, paused), Broadcast replays events, Analyst pill score and last five events, Broadcast follows once Watch resumes.
 
 ## Match Pulse and watch modes (EXP-3, EXP-4)
 - The shell posts one card per agent line to Watch (`type: 'pulse'`). Watch shows it for 12 s, keeps the last 10 in a scrollable log, and marks each with the Verifier's tick (green) or an amber dot, plus a 'Rules fallback' chip when the in-page rules wrote it. 'Why?' lists the cited events; the 3D replay with highlights is Planned.
 - Casual shows the plain line and no chips; the other modes show the full line with chips. Player focus leads the line with the player's name; My club accents the club's cards.
 - The watch mode is saved in localStorage (`mcx-mode`) and restored on reload. It is sent to the shell as the persona (`casual`, `analyst`, `club:<key>`, `player:<name>`, `metric:<name>`), and `live.js` reopens the api stream for it.
 - The language picker labels everything except English, Spanish and Hindi as Planned.
+
+## One match source (EXP-2)
+- Watch is the only engine. Four times a second it sends the pitch state (22 players' positions, velocities and headings, the ball, score, clock, pause, speed and stats) and the shell forwards it to Broadcast, along with Watch's events.
+- Broadcast runs in consumer mode (`window.MC_CONSUMER`, `consumerStep` in `embed/broadcast.js`, patched into `stepSim` by `build.py`): it moves its players and ball toward the latest frame, takes the score, minute, half and stats from it, and replays Watch's events onto its own event bus. Its desk modules (odds, calls, focus board, lower-thirds) read that. Its own play and pause buttons are disabled; Watch's controls drive the match.
+- The Analyst's live pill shows the same score and minute and lists the last five events in its tooltip.
+- Known gaps: Broadcast shows running and positioning but not kick, tackle or fall animations (the frames carry no action state); the Analyst's season pages are still recorded runs, only the live pill follows Watch.
 
 ## Limits
 - The views are separate engines inside frames. Their own headers stay under the shell bar, and the Analyst keeps its own design. A single merged code base would be a larger job.
