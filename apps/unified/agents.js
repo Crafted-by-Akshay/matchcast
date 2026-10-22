@@ -55,7 +55,9 @@ const AG = (() => {
     return { verdict: 'verified', repaired: true, reason: 'differed from the event log; repaired from it once' };
   };
 
-  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text });
+  // wild moments are deterministic triggers; the Producer makes them priority 1 and the line still goes through the Verifier
+  const ALERTS = { red_card: 'Red card', turning_point: 'Turning point' };
+  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, alert: c.alert || null, verdict: c.verdict });
   const nums = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
   // a person's action on a queued line; every one lands in the audit chain with the person's name
   const act = (id, who, action, detail, fn) => {
@@ -86,6 +88,7 @@ const AG = (() => {
     t = clock();
     run.claims.push(c); run.stat.claims++;
     if (seedBad && c.kind === 'score') { seedBad = false; c.inputs.score = [c.inputs.score[0] + 1, c.inputs.score[1]]; c.seeded = true; }   // demo: a wrong number
+    if (c.kind === 'moment' && ALERTS[c.inputs.type]) { c.alert = ALERTS[c.inputs.type]; say('Producer', c.minute, c.id + ' priority 1: ' + c.alert.toLowerCase(), 'warn'); }
     log(c, 'analyst', 'claim', { kind: c.kind, inputs: c.inputs, evidence: c.evidence, basis: c.basis || null });
     trace(c, 'analyst', 'claim', t, { tools: TOOLS[c.kind] || [], detail: c.seeded ? 'claimed a score one goal too high (seeded for the demo)' : 'claim from ' + c.evidence.length + ' source event(s)' });
     t = clock();
