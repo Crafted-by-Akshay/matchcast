@@ -8,9 +8,15 @@ test('guard: Azure hosts are matched by suffix, look-alikes are not', () => {
 
 test.describe('a request to Azure', () => {
   test.skip(!!process.env.E2E_BASE_URL, 'the guard is off in live runs');
-  test.fail();   // expected to fail: the guard turns the blocked request into a failed test
-  test('is blocked and fails the test', async ({ page }) => {
-    await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
-    await page.evaluate(() => fetch('https://demo.openai.azure.com/openai/deployments').catch(() => null));
-  });
+  for (const own of [false, true]) {
+    test(`is blocked and recorded${own ? ' (page from browser.newPage)' : ''}`, async ({ page, browser, azureHits }) => {
+      const p = own ? await browser.newPage() : page;
+      await p.goto('/index.html', { waitUntil: 'domcontentloaded' });
+      const failed = await p.evaluate(() => fetch('https://demo.openai.azure.com/openai/deployments').then(() => false, () => true));
+      expect(failed).toBe(true);
+      expect(azureHits).toEqual(['https://demo.openai.azure.com/openai/deployments']);
+      azureHits.length = 0;   // recorded and checked here, so the fixture's own end-of-test check passes
+      if (own) await p.close();
+    });
+  }
 });
