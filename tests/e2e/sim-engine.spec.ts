@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { execFileSync } from 'child_process';
 import { collectErrors } from './helpers';
 

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors } from './helpers';
 
 // DAT-10: the condensed broadcast director. Watch at full density (half=45). The test drives the real frame loop with a
