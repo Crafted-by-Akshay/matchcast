@@ -15,7 +15,9 @@ Model quota is pending, models can time out, and judges look for failure recover
 
 ## Decision
 
-Every executor has a rules twin in packages/agents/rules, chosen on timeout, 429 after one retry, 5xx or an open circuit. Lines are labelled Rules fallback and derivation_version ends with +rules.
+Every executor has a rules twin in packages/agents/rules, chosen on timeout, 429 after one retry, 5xx or an open circuit. Fallbacks are recorded as `fallback_used` audit records (with `fallback_reason`) and as an SSE `status` event with `reason`.
+
+Deviation: the contract pattern for `derivation_version` is `x.y.z`, so it cannot end with `+rules`. The label lives in the audit record and the status event instead. The status returns to `live` only when every wrapped agent is live again.
 
 ## Consequences
 

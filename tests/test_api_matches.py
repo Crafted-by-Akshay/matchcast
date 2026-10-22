@@ -250,3 +250,36 @@ def test_easy_auth_gate_answers_401_403_and_allows_the_producer(
     spoof = {**principal("Viewer"), "X-MatchCast-Role": "Producer"}
     assert client.get(url, params=Q, headers=spoof).status_code == 403
     assert client.get(url, params=Q, headers=principal("Producer")).status_code == 200
+
+
+def _create_with_header(client: TestClient, **extra) -> None:
+    body = {
+        "session_id": "short",
+        "match_id": "match-short",
+        "roster": FIXTURE["roster"],
+        "names": FIXTURE["names"],
+        "clubs": FIXTURE["teams"],
+        **extra,
+    }
+    response = client.post("/v1/matches", json=body, headers={"X-MatchCast-Seed-Bad-Claim": "1"})
+    assert response.status_code == 201
+
+
+def _rejections(client: TestClient) -> list[dict]:
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    return [r for r in audit if r["action"] == "line_rejected"]
+
+
+def test_seed_bad_claim_header_corrupts_a_claim_once_the_minute_is_reached(
+    client: TestClient,
+) -> None:
+    _create_with_header(client, seed_bad_claim_at_ms=0)
+    post_all(client)
+    assert _rejections(client)
+
+
+def test_seed_bad_claim_defaults_to_minute_twelve(client: TestClient) -> None:
+    """The fixture lasts ten minutes, so the default cue never fires."""
+    _create_with_header(client)
+    post_all(client)
+    assert not _rejections(client)

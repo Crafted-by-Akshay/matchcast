@@ -40,9 +40,7 @@ def parse_client_principal(value: str | None) -> Principal | None:
         return None
     claims = [c for c in data.get("claims", []) if isinstance(c, dict)]
     roles = tuple(
-        str(c.get("val"))
-        for c in claims
-        if c.get("typ") in ROLE_CLAIM_TYPES and c.get("val")
+        str(c.get("val")) for c in claims if c.get("typ") in ROLE_CLAIM_TYPES and c.get("val")
     )
     name = next((str(c["val"]) for c in claims if c.get("typ") in NAME_CLAIM_TYPES), "")
     user_id = next(
