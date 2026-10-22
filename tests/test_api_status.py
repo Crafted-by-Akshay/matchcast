@@ -1,0 +1,70 @@
+from app.main import create_app
+from app.status import dependency_status
+from fastapi.testclient import TestClient
+
+
+def states(env, mode):
+    return {i["key"]: i["status"] for i in dependency_status(env, mode)["dependencies"]}
+
+
+def test_local_defaults_are_simulated_and_the_rest_planned():
+    doc = dependency_status({}, "local")
+    got = {i["key"]: i["status"] for i in doc["dependencies"]}
+    assert got["agents"] == got["store"] == got["stream"] == got["speech"] == "simulated"
+    assert got["fabric"] == got["databricks"] == "planned"
+    assert doc["overall"] == "simulated"
+    assert sum(doc["counts"].values()) == len(doc["dependencies"])
+
+
+def test_configured_resources_are_live():
+    env = {
+        "MATCHCAST_AGENT_MODE": "live",
+        "FOUNDRY_PROJECT_ENDPOINT": "https://x.invalid",
+        "MATCHCAST_STORE": "table",
+        "MATCHCAST_PIPELINE": "eventhubs",
+        "MATCHCAST_EASY_AUTH": "1",
+        "MATCHCAST_REQUIRE_ROLE": "1",
+        "SPEECH_ENDPOINT": "https://sp-x.cognitiveservices.azure.com",
+        "SPEECH_REGION": "eastus2",
+        "TRANSLATOR_ENDPOINT": "https://tr-x.cognitiveservices.azure.com/",
+        "VISION_ENDPOINT": "https://cv-x.cognitiveservices.azure.com",
+    }
+    got = states(env, "cloud")
+    assert got["agents"] == got["store"] == got["stream"] == got["auth"] == "live"
+    assert got["speech"] == got["translator"] == got["vision"] == "live"
+
+
+def test_speech_needs_its_region_and_vision_a_valid_host():
+    base = {"SPEECH_ENDPOINT": "https://sp-x.cognitiveservices.azure.com"}
+    assert states(base, "cloud")["speech"] == "unavailable"
+    assert (
+        states({"VISION_ENDPOINT": "https://evil.example.com"}, "cloud")["vision"] == "unavailable"
+    )
+
+
+def test_content_safety_and_search_are_planned_even_when_configured():
+    env = {"CONTENT_SAFETY_ENDPOINT": "https://x", "SEARCH_ENDPOINT": "https://y"}
+    got = states(env, "cloud")
+    assert got["content_safety"] == got["search"] == "planned"
+
+
+def test_easy_auth_without_required_roles_is_not_live():
+    assert states({"MATCHCAST_EASY_AUTH": "1"}, "cloud")["auth"] == "simulated"
+
+
+def test_cloud_without_a_resource_is_unavailable_not_simulated():
+    got = states({}, "cloud")
+    assert got["translator"] == got["vision"] == "unavailable"
+    assert dependency_status({}, "cloud")["overall"] == "unavailable"
+
+
+def test_live_agent_mode_without_an_endpoint_stays_simulated():
+    assert states({"MATCHCAST_AGENT_MODE": "live"}, "cloud")["agents"] == "simulated"
+
+
+def test_route_is_public_never_503_and_leaks_no_values(monkeypatch):
+    monkeypatch.setenv("SPEECH_ENDPOINT", "https://secret-name.invalid")
+    response = TestClient(create_app()).get("/v1/status")
+    assert response.status_code == 200
+    assert "secret-name" not in response.text
+    assert {"mode", "overall", "counts", "dependencies"} <= response.json().keys()
