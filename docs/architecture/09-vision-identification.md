@@ -75,3 +75,7 @@ If the target is missed, we report the measured number. We never round it up.
 - Budget is per api process and shared by every caller; one viewer can use all 15 a minute. This is a cost cap (ADR-0010), not fairness. With more than one replica the ceiling is the sum.
 - A call that reaches Azure is charged even if Azure fails. A failure to get a token is refunded. Failures are logged by type only, never with the token or the image.
 - Crops are validated before any budget is taken: complete PNG (IHDR CRC, IEND), 128x128, at most 40 KB.
+
+## Browser crop queue (task 275, browser side)
+
+`apps/unified/embed/vision-crops.js` builds the crop and `index.html` relays it (`vision-crop` to `LV.identify`, `vision-ocr` back). Rules in code: confidence proxy `min(1, stable/6)` below 0.8, at most one call in flight and one per 4.1 s, lowest confidence first, PNG at most 40 KB, nothing kept. Tracks under 24 px tall are counted as "too small to read" and not sent, since a number cannot fit in the pixels. Counters (`sent`, `answered`, `read`, `no_digits`, `skipped_small`, `unavailable`, `errors`) travel in the vision report to the Tracking lab. Measured on the Broadcast camera in the sandbox: players are 8 to 13 px tall, so OCR is expected to help only on the Tactical camera; task 279 reports the real numbers.

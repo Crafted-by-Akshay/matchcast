@@ -120,6 +120,8 @@ def build_watch():
         + r(EMB + "hook.js")
         + "\n"
         + r(EMB + "watch.js")
+        + "\n"
+        + r(EMB + "vision-crops.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 

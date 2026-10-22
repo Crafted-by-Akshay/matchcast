@@ -16,6 +16,8 @@
       ['Position error', num(r.detection.posErr, ' m'), 'mean distance to the true position'],
       ['Identity, glyph reader only', num(r.identity.accuracy, '%'), 'shirt number read from pixels; ' + num(r.identity.unknownPct, '%') + ' not yet identified, ' + num(r.identity.switches) + ' switches'],
       ['Identity, glyph + Azure OCR', 'Planned', 'second opinion from Azure AI Vision Read (DAT-11, tasks 275 and 277)'],
+      ...(r.ocr ? [['OCR crops sent', num(r.ocr.sent), 'answered ' + num(r.ocr.answered) + ', digits read ' + num(r.ocr.read) + ', none found ' + num(r.ocr.no_digits) + '; too small to read ' + num(r.ocr.skipped_small) +
+        ', no api ' + num(r.ocr.unavailable) + ', errors ' + num(r.ocr.errors) + '; at most ' + num(r.ocr.per_minute_cap) + ' a minute (task 275)']] : []),
       ['Pass recall / precision', num(r.passes.recall, '%') + ' / ' + num(r.passes.precision, '%'), num(r.passes.gt) + ' real passes, ' + num(r.passes.vis) + ' detected'],
       ['Ball found', num(r.ball.found, '%'), 'while in view; position error ' + num(r.ball.posErr, ' m')],
       ['Speed error', num(r.speed.playerErr, ' m/s'), 'players; ball ' + num(r.speed.ballErr, ' m/s')],

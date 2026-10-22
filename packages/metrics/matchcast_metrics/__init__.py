@@ -12,8 +12,14 @@ from .core import (
     pressure_index,
     xg,
 )
+from .indices import INDEX_VERSION, chaos_index, control_index, rolling_series, tempo
 
 __all__ = [
+    "INDEX_VERSION",
+    "chaos_index",
+    "control_index",
+    "rolling_series",
+    "tempo",
     "DERIVATION_VERSIONS",
     "Frame",
     "Pass",

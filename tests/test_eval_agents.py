@@ -31,8 +31,8 @@ def test_rules_agents_hold_the_floor(result):
     assert result["ask"]["redteam_missed"] == []
 
 
-def test_the_blind_spot_is_reported_not_hidden(result):
-    spot = result["verifier"]["known_blind_spot_other_team_player"]
+def test_the_remaining_gap_is_reported_not_hidden(result):
+    spot = result["verifier"]["known_gap_wrong_teammate"]
     assert spot["tried"] > 0 and spot["rate"] is not None  # listed; fixing it only raises the rate
 
 
@@ -46,6 +46,7 @@ def test_every_mutation_kind_is_exercised(result):
         "claim_stale",
         "line_too_long",
         "source_forged",
+        "player_from_other_club",
     }
     assert all(d["rate"] == 1.0 for k, d in result["verifier"]["by_mutation"].items()
                if k != "number_in_text_changed")  # fmt: skip
