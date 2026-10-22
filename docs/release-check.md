@@ -32,3 +32,17 @@ Automated cover: `make e2e` (Chromium) and `make e2e-live E2E_BASE_URL=<deployed
 
 | Date | Commit | Run by | Result | Notes |
 | --- | --- | --- | --- | --- |
+| 22 Oct | b914ad0 | Quality lane (local, Actions down) | checks, openapi, full e2e pass | gitleaks and az not installed on this machine, so secrets and bicep not run |
+
+## Broadcast coverage (QUA-2)
+
+There is no separate `broadcast.spec.ts`; loading a second cold Broadcast costs minutes of CI, so its checks live in the specs that already have it loaded:
+
+| QUA-2 check | Spec |
+| --- | --- |
+| Same score as Watch | `cross-view.spec.ts`, `unified.spec.ts` (scoreboard test) |
+| Lower-third only after approval in producer mode, then airs at once in demo mode | `approval.spec.ts` |
+| Red-card alert on air with a verified line | `approval.spec.ts` |
+| Captions show for verified lines | `voice.spec.ts` |
+
+**Deliberate-break proof (22 Oct, b914ad0):** with `agents.js` line 157 changed so producer mode no longer queues lines for approval, `approval.spec.ts` failed both tests (`approval queue: approve, wrong-number edit rejected, kill never airs…` at line 18 and `lower-third waits for approval in producer mode…` at line 49, "the lower-third is hidden before approval"). The change was reverted; nothing from it is committed.

@@ -572,18 +572,22 @@ name = "matchcast-agents"
 version = "0.1.0"
 source = { editable = "packages/agents" }
 dependencies = [
+    { name = "azure-core" },
     { name = "httpx" },
     { name = "matchcast-contracts" },
     { name = "matchcast-metrics" },
+    { name = "matchcast-shared" },
     { name = "opentelemetry-api" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "azure-core", specifier = ">=1.30,<2" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "matchcast-contracts", editable = "packages/contracts" },
     { name = "matchcast-metrics", editable = "packages/metrics" },
+    { name = "matchcast-shared", editable = "packages/shared" },
     { name = "opentelemetry-api", specifier = ">=1.27,<2" },
     { name = "pydantic", specifier = ">=2.9,<3" },
 ]

@@ -155,7 +155,7 @@ class _LocalStatsDesk:
         self, metric: str, scope: str, value: float, team_id: str | None = None
     ) -> dict[str, Any]:
         try:
-            return self._season.compare(metric, scope, value, team_id)
+            return await asyncio.to_thread(self._season.compare, metric, scope, value, team_id)
         except SeasonError as error:
             raise StatsDeskError(str(error)) from error
 
