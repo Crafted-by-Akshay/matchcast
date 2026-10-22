@@ -45,7 +45,9 @@ def test_lists_the_tools_with_schemas(store) -> None:
     assert {"get_state", "get_events", "get_metrics", "get_evidence", "get_replay_clip"} <= set(
         tools
     )
-    assert all(t.description and t.input_schema["properties"] for t in tools.values())
+    assert all(t.description for t in tools.values())
+    assert all(t.input_schema["properties"] for n, t in tools.items() if n != "describe_views")
+    assert {"describe_views", "query_season", "search_kb"} <= set(tools)
 
 
 def test_get_metrics_matches_the_workflow_state(store) -> None:
@@ -138,3 +140,36 @@ def test_unknown_match_is_an_error(store) -> None:
             )
 
     assert run(go()).is_error
+
+
+def _season_call(tool: str, **args):
+    async def go():
+        async with Client(create_server(MemoryStore())) as client:
+            return await client.call_tool(tool, args)
+
+    return run(go())
+
+
+def test_describe_views_and_query_season_serve_the_season_data() -> None:
+    views = _season_call("describe_views").structured_content["views"]
+    assert {"matches", "team_match_stats"} <= set(views)
+    result = _season_call("query_season", sql="SELECT count(*) AS n FROM matches")
+    assert not result.is_error and result.structured_content["rows"] == [[28]]
+    assert result.structured_content["sql_hash"]
+
+
+@pytest.mark.parametrize(
+    "sql",
+    ["DROP TABLE matches", "SELECT * FROM read_parquet('/etc/passwd')", "SELECT 1; SELECT 2"],
+)
+def test_query_season_refuses_anything_but_one_select(sql) -> None:
+    assert _season_call("query_season", sql=sql).is_error
+
+
+def test_search_kb_returns_citable_chunks_and_respects_top_and_corpus() -> None:
+    result = _season_call("search_kb", query="what is offside", top=3)
+    chunks = result.structured_content["chunks"]
+    assert 0 < len(chunks) <= 3 and all(c["id"] and c["text"] for c in chunks)
+    laws = _season_call("search_kb", query="offside", corpus="laws").structured_content["chunks"]
+    assert laws and {c["corpus"] for c in laws} == {"laws"}
+    assert _season_call("search_kb", query="offside", top=99).is_error
