@@ -8,13 +8,15 @@
 JSON file holding `{"events": [...]}` or a list. Events are converted to contract v1.1,
 validated, and sent in order, each at its match time divided by the speed (a 90-minute match at
 4x takes 22.5 minutes). Sinks: `jsonl` (a file or stdout), `http` (the api's
-POST /v1/matches/{id}/events, batches of up to 50). An Event Hubs sink goes behind the same
-function once the namespace exists.
+POST /v1/matches/{id}/events, batches of up to 50), `eventhub` (scripts/replay_sinks/eventhub.py:
+creates the match over HTTP at --url, then publishes to the hub; needs EVENTHUB_FQDN and an Entra
+login).
 """
 
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import sys
 import time
@@ -44,19 +46,19 @@ def load(args: argparse.Namespace) -> tuple[list[dict], dict, list[str], str]:
     return events, {"players": players}, teams, Path(args.events).stem
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--match", help="season match id, for example M001")
     src.add_argument("--events", help="JSON file of engine events")
     ap.add_argument("--speed", type=float, default=1.0, help="1 or 4 (any positive number works)")
-    ap.add_argument("--sink", choices=("jsonl", "http"), default="jsonl")
+    ap.add_argument("--sink", choices=("jsonl", "http", "eventhub"), default="jsonl")
     ap.add_argument("--out", default="-", help="jsonl sink: file path or - for stdout")
     ap.add_argument("--url", default="http://localhost:8000", help="http sink: api base URL")
     ap.add_argument("--session-id", default="replay")
     ap.add_argument("--tenant-id", default="demo")
     ap.add_argument("--no-wait", action="store_true", help="skip the pacing (tests)")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     if a.speed <= 0:
         ap.error("--speed must be above 0")
 
@@ -84,13 +86,23 @@ def main() -> int:
                 detail = err.read()[:200]
                 raise SystemExit(f"api answered {err.code} for {path}: {detail!r}") from err
 
+    sk = "|".join((stream["tenant_id"], stream["session_id"], stream["match_id"]))
+    hub = None
+    if a.sink == "eventhub":
+        from replay_sinks.eventhub import from_env
+
+        hub = from_env()
+        atexit.register(hub.close)
+
     def flush() -> None:
         if batch and a.sink == "http":
             post(f"/v1/matches/{stream['match_id']}/events?session_id={a.session_id}",
                  {"events": batch})  # fmt: skip
+        elif batch and hub is not None:
+            hub.send(sk, list(batch))
         batch.clear()
 
-    if a.sink == "http":
+    if a.sink in ("http", "eventhub"):
         # a match must exist before events are posted; 409 means a previous run created it
         post("/v1/matches", {"session_id": a.session_id, "match_id": stream["match_id"],
                              "roster": roster}, ok=(409,))  # fmt: skip
@@ -121,6 +133,8 @@ def main() -> int:
                 flush()
         sent += 1
     flush()
+    if hub is not None:
+        hub.close()  # idempotent; atexit covers an error before this point
     if out is not sys.stdout:
         out.close()
     print(f"replayed {sent} events of {match_id} at {a.speed}x", file=sys.stderr)
