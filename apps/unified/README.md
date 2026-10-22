@@ -112,7 +112,7 @@ A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chi
 
 ## Full-time recap in the Analyst library (AGT-15, task 105)
 - At full time the shell adds `recap: { api, session_id, match_id }` to the import message it sends the Analyst (only when Watch is the source and an api is configured; `LV.key` exposes the run's key). `embed/analyst.js` stores it on the imported match.
-- `analyst-pages/30_recap.js` wraps the Match centre page: for such a match it shows a Full-time recap card from `GET /v1/matches/{id}/recap/analyst`, polling every 5 s for a minute ("Being written by the agents…"), then "Planned: not ready". It shows the Verifier tick only when every sentence has verdict `verified`, and "Rules fallback" when the api's mode is `rules`. Recorded season matches have no recap card. Watch and Broadcast recap cards belong to their lanes.
+- `analyst-pages/30_recap.js` wraps the Match centre page: for such a match it shows a Full-time recap card from `GET /v1/matches/{id}/recap/analyst`, polling every 5 s for a minute ("Being written by the agents…"), then "Planned: not ready". It shows only the sentences whose verdict is `verified` (the rest are counted as "unverified hidden", never displayed; none verified means no recap text), and "Rules fallback" when the api's mode is `rules`. Recorded season matches have no recap card. Watch and Broadcast recap cards belong to their lanes.
 
 ## Instant replay (Broadcast)
 - `embed/replay.js` (appended after `broadcast.js` by `build.py`) keeps the last 60 s of Watch's frames in Broadcast. The "Instant replay" bar on the live view plays back the last 10, 20 or 30 s at normal or half speed, with a red REPLAY tag and a Back to live button; it returns to live by itself at the end.

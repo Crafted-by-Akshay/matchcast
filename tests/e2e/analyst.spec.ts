@@ -134,14 +134,14 @@ test('match centre: the recap card waits for the api, then shows the verified re
   await page.route('http://api.test/v1/matches/m1/recap/analyst**', (r) => {
     const headers = { 'Access-Control-Allow-Origin': '*' };
     if (++calls < 2) return r.fulfill({ status: 404, headers, json: { code: 'not_found' } });
-    return r.fulfill({ status: 200, headers, json: { text: 'Guanabara won 4-0 <b>x</b>.', word_count: 4, mode: 'rules', sentences: [{ verdict: 'verified' }, { verdict: 'verified' }] } });
+    return r.fulfill({ status: 200, headers, json: { text: 'Guanabara won 4-0 <b>x</b>.', word_count: 4, mode: 'rules', sentences: [{ verdict: 'verified', text: 'Guanabara won 4-0 <b>x</b>.' }] } });
   });
   const f = await openPage(page, 'match');
   await f.evaluate(() => { const m = D.matches[D.matches.length - 1]; m.recap = { api: 'http://api.test/', session_id: 's1', match_id: 'm1' }; (window as any).go('match', m.id); });
   await expect(f.locator('#rc-card')).toContainText('Being written');
   await expect(f.locator('#rc-text')).toContainText('Guanabara won 4-0 <b>x</b>.', { timeout: 15_000 });
   await expect(f.locator('#rc-card b')).toHaveCount(0);
-  await expect(f.locator('#rc-card')).toContainText('Rules verifier ✓ every sentence');
+  await expect(f.locator('#rc-card')).toContainText('Rules verifier ✓ every sentence shown');
   await expect(f.locator('#rc-card')).toContainText('Rules fallback');
   expect(errs).toEqual([]);
 });
@@ -158,10 +158,17 @@ async function recapCard(page: Page, status: number, json: object) {
   return f;
 }
 
-test('match centre: no Verifier tick unless every recap sentence is verified', async ({ page }) => {
-  const f = await recapCard(page, 200, { text: 'One. Two.', word_count: 2, mode: 'agents', sentences: [{ verdict: 'verified' }, { verdict: 'review' }] });
-  await expect(f.locator('#rc-card')).toContainText('Not every sentence verified');
-  await expect(f.locator('#rc-card')).not.toContainText('✓');
+test('match centre: a sentence the Verifier did not pass is never shown', async ({ page }) => {
+  const f = await recapCard(page, 200, { text: 'One ok. Two bad.', word_count: 4, mode: 'agents', sentences: [{ verdict: 'verified', text: 'One ok.' }, { verdict: 'review', text: 'Two bad.' }] });
+  await expect(f.locator('#rc-text')).toHaveText('One ok.');
+  await expect(f.locator('#rc-card')).not.toContainText('Two bad');
+  await expect(f.locator('#rc-card')).toContainText('1 unverified hidden');
+});
+
+test('match centre: with no verified sentence the card shows no recap text', async ({ page }) => {
+  const f = await recapCard(page, 200, { text: 'Only bad.', word_count: 2, mode: 'agents', sentences: [{ verdict: 'review', text: 'Only bad.' }] });
+  await expect(f.locator('#rc-card')).toContainText('No sentence passed the Verifier');
+  await expect(f.locator('#rc-card')).not.toContainText('Only bad');
 });
 
 test('match centre: empty recap text and api errors are said plainly, not polled as "being written"', async ({ page }) => {
