@@ -43,12 +43,17 @@ class AnalystRules:
         self._failing = failing_tools
 
     async def analyse(
-        self, ctx: MatchContext, task: ProducerTask, *, repair: bool = False
+        self,
+        ctx: MatchContext,
+        task: ProducerTask,
+        *,
+        repair: bool = False,
+        metrics: list[str] | None = None,
     ) -> list[ClaimResult]:
         event = ctx.event(task.event_ids[0])
         assert event is not None
         team = event["payload"].get("team_id", ctx.home)
-        metrics = [
+        metrics = metrics or [
             m.format(t=team, h=ctx.home, a=ctx.away) for m in COUNT_METRICS.get(task.reason, ())
         ]
         snapshot = ctx.state.snapshot()
