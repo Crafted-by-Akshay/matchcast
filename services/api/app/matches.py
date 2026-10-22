@@ -6,6 +6,7 @@ import asyncio
 import csv
 import hashlib
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -313,6 +314,33 @@ class Registry:
         if flow is None:
             raise Problem(404, "not_found", f"unknown match {match_id}")
         return flow
+
+
+def _bare_ip(entry: str) -> str | None:
+    """The address in a forwarded entry, without a port; None when it is not an address."""
+    if entry.startswith("["):  # [v6]:port
+        entry = entry[1:].split("]", 1)[0]
+    elif entry.count(":") == 1:  # v4:port
+        entry = entry.split(":", 1)[0]
+    try:
+        return str(ipaddress.ip_address(entry))
+    except ValueError:
+        return None
+
+
+def client_ip(request: Request) -> str:
+    """The address rate limits key on.
+
+    Behind the Container Apps ingress (``MATCHCAST_BEHIND_INGRESS=true``, set by Bicep) the socket
+    peer is the ingress, so the client is the rightmost ``X-Forwarded-For`` entry, the one the
+    ingress appended; entries to its left come from the caller and can be forged. Anywhere else
+    the header is ignored.
+    """
+    if os.environ.get("MATCHCAST_BEHIND_INGRESS", "").strip().lower() == "true":
+        entries = [e.strip() for e in request.headers.get("x-forwarded-for", "").split(",")]
+        if (entry := next((e for e in reversed(entries) if e), "")) and (ip := _bare_ip(entry)):
+            return ip
+    return request.client.host if request.client else "local"
 
 
 def _is_stored(store: Any, sk: str) -> bool:
@@ -693,7 +721,7 @@ def build_router(registry: Registry) -> APIRouter:
         speech = registry.speech
         if not speech.ready:
             raise Problem(503, "not_ready", "no Speech resource is configured")
-        if not speech.allow(request.client.host if request.client else "local"):
+        if not speech.allow(client_ip(request)):
             raise Problem(
                 429, "rate_limited", f"at most {SPEECH_PER_MINUTE} tokens a minute", retry_after=60
             )
@@ -707,7 +735,7 @@ def build_router(registry: Registry) -> APIRouter:
         """Data Scientist: a season question, answered from one verified SELECT (F10)."""
         if registry.season is None:
             raise Problem(503, "not_ready", "the season data is not loaded")
-        if not registry.allow_ds(request.client.host if request.client else "local"):
+        if not registry.allow_ds(client_ip(request)):
             raise Problem(
                 429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute", retry_after=60
             )
