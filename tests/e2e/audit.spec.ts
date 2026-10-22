@@ -16,11 +16,11 @@ const chain = (n: number) => {
   return out;
 };
 
-async function open(page, records: any[]) {
+async function open(page, records: any[], status = 200) {
   await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://api.test";window.MATCHCAST_WARM_MS=2000;' }));
   await page.route('http://api.test/**', (rt) => {
     const u = rt.request().url();
-    if (/\/audit/.test(u)) return rt.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ records }) });
+    if (/\/audit/.test(u)) return rt.fulfill({ status, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ records }) });
     return rt.fulfill({ status: 503, headers: { 'Access-Control-Allow-Origin': '*' }, body: '{}' });
   });
   await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
@@ -41,4 +41,27 @@ test('audit: a tampered record shows the first broken sequence', async ({ page }
   await open(page, recs);
   await page.click('#ag-verify');
   await expect(page.locator('#ag-verify-out')).toContainText('Chain broken at sequence 3 (hash_mismatch)');
+});
+
+test('audit: when the server cannot answer, the in-page chain is checked and labelled', async ({ page }) => {
+  await open(page, [], 503);
+  await page.click('#ag-verify');
+  await expect(page.locator('#ag-verify-out')).toContainText('Server records not available');
+  await expect(page.locator('#ag-verify-out')).toContainText('in-page (simulated)');
+});
+
+test('audit: a chain longer than one page is fetched in pages and counted in full', async ({ page }) => {
+  const recs = chain(1003);
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://api.test";window.MATCHCAST_WARM_MS=2000;' }));
+  await page.route('http://api.test/**', (rt) => {
+    const u = new URL(rt.request().url());
+    if (!/\/audit/.test(u.pathname)) return rt.fulfill({ status: 503, headers: { 'Access-Control-Allow-Origin': '*' }, body: '{}' });
+    const from = +(u.searchParams.get('from_seq') || 1);
+    return rt.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ records: recs.slice(from - 1, from - 1 + 1000) }) });
+  });
+  await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await page.evaluate(() => LV.begin('k1', null));
+  await page.click('#ag-verify');
+  await expect(page.locator('#ag-verify-out')).toContainText('Chain intact · 1003 records · server');
 });

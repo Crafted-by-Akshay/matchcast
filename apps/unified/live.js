@@ -88,10 +88,15 @@ const LV = (() => {
   };
   const audit = async () => {
     if (!run) throw new Error('no match yet');
-    const res = await fetch(url('/v1/matches/' + run.id + '/audit', { limit: 1000 }));
-    if (!res.ok) throw new Error('audit ' + res.status);
-    const j = await res.json();
-    return Array.isArray(j) ? j : (j.records || j.items || []);
+    const all = [], LIMIT = 1000;
+    for (let page = 0; page < 20; page++) {   // the api returns at most 1000 records a call; from_seq is the first sequence wanted
+      const res = await fetch(url('/v1/matches/' + run.id + '/audit', { limit: LIMIT, from_seq: all.length + 1 }));
+      if (!res.ok) throw new Error('audit ' + res.status);
+      const j = await res.json(), got = Array.isArray(j) ? j : (j.records || j.items || []);
+      all.push(...got);
+      if (got.length < LIMIT) return all;
+    }
+    throw new Error('more than 20,000 records');
   };
 
   // Watch's batch, as the shell receives it

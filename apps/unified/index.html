@@ -547,16 +547,16 @@ function init(list) {
   $('lg-export').onclick = exportLedger;
   $('ag-claims').onclick = (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) { picked = tr.dataset.id; renderAgents(); } };
   $('ag-verify').onclick = async () => {
+    let pre = '';
     if (LV.enabled) {   // with an api, check the server's records; if it cannot answer, say so and fall back to the in-page chain
       try {
         const recs = await LV.audit(), v = await LV.verifyChain(recs);
         $('ag-verify-out').textContent = v.valid ? 'Chain intact · ' + v.count + ' records · server' : 'Chain broken at sequence ' + v.first_broken_sequence + ' (' + v.reason + ') · server';
         $('ag-recs').innerHTML = recs.slice(-6).reverse().map((x) => '<li>#' + x.sequence + ' ' + esc(x.actor_id) + ' ' + esc(x.action) + ' ' + esc(x.subject_id) + ' · ' + esc(String(x.hash).slice(0, 16)) + '</li>').join('') || '<li class="empty">No records yet</li>';
         return;
-      } catch (err) { $('ag-verify-out').textContent = 'Server records not available (' + err.message + '); '; }
+      } catch (err) { pre = 'Server records not available (' + err.message + '); '; }
     }
     const v = await MCC.verify();
-    const pre = $('ag-verify-out').textContent.startsWith('Server') ? $('ag-verify-out').textContent : '';
     $('ag-verify-out').textContent = pre + (v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '… · in-page (simulated)' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count + ' · in-page (simulated)');
   };
   AG.onAir((l) => post('broadcast', { src: 'matchcast-shell', type: 'air', line: l }));
