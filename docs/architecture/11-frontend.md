@@ -1,0 +1,89 @@
+# 11 Front end (unified app)
+
+Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: EXP-1 to EXP-17. Current build notes: `apps/unified/README.md` (on branch `feature/unified-app`, PR #4).
+
+## 1. Structure
+
+```mermaid
+flowchart TB
+  subgraph Shell[index.html shell]
+    bar[top bar: Watch 1, Analyst 2, Broadcast 3, Agents 4<br/>match bar, language picker, status pill, sign-in]
+    bus[postMessage bus]
+    live[live.js: REST + SSE client]
+    ag[agents.js rules pipeline<br/>offline fallback]
+  end
+  subgraph W[watch iframe]
+    eng[3D engine + simulator<br/>the only match source]
+    vis[vision tracker]
+    pulse[Match Pulse, Copilot Ask/Talk]
+  end
+  subgraph B[broadcast iframe]
+    lt[lower-thirds, teleprompter, alerts,<br/>approval queue, Ask the producer]
+  end
+  subgraph A[analyst iframe]
+    led[ledger, provenance, audit, reports,<br/>Data Scientist workspace, Tracking lab]
+  end
+  eng -- events --> bus
+  bus --> live
+  live -- SSE packets --> bus
+  bus --> pulse
+  bus --> lt
+  bus --> led
+  ag -. when api is unreachable .-> bus
+```
+
+- Three views, each an iframe built from its source folder by `apps/unified/build.py`, plus the shell.
+- **Watch is the only engine** (EXP-2). Broadcast and Analyst run in consumer mode and render from bus messages.
+- `live.js` is the only code that talks to the network. Views never call the API directly. The one exception is the vision crop upload, which goes through a `live.js` helper too.
+
+## 2. Bus messages
+
+All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine messages only from the Watch frame's origin and only for the shared match.
+
+| Type | From → to | Payload |
+| --- | --- | --- |
+| `event` | Watch → shell | contract event |
+| `events_ack` | shell → Watch | last_sequence |
+| `claim`, `line`, `verdict`, `publication`, `audit`, `recap_ready` | shell → all views | the SSE packet |
+| `state` | shell → all views | score, clock, possession |
+| `status` | shell → all views | `live`, `rules_fallback`, `offline`, `warming_up` |
+| `persona`, `language` | any view → shell | viewer's choice, sent upstream as SSE query parameters |
+| `ask`, `talk` | any view → shell | request; reply arrives as `ask_reply`, `talk_reply` |
+| `approve`, `edit`, `kill` | Broadcast or Analyst → shell | claim or line ID |
+
+## 3. Connection behaviour
+
+| Situation | What the viewer sees | What happens |
+| --- | --- | --- |
+| `MATCHCAST_API` empty at build | Status pill "Offline (simulated)" | `agents.js` rules in the page |
+| API cold (first request pending) | "Warming up the match engine" | Retry `/ready` every 2 s up to 30 s |
+| API live | "Live agents" | REST + SSE |
+| SSE drops | "Reconnecting" for up to 10 s | `EventSource` reconnects with `Last-Event-ID`; the server replays from `publications` and `audit` |
+| API down for over 30 s | "Rules fallback" | Switch to in-page rules; switch back when `/ready` returns 200 |
+
+## 4. Personalisation (stage e)
+
+| Control | Values | Effect |
+| --- | --- | --- |
+| Watch mode | Casual, Analyst, My club, Player focus, One metric | Persona sent to the agents; layout and density |
+| My club | one of the two clubs | Lines framed from that club's angle |
+| Player focus | any player on the pitch | Lines lead with that player; their name tag is highlighted |
+| One metric | xG, pass quality, pressure, speed, control | Only that metric's lines |
+| Language | English, Spanish, Hindi | Captions, voice, Ask and Talk replies |
+| Voice | on or off | TTS playback |
+| Playback | 0.25x to 2x | Live passages; quiet spells always fast-forward |
+
+## 5. Rules for every view
+
+1. Anything not connected is labelled "Simulated" (or the specific label in [08-analytics-and-ml.md](08-analytics-and-ml.md) §3).
+2. Every published line shows its verdict mark (green tick verified, amber dot awaiting review) and a "How was this made?" link to the trace panel (EXP-6).
+3. Rules-made lines show the "Rules fallback" chip.
+4. Accessibility: keys 1, 2, 3 switch views; Tab order through cards; Enter opens a trace; Esc closes; an `aria-live="polite"` region reads each published line; WCAG AA contrast.
+5. Performance: Watch interactive in ≤ 4 s cold on 50 Mbps; other views load on first switch; `players.json` and match files served compressed with long cache headers.
+6. No secret, key or token is ever placed in the page, except the 10-minute Speech token, held in memory only.
+
+## 6. Build and hosting
+
+- `python3 apps/unified/build.py --api https://<api-fqdn>` writes `dist/`. The API base URL is injected as `window.MATCHCAST_API`.
+- The `web` container (`nginx:1.27-alpine`) serves `dist/` with brotli/gzip, `Cache-Control: public, max-age=31536000, immutable` for hashed assets and `no-cache` for `index.html`.
+- Content Security Policy: `default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://<api-fqdn> https://*.tts.speech.microsoft.com https://*.stt.speech.microsoft.com wss://*.stt.speech.microsoft.com; img-src 'self' data: blob:; media-src 'self' https://<api-fqdn> blob:`.

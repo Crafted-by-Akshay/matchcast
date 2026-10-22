@@ -1,0 +1,77 @@
+# 08 Data science, analytics and ML
+
+Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: DAT-3, DAT-4, DAT-5, DAT-6, DAT-7, DAT-8, AGT-14, EXP-13.
+
+## 1. Four layers
+
+| Layer | What | Runs | When |
+| --- | --- | --- | --- |
+| Metrics engine | xG, pass quality, ball speed, pressure, moment score, control, chaos, tempo | `packages/metrics` inside `api` and `mcp` | Live, every event |
+| Season analytics | SQL, charts, similarity over the 28-match season | DuckDB in `mcp`, Data Scientist agent | On demand |
+| ML training | Danger-moment classifier, xG fit | Databricks jobs + MLflow + Unity Catalog | Once during the build |
+| Streaming analytics | Real-Time Dashboard on the event stream | Fabric Eventstream → Eventhouse → dashboard | About 12 active hours, then paused |
+
+## 2. Metrics engine (`packages/metrics`)
+
+Every function is pure, takes contract events and state, and returns a value with units and a `derivation_version` (semver). The same functions run live and in the Verifier's recompute step, so a claim and its check can never disagree on the formula.
+
+| Function | Output | Units | Definition |
+| --- | --- | --- | --- |
+| `xg(shot, state)` | 0–1 | ratio | Logistic on angle and distance with `data/calibration/xg.json`, ± rating shift (see [06-simulation.md](06-simulation.md)) |
+| `pass_quality(pass, state)` | 0–1 | ratio | difficulty × outcome × progression |
+| `ball_speed_kmh(event, tracking)` | number | km/h | Peak speed in the first 0.3 s after contact |
+| `pressure_index(target, state, radius_m=5)` | 0–1 | ratio | Opponents within the radius, weighted by closing speed |
+| `moment_score(events, state)` | 0–100 | score | Weighted sum: shot, xG, box entry, card, score change, danger probability |
+| `control_index`, `chaos_index`, `tempo` | number | ratio, ratio, passes/min | Rolling 5-minute window (DAT-4) |
+
+Golden tests: 50 events exported from the JavaScript prototype with their JS values; Python must match within 0.001 (DAT-3).
+
+## 3. Data Scientist workspace (Analyst view)
+
+What is real and what is labelled, so nothing is ambiguous in the demo:
+
+| Prototype page | v1 behaviour | Backed by | Label |
+| --- | --- | --- | --- |
+| Query workbench (SQL) | Real | `query_season` over DuckDB | none |
+| Ask the Data Scientist | Real | Data Scientist agent, Verifier re-runs SQL | none |
+| Chart builder | Real | Vega-Lite 5 in the browser, on returned rows | none |
+| Dashboards | Real, built from saved queries | Browser storage per viewer | none |
+| xG model lab | Real | `xg.json` + MLflow run metrics in `models/danger/*/model-card.json` | none |
+| Player similarity | Real | Cosine similarity over `player_vectors` | none |
+| Danger model card | Real | `model-card.json` from Blob | none |
+| Tracking lab | Real | Vision accuracy panel ([09-vision-identification.md](09-vision-identification.md)) | none |
+| Notebooks | Not connected | Static example | "Simulated" |
+| Connectors | Not connected | Static list | "Simulated" |
+| Fabric dashboard | Screenshot, 20 s clip, link | Fabric (paused after filming) | "Paused after filming to save cost" |
+
+Data Scientist rules: it may run only `query_season` and `describe_views`; it shows the SQL with every answer; the Verifier re-runs the same SQL (matched by `sql_hash`) and compares every number in the answer with the rows.
+
+## 4. Databricks jobs
+
+```mermaid
+flowchart LR
+  sc[(Blob scenes/v1)] --> td[train-danger notebook]
+  wy[(Wyscout shots, temp DBFS folder)] --> fx[fit-xg notebook]
+  td --> ml[(MLflow experiment matchcast-danger)]
+  fx --> ml2[(MLflow experiment matchcast-xg)]
+  td --> uc[(Unity Catalog matchcast.ml.danger)]
+  td --> onnx[(Blob models/danger/v/model.onnx<br/>+ model-card.json)]
+  fx --> xg[(xg.json committed to the repo)]
+```
+
+| Item | Value |
+| --- | --- |
+| Workspace | `dbw-matchcast`, Premium, East US 2 |
+| Compute | Single-node jobs cluster `Standard_D4ds_v5` (fallback `Standard_DS3_v2` if quota blocks it), auto-terminate when the run ends |
+| `train-danger` | Gradient-boosted classifier; label = a shot within the next 10 s; 80/20 split by match, not by row; logs params, AUC, Brier score, calibration plot; exports ONNX |
+| `fit-xg` | Logistic regression on angle and distance; logs log-loss and a reliability plot; writes `b0..b2` |
+| Code | `data/databricks/train_danger.py`, `data/databricks/fit_xg.py` in the repo, deployed as a Databricks Asset Bundle `data/databricks/databricks.yml` |
+| After the runs | Stop all compute; record run URLs and metrics in `docs/data.md` |
+
+Serving: no Databricks Model Serving (it would be an always-on cost). The `mcp` tool `predict_danger` loads the ONNX file with onnxruntime at start.
+
+## 5. Fabric Real-Time Intelligence
+
+- Workspace `MatchCast` on F2 (or the 60-day trial). Eventstream source: Event Hubs `match-events`, consumer group `$Default`, Entra auth. Destination: Eventhouse `matchcast`, table `events`.
+- Real-Time Dashboard with exactly four tiles: control vs chaos timeline, pass quality leaders, shots and xG by team, events per minute. Refresh 10 s.
+- Film a 20 s clip during a 4x replay, export screenshots, save the KQL in `data/fabric/queries.kql`, then pause the capacity (runbook).
