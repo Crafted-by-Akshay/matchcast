@@ -20,19 +20,19 @@ Observed 22 Oct on the local api in rules mode.
 ## 2. Duplicate batch
 Post the same first 50 fixture events twice.
 Expect: both calls return `202` with `last_sequence: 50`; the audit trail holds one set of `claim_created` / `line_*` records, not two (events are keyed by `stream_sequence`, so a replay is a no-op).
-Observed 22 Oct that both calls return 202; the audit list was read once after the second call and showed one run of records.
+Observed 22 Oct: both calls return 202, and the audit counts after two posts equal those after one post on a fresh match (16 `claim_created`, 12 each of `line_drafted`, `line_verified`, `line_approved`, `publication_created`). The two `a2a_failed` records in both runs are the Stats Desk season comparison finding no season rows for a fictional team id; the line still publishes, so this is the designed degrade, not a duplicate.
 
 ## 3. Seeded bad claim
-Create a match with header `x-matchcast-seed-bad-claim: 1` (or `seed_bad_claim: true` in the body, cue at `seed_bad_claim_at_ms`, default 12:00). The Producer drafts a line with a wrong number, the Verifier recounts from the stored events and rejects it, the line is repaired once or abstained (04-agents.md; F2).
+Create a match with header `x-matchcast-seed-bad-claim: 1` (value not checked; or `seed_bad_claim: true` in the body, cue at `seed_bad_claim_at_ms`, default 12:00). The Producer drafts a line with a wrong number, the Verifier recounts from the stored events and rejects it, the line is repaired once or abstained (04-agents.md; F2).
 Expect: a `line_rejected` audit record followed by a repaired `line_verified`, and the rejected line never reaches a `publication`.
 
 ## 4. Model unavailable (Azure)
 Set `FOUNDRY_MODEL_DEPLOYMENT` to a name that does not exist on the api container app (`az containerapp update ... --set-env-vars`), post events.
-Expect: after the timeout or error each step runs its rules implementation, audit shows `fallback_used` with a `fallback_reason`, the UI shows the rules chip, the circuit breaker opens after 3 failures in 60 s. Restore the setting afterwards and confirm the chip clears. The "Fallback spike" alert needs more than 20% rules lines for 10 minutes.
+Expected by design (not yet observed): after the timeout or error each step runs its rules implementation, audit shows `fallback_used` with a `fallback_reason`, the UI shows the rules chip, the circuit breaker opens after 3 failures in 60 s. Restore the setting afterwards and confirm the chip clears. The "Fallback spike" alert needs more than 20% rules lines for 10 minutes.
 
 ## 5. Kill and resume (Azure)
 Mid-replay, run `az containerapp replica list` then restart the revision (`az containerapp revision restart`).
-Expect: the SSE stream reconnects with `Last-Event-ID`, state is rebuilt from the Table Storage rows (`MATCHCAST_STORE=table`), no line is published twice. In-memory mode (`MATCHCAST_STORE` unset) loses the match on restart, which is why Azure sets it to `table`.
+Expected by design (not yet observed): the SSE stream reconnects with `Last-Event-ID`, state is rebuilt from the Table Storage rows (`MATCHCAST_STORE=table`), no line is published twice. In-memory mode (`MATCHCAST_STORE` unset) loses the match on restart, which is why Azure sets it to `table`.
 
 ## 6 and 7
 See docs/infra.md (Scaling proof) and docs/runbook-shutdown.md for the exact commands. Record each result in `docs/evidence/` with the date.
