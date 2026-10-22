@@ -1,0 +1,31 @@
+{
+  "kind": "event",
+  "schema_version": "1.1.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-foul",
+  "stream_sequence": 21,
+  "revision": 0,
+  "event_time_ms": 21000,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 21000
+  },
+  "payload": {
+    "type": "foul",
+    "player_id": "away2",
+    "team_id": "away",
+    "victim_player_id": "home2",
+    "advantage": false,
+    "position_unit": "m",
+    "position": {
+      "x": 40,
+      "y": 20,
+      "z": 0
+    }
+  }
+}

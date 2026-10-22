@@ -1,5 +1,7 @@
 # MatchCast
 
+[![ci](https://github.com/Crafted-by-Akshay/matchcast/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Crafted-by-Akshay/matchcast/actions/workflows/ci.yml)
+
 MatchCast is an AI-powered football broadcasting platform being built for a Microsoft AI Hackathon. This repository is the initial monorepo scaffold; product features and shared contracts will be added in later phases.
 
 ## Repository layout
