@@ -386,6 +386,10 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
         return problem_response(error)
 
+    @app.exception_handler(404)
+    async def unknown_path(_request: Request, _error: Exception) -> JSONResponse:
+        return problem_response(Problem(404, "not_found", "no such path"))
+
     app.include_router(build_router(registry))
     app.include_router(build_internal_router(registry))
     if os.environ.get("MATCHCAST_MCP_MOUNT") != "0":
@@ -407,4 +411,8 @@ def _mount_mcp(app: FastAPI, registry: Registry) -> None:
             yield
 
     app.router.lifespan_context = lifespan
-    app.mount("/", mcp_app)
+    taken = {getattr(r, "path", None) for r in app.router.routes}
+    # only the MCP (and A2A) paths join the api, so unknown paths still return Problem JSON
+    app.router.routes.extend(
+        r for r in mcp_app.router.routes if getattr(r, "path", None) not in taken
+    )

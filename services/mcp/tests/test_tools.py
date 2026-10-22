@@ -84,8 +84,42 @@ def test_time_scoping_hides_later_events(store) -> None:
 def test_evidence_for_a_published_claim(store) -> None:
     sk = next(iter(store._claims))
     claim_id = next(iter(store._claims[sk]))
-    result = run(call(store, "get_evidence", claim_id=claim_id)).structured_content
-    assert result["claim"]["claim_id"] == claim_id and result["tool_call_ids"] == ["tc-1"]
+    result = run(call(store, "get_evidence", up_to_sequence=137, claim_id=claim_id))
+    assert result.structured_content["claim"]["claim_id"] == claim_id
+    assert result.structured_content["tool_call_ids"] == ["tc-1"]
+
+
+def test_evidence_is_hidden_before_the_claim_existed(store) -> None:
+    sk = next(iter(store._claims))
+    claim = max(store._claims[sk].values(), key=lambda row: row["packet"]["max_evidence_sequence"])
+    early = claim["packet"]["max_evidence_sequence"] - 1
+    result = run(
+        call(store, "get_evidence", up_to_sequence=early, claim_id=claim["packet"]["claim_id"])
+    )
+    assert result.is_error and "unknown claim" in result.content[0].text
+
+
+def test_evidence_does_not_return_a_later_revision_of_a_source_event(store) -> None:
+    import copy
+
+    sk = next(iter(store._claims))
+    row = copy.deepcopy(next(iter(store._claims[sk].values())))
+    original = FIXTURE["events"][4]
+    row["packet"]["claim_id"] = "claim-events-source"
+    row["packet"]["max_evidence_sequence"] = original["stream_sequence"]
+    row["packet"]["source"] = {
+        "type": "events",
+        "events": [
+            {"event_id": original["event_id"], "stream_sequence": original["stream_sequence"]}
+        ],
+    }
+    store._claims[sk]["claim-events-source"] = row
+    later = copy.deepcopy(original) | {"stream_sequence": 138, "revision": 1}
+    store.add_event(sk, later)
+    result = run(call(store, "get_evidence", up_to_sequence=137, claim_id="claim-events-source"))
+    assert [e["stream_sequence"] for e in result.structured_content["source_events"]] == [
+        original["stream_sequence"]
+    ]
 
 
 def test_replay_clip_window(store) -> None:

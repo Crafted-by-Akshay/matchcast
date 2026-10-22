@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse
 
 from .server import create_server
 
-LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*", "testserver"]
+LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 
 
 def transport_security(env: str | None = None) -> TransportSecuritySettings:

@@ -74,3 +74,14 @@ def test_copilot_style_client_reads_metrics_for_a_match_posted_over_rest(base_ur
     got = {k: v["value"] for k, v in ok.structured_content["values"].items()}
     assert not ok.is_error and got == expected
     assert future.is_error
+
+
+def test_unknown_paths_still_return_problem_json() -> None:
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+
+    response = TestClient(create_app()).get("/no/such/path")
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/problem+json") or (
+        "code" in response.json()
+    )
