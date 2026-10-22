@@ -28,6 +28,8 @@ from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, stream_key
 from .tools import InProcessTools, ToolError
 
+STATS_DESK_BUDGET_S = 2.0
+
 TALK_PHRASES = {
     "shots on target": "shots_on_target", "shots": "shots", "goals": "goals",
     "tackles won": "tackles_won", "fouls": "fouls", "cards": "cards",
@@ -158,6 +160,7 @@ class MatchWorkflow:
         stats_desk: StatsDesk | None = None,
     ) -> None:
         self.stats_desk = stats_desk
+        self._verified_claims: dict[str, dict[str, Any]] = {}
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
@@ -614,11 +617,19 @@ class MatchWorkflow:
         claims = await self._analyse(ctx, task, repair=False)
         if not claims:
             return
-        if task.priority == 1 and self.stats_desk is not None:
-            await self._ask_stats_desk(task, claims)
         drafts = await self._call(a.narrator, "write", task.moment_id, ctx, task, claims)
+        self._verified_claims = {}
         for draft in drafts:
             await self._verify_line(ctx, task, claims, draft, attempt=0)
+        if task.priority == 1 and self.stats_desk is not None:
+            # After verification: only a claim that backs a verified line is ever sent to the desk.
+            checked = list(self._verified_claims.values())
+            try:
+                await asyncio.wait_for(self._ask_stats_desk(task, checked), STATS_DESK_BUDGET_S)
+            except TimeoutError:
+                self._audit(
+                    "agent", "producer", "a2a_failed", task.moment_id, {"error": "time budget"}
+                )
 
     async def _ask_stats_desk(self, task: ProducerTask, claims: list[dict[str, Any]]) -> None:
         """Priority 1 moments: compare the first team stat with the season over A2A (audited)."""
@@ -763,6 +774,9 @@ class MatchWorkflow:
         )
         if record.status == "verified":
             self.stats["verified"] += 1
+            for claim in claims:
+                if claim["claim_id"] in record.claim_ids:
+                    self._verified_claims[claim["claim_id"]] = claim
             if self.config.approval_mode == "auto":
                 self._approve(record, "agent", a.producer.agent_id)
 
