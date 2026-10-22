@@ -1,0 +1,12 @@
+{
+  "matches": 1941,
+  "per_match_both_teams": {
+    "shots": 22.19,
+    "goals": 2.31,
+    "passes": 858.07,
+    "duels": 452.9
+  },
+  "goals_per_shot_all_shots": 0.1043,
+  "note": "Aggregates only; shots include penalties and free kicks.",
+  "source": "Wyscout soccer match event dataset, Pappalardo et al. 2019, CC BY 4.0"
+}

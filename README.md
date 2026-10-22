@@ -101,3 +101,9 @@ acceptance evidence is in [`docs/evidence/S02.md`](docs/evidence/S02.md).
 ## Planned technology
 
 The initial scaffold uses Next.js, React, TypeScript, FastAPI, `uv`, Ruff, pytest, npm, ESLint, and TypeScript. Docker and Azure Container Apps are intended deployment options; Microsoft Agent Framework, Microsoft Foundry, Azure Databricks, and MLflow are planned for later phases. This scaffold creates no cloud resources and does not implement simulation, tactical analysis, AI commentary, authentication, or agent orchestration.
+
+## Credits
+
+- **Wyscout soccer match event dataset** — Pappalardo, L., Cintia, P., Rossi, A. et al. "A public data set of spatio-temporal match events in soccer competitions." *Scientific Data* 6, 236 (2019). https://doi.org/10.6084/m9.figshare.7770599. Licence: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Used only as aggregate statistics: the xG curve and per-match event rates. No Wyscout rows are stored in this repository.
+- **martj42 international football results** — https://github.com/martj42/international_results, CC0. Used for goal, draw and timing rates.
+- Full list with what each source is used for: [`docs/dataset-card.md`](docs/dataset-card.md).

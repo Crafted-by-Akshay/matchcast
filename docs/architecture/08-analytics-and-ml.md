@@ -18,13 +18,14 @@ Every function is pure, takes contract events and state, and returns a value wit
 | Function | Output | Units | Definition |
 | --- | --- | --- | --- |
 | `xg(shot, state)` | 0–1 | ratio | Logistic on angle and distance with `data/calibration/xg.json`, ± rating shift (see [06-simulation.md](06-simulation.md)) |
-| `pass_quality(pass, state)` | 0–1 | ratio | difficulty × outcome × progression |
-| `ball_speed_kmh(event, tracking)` | number | km/h | Peak speed in the first 0.3 s after contact |
-| `pressure_index(target, state, radius_m=5)` | 0–1 | ratio | Opponents within the radius, weighted by closing speed |
-| `moment_score(events, state)` | 0–100 | score | Weighted sum: shot, xG, box entry, card, score change, danger probability |
+| `pass_difficulty(pass, state)` | 0–100 | score | Six capped terms: distance, pressure, lane (distance of the nearest opponent to the pass line), marking, flight, weak foot |
+| `pass_quality(pass, state)` | 0–1 | ratio | outcome × (0.2 + 0.4 × difficulty + 0.4 × progression); outcome 1 completed, 0.25 missed |
+| `ball_speed_kmh(samples, event_time_ms)` | number | km/h | 3D distance over time between the first and last ball sample within ±500 ms of the event |
+| `pressure_index(x, y, state, radius_m=5)` | 0–1 | ratio | 0.7 × nearest-opponent term + 0.3 × crowding (up to 3 opponents inside the radius); `radius_m` must exceed 1 |
+| `moment_score(events, minute, goal_margin)` | 0–100 | score | Highest event score, +10 per further event (max +30), x1.1 late, x1.1 when close. Formulas: [../metrics.md](../metrics.md); decision: ADR-0016 |
 | `control_index`, `chaos_index`, `tempo` | number | ratio, ratio, passes/min | Rolling 5-minute window (DAT-4) |
 
-Golden tests: 50 events exported from the JavaScript prototype with their JS values; Python must match within 0.001 (DAT-3).
+Golden tests: 54 cases with expected values from JavaScript reference formulas (`packages/metrics/golden/export_golden.cjs`); Python must match within 0.001 (DAT-3). The reference restates the documented formulas and the engine's xG curve and pass-difficulty terms, not the engine's own functions; ADR-0016 records why.
 
 ## 3. Data Scientist workspace (Analyst view)
 
