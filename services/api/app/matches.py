@@ -23,7 +23,13 @@ TENANT = "demo"
 HEARTBEAT_S = 15
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
-STATUS = {"not_found": 404, "match_exists": 409, "forbidden_role": 403, "not_approvable": 409}
+STATUS = {
+    "not_found": 404,
+    "match_exists": 409,
+    "forbidden_role": 403,
+    "not_approvable": 409,
+    "prompt_attack": 400,
+}
 
 
 def pretty(identifier: str) -> str:

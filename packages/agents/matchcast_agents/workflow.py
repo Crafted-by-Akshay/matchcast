@@ -15,9 +15,10 @@ from matchcast_contracts import ContractError, validate
 
 from .context import MatchContext
 from .hub import StreamHub
-from .messages import DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
+from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
+from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
 from .store import MemoryStore, stream_key
 from .tools import ToolError
@@ -124,6 +125,7 @@ class MatchWorkflow:
         hub: StreamHub | None = None,
         agents: AgentSet | None = None,
         config: WorkflowConfig | None = None,
+        safety: SafetyScreen | None = None,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         self.stream = stream
@@ -136,6 +138,7 @@ class MatchWorkflow:
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)
         self._clock = clock
+        self.safety = safety or LocalSafetyScreen()
         self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
         self._lock = asyncio.Lock()
         self.stats = {
@@ -349,6 +352,7 @@ class MatchWorkflow:
             claim_ids=list(draft.claim_ids),
         )
         verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
+        verdict = await self._screen(draft, verdict)
         record.checks = list(verdict.checks)
         record.reason_code = verdict.reason_code
         if verdict.verdict == "rejected":
@@ -384,6 +388,30 @@ class MatchWorkflow:
             self.stats["verified"] += 1
             if self.config.approval_mode == "auto":
                 self._approve(record, "agent", a.producer.agent_id)
+
+    async def _screen(self, draft: DraftLine, verdict: Verdict) -> Verdict:
+        """Check 7: Content Safety on every line that survived checks 1 to 6."""
+        if verdict.verdict == "rejected":
+            return verdict
+        result = await self.safety.analyze(draft.text)
+        check = Check(
+            name="safety",
+            passed=result.allowed,
+            detail=f"{result.source}: max severity {max(result.categories.values(), default=0)}",
+        )
+        checks = (*verdict.checks, check)
+        if result.allowed:
+            return verdict.model_copy(update={"checks": checks})
+        self._audit(
+            "system",
+            "content-safety",
+            "safety_blocked",
+            draft.line_id,
+            {"source": result.source, "categories": result.categories},
+        )
+        return verdict.model_copy(
+            update={"verdict": "rejected", "reason_code": "unsafe_content", "checks": checks}
+        )
 
     async def _repair(
         self,
@@ -499,6 +527,11 @@ class MatchWorkflow:
             line = self._line(line_id)
             if line.status in ("published", "killed"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
+            shield = await self.safety.shield(text)
+            if shield.attack_detected:
+                self._audit("system", "content-safety", "safety_blocked", line_id,
+                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+                raise WorkflowError("prompt_attack", "the edit text was flagged as a prompt attack")
             ctx = self._ctx()
             claims = [self.store.get_claim(self.sk, c)["packet"] for c in line.claim_ids]  # type: ignore[index]
             draft = DraftLine(
@@ -509,6 +542,7 @@ class MatchWorkflow:
                 max_chars=280,
             )
             verdict = await self._call(self.agents.verifier, "check", line_id, ctx, draft, claims)
+            verdict = await self._screen(draft, verdict)
             if verdict.verdict == "rejected":
                 return line, verdict
             line.text, line.checks, line.reason_code = text, list(verdict.checks), None
