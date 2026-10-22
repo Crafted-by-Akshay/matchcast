@@ -212,6 +212,7 @@ class Registry:
         self.ds_asked: dict[str, deque[float]] = {}
         self.vision = VisionService()
         self.speech = SpeechTokenService()
+        self.pipeline: Pipeline | None = None  # set by install() when MATCHCAST_PIPELINE says so
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -270,6 +271,38 @@ class Registry:
             return False
         window.append(now)
         return True
+
+    async def flow_for(self, session_id: str, match_id: str) -> MatchWorkflow:
+        """The workflow of a match, rebuilt from its stored roster after a restart (F1)."""
+        key = (session_id, match_id)
+        if (flow := self.flows.get(key)) is not None:
+            return flow
+        async with self.create_lock:
+            if (flow := self.flows.get(key)) is not None:
+                return flow
+            stream = {"tenant_id": TENANT, "session_id": session_id, "match_id": match_id}
+            sk = stream_key(stream)
+
+            def stored() -> dict[str, Any] | None:
+                _is_stored(self.store, sk)  # hydrates a buffered store off the event loop
+                return self.store.get_match(sk)
+
+            info = await asyncio.to_thread(stored)
+            if info is None:
+                raise Problem(404, "not_found", f"unknown match {match_id}")
+            config = WorkflowConfig()
+            flow = MatchWorkflow(
+                stream=stream,
+                roster=info["roster"],
+                names=info.get("names", {}),
+                clubs=info.get("clubs", {}),
+                agents=self.agents_for(config.personas),
+                config=config,
+                store=self.store,
+                stats_desk=self.stats_desk,
+            )
+            self.flows[key] = flow
+            return flow
 
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))

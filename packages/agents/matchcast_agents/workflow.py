@@ -279,8 +279,8 @@ class MatchWorkflow:
 
     # ---- ingest ------------------------------------------------------------------------
 
-    async def ingest(self, events: list[dict[str, Any]]) -> dict[str, int]:
-        """Validate the whole batch first (all or nothing), then process each event in order."""
+    def validate_batch(self, events: list[dict[str, Any]]) -> None:
+        """Raise ContractError (with ``index``) for the first event that is not valid here."""
         for index, event in enumerate(events):
             try:
                 validate(event, roster=self.roster)
@@ -291,6 +291,10 @@ class MatchWorkflow:
             except ContractError as error:
                 error.index = index  # type: ignore[attr-defined]
                 raise
+
+    async def ingest(self, events: list[dict[str, Any]]) -> dict[str, int]:
+        """Validate the whole batch first (all or nothing), then process each event in order."""
+        self.validate_batch(events)
         async with self._lock:
             await self._catch_up()
             for event in events:
