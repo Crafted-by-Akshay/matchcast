@@ -143,7 +143,7 @@ function kickOff() {
   for (const p of players) { p.stamina = 1; p.cap = 1; }
   lineUp(0); $('intro').hidden = true; $('setup').hidden = true; for (const id of ['bug', 'ctrl', 'third', 'cap', 'wxchip', 'cpbtn']) $(id).hidden = false;
   pickOfficials(SET.seed); for (const o of officials) { o.pos2.copy(o.role === 'ref' ? V2(57, 38) : V2(o.role === 'ar1' ? 75 : 30, o.role === 'ar1' ? -0.8 : 68.8)); o.act = null; o.faceYaw = undefined; }
-  S.dead = null; if (window.verifierReset) verifierReset();
+  S.dead = null; if (window.verifierReset) verifierReset(); dirStart();
   S.started = true; dataEvent('kickoff', { team: TEAMS[0].key, half: 1, referee: OFFICIALS.ref + ' (' + OFFICIALS.nat + ')', formations: TEAMS.map((T) => T.key + ' ' + T.tac.form + ' ' + T.tac.style).join(' v ') }); if (window.copilotReset) copilotReset(); talkReset();
   say('Kick-off at ' + SET.st.name + ' in ' + SET.st.city + ', with ' + OFFICIALS.ref + ' of ' + OFFICIALS.nat + ' the referee. ' + Math.round(ENV.temp) + '°C, ' + WX[ENV.wx].label.toLowerCase() + ', the pitch ' + ENV.pitch.toLowerCase() + '. ' + TEAMS[0].club + ' get us under way.');
 }

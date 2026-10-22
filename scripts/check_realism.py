@@ -41,7 +41,11 @@ def measure(matches: list[dict]) -> dict[str, float]:
         "duels": duels / n,
         "late_goals": late / goals if goals else 0.0,
         "penalty_goals": sum(m["penaltyGoals"] for m in matches) / goals if goals else 0.0,
-    }
+    } | (
+        {"watch_minutes": sum(m["director"]["watchMin"] for m in matches) / n}
+        if all("director" in m for m in matches)
+        else {}
+    )
 
 
 def main() -> int:
@@ -84,6 +88,8 @@ def main() -> int:
     print(f"{'measure':34} {'simulated':>10} {'target':>9} {'band':>16}  result")
     misses = []
     for t in json.loads(TARGETS.read_text())["targets"]:
+        if t["id"] not in got:
+            continue  # result files from before the director existed
         v = got[t["id"]]
         ok = t["min"] <= v <= t["max"]
         if not ok:

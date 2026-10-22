@@ -2,14 +2,95 @@
   "version": "1.0.0",
   "scope": "Both teams together, per match, over the check's seeds (200 in CI). Engine run at full density (half = 45).",
   "targets": [
-    {"id": "goals", "label": "Goals per match", "value": 2.66, "min": 2.3, "max": 3.0, "source": "martj42 international results", "licence": "CC0"},
-    {"id": "draws", "label": "Share of draws", "value": 0.24, "min": 0.18, "max": 0.30, "source": "martj42 international results", "licence": "CC0"},
-    {"id": "nil_nil", "label": "Share of 0-0", "value": 0.07, "min": 0.03, "max": 0.12, "source": "Poisson at 2.66 goals", "licence": "derived"},
-    {"id": "shots", "label": "Shots per match", "value": 25, "min": 20, "max": 30, "source": "Wyscout soccer match event dataset (measured 22.2 incl. penalties and free kicks)", "licence": "CC BY 4.0"},
-    {"id": "goals_per_shot", "label": "Goals per shot", "value": 0.11, "min": 0.08, "max": 0.13, "source": "derived (Wyscout measured 0.104)", "licence": "CC BY 4.0"},
-    {"id": "passes", "label": "Passes per match", "value": 840, "min": 700, "max": 1000, "source": "Wyscout soccer match event dataset (measured 858)", "licence": "CC BY 4.0"},
-    {"id": "duels", "label": "Duels per match", "value": 470, "min": 380, "max": 560, "source": "Wyscout soccer match event dataset (measured 453; engine duel = aerial duel + slide tackle + take-on + possession turnover)", "licence": "CC BY 4.0"},
-    {"id": "late_goals", "label": "Share of goals in 76'-90'", "value": 0.215, "min": 0.17, "max": 0.26, "source": "martj42 international results", "licence": "CC0"},
-    {"id": "penalty_goals", "label": "Penalty goals as share of goals", "value": 0.068, "min": 0.03, "max": 0.11, "source": "martj42 international results", "licence": "CC0"}
+    {
+      "id": "goals",
+      "label": "Goals per match",
+      "value": 2.66,
+      "min": 2.3,
+      "max": 3.0,
+      "source": "martj42 international results",
+      "licence": "CC0"
+    },
+    {
+      "id": "draws",
+      "label": "Share of draws",
+      "value": 0.24,
+      "min": 0.18,
+      "max": 0.3,
+      "source": "martj42 international results",
+      "licence": "CC0"
+    },
+    {
+      "id": "nil_nil",
+      "label": "Share of 0-0",
+      "value": 0.07,
+      "min": 0.03,
+      "max": 0.12,
+      "source": "Poisson at 2.66 goals",
+      "licence": "derived"
+    },
+    {
+      "id": "shots",
+      "label": "Shots per match",
+      "value": 25,
+      "min": 20,
+      "max": 30,
+      "source": "Wyscout soccer match event dataset (measured 22.2 incl. penalties and free kicks)",
+      "licence": "CC BY 4.0"
+    },
+    {
+      "id": "goals_per_shot",
+      "label": "Goals per shot",
+      "value": 0.11,
+      "min": 0.08,
+      "max": 0.13,
+      "source": "derived (Wyscout measured 0.104)",
+      "licence": "CC BY 4.0"
+    },
+    {
+      "id": "passes",
+      "label": "Passes per match",
+      "value": 840,
+      "min": 700,
+      "max": 1000,
+      "source": "Wyscout soccer match event dataset (measured 858)",
+      "licence": "CC BY 4.0"
+    },
+    {
+      "id": "duels",
+      "label": "Duels per match",
+      "value": 470,
+      "min": 380,
+      "max": 560,
+      "source": "Wyscout soccer match event dataset (measured 453; engine duel = aerial duel + slide tackle + take-on + possession turnover)",
+      "licence": "CC BY 4.0"
+    },
+    {
+      "id": "late_goals",
+      "label": "Share of goals in 76'-90'",
+      "value": 0.215,
+      "min": 0.17,
+      "max": 0.26,
+      "source": "martj42 international results",
+      "licence": "CC0"
+    },
+    {
+      "id": "penalty_goals",
+      "label": "Penalty goals as share of goals",
+      "value": 0.068,
+      "min": 0.03,
+      "max": 0.11,
+      "source": "martj42 international results",
+      "licence": "CC0"
+    },
+    {
+      "id": "watch_minutes",
+      "label": "Watch length at 1x (minutes)",
+      "value": 10,
+      "min": 8,
+      "max": 12,
+      "source": "DAT-10 acceptance: a 90-minute match in 8 to 12 real minutes with passages scoring 0.5+ live and the rest at 20x",
+      "licence": "n/a"
+    }
   ]
 }

@@ -586,7 +586,7 @@ function offsideLine(ti) { const xs = teamOf(1 - ti).map((o) => w2own(ti, o.pos2
 // Constants mirror data/calibration/xg.json; tests/xg_constants.test checks they agree. XG_SCALE is the tuned global scale (docs/simulator.md).
 const XG = { b0: -1.464609, b1: 1.413822, b2: -0.089141, scale: 1.1 };
 // tuned action weights (docs/simulator.md); a `tune` query parameter overrides them for calibration runs only, e.g. ?tune=passBias:0.5,shotThr:0.05
-const TUNE = { passBias: 1.5, shotThr: 0.06, longShot: 0.05, holdScale: 1.5, boxFoul: 0.65 };
+const TUNE = { passBias: 1.5, shotThr: 0.06, longShot: 0.05, holdScale: 1.5, boxFoul: 0.65, skillCD: 1.25 };
 try { for (const kv of (new URLSearchParams(location.search).get('tune') || '').split(',')) { const [k, v] = kv.split(':'); if (k in TUNE && v !== undefined) TUNE[k] = +v; if (k === 'xgScale') XG.scale = +v; } } catch (e) { /* no query string */ }
 const sig = (z) => 1 / (1 + Math.exp(-z));
 function xgAt(pos, goal) {
@@ -1339,7 +1339,7 @@ function ownerControl(p, dt) {
       p.dribDir = f0.clone().rotateAround(V2(0, 0), away * (move === 'cut' ? 1.3 : move === 'dragback' ? 1.9 : move === 'roulette' ? 0.9 : 0.6 + 0.3 * rnd())); p.dribSp = Math.min(p.vmax * 0.9, 7.5);
       const win = rnd() < clamp(0.35 + 0.5 * p.drib - 0.35 * opp.tackle + (move === 'stepover' ? 0.05 : 0), 0.1, 0.85);
       if (win) { opp.beaten = 0.6 + 0.5 * p.drib; if (rnd() < 0.5) say(p.name + ({ stepover: ' with the step-over, ', cut: ' chops inside, ', roulette: ' spins away with a roulette, ', dragback: ' drags it back, ', elastico: ' with the elastico, ' }[move] || ' drops the shoulder, ') + 'and ' + surname(opp.name) + ' is beaten.'); }
-      dataEvent('take_on', { team: p.T.key, player: p.name, defender: opp.name, move, success: win }); p.skillCD = 3;
+      dataEvent('take_on', { team: p.T.key, player: p.name, defender: opp.name, move, success: win }); p.skillCD = 3 * TUNE.skillCD;
     }
   }
   const dd = p.dribDir || fwd(p); const sp = p.dribSp || 3.5;
@@ -1608,6 +1608,40 @@ const playSet = (v) => { if (v === 'pause') S.paused = !S.paused; else S.speed =
 mkGroup($('play'), playDefs(), () => String(S.speed), playSet);
 
 // ============ MAIN LOOP ============
+// ============ CONDENSED BROADCAST (DAT-10, ADR-0004) ============
+// The engine simulates the whole match at full density; this director scores each passage of play from 0 to 1 and
+// frame() plays passages scoring 0.5 or more live at the chosen speed and fast-forwards the rest at FF_X behind a wipe
+// that shows the minute range. Every step still runs, so events, stats, agents and the Verifier see everything.
+//   shot or goal 1.0 (6 s after a shot, through the celebration) · ball in a penalty area 0.7 · set piece near goal 0.6
+//   · card 0.6 (6 s) · first 15 s of a half 0.5 · otherwise 0.1. Live status is held 3 s after the score drops.
+const FF_X = 20;
+const DIRC = { on: false, ff: false, liveS: 0, ffS: 0, hold: 0, score: 0.1, cardT: -99, cut: null, ranges: [], wipe: null };
+onMatchEvent((e) => { if (e.type === 'yellow_card' || e.type === 'red_card') DIRC.cardT = S.t; });
+function passageScore() {
+  const si = S.shotInfo; if (si && S.t - si.t < 6) return 1;
+  if (S.celebrate > 0) return 1;
+  const near = (S.owner || { pos2: V2(ball.p.x, ball.p.z) }).pos2; const box = Math.min(near.x, 105 - near.x) < 16.5 && Math.abs(near.y - 34) < 20.16;
+  if (box) return 0.7;
+  const R = S.restart || S.dead; if (R && (R.type === 'corner' || R.type === 'penalty' || (R.type === 'freekick' && R.spot && Math.min(R.spot.x, 105 - R.spot.x) < 40))) return 0.6;
+  if (S.t - DIRC.cardT < 6) return 0.6;
+  const mc = S.mclock % (45 * 60); if (mc < 15) return 0.5;
+  return 0.1;
+}
+const minuteOf = () => Math.floor(S.mclock / 60) + 1;
+function dirUpdate(dt) {
+  if (!DIRC.on) { DIRC.liveS += dt; return; }
+  DIRC.score = passageScore();
+  if (DIRC.score >= 0.5) DIRC.hold = 3; else DIRC.hold = Math.max(0, DIRC.hold - dt);
+  const ff = DIRC.score < 0.5 && DIRC.hold <= 0;
+  if (ff && !DIRC.ff) DIRC.cut = { from: minuteOf(), fromClock: S.mclock };
+  if (!ff && DIRC.ff && DIRC.cut) { DIRC.ranges.push({ from: DIRC.cut.from, to: minuteOf(), seconds: +(S.mclock - DIRC.cut.fromClock).toFixed(1) }); DIRC.cut = null; }
+  DIRC.ff = ff; if (ff) DIRC.ffS += dt; else DIRC.liveS += dt;
+  if (DIRC.wipe) { DIRC.wipe.style.opacity = ff ? 1 : 0; if (ff && DIRC.cut) DIRC.wipe.textContent = '⏩ ' + DIRC.cut.from + "' → " + minuteOf() + "'"; }
+}
+function dirStart() {   // at kick-off: condense only full-length matches (half = 45), shorter halves are already compressed; the headless runner scores passages too, to report the watch length
+  Object.assign(DIRC, { on: SET.half >= 45 && new URLSearchParams(location.search).get('condense') !== '0', ff: false, liveS: 0, ffS: 0, hold: 0, ranges: [], cut: null });
+  if (!DIRC.wipe) { const d = document.createElement('div'); d.id = 'ffwipe'; d.style.cssText = 'position:fixed;top:14%;left:50%;transform:translateX(-50%);padding:6px 18px;background:rgba(10,14,20,.78);color:#fff;font:700 20px system-ui;letter-spacing:.06em;border-radius:6px;opacity:0;transition:opacity .15s;pointer-events:none;z-index:9'; document.body.appendChild(d); DIRC.wipe = d; }
+}
 function stepSim(dt) {
   if (S.hold) { holdTick(dt); return; }
   S.clock += dt; S.t += dt; S.mclock += dt * S.mscale;
@@ -1637,6 +1671,7 @@ function stepSim(dt) {
   }
   officiate(dt);
   verifierTick(dt);
+  dirUpdate(dt);
 }
 const clk = new THREE.Clock();
 let ledAcc = 0;
@@ -1645,7 +1680,10 @@ function frame(dt, draw) {
   const sim = S.paused || window.__mcHeadless ? 0 : dt * S.speed; // the headless runner steps the engine itself, on a fixed step
   if (!S.started && sim > 0) S.t += sim;
   applyWorldVisuals(sim);
-  if (S.started && !S.over && players.length && sim > 0) { const n = Math.ceil(sim / 0.02); for (let i = 0; i < n; i++) stepSim(sim / n); }
+  if (S.started && !S.over && players.length && sim > 0) {
+    if (DIRC.on) { let budget = sim, guard = 0; while (budget > 0 && !S.over && guard++ < 4000) { const st = Math.min(0.02, budget * (DIRC.ff ? FF_X : 1)); stepSim(st); budget -= DIRC.ff ? st / FF_X : st; } }   // fast-forward spends 1/FF_X of the frame's time per simulated second
+    else { const n = Math.ceil(sim / 0.02); for (let i = 0; i < n; i++) stepSim(sim / n); }
+  }
   for (const p of players) if (!p.off) animate(p, sim);
   // ball render: roll from displacement
   const bw = W(ball.p.x, ball.p.y, ball.p.z); const mv = bw.clone().sub(ballMesh.position); const hd = Math.hypot(mv.x, mv.z);
@@ -1666,7 +1704,7 @@ function start() {
   $('kick').onclick = kickOff;
   renderer.setAnimationLoop(loop);
 }
-window.__mc = { STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY };
+window.__mc = { DIRC, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY };
 
 /*@@SETUP@@*/
 // ============ LOAD ============

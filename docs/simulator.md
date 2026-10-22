@@ -47,6 +47,8 @@ At every strike the engine draws the shot's fate from the play stream: goal with
 | `passBias` | 1.5 | A pass must beat the dribble option by this much |
 | `holdScale` | 1.5 | Scales how long a player holds the ball before a forced pass |
 | `xgScale` | 1.1 | Global multiplier on the goal probability, to offset shots blocked before they reach the goal |
+| `skillCD` | 1.25 | Multiplier on the pause between a player's take-ons (keeps duels inside the band) |
+| `skillCD` | 1.25 | Multiplier on the pause between a player's take-ons (keeps duels inside the band) |
 | `boxFoul` | 0.65 | Multiplier on a defender's foul risk inside his own box (keeps penalties near 0.3 a match) |
 
 Starting from the prototype values (0.04, 0.09, 0, 1) the engine produced about 34 shots and 1,014 passes a match. The values above come from 16-seed sample runs against the targets; the final check numbers are in the next section. Override for experiments with `?tune=shotThr:0.05,passBias:1` in the Watch URL or `--tune` on the runner.
