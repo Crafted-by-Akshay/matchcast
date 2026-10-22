@@ -15,7 +15,7 @@ MatchCast turns a synthetic football match into explained, verified, personalise
 | G3 | Every on-screen number and name is correct, or the line is not shown | Verifier pass rate and zero hallucinated numbers in the QUA-4 evaluation |
 | G4 | Football-realistic synthetic data | 9 realism targets in [06-simulation.md](06-simulation.md) pass over 200 seeds |
 | G5 | Live demo judges can open free until 10 Nov 2026, 11:59 pm PT (rules §4.8) | Logged-out release check (QUA-8) |
-| G6 | Total Azure spend about $49 worst case (about $60 with Translator, Vision and Content Safety under their hard caps, pending Akshay's OK on 22 Oct), hard cap $100 | `scripts/cost_today.sh`, budget alerts at $40 and $50 |
+| G6 | Total Azure spend about $49 worst case (about $60 with Translator, Vision and Content Safety under their hard caps, accepted by Akshay on 22 Oct), hard cap $100 | `scripts/cost_today.sh`, budget alerts at $40 and $50 |
 
 ## 3. Stakeholders
 

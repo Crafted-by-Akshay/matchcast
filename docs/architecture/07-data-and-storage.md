@@ -157,4 +157,4 @@ Only if all four are no does it need a database. Signs of that: filters on non-k
 2. **If joins or relational constraints are the need: Azure Database for PostgreSQL Flexible Server, Burstable B1ms**, Entra authentication only. It costs roughly $13 a month plus storage even when idle, so it is a second choice.
 3. **Process:** write an ADR (it changes cost, so Akshay decides), add `infra/modules/<db>.bicep` with the role assignment, implement the repository, pass the store contract suite, add a one-off copy script from Tables if data must move, and switch with `MATCHCAST_STORE`. The spend must still fit the $100 cap with the $40 and $50 alerts.
 
-The rule for this is ADR-0015.
+The rule for this is ADR-0015 (accepted by Akshay, 22 Oct 2026).

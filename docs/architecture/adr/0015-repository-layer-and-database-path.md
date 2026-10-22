@@ -1,8 +1,8 @@
 # ADR-0015: Repository layer, and the path to a database if one is ever needed
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-22
-- **Decided by:** Data lane; needs Akshay's OK
+- **Decided by:** Akshay (22 Oct 2026); Data lane
 
 ## Context
 

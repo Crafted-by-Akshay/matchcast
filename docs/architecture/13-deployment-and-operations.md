@@ -1,6 +1,6 @@
 # 13 Deployment, identity and operations
 
-Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: PLT-1 to PLT-11. Cost plan: `/mnt/project-files/matchcast-v2/plan/full-3-day-plan.md` (about $49 worst case; about $60 with the Translator, Vision and Content Safety caps in PLT-10, pending Akshay's OK).
+Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: PLT-1 to PLT-11. Cost plan: `/mnt/project-files/matchcast-v2/plan/full-3-day-plan.md` (about $49 worst case; about $60 with the Translator, Vision and Content Safety caps in PLT-10, accepted 22 Oct).
 
 ## 1. Azure topology
 
