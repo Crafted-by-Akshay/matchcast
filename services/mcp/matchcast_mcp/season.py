@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import threading
+from datetime import date, datetime, time
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -40,10 +42,22 @@ def default_root() -> Path:
     raise SeasonError("season data not found: set MATCHCAST_SEASON_DIR to the Parquet folder")
 
 
+def _plain(value: Any) -> Any:
+    """A JSON-safe cell: dates as ISO text, decimals as floats, anything else exotic as text."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (date, datetime, time)):
+        return value.isoformat()
+    return str(value)
+
+
 class Season:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or default_root()
         self._con = duckdb.connect()
+        self._lock = threading.RLock()  # one statement at a time: the connection is not thread-safe
         for table in TABLES:
             path = self.root / f"{table}.parquet"
             if not path.is_file():
@@ -54,11 +68,14 @@ class Season:
             f"SET allowed_directories=['{str(self.root).replace(chr(39), chr(39) * 2)}']"
         )
         self._con.execute("SET enable_external_access=false")
+        self._con.execute("SET threads=2")
+        self._con.execute("SET memory_limit='512MB'")
         self._con.execute("SET lock_configuration=true")
 
     @property
     def matches(self) -> int:
-        return self._con.execute("SELECT count(*) FROM matches").fetchone()[0]
+        with self._lock:
+            return self._con.execute("SELECT count(*) FROM matches").fetchone()[0]
 
     def compare(
         self, metric: str, scope: str, value: float, team_id: str | None = None
@@ -70,14 +87,15 @@ class Season:
             raise SeasonError(f"unknown {scope} metric {metric!r}")
         table = SCOPE_TABLE[scope]
         where, args = ("WHERE team_id = ?", [team_id]) if team_id else ("", [])
-        average, n = self._con.execute(
-            f"SELECT avg({metric}), count(*) FROM {table} {where}", args
-        ).fetchone()
-        better = self._con.execute(
-            f"SELECT count(*) FROM {table} {'WHERE team_id = ? AND' if team_id else 'WHERE'} "
-            f"{metric} > ?",
-            [*args, value],
-        ).fetchone()[0]
+        with self._lock:
+            average, n = self._con.execute(
+                f"SELECT avg({metric}), count(*) FROM {table} {where}", args
+            ).fetchone()
+            better = self._con.execute(
+                f"SELECT count(*) FROM {table} {'WHERE team_id = ? AND' if team_id else 'WHERE'} "
+                f"{metric} > ?",
+                [*args, value],
+            ).fetchone()[0]
         if n == 0:
             raise SeasonError(f"no {scope} rows for team {team_id!r}")
         return {
@@ -96,14 +114,17 @@ class Season:
     def describe_views(self) -> dict[str, list[dict[str, str]]]:
         """Each allowed view with its columns and types."""
         out = {}
-        for table in TABLES:
-            rows = self._con.execute(f"DESCRIBE {table}").fetchall()
-            out[table] = [{"name": r[0], "type": r[1]} for r in rows]
+        with self._lock:
+            for table in TABLES:
+                rows = self._con.execute(f"DESCRIBE {table}").fetchall()
+                out[table] = [{"name": r[0], "type": r[1]} for r in rows]
         return out
 
     def check_sql(self, sql: str) -> None:
         """One SELECT over the allowed views and allowed functions, or a SeasonError."""
-        ast = json.loads(self._con.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()[0])
+        with self._lock:
+            raw = self._con.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()[0]
+        ast = json.loads(raw)
         if ast.get("error") or len(ast.get("statements", [])) != 1:
             raise SeasonError("send exactly one SELECT statement")
         problems: list[str] = []
@@ -135,17 +156,18 @@ class Season:
         """Run one allowed SELECT: at most 1,000 rows and 5 seconds."""
         sql = sql.strip().rstrip(";")
         self.check_sql(sql)
-        cursor = self._con.cursor()
-        timer = threading.Timer(TIMEOUT_S, cursor.interrupt)
-        timer.start()
-        try:
-            cursor.execute(f"SELECT * FROM (\n{sql}\n) LIMIT {ROW_LIMIT}")
-            columns = [d[0] for d in cursor.description]
-            rows = [list(r) for r in cursor.fetchall()]
-        except Exception as error:  # noqa: BLE001 - surface any engine error as a refusal
-            raise SeasonError(f"query failed: {error}") from error
-        finally:
-            timer.cancel()
+        with self._lock:
+            cursor = self._con.cursor()
+            timer = threading.Timer(TIMEOUT_S, cursor.interrupt)
+            timer.start()
+            try:
+                cursor.execute(f"SELECT * FROM (\n{sql}\n) LIMIT {ROW_LIMIT}")
+                columns = [d[0] for d in cursor.description]
+                rows = [[_plain(v) for v in r] for r in cursor.fetchall()]
+            except Exception as error:  # noqa: BLE001 - surface any engine error as a refusal
+                raise SeasonError(f"query failed: {error}") from error
+            finally:
+                timer.cancel()
         return {
             "sql": sql,
             "sql_hash": hashlib.sha256(sql.encode()).hexdigest()[:16],
