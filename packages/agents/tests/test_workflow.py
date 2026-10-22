@@ -171,6 +171,43 @@ def test_priority_one_moments_call_the_stats_desk_and_audit_it(match) -> None:
     assert 1 in priorities
 
 
+def test_the_desk_is_only_sent_claims_behind_a_verified_line(match) -> None:
+    desk = FakeDesk()
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], stats_desk=desk,
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    verified = {
+        cid
+        for ln in flow.store.lines(flow.sk)
+        if ln.status not in ("rejected", "abstained", "review")
+        for cid in ln.claim_ids
+    }
+    calls = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "a2a_call"]
+    assert calls and all(r["details"]["claim_id"] in verified for r in calls)
+
+
+def test_a_slow_desk_times_out_without_blocking_the_moment(match, monkeypatch) -> None:
+    import asyncio
+
+    import matchcast_agents.workflow as wf
+
+    monkeypatch.setattr(wf, "STATS_DESK_BUDGET_S", 0.01)
+
+    class Slow(FakeDesk):
+        async def compare(self, *args, **kwargs):
+            await asyncio.sleep(1)
+
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], stats_desk=Slow(),
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    failed = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "a2a_failed"]
+    assert failed and failed[0]["details"]["error"] == "time budget"
+
+
 def test_a_stats_desk_outage_is_audited_and_does_not_stop_lines(match) -> None:
     flow = MatchWorkflow(
         stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
