@@ -173,3 +173,24 @@ def test_search_kb_returns_citable_chunks_and_respects_top_and_corpus() -> None:
     laws = _season_call("search_kb", query="offside", corpus="laws").structured_content["chunks"]
     assert laws and {c["corpus"] for c in laws} == {"laws"}
     assert _season_call("search_kb", query="offside", top=99).is_error
+
+
+def test_dates_and_decimals_come_back_as_json() -> None:
+    result = _season_call("query_season", sql="SELECT *, 1.5 AS d FROM matches")
+    assert not result.is_error and len(result.structured_content["rows"]) == 28
+    json.dumps(result.structured_content)
+
+
+def test_concurrent_queries_share_one_connection_safely() -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from matchcast_mcp.season import Season
+
+    season = Season()
+
+    def one(_):
+        season.describe_views()
+        return season.query("SELECT count(*) FROM matches")["rows"]
+
+    with ThreadPoolExecutor(16) as pool:
+        assert all(r == [[28]] for r in pool.map(one, range(200)))
