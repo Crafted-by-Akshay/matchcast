@@ -14,7 +14,8 @@ What is measured, and what grades it:
 - Verifier: the real checks are replayed on mutated copies of every line the workflow verified
   (changed number, changed claim value, wrong unit, invented name, forged source, stale claim,
   overlong line). Catch rate is per mutation; false rejects are counted on untouched copies.
-  A player from the other team is listed as a known blind spot: the roster check is per match.
+  A teammate swapped in for the event's player is listed as a known gap: the Verifier checks the
+  moment's team and the event's players, not which teammate is right.
   End to end, the seeded bad claim is injected at several match times and the audit chain must
   show it rejected and no shown line may carry a wrong claim.
 - Ask: the 40-question golden set (retrieval hit rate, unanswerable abstain rate, live answers
@@ -50,6 +51,7 @@ EXPECTED = {
     "number_in_text_changed": "number_mismatch",
     "claim_value_off_by_one": "number_mismatch",
     "invented_player": "unknown_player",
+    "player_from_other_club": "unknown_player",
     "source_forged": "unknown_source",
     "wrong_unit": "number_mismatch",
     "claim_stale": "stale_state",
@@ -296,6 +298,9 @@ def mutations(ctx: Any, line: Any, claims: list[dict[str, Any]]) -> dict[str, tu
         line.model_copy(update={"text": line.text + " Dario Vance agrees."}),
         claims,
     )
+    swapped = swap_player(ctx, line, same_team=False)
+    if swapped is not None:
+        out["player_from_other_club"] = (swapped, claims)
     out["line_too_long"] = (
         line.model_copy(update={"text": line.text + " x" * line.max_chars}),
         claims,
@@ -303,12 +308,16 @@ def mutations(ctx: Any, line: Any, claims: list[dict[str, Any]]) -> dict[str, tu
     return out
 
 
-def other_team_player(ctx: Any, line: Any) -> Any | None:
-    """Swap a player for one from the other club: the roster check cannot see this."""
+def swap_player(ctx: Any, line: Any, same_team: bool) -> Any | None:
+    """Put a different player in the line: from the other club, or a teammate of the named one."""
     team_of = {p["player_id"]: p["team_id"] for p in ctx.roster["players"]}
     for pid, name in ctx.names.items():
         if name in line.text:
-            others = [n for q, n in ctx.names.items() if team_of.get(q) != team_of.get(pid)]
+            others = [
+                n
+                for q, n in ctx.names.items()
+                if q != pid and (team_of.get(q) == team_of.get(pid)) == same_team
+            ]
             if others:
                 return line.model_copy(update={"text": line.text.replace(name, others[0], 1)})
     return None
@@ -333,7 +342,7 @@ def eval_verifier(recorder: RecordingVerifier) -> dict[str, Any]:
             caught[kind] += got.verdict == "rejected" and got.reason_code == EXPECTED[kind]
     blind = tried_blind = 0
     for ctx, line, claims in first_pass:
-        swapped = other_team_player(ctx, line)
+        swapped = swap_player(ctx, line, same_team=True)
         if swapped is not None:
             tried_blind += 1
             blind += reply(ctx, swapped, claims).verdict == "rejected"
@@ -354,7 +363,7 @@ def eval_verifier(recorder: RecordingVerifier) -> dict[str, Any]:
         "content_mutations_tried": sum(tried[k] for k in content),
         "catch_rate": rate(sum(caught[k] for k in content), sum(tried[k] for k in content)),
         "by_mutation": per_kind,
-        "known_blind_spot_other_team_player": {
+        "known_gap_wrong_teammate": {
             "tried": tried_blind,
             "caught": blind,
             "rate": rate(blind, tried_blind),
@@ -509,7 +518,7 @@ def report(r: dict[str, Any]) -> str:
             if d["by_construction"] == structural
         )
 
-    blind = v["known_blind_spot_other_team_player"]
+    blind = v["known_gap_wrong_teammate"]
     kinds = "\n".join(
         f"| {name} | {d['asked']} | {d['right']} | {pct(d['rate'])} |"
         for name, d in k["by_kind"].items()
@@ -567,7 +576,7 @@ These are caught by a table lookup or a fixed threshold, so they sit outside the
 | --- | --- | --- | --- |
 {mut_rows(True)}
 
-**Known blind spots.** Swapping in a player from the other club is caught {blind["caught"]} of {blind["tried"]} times: the roster check is per match, not per team. A line that uses the wrong claim's number when both numbers are valid for the line (for example the other side's goal count) is not caught either. The meaning check is the live Verifier's model step and is skipped in rules mode.
+**Known gaps.** Swapping the named player for a teammate who is not in the event is caught {blind["caught"]} of {blind["tried"]} times: the Verifier knows the moment's team and the players its event names, not which teammate the Narrator should have picked. Numbers written in the wrong order (a score of 0-1 for 1-0) are not caught either, because each claim backs a number but not its place in the sentence. The meaning check is the live Verifier's model step and is skipped in rules mode.
 
 Seeded bad claim, end to end: injected at {s["trials"]} match times ({s["injected"]} took effect); the Verifier rejected the line for a number mismatch in {pct(s["caught_rate"])}, repair or abstain followed in {pct(s["repair_or_abstain_rate"])}, and {s["wrong_claims_shown_total"]} wrong claims were shown.
 
