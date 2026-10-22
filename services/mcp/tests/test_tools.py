@@ -244,3 +244,53 @@ def test_danger_features_follow_the_cards_feature_order() -> None:
     assert len(row) == 47 and by_name["passes_prev_10s"] == 1.0  # the pass 25 s ago is outside
     assert by_name["type=shot"] == 1.0 and by_name["x"] == 90.0 and by_name["xg"] == -1.0
     assert by_name["phase="] == 1.0 and "xg" in unset
+
+
+def test_predict_danger_names_the_team_and_refuses_unscorable_events(store) -> None:
+    shot = next(e for e in FIXTURE["events"] if e["payload"]["type"] == "shot")
+    ok = run(
+        call(
+            store,
+            "predict_danger",
+            up_to_sequence=shot["stream_sequence"],
+            event_id=shot["event_id"],
+        )
+    )
+    assert ok.structured_content["team_id"] == shot["payload"]["team_id"]
+    assert "AUC" in ok.structured_content["caution"]
+    odd = next((e for e in FIXTURE["events"] if e["payload"]["type"] not in danger_types()), None)
+    if odd:
+        refused = run(
+            call(
+                store,
+                "predict_danger",
+                up_to_sequence=odd["stream_sequence"],
+                event_id=odd["event_id"],
+            )
+        )
+        assert refused.is_error
+
+
+def danger_types() -> set[str]:
+    from matchcast_mcp import danger
+
+    return set(danger.TYPE_MAP)
+
+
+def test_a_missing_model_is_a_refusal_not_a_crash(store, monkeypatch, tmp_path) -> None:
+    from matchcast_mcp import danger
+
+    (tmp_path / "model-card.json").write_text("{}")
+    monkeypatch.setenv("MATCHCAST_DANGER_MODEL", str(tmp_path))
+    danger._load.cache_clear()
+    shot = next(e for e in FIXTURE["events"] if e["payload"]["type"] == "shot")
+    result = run(
+        call(
+            store,
+            "predict_danger",
+            up_to_sequence=shot["stream_sequence"],
+            event_id=shot["event_id"],
+        )
+    )
+    assert result.is_error
+    danger._load.cache_clear()

@@ -117,13 +117,17 @@ def create_server(store: Store, season: Season | None = None) -> MCPServer:
         the 10 s before it. Trained on simulator scenes; unset inputs are listed in the result."""
         _sk, ctx, limit = scope(session_id, match_id, up_to_sequence)
         events = [e for e in ctx.events if e["stream_sequence"] <= limit]
-        event = next((e for e in events if e["event_id"] == event_id), None)
+        event = max(
+            (e for e in events if e["event_id"] == event_id),
+            key=lambda e: e.get("revision", 0),
+            default=None,
+        )
         if event is None:
             raise ToolRefusal(f"unknown event {event_id} at this sequence")
         earlier = [e for e in events if e["stream_sequence"] < event["stream_sequence"]]
         try:
             return _cap(danger.predict(event, earlier))
-        except danger.DangerUnavailable as error:
+        except (danger.DangerUnavailable, ValueError) as error:
             raise ToolRefusal(str(error)) from error
 
     @server.tool()

@@ -44,18 +44,27 @@ def model_dir() -> Path:
 @lru_cache(maxsize=2)
 def _load(path: str) -> tuple[Any, dict[str, Any]]:
     try:
+        import numpy  # noqa: F401
         import onnxruntime as ort
     except ImportError as error:  # pragma: no cover - depends on the image
-        raise DangerUnavailable("onnxruntime is not installed") from error
+        raise DangerUnavailable("onnxruntime or numpy is not installed") from error
     folder = Path(path)
     try:
         card = json.loads((folder / "model-card.json").read_text())
+        for key in ("features", "missing_value", "name", "version", "metrics", "limits"):
+            card[key]
         session = ort.InferenceSession(
             str(folder / "model.onnx"), providers=["CPUExecutionProvider"]
         )
-    except (OSError, ValueError) as error:
-        raise DangerUnavailable(f"danger model not found in {folder}") from error
+    except Exception as error:  # noqa: BLE001 - onnxruntime's errors are not OSError or ValueError
+        raise DangerUnavailable(f"danger model not usable in {folder.name}") from error
     return session, card
+
+
+def event_team(event: dict[str, Any]) -> str | None:
+    """The team the score is about: the actor, or for a possession change the team that won it."""
+    payload = event["payload"]
+    return payload.get("team_id") or payload.get("to_team_id")
 
 
 def _model_type(event: dict[str, Any]) -> str | None:
@@ -67,6 +76,8 @@ def features(
 ) -> tuple[list[float], list[str]]:
     """The model's input row for one event and the events before it; also the fields left unset."""
     names: list[str] = card["features"]
+    if _model_type(event) is None:
+        raise ValueError(f"no danger score for a {event['payload']['type']} event")
     missing_value = float(card["missing_value"])
     row = dict.fromkeys(names, 0.0)
     unset: list[str] = []
@@ -84,7 +95,7 @@ def features(
     for prior in earlier:
         if now - WINDOW_MS <= prior["event_time_ms"] < now:
             kind = _model_type(prior)
-            if kind in counts:
+            if kind in counts:  # corrections and retractions have no model type, so never count
                 counts[kind] += 1
     row["passes_prev_10s"] = float(counts["pass"])
     row["turnovers_prev_10s"] = float(counts["turnover"])
@@ -112,6 +123,11 @@ def predict(event: dict[str, Any], earlier: list[dict[str, Any]]) -> dict[str, A
         "score": round(score, 4),
         "meaning": "ranking score for a same-team shot within 10 s; not a probability",
         "model": {"name": card["name"], "version": card["version"], "auc": card["metrics"]["auc"]},
+        "team_id": event_team(event),
         "unset_inputs": unset,
+        "caution": (
+            "the live event lacks xg, phase, kind and stamina, so the held-out AUC (measured with "
+            "them) does not carry over, and high scores were overconfident in the model card"
+        ),
         "limits": card["limits"],
     }
