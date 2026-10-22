@@ -1,4 +1,4 @@
-"""Every browser spec uses the shared fixtures (network guard against Azure) and synthetic clubs."""
+"""Every browser spec uses the shared fixtures (Azure network guard) and synthetic club names."""
 
 import re
 from pathlib import Path
