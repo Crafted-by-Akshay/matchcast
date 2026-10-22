@@ -13,11 +13,14 @@
     const d = e.data || {};
     if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'air' || !d.line || log.some((x) => x.id === d.line.id)) return;
     log.push(d.line);
+    box.querySelector('#mc-onair-hash').textContent = ''; delete box.dataset.hash;   // the shown hash belongs to the file exported before this line
     box.querySelector('#mc-onair-n').textContent = log.length + (log.length === 1 ? ' line on air' : ' lines on air');
   });
   box.querySelector('#mc-onair-export').addEventListener('click', async () => {
     const text = doc();
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = 'matchcast-onair.json'; a.click();
+    box.querySelector('#mc-onair-hash').textContent = ''; delete box.dataset.hash;
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'matchcast-onair.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 0);
     try { const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((n) => n.toString(16).padStart(2, '0')).join(''); box.querySelector('#mc-onair-hash').textContent = 'SHA-256 ' + h.slice(0, 16) + '…'; box.dataset.hash = h; } catch (err) { /* no subtle crypto here: the file is still saved */ }
   });
   window.MCOnAir = { json: doc, get count() { return log.length; } };

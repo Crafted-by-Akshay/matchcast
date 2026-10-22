@@ -91,7 +91,6 @@ Choosing Spanish or Hindi in Watch shows Match Pulse cards in that language. Wit
 
 ## Audit chain from the server (EXP-12)
 With an api configured, "Verify chain" in the Agents tab fetches `GET /v1/matches/{id}/audit`, pages through the records (1000 a call, `from_seq`), recomputes every hash in the page (same rules as `verifyChain` in packages/contracts: sorted-key canonical JSON, SHA-256, genesis of 64 zeros) and shows "Chain intact · N records · server" or the first broken sequence and reason. With no api, or if the api cannot answer, it checks the in-page chain and says so. The Analyst's own Trust & audit page still verifies its in-page chain (Planned: switch it to the same call).
-- On-air log (`embed/onair.js`): every line that reached air is logged; "Export on-air JSON" saves `matchcast.onair/1` (id, minute, text, alert, verdict; marked simulated) and shows the file's SHA-256. Pending and killed lines are never in it. Test: `tests/e2e/onair.spec.ts`.
 
 ## Wild-moment alerts (EXP-9)
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
@@ -130,3 +129,6 @@ A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chi
 
 ## Talk by voice (EXP-16)
 Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.js`): hold, speak, release and the words fill the box and submit it; Space or Enter on the focused button works too, and typing always works. Watch's talk-to-player already had a mic. Both use the browser's speech recognition (the button is disabled where the browser has none). Orders that change play are labelled "Game mode" in Watch and never touch the event record behind the claims. Planned, all needing the api: the Speech token endpoint with the Azure Speech SDK, the `/talk` role agents with Verifier and Content Safety, and a spoken reply from the api's voices. No Speech key is ever placed in the page.
+
+## On-air log (AB#362)
+- On-air log (`embed/onair.js`): every line that reached air is logged; "Export on-air JSON" saves `matchcast.onair/1` (id, minute, text, alert, verdict; marked simulated) and shows the file's SHA-256. Pending and killed lines are never in it. Test: `tests/e2e/onair.spec.ts`.
