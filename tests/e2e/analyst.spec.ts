@@ -203,7 +203,7 @@ test('tracking lab: shows the vision report from Watch and shows the OCR row hon
   await f.evaluate((r) => window.postMessage({ src: 'matchcast-shell', type: 'vision', report: { ...r, ocr: { sent: 4, answered: 3, read: 2, no_digits: 1, skipped_small: 20, unavailable: 0, errors: 1, per_minute_cap: 15, accepted: 2, scored: 2, glyph_right: 1, ocr_right: 2, agreed: 1, changed: 1 } } }, '*'), report);
   await expect(f.locator('#vis-panel tr', { hasText: 'OCR crops sent' })).toContainText('digits read 2');
   await expect(f.locator('#vis-panel tr', { hasText: 'OCR crops sent' })).toContainText('too small to read 20');
-  await expect(f.locator('#vis-panel tr', { hasText: 'glyph + Azure OCR' })).toContainText('glyph only 50%, glyph + OCR 100%');
+  await expect(f.locator('#vis-panel tr', { hasText: 'glyph + Azure OCR' })).toContainText('low-confidence tracks only, 2 scored of 2 accepted: glyph alone 50%, glyph + OCR 100%');
   await f.evaluate((r) => window.postMessage({ src: 'matchcast-shell', type: 'vision', report: { ...r, on: false, detection: { ...r.detection, recall: null } } }, '*'), report);
   await expect(f.locator('#vis-panel')).toContainText('n/a');
   await expect(f.locator('#vis-panel')).toContainText('switched off');

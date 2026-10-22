@@ -71,29 +71,36 @@ test('vision crop: Watch with Vision on sends valid 128x128 PNG crops, one at a 
 });
 
 // DAT-11 task 277: OCR text is accepted only as 1 or 2 digits, confidence 0.7 or more, on a number the track's team has.
-test('vision combine: only a well-formed, confident, existing shirt number changes a track identity', async ({ page }) => {
+// The tracker's own track objects are never written to; scoring uses the snapshot taken when the crop was sent.
+test('vision combine: only a well-formed, confident, existing shirt number is accepted, and scoring is honest', async ({ page }) => {
   await openShell(page, 'watch');
   await ready('watch')(page);
   const w = await viewFrame(page, 'watch');
   const r: any = await w.evaluate(() => {
-    const m: any = (window as any).mcOcr, P: any[] = (window as any).__mc.players;
-    const home = P.filter((p) => p.ti === 0 && !p.off), nums = new Set(home.map((p) => String(p.num)));
+    const m: any = (window as any).mcOcr, P: any[] = (window as any).__mc.players, stats = () => (window as any).mcOcrStats();
+    const home = P.filter((p) => p.ti === 0 && !p.off), away = P.filter((p) => p.ti === 1 && !p.off), nums = new Set(home.map((p) => String(p.num)));
     const missing = String([...Array(100).keys()].find((n) => !nums.has(String(n))));
-    const target = home[3], idx = P.indexOf(target);
-    const track = (pid: number) => ({ cls: 1, pid, stable: 0, x: target.pos2.x + 0.3, y: target.pos2.y });
-    const out: any = {};
-    out.format = [m.combine(track(0), { shirt: 'A1', confidence: 0.99 }), m.combine(track(0), { shirt: '123', confidence: 0.99 }), m.combine(track(0), { shirt: null, confidence: 0 })];
-    out.low = m.combine(track(0), { shirt: String(target.num), confidence: 0.69 });
-    out.unknown = m.combine(track(0), { shirt: missing, confidence: 0.95 });
-    const t2: any = track(P.indexOf(home[0])); out.ok = m.combine(t2, { shirt: String(target.num), confidence: 0.7 });
-    out.idx = idx; out.after = { pid: t2.pid, stable: t2.stable, ocr: t2.ocr };
-    out.stats = (window as any).mcOcrStats();
+    const onlyAway = away.find((p) => !nums.has(String(p.num)));
+    const idx = (p: any) => P.indexOf(p), t = home[3];
+    const at = (p: any, d = 0.3) => ({ id: 7, cls: 1, pid: -1, stable: 0, x: p.pos2.x + d, y: p.pos2.y });
+    const out: any = { before: stats() };
+    const k = at(t); Object.freeze(k);                                   // combine and snapshot must not write to a track
+    out.snap = m.snapshot(k);
+    out.format = [m.combine(out.snap, { shirt: 'A1', confidence: 0.99 }), m.combine(out.snap, { shirt: '123', confidence: 0.99 }), m.combine(out.snap, { shirt: null, confidence: 0 }), m.combine(out.snap, { shirt: '07', confidence: 0.99 })];
+    out.low = m.combine(out.snap, { shirt: String(t.num), confidence: 0.69 });
+    out.unknown = m.combine(out.snap, { shirt: missing, confidence: 0.95 });
+    out.otherTeam = onlyAway ? m.combine(out.snap, { shirt: String(onlyAway.num), confidence: 0.95 }) : null;
+    out.ok = m.combine(out.snap, { shirt: String(t.num), confidence: 0.7 });                       // glyph said -1, truth is t, OCR says t
+    out.agree = m.combine(m.snapshot({ ...at(home[0]), pid: idx(home[0]) }), { shirt: String(home[0].num), confidence: 0.9 });   // glyph already right
+    out.far = m.combine(m.snapshot(at(t, 5)), { shirt: String(t.num), confidence: 0.9 });          // no player within 1.5 m: accepted, not scorable
+    out.hasOnlyAway = !!onlyAway; out.idx = idx(t); out.i0 = idx(home[0]); out.after = stats(); out.accepted = [...m.accepted.keys()];
     return out;
   });
-  expect(r.format).toEqual([null, null, null]);
-  expect(r.low).toBeNull();
-  expect(r.unknown).toBeNull();
-  expect(r.ok).toBe(r.idx);
-  expect(r.after).toEqual({ pid: r.idx, stable: 6, ocr: true });
-  expect(r.stats).toMatchObject({ rejected_format: 3, rejected_confidence: 1, rejected_unknown_number: 1, accepted: 1, changed: 1, agreed: 0, scored: 1, glyph_right: 0, ocr_right: 1 });
+  expect(r.snap).toMatchObject({ ti: 0, pid: -1, truth: r.idx });
+  expect(r.format).toEqual([null, null, null, null]);
+  expect(r.low).toBeNull(); expect(r.unknown).toBeNull(); expect(r.otherTeam).toBeNull();
+  expect(r.ok).toBe(r.idx); expect(r.agree).toBe(r.i0); expect(r.far).toBe(r.idx);
+  const d = (k: string) => r.after[k] - r.before[k];
+  expect({ f: d('rejected_format'), c: d('rejected_confidence'), u: d('rejected_unknown_number'), a: d('accepted'), ag: d('agreed'), ch: d('changed'), sc: d('scored'), g: d('glyph_right'), o: d('ocr_right') })
+    .toEqual({ f: 4, c: 1, u: r.hasOnlyAway ? 2 : 1, a: 3, ag: 1, ch: 2, sc: 2, g: 1, o: 2 });
 });
