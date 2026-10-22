@@ -7,7 +7,7 @@ GOLDEN = Path(__file__).parent.parent / "golden"
 
 
 def test_indices_golden_is_current():
-    """The JavaScript port in apps/unified/embed/indices.js is checked against this file, so it must match the Python code."""
+    """apps/unified/embed/indices.js is checked against this file, so it must match the Python."""
     fresh = subprocess.run(
         [sys.executable, str(GOLDEN / "export_indices_golden.py")],
         capture_output=True, text=True, check=True,
