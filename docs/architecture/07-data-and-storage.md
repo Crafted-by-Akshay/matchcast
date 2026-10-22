@@ -94,7 +94,7 @@ Write rules:
 | `models` | `danger/{version}/model.onnx`, `danger/{version}/model-card.json` | Danger model | Kept |
 | `audio` | `{prefix}/{publication_id}.{lang}.mp3`, `{prefix}/recap.{lang}.mp3` | Voice | Delete after 30 days |
 | `recaps` | `{prefix}/{persona}.json` | Full-time recaps | Kept |
-| `kb` | `v1/chunks.jsonl` | Search fallback copy | Kept |
+| `kb-chunks` | `v1/chunks.jsonl` | Search fallback copy | Kept |
 | `vision` | `{prefix}/{yyyyMMddHHmm}/crop-{n}.png` | OCR crops | Delete after 1 day |
 | `exports` | `{prefix}/{export_id}.{csv,json}` | Analyst exports with SHA-256 | Delete after 7 days |
 | `overflow` | see §4 | Large JSON values | With the row |
