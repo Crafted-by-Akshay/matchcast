@@ -6,6 +6,7 @@ import asyncio
 import csv
 import hashlib
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -315,6 +316,18 @@ class Registry:
         return flow
 
 
+def _bare_ip(entry: str) -> str | None:
+    """The address in a forwarded entry, without a port; None when it is not an address."""
+    if entry.startswith("["):  # [v6]:port
+        entry = entry[1:].split("]", 1)[0]
+    elif entry.count(":") == 1:  # v4:port
+        entry = entry.split(":", 1)[0]
+    try:
+        return str(ipaddress.ip_address(entry))
+    except ValueError:
+        return None
+
+
 def client_ip(request: Request) -> str:
     """The address rate limits key on.
 
@@ -323,10 +336,10 @@ def client_ip(request: Request) -> str:
     ingress appended; entries to its left come from the caller and can be forged. Anywhere else
     the header is ignored.
     """
-    if os.environ.get("MATCHCAST_BEHIND_INGRESS", "").lower() == "true":
-        forwarded = request.headers.get("x-forwarded-for", "")
-        if last := forwarded.rsplit(",", 1)[-1].strip():
-            return last
+    if os.environ.get("MATCHCAST_BEHIND_INGRESS", "").strip().lower() == "true":
+        entries = [e.strip() for e in request.headers.get("x-forwarded-for", "").split(",")]
+        if (entry := next((e for e in reversed(entries) if e), "")) and (ip := _bare_ip(entry)):
+            return ip
     return request.client.host if request.client else "local"
 
 

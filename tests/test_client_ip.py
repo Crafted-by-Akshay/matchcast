@@ -30,3 +30,15 @@ def test_absent_or_empty_header_falls_back_to_the_peer(monkeypatch):
     assert client_ip(request()) == "10.0.0.9"
     assert client_ip(request("  ")) == "10.0.0.9"
     assert client_ip(request(peer=None)) == "local"
+
+
+def test_port_suffix_trailing_comma_and_case_are_handled(monkeypatch):
+    monkeypatch.setenv("MATCHCAST_BEHIND_INGRESS", " True ")
+    assert client_ip(request("203.0.113.7:51234")) == "203.0.113.7"
+    assert client_ip(request("[2001:db8::1]:443")) == "2001:db8::1"
+    assert client_ip(request("203.0.113.7,")) == "203.0.113.7"
+
+
+def test_a_non_address_falls_back_to_the_peer(monkeypatch):
+    monkeypatch.setenv("MATCHCAST_BEHIND_INGRESS", "true")
+    assert client_ip(request("not-an-ip")) == "10.0.0.9"
