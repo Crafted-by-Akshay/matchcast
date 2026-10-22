@@ -1,6 +1,7 @@
 // Real-Time Dashboard tiles (DAT-8), exactly four, refresh 10 s (docs/architecture/08 section 5).
 // In the dashboard, add a string parameter `MatchId` (single selection, default = latest match) and
 // delete the `let MatchId` line from each query. Run standalone by setting it below.
+// All tiles read EventsLatest() (events.kql): the newest revision of each event, no retractions.
 // Pitch is 105 x 68 m; goals at x = 0 and x = 105. Not run against a live Eventhouse yet.
 //
 // The tiles are KQL approximations of the metrics in packages/metrics (docs/metrics.md): the event
@@ -12,7 +13,7 @@
 // chaos   = share of all events in the minute that are contests: tackles, fouls, pressure,
 //           possession changes (0 to 100).
 let MatchId = "match-demo";
-events
+EventsLatest()
 | where match_id == MatchId
 | extend minute = event_time_ms / 60000
 | summarize
@@ -31,11 +32,11 @@ events
 // term of pass_quality). A team attacks x = 105 if its goals and shots are mostly at x > 52.5, and
 // the home team defaults to x = 105 before it has any.
 let MatchId = "match-demo";
-let attack = events
+let attack = EventsLatest()
     | where match_id == MatchId and kind in ("shot", "goal")
     | summarize avg_x = avg(x) by team_id
     | project team_id, attack_x = iff(avg_x > 52.5, 105.0, 0.0);
-events
+EventsLatest()
 | where match_id == MatchId and kind == "pass"
 | extend x0 = todouble(payload.start_position.x), x1 = todouble(payload.end_position.x)
 | join kind=leftouter attack on team_id
@@ -54,7 +55,7 @@ events
 // stream does not carry, so they are left out. Checked against packages/metrics `xg` (equal to 1e-15).
 let MatchId = "match-demo";
 let b0 = -1.464609; let b1 = 1.413822; let b2 = -0.089141;
-let shots = events
+let shots = EventsLatest()
     | where match_id == MatchId and kind == "shot"
     | extend goal_x = iff(x > 52.5, 105.0, 0.0)
     | extend dx = abs(goal_x - x)
@@ -62,7 +63,7 @@ let shots = events
     | extend angle = abs(atan2(y - 30.34, dx) - atan2(y - 37.66, dx))
     | extend xg = max_of(0.005, min_of(0.95, 1.0 / (1.0 + exp(-(b0 + b1 * angle + b2 * dist)))))
     | summarize shots = count(), xg = round(sum(xg), 2) by team_id;
-let goals = events
+let goals = EventsLatest()
     | where match_id == MatchId and kind == "goal"
     | summarize goals = count() by team_id;
 shots
@@ -71,7 +72,7 @@ shots
 
 // ---- Tile 4: events per minute (area chart) -------------------------------------------------------
 let MatchId = "match-demo";
-events
+EventsLatest()
 | where match_id == MatchId
 | summarize events_per_minute = count() by minute = event_time_ms / 60000
 | order by minute asc

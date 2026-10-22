@@ -122,7 +122,7 @@ Built today (`scripts/export_season.py`, 28 matches, `data/season/v1/*.parquet`)
 
 ## 8. Fabric Eventhouse
 
-Table `events` (KQL): `tenant_id: string, session_id: string, match_id: string, stream_sequence: long, event_id: string, kind: string, team_id: string, player_id: string, x: real, y: real, event_time_ms: long, period: int, payload: dynamic, ingested_at: datetime`. Queries for the four dashboard tiles are in `data/fabric/queries.kql`.
+Table `events` (KQL): `tenant_id: string, session_id: string, match_id: string, stream_sequence: long, event_id: string, revision: int, kind: string, team_id: string, player_id: string, x: real, y: real, event_time_ms: long, period: int, payload: dynamic, ingested_at: datetime`. Queries for the four dashboard tiles are in `data/fabric/queries.kql`.
 
 ## 9. Databricks Unity Catalog
 

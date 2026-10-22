@@ -18,5 +18,5 @@ Status: **written, not run**. No Fabric workspace exists yet and Kusto has no lo
 7. Film a 20 s clip, export screenshots into this folder, then **pause the capacity**: `docs/runbook-shutdown.md`, "Schedule".
 
 ## Known limits
-- Corrections and retractions arrive as new revisions of an event; `events` keeps every row, so counts can be above the published count after a correction. Tile queries do not collapse revisions.
+- `events` keeps every revision of an event (a correction is a new row). Tiles read `EventsLatest()`, which keeps the newest revision and drops retractions.
 - Control and chaos are per-minute proxies from event counts, not the 5-minute rolling indices of `packages/metrics`.
