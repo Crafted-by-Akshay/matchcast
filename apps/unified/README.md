@@ -76,3 +76,6 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 
 ## Captions and voice (EXP-8)
 `voice.js` shows every verified line as a caption and, when "Voice" in the top bar is on, speaks it. With the api, a publication's `audio_url` (Azure Speech mp3 from `/v1/audio/...`) is played; without it the browser's own voice is used and labelled "Browser voice (simulated)"; the Azure Speech voice is Planned. A line older than 5 s is shown but never spoken. Each claim is spoken once. Voice names live in `voices.json` (shown on the button; the api reads them, the browser fallback cannot use Azure voice names)`voices.json` (play-by-play, analyst, Spanish, Hindi). Voice is off by default (browsers need a click to play audio) and the choice is remembered. Planned: the Speech resource and synthesis service (api and Bicep), Spanish/Hindi voices once EXP-17 lands, and per-role voice choice.
+
+## Wild-moment alerts (EXP-9)
+A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.

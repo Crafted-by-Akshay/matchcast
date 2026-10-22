@@ -6,9 +6,10 @@ on:
   push:
     branches: [main]
 
+# Pull request runs cancel superseded pushes; every run on main finishes so each merge has a verdict.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -117,6 +118,8 @@ jobs:
         run: |
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
           ./gitleaks detect --source . --log-opts="HEAD" --redact --no-banner --verbose
+      - name: Prove the scan fails on a fake key
+        run: scripts/gitleaks_proof.sh ./gitleaks
 
   openapi:
     runs-on: ubuntu-latest
