@@ -807,6 +807,8 @@ dependencies = [
     { name = "matchcast-agents" },
     { name = "matchcast-contracts" },
     { name = "mcp" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
     { name = "starlette" },
 ]
 
@@ -816,6 +818,8 @@ requires-dist = [
     { name = "matchcast-agents", editable = "packages/agents" },
     { name = "matchcast-contracts", editable = "packages/contracts" },
     { name = "mcp", specifier = ">=2,<3" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
     { name = "starlette" },
 ]
 
