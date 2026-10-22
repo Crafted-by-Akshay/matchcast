@@ -16,6 +16,11 @@ def stream_key(stream: dict[str, str]) -> str:
     return "|".join((stream["tenant_id"], stream["session_id"], stream["match_id"]))
 
 
+class MatchRepo(Protocol):
+    def put_match(self, sk: str, info: dict[str, Any]) -> None: ...
+    def get_match(self, sk: str) -> dict[str, Any] | None: ...
+
+
 class EventRepo(Protocol):
     def add_event(self, sk: str, event: dict[str, Any]) -> bool: ...
     def events(self, sk: str, up_to_sequence: int | None = None) -> list[dict[str, Any]]: ...
@@ -71,6 +76,13 @@ class MemoryStore:
         self._audit: dict[str, list[dict[str, Any]]] = {}
         self._recaps: dict[str, dict[str, dict[str, Any]]] = {}
         self._checkpoints: dict[str, dict[str, Any]] = {}
+        self._matches: dict[str, dict[str, Any]] = {}
+
+    def put_match(self, sk: str, info: dict[str, Any]) -> None:
+        self._matches[sk] = info
+
+    def get_match(self, sk: str) -> dict[str, Any] | None:
+        return self._matches.get(sk)
 
     def add_event(self, sk: str, event: dict[str, Any]) -> bool:
         """Store a semantic event once per (event_id, revision); False for a retry."""
