@@ -1,0 +1,16 @@
+{
+  "name": "@matchcast/simulation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless runner for the MatchCast match engine (the same modules the Watch view uses, driven in Chromium without rendering)",
+  "license": "UNLICENSED",
+  "engines": { "node": "^20.19.0 || ^22.13.0 || >=24" },
+  "scripts": {
+    "match": "node run.cjs",
+    "time": "node run.cjs --seeds 1-3 --half 45 --workers 1"
+  },
+  "dependencies": {
+    "playwright-core": "1.56.1",
+    "three": "0.160.0"
+  }
+}
