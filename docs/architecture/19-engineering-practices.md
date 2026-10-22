@@ -14,7 +14,7 @@ services/simulation/     Data         headless engine runner (Node 22)
 packages/contracts/      Agents       JSON Schema, generated TS, validators (change needs all-lane agreement)
 packages/agents/         Agents       workflow, executors, prompts, rules, ask
 packages/metrics/        Data         metric functions + golden tests
-packages/shared/         Platform     Azure client factories (shared credential) and telemetry setup used by api, worker, agents
+packages/shared/         Platform     Azure client factories (shared credential) and telemetry setup used by api and agents
 apps/broadcast-web/      (obsolete)   early Next.js scaffold, replaced by apps/unified; do not build here. Delete it in the PR that adds the `web` container (doc 02 §4), together with its root `build` script entry
 kb/                      Agents       knowledge base markdown
 data/                    Data         calibration targets, Databricks bundle, Fabric KQL
