@@ -84,3 +84,8 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 With an api configured, "Verify chain" in the Agents tab fetches `GET /v1/matches/{id}/audit`, pages through the records (1000 a call, `from_seq`), recomputes every hash in the page (same rules as `verifyChain` in packages/contracts: sorted-key canonical JSON, SHA-256, genesis of 64 zeros) and shows "Chain intact · N records · server" or the first broken sequence and reason. With no api, or if the api cannot answer, it checks the in-page chain and says so. The Analyst's own Trust & audit page still verifies its in-page chain (Planned: switch it to the same call).
 ## Wild-moment alerts (EXP-9)
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
+
+## Analyst Data platform page (EXP-13)
+- `analyst-pages/*.js` holds Analyst pages we own; `build.py` appends them after the prototype pages. `10_data_platform.js` adds Platform > Data platform.
+- It shows the Fabric dashboard clip or screenshot (`shared/fabric-dashboard.mp4` / `.png`) and the Databricks model card (`shared/model-card.json`). Each block says **Planned** and names its ticket (DAT-8, DAT-6) until the file exists. Fabric is labelled paused after filming.
+- Test: `tests/e2e/analyst.spec.ts`.
