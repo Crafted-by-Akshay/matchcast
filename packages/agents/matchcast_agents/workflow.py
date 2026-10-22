@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from matchcast_contracts import ContractError, validate
+from opentelemetry import trace
 
 from . import recap as recap_mod
 from .context import MatchContext
@@ -106,6 +107,24 @@ class WorkflowConfig:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+_TRACER = trace.get_tracer("matchcast.agents")
+
+
+def _annotate(span: Any, method: str, result: Any) -> None:
+    """Attach the verdict or claim ids to the agent span so a claim ID finds its trace (PLT-8)."""
+    verdict = getattr(result, "verdict", None)
+    if method == "check" and verdict:
+        span.set_attribute("matchcast.verdict", verdict)
+        reason = getattr(result, "reason_code", None)
+        if reason:
+            span.set_attribute("matchcast.reason_code", reason)
+    if method == "analyse" and isinstance(result, list | tuple):
+        ids = [c.packet.get("claim_id") for c in result if hasattr(c, "packet")]
+        ids = [i for i in ids if i]
+        if ids:
+            span.set_attribute("matchcast.claim_ids", ids)
+
+
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -191,10 +210,17 @@ class MatchWorkflow:
 
     async def _call(self, agent: Any, method: str, subject: str, *args: Any, **kwargs: Any) -> Any:
         """Call an agent, then audit any rules fallback it made and publish the status change."""
-        try:
-            return await getattr(agent, method)(*args, **kwargs)
-        finally:
-            self._sync_status(agent, subject)
+        with _TRACER.start_as_current_span(f"invoke_agent {agent.agent_id}") as span:
+            span.set_attribute("gen_ai.agent.name", agent.agent_id)
+            span.set_attribute("matchcast.mode", getattr(agent, "mode", "live"))
+            span.set_attribute("matchcast.method", method)
+            span.set_attribute("matchcast.subject", subject)
+            try:
+                result = await getattr(agent, method)(*args, **kwargs)
+            finally:
+                self._sync_status(agent, subject)
+            _annotate(span, method, result)
+            return result
 
     def _sync_status(self, agent: Any, subject: str) -> None:
         take = getattr(agent, "take_fallbacks", None)
