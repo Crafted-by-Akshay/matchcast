@@ -227,3 +227,26 @@ def test_the_unified_app_client_can_create_a_match_and_get_lines(client: TestCli
         "/v1/matches/m-x/stream", params={**q, "persona": "fan", "follow": "false"}
     ).text
     assert "Ada Kerr" in text and "Harbour" in text
+
+
+def test_easy_auth_gate_answers_401_403_and_allows_the_producer(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import base64
+    import json
+
+    def principal(*roles: str) -> dict[str, str]:
+        claims = [{"typ": "roles", "val": r} for r in roles] + [{"typ": "name", "val": "Judge"}]
+        encoded = base64.b64encode(json.dumps({"claims": claims}).encode()).decode()
+        return {"X-MS-CLIENT-PRINCIPAL": encoded}
+
+    monkeypatch.setenv("MATCHCAST_EASY_AUTH", "1")
+    client.app.state.matches.require_role = True  # type: ignore[attr-defined]
+    create(client, approval_mode="producer")
+    url = "/v1/matches/match-short/lines"
+
+    assert client.get(url, params=Q).status_code == 401
+    assert client.get(url, params=Q, headers=principal("Viewer")).status_code == 403
+    spoof = {**principal("Viewer"), "X-MatchCast-Role": "Producer"}
+    assert client.get(url, params=Q, headers=spoof).status_code == 403
+    assert client.get(url, params=Q, headers=principal("Producer")).status_code == 200

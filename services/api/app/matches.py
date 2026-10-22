@@ -8,7 +8,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
-from fastapi import APIRouter, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.hub import StreamEvent
@@ -17,10 +17,11 @@ from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.auth import PRODUCER_ROLES, caller_role
+
 TENANT = "demo"
 HEARTBEAT_S = 15
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
-PRODUCER_ROLES = ("Producer", "Admin")
 PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {"not_found": 404, "match_exists": 409, "forbidden_role": 403, "not_approvable": 409}
 
@@ -252,7 +253,7 @@ def build_router(registry: Registry) -> APIRouter:
         match_id: str,
         session_id: str,
         status: str | None = None,
-        x_matchcast_role: str | None = Header(default=None),
+        x_matchcast_role: str | None = Depends(caller_role),
     ) -> dict[str, Any]:
         need_producer(x_matchcast_role)
         flow = registry.get(session_id, match_id)
@@ -280,19 +281,19 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/lines/{line_id}/approve")
     async def approve(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Header(default=None)
+        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
     ) -> dict[str, Any]:
         return await act(line_id, body, x_matchcast_role, "approve")
 
     @router.post("/lines/{line_id}/edit")
     async def edit(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Header(default=None)
+        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
     ) -> dict[str, Any]:
         return await act(line_id, body, x_matchcast_role, "edit")
 
     @router.post("/lines/{line_id}/kill")
     async def kill(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Header(default=None)
+        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
     ) -> dict[str, Any]:
         return await act(line_id, body, x_matchcast_role, "kill")
 

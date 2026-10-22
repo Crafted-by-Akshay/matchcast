@@ -93,7 +93,12 @@ approve, edit or kill lines. Errors are RFC 9457 problems with a `code`.
 - The tenant is `demo`; the roster's `stream` must equal `(demo, session_id, match_id)`.
 - Everything is in memory in one process (ADR-0005). No model is called.
 - `GET .../stream?follow=false` sends status, state and the replay, then closes (useful for curl and tests).
-- Producer routes check the `X-MatchCast-Role` header (`Producer` or `Admin`) only when
-  `MATCHCAST_REQUIRE_ROLE=1`; real Entra roles replace it in PLT-5.
+- Producer routes (lines, approve, edit, kill) check the caller's role only when
+  `MATCHCAST_REQUIRE_ROLE=1`. With `MATCHCAST_EASY_AUTH=1` (set by Bicep when Entra sign-in is
+  on) the role comes from the Easy Auth `X-MS-CLIENT-PRINCIPAL` header: no caller gives 401
+  `unauthenticated` (the browser then goes to `/.auth/login/aad`), a Viewer gives 403
+  `forbidden_role`, Producer and Admin pass, and the `X-MatchCast-Role` header is ignored.
+  Without Easy Auth (local mode) the `X-MatchCast-Role` header (`Producer` or `Admin`) is used.
+  `app/auth.py` holds the parsing and the `caller_role` dependency.
 - Not built yet: `/ask`, `/talk`, `/ds/ask`, vision, speech, audio, recap and exports routes;
   rate limits; `docs/api/openapi.json` snapshot.
