@@ -79,3 +79,7 @@ If the target is missed, we report the measured number. We never round it up.
 ## Browser crop queue (task 275, browser side)
 
 `apps/unified/embed/vision-crops.js` builds the crop and `index.html` relays it (`vision-crop` to `LV.identify`, `vision-ocr` back). Rules in code: confidence proxy `min(1, stable/6)` below 0.8, at most one call in flight and one per 4.1 s, lowest confidence first, PNG at most 40 KB, nothing kept. Tracks under 24 px tall are counted as "too small to read" and not sent, since a number cannot fit in the pixels. Counters (`sent`, `answered`, `read`, `no_digits`, `skipped_small`, `unavailable`, `errors`) travel in the vision report to the Tracking lab. Measured on the Broadcast camera in the sandbox: players are 8 to 13 px tall, so OCR is expected to help only on the Tactical camera; task 279 reports the real numbers.
+
+## Combining OCR with the glyph reading (task 277)
+
+`combine` in `embed/vision-crops.js` applies rule 3 above: 1 or 2 digits, confidence at least 0.7, a shirt number the track's team has (home for kit classes 1 and 3, away for 2 and 4). An accepted reading sets the track's player and holds it (`stable` at least 6); anything else leaves the glyph reading. Each accepted answer is scored against engine truth (the player of that team nearest the track within 1.5 m): the Tracking lab shows glyph only against glyph + OCR **on the tracks OCR answered**, not a whole-run figure, plus agreed and changed counts. Posting vision events on the `<session>.vision` stream is not done yet.

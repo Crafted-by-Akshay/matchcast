@@ -69,3 +69,31 @@ test('vision crop: Watch with Vision on sends valid 128x128 PNG crops, one at a 
   expect(await w.evaluate(() => (window as any).mcOcr.results.size)).toBeGreaterThan(0);
   expect(errs).toEqual([]);
 });
+
+// DAT-11 task 277: OCR text is accepted only as 1 or 2 digits, confidence 0.7 or more, on a number the track's team has.
+test('vision combine: only a well-formed, confident, existing shirt number changes a track identity', async ({ page }) => {
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const w = await viewFrame(page, 'watch');
+  const r: any = await w.evaluate(() => {
+    const m: any = (window as any).mcOcr, P: any[] = (window as any).__mc.players;
+    const home = P.filter((p) => p.ti === 0 && !p.off), nums = new Set(home.map((p) => String(p.num)));
+    const missing = String([...Array(100).keys()].find((n) => !nums.has(String(n))));
+    const target = home[3], idx = P.indexOf(target);
+    const track = (pid: number) => ({ cls: 1, pid, stable: 0, x: target.pos2.x + 0.3, y: target.pos2.y });
+    const out: any = {};
+    out.format = [m.combine(track(0), { shirt: 'A1', confidence: 0.99 }), m.combine(track(0), { shirt: '123', confidence: 0.99 }), m.combine(track(0), { shirt: null, confidence: 0 })];
+    out.low = m.combine(track(0), { shirt: String(target.num), confidence: 0.69 });
+    out.unknown = m.combine(track(0), { shirt: missing, confidence: 0.95 });
+    const t2: any = track(P.indexOf(home[0])); out.ok = m.combine(t2, { shirt: String(target.num), confidence: 0.7 });
+    out.idx = idx; out.after = { pid: t2.pid, stable: t2.stable, ocr: t2.ocr };
+    out.stats = (window as any).mcOcrStats();
+    return out;
+  });
+  expect(r.format).toEqual([null, null, null]);
+  expect(r.low).toBeNull();
+  expect(r.unknown).toBeNull();
+  expect(r.ok).toBe(r.idx);
+  expect(r.after).toEqual({ pid: r.idx, stable: 6, ocr: true });
+  expect(r.stats).toMatchObject({ rejected_format: 3, rejected_confidence: 1, rejected_unknown_number: 1, accepted: 1, changed: 1, agreed: 0, scored: 1, glyph_right: 0, ocr_right: 1 });
+});
