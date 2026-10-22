@@ -149,3 +149,37 @@ def test_consumer_restarts_after_a_failure(monkeypatch):
 
     asyncio.run(go())
     assert len(calls) == 3
+
+
+def test_reducer_writer_delivers_a_shuffled_stream_to_the_workflow_in_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-0017: the reducer reorders and dedupes, so the workflow sees the stream in order."""
+    import random
+
+    events = FIXTURE["events"]
+    monkeypatch.setenv("MATCHCAST_PIPELINE", "direct")
+    direct = TestClient(create_app())
+    direct.post("/v1/matches", json=BODY)
+    post(direct, events)
+    expected = sorted(c["claim_id"] for c in claims(direct))
+
+    shuffled = list(events) + events[:20]
+    random.Random(3).shuffle(shuffled)
+    monkeypatch.setenv("MATCHCAST_PIPELINE", "memory")
+    monkeypatch.setenv("MATCHCAST_STATE_WRITER", "reducer")
+    with TestClient(create_app()) as piped:
+        piped.post("/v1/matches", json=BODY)
+        assert piped.app.state.matches.pipeline.state_repo is not None
+        post(piped, shuffled)
+        wait_for_sequence(piped, events[-1]["stream_sequence"])
+        assert sorted(c["claim_id"] for c in claims(piped)) == expected
+
+
+def test_workflow_writer_is_the_default_and_leaves_the_reducer_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MATCHCAST_PIPELINE", "memory")
+    monkeypatch.delenv("MATCHCAST_STATE_WRITER", raising=False)
+    with TestClient(create_app()) as piped:
+        assert piped.app.state.matches.pipeline.state_repo is None

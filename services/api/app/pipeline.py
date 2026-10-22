@@ -12,6 +12,11 @@
 * ``memory``: the same two halves joined by an in-process queue, to exercise the pipeline code
   without a hub (local runs, tests).
 
+With ``MATCHCAST_STATE_WRITER=reducer`` (ADR-0017) the consumer first runs the batch through the
+state reducer, which then owns ``matchstate``, and hands the workflow the events the reducer
+applied plus the duplicates it dropped (the workflow dedupes them itself, and a redelivery after a
+crash between the two still reaches it). Only events held behind a gap wait.
+
 A match this process has no workflow for (the api restarted) is rebuilt from the stored roster, so
 the consumer resumes from the checkpoint instead of dropping events.
 """
@@ -27,6 +32,8 @@ from typing import TYPE_CHECKING, Any
 
 from matchcast_contracts import ContractError
 from matchcast_worker.eventhubs import EventHubsPublisher, EventHubsSource, MemoryBus, Publisher
+from matchcast_worker.reducer import stream_key
+from matchcast_worker.repo import MemoryStateRepo, StateRepo, process_applied
 
 if TYPE_CHECKING:
     from app.matches import Registry
@@ -43,24 +50,66 @@ def pipeline_mode() -> str:
     return mode
 
 
+def _state_repo() -> StateRepo | None:
+    """The reducer's repository when it owns ``matchstate``, else None (the workflow writes)."""
+    writer = os.environ.get("MATCHCAST_STATE_WRITER", "workflow")
+    if writer == "workflow":
+        return None
+    if writer != "reducer":
+        raise ValueError(f"MATCHCAST_STATE_WRITER must be workflow or reducer, not {writer!r}")
+    if os.environ.get("MATCHCAST_STORE", "memory") == "table":
+        from matchcast_shared import azure_clients
+        from matchcast_worker.table_repo import TableStateRepo
+
+        return TableStateRepo(azure_clients.table_service_client())
+    return MemoryStateRepo()
+
+
 class Pipeline:
-    def __init__(self, registry: Registry, publisher: Publisher, source: Any) -> None:
+    def __init__(
+        self,
+        registry: Registry,
+        publisher: Publisher,
+        source: Any,
+        state_repo: StateRepo | None = None,
+    ) -> None:
         self.registry = registry
         self.publisher = publisher
         self._source = source
+        self.state_repo = state_repo
 
     @classmethod
     def build(cls, registry: Registry, mode: str | None = None) -> Pipeline | None:
         mode = mode or pipeline_mode()
         if mode == "direct":
             return None
+        repo = _state_repo()
         if mode == "memory":
             bus = MemoryBus()
-            return cls(registry, bus, bus)
+            return cls(registry, bus, bus, repo)
         from matchcast_shared import azure_clients
 
         publisher = EventHubsPublisher(azure_clients.eventhub_producer_aio())
-        return cls(registry, publisher, EventHubsSource(azure_clients.eventhub_consumer_aio()))
+        source = EventHubsSource(azure_clients.eventhub_consumer_aio())
+        return cls(registry, publisher, source, repo)
+
+    def _reduce(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Run the batch through the reducer; return what the workflow should see, in order."""
+        repo = self.state_repo
+        assert repo is not None
+        seen: dict[str, int] = {}
+        for event in batch:
+            if event.get("kind") == "event":
+                sk = stream_key(event)
+                if sk not in seen:
+                    state = repo.get(sk)
+                    seen[sk] = state.max_sequence if state else 0
+        _, applied = process_applied(repo, batch)
+        out = {e["event_id"]: e for e in applied}
+        for event in batch:
+            if event.get("kind") == "event" and event["stream_sequence"] <= seen[stream_key(event)]:
+                out.setdefault(event["event_id"], event)  # a duplicate: the workflow dedupes it
+        return sorted(out.values(), key=lambda e: e["stream_sequence"])
 
     async def publish(self, sk: str, events: list[dict[str, Any]]) -> None:
         await self.publisher.publish(sk, events)
@@ -81,6 +130,10 @@ class Pipeline:
             except (Problem, LookupError):
                 log.warning("dropping %d events of unknown match %s", len(batch), match_id)
                 continue
+            if self.state_repo is not None:
+                batch = await asyncio.to_thread(self._reduce, batch)
+                if not batch:
+                    continue
             try:
                 await flow.ingest(batch)
             except ContractError as error:
