@@ -66,3 +66,20 @@ test('language: shot and xG lines translate and pass the re-check in both langua
   expect(kinds.length).toBeGreaterThanOrEqual(3);
   for (const k of kinds) expect(k.slice(1)).toEqual([true, true]);
 });
+
+// PR 118: the api sends variants only for translations it re-checked; they replace the rules text for that language and the other language keeps the fallback.
+test('language: api variants are shown for the language they cover; the other keeps the rules line', async ({ page }) => {
+  await openShell(page, 'agents');
+  await page.evaluate(() => AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' }));
+  await goal(page, 10.1, '1-0');
+  const r = await page.evaluate(() => {
+    const x = AG.run.claims.find((q: any) => q.kind === 'score');
+    const rulesHi = x.tr.hi.text;
+    AG.ingest({ claim_id: x.id, variants: { es: '<b>Gol</b> de A One, 1-0.' } }, 'live');
+    return { es: x.tr.es, hi: x.tr.hi.text === rulesHi, card: cardOf(x).tr.es };
+  });
+  expect(r.es.ok).toBe(true);
+  expect(r.es.api).toBe(true);
+  expect(r.es.text).toBe('<b>Gol</b> de A One, 1-0.');   // plain text: Watch renders it with textContent / esc
+  expect(r.hi).toBe(true);
+});

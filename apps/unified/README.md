@@ -145,3 +145,6 @@ Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.j
 - Only Watch is loaded at first (one iframe); Broadcast and Analyst are created on first switch.
 - The shell now says what is happening: with no WebGL, Watch and Broadcast show "This view needs WebGL" at once (Analyst and Agents still work); a view still loading after 25 s shows a note and a "Reload this view" button. Test: `tests/e2e/loading-states.spec.ts`.
 - Ideas not done (visual risk, in the prototype source): fewer grass-noise specks in `paintPitch`, decode the player model off the main thread.
+
+## Server translations (EXP-17, api PR 118)
+When the api sends `variants: {es|hi: text}` on a publication (only after its own number, name and citation re-check), `agents.js` ingest stores it as that language's translation (`api: true`, shown as "Translated by Azure AI Translator") and Watch renders it as text. A language the api did not send keeps the rules-template line, so nothing changes until Platform sets `TRANSLATOR_ENDPOINT`. Test: the `api variants` case in `tests/e2e/language.spec.ts`.

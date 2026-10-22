@@ -47,7 +47,7 @@ MCS.progress('Loading the stadium and players');
     const chips = mode() === 'casual' ? [] : c.chips;
     return '<p>' + esc(line(c)) + '</p><div class="mcx-r"><span class="mcx-t' + (ok ? '' : ' wait') + '" title="' + (ok ? 'Verified: recounted from the event log' : 'Awaiting review') + '">' + (ok ? '✓ Verified' : '● Awaiting review') + '</span>'
       + chips.map((x) => '<span class="mcx-ch">' + esc(x) + '</span>').join('') + (c.source === 'rules' ? '<span class="mcx-ch fb" title="Written by the in-page rules, not the model">Rules fallback</span>' : '')
-      + (tr(c) ? (tr(c).ok ? '<span class="mcx-ch" title="Translated by rules; the Verifier re-checked numbers and names">' + lang() + ' · translated ✓</span>' : '<span class="mcx-ch fb" title="' + esc(tr(c).reason) + '">Translation unavailable</span>') : '') + '<button class="mcx-b" data-why>Why?</button><button class="mcx-b" data-how>How was this made?</button></div><div class="mcx-w" hidden></div>';
+      + (tr(c) ? (tr(c).ok ? '<span class="mcx-ch" title="' + (tr(c).api ? 'Translated by Azure AI Translator; ' : 'Translated by rules; ') + 'the Verifier re-checked numbers and names">' + lang() + ' · translated ✓</span>' : '<span class="mcx-ch fb" title="' + esc(tr(c).reason) + '">Translation unavailable</span>') : '') + '<button class="mcx-b" data-why>Why?</button><button class="mcx-b" data-how>How was this made?</button></div><div class="mcx-w" hidden></div>';
   };
   const why = (el, c) => {
     const w = el.querySelector('.mcx-w'); if (!w.hidden) { w.hidden = true; return; }
