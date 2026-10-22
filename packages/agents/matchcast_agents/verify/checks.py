@@ -118,6 +118,8 @@ def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any
 
 # lines that are not about one moment: the Ask answer and the full-time recap
 NOT_A_MOMENT = ("ask", "line-recap")
+# events whose lines are about one side's player; summaries and period ends are about both
+PLAYER_MOMENTS = ("goal", "card", "shot", "tackle", "foul")
 
 
 def moment_team_problem(
@@ -125,12 +127,14 @@ def moment_team_problem(
 ) -> str | None:
     """A player named in a moment line must belong to the moment's team or be named in its event.
 
-    The moment is the event at the claims' evidence sequence. Returns the offending name."""
+    The moment is the event at the claims' evidence sequence (the latest revision of it).
+    Names are matched whole and longest first, so "Ben Cole" is not found inside "Ben Coleman".
+    Returns the offending name."""
     if line.line_id.startswith(NOT_A_MOMENT) or not claims:
         return None
     seq = max(c["max_evidence_sequence"] for c in claims)
-    event = next((e for e in ctx.events if e["stream_sequence"] == seq), None)
-    if event is None:
+    event = next((e for e in reversed(ctx.events) if e["stream_sequence"] == seq), None)
+    if event is None or event["payload"]["type"] not in PLAYER_MOMENTS:
         return None
     payload = event["payload"]
     allowed = {v for v in payload.values() if isinstance(v, str) and v in ctx.names}
@@ -139,9 +143,14 @@ def moment_team_problem(
         allowed |= {p["player_id"] for p in ctx.roster["players"] if p["team_id"] == team}
     ok = {ctx.names[pid].casefold() for pid in allowed}
     text = line.text.casefold()
-    return next(
-        (n for n in ctx.names.values() if n.casefold() in text and n.casefold() not in ok), None
-    )
+    for name in sorted(ctx.names.values(), key=len, reverse=True):
+        folded = name.casefold()
+        pattern = rf"(?<![\w]){re.escape(folded)}(?![\w])"
+        if re.search(pattern, text):
+            if folded not in ok:
+                return name
+            text = re.sub(pattern, " ", text)  # consume it, so a shorter name inside is not seen
+    return None
 
 
 def check_names(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]) -> Check:

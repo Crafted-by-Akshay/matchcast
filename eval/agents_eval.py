@@ -576,7 +576,7 @@ These are caught by a table lookup or a fixed threshold, so they sit outside the
 | --- | --- | --- | --- |
 {mut_rows(True)}
 
-**Known gaps.** Swapping the named player for a teammate who is not in the event is caught {blind["caught"]} of {blind["tried"]} times: the Verifier knows the moment's team and the players its event names, not which teammate the Narrator should have picked. A line that uses the wrong claim's number when both numbers are valid for the line (for example the other side's goal count) is not caught either. The meaning check is the live Verifier's model step and is skipped in rules mode.
+**Known gaps.** Swapping the named player for a teammate who is not in the event is caught {blind["caught"]} of {blind["tried"]} times: the Verifier knows the moment's team and the players its event names, not which teammate the Narrator should have picked. Numbers written in the wrong order (a score of 0-1 for 1-0) are not caught either, because each claim backs a number but not its place in the sentence. The meaning check is the live Verifier's model step and is skipped in rules mode.
 
 Seeded bad claim, end to end: injected at {s["trials"]} match times ({s["injected"]} took effect); the Verifier rejected the line for a number mismatch in {pct(s["caught_rate"])}, repair or abstain followed in {pct(s["repair_or_abstain_rate"])}, and {s["wrong_claims_shown_total"]} wrong claims were shown.
 

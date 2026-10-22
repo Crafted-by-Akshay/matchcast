@@ -251,3 +251,27 @@ def test_a_player_must_belong_to_the_moments_team(match) -> None:
         if p["team_id"] == team and p["player_id"] != shooter
     )
     assert verdict(ctx, line(text(mate)), claims).verdict == "verified"  # a known gap, see eval
+
+
+def test_team_rule_leaves_summaries_period_ends_and_whole_names_alone(match) -> None:
+    index = next(i for i, e in enumerate(match["events"]) if e["payload"]["type"] == "pass")
+    ctx = context(match, upto=index + 1)
+    team = match["events"][index]["payload"]["team_id"]
+    rival = next(p["player_id"] for p in ctx.roster["players"] if p["team_id"] != team)
+    shots = ctx.state.count("shots", team)
+    claims = [claim(ctx, f"shots:{team}", shots)]
+    text = f"{match['teams'][team]} shots {shots}; {match['names'][rival]} keeps them out."
+    assert verdict(ctx, line(text), claims).verdict == "verified"  # a pass event: a summary moment
+
+    longer = dict(match["names"], home1="Ben Coleman", away1="Ben Cole")
+    shot = next(
+        i
+        for i, e in enumerate(match["events"])
+        if e["payload"]["type"] == "shot" and e["payload"]["player_id"] == "home1"
+    )
+    base = context(match, upto=shot + 1)
+    ctx2 = MatchContext(base.stream, base.roster, longer, base.clubs, base.state, base.events)
+    n = ctx2.state.count("shots", "home")
+    text = f"Northgate FC: Ben Coleman shoots, shots {n}."
+    ok = verdict(ctx2, line(text), [claim(ctx2, "shots:home", n)])
+    assert ok.verdict == "verified"  # "Ben Cole" (away) is not found inside "Ben Coleman"

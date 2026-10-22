@@ -43,7 +43,7 @@ These are caught by a table lookup or a fixed threshold, so they sit outside the
 | line_too_long | 34 | 34 | 100.0% |
 | wrong_unit | 34 | 34 | 100.0% |
 
-**Known gaps.** Swapping the named player for a teammate who is not in the event is caught 0 of 30 times: the Verifier knows the moment's team and the players its event names, not which teammate the Narrator should have picked. A line that uses the wrong claim's number when both numbers are valid for the line (for example the other side's goal count) is not caught either. The meaning check is the live Verifier's model step and is skipped in rules mode.
+**Known gaps.** Swapping the named player for a teammate who is not in the event is caught 0 of 30 times: the Verifier knows the moment's team and the players its event names, not which teammate the Narrator should have picked. Numbers written in the wrong order (a score of 0-1 for 1-0) are not caught either, because each claim backs a number but not its place in the sentence. The meaning check is the live Verifier's model step and is skipped in rules mode.
 
 Seeded bad claim, end to end: injected at 7 match times (7 took effect); the Verifier rejected the line for a number mismatch in 100.0%, repair or abstain followed in 100.0%, and 0 wrong claims were shown.
 
