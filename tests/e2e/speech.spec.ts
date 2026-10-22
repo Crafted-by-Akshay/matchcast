@@ -1,27 +1,12 @@
-import { test, expect } from './fixtures';
+import { test, expect, fakeSpeechSdk } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // EXP-8/EXP-16: Azure Speech through the api's short-lived token. The api and the SDK are faked; the browser voice stays the fallback and keeps its label.
 declare const VC: any, SPX: any, AG: any, answerAsk: any;
 
-const fakeSdk = () => {
-  const w = window as any; w.__azure = { voices: [], texts: [], tokens: [], heard: 0 };
-  w.SpeechSDK = {
-    SpeechConfig: { fromAuthorizationToken: (t: string, r: string) => { w.__azure.tokens.push([t, r]); return { t, r }; } },
-    ResultReason: { SynthesizingAudioCompleted: 1, RecognizedSpeech: 2 },
-    AudioConfig: { fromDefaultMicrophoneInput: () => ({}), fromSpeakerOutput: (d: any) => ({ dest: d }) },
-    SpeakerAudioDestination: function (this: any) { this.pause = () => {}; this.close = () => {}; },
-    SpeechSynthesizer: function (this: any, c: any, a: any) { this.close = () => {}; this.speakTextAsync = (t: string, ok: any) => { w.__azure.voices.push(c.speechSynthesisVoiceName); w.__azure.texts.push(t); ok({ reason: 1 }); setTimeout(() => a.dest.onAudioEnd(), 30); }; },
-    SpeechRecognizer: function (this: any) { this.close = () => {}; this.recognizeOnceAsync = (ok: any) => { w.__azure.heard++; ok({ reason: 2, text: 'who is on the ball' }); }; },
-  };
-  w.__spoken = [];
-  (window as any).SpeechSynthesisUtterance = function (this: any, t: string) { this.text = t; };
-  Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u: any) => { w.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 10); }, cancel() {} }, configurable: true });
-};
-
 test('speech: with a token Azure speaks with the role and language voice; the browser voice is labelled when there is none', async ({ page }) => {
   const errs = collectErrors(page);
-  await page.addInitScript(fakeSdk);
+  await page.addInitScript(fakeSpeechSdk);
   let calls = 0;
   await page.route('http://api.test/v1/speech/token', (r) => {
     calls++;
@@ -43,7 +28,7 @@ test('speech: with a token Azure speaks with the role and language voice; the br
 
 test('speech: 503 not_ready and 429 fall back to the browser voice with its label and are not hammered', async ({ page }) => {
   const errs = collectErrors(page);
-  await page.addInitScript(fakeSdk);
+  await page.addInitScript(fakeSpeechSdk);
   let calls = 0;
   await page.route('http://api.test/v1/speech/token', (r) => { calls++; return r.fulfill({ status: 503, contentType: 'application/problem+json', body: '{"code":"not_ready"}' }); });
   await openShell(page, 'agents');
@@ -60,7 +45,7 @@ test('speech: 503 not_ready and 429 fall back to the browser voice with its labe
 
 test('speech: Azure push-to-talk fills Ask the producer; a verified answer is spoken, an unverified one is not', async ({ page }) => {
   const errs = collectErrors(page);
-  await page.addInitScript(fakeSdk);
+  await page.addInitScript(fakeSpeechSdk);
   await openShell(page, 'agents');
   await page.click('#tab-broadcast');
   await ready('broadcast')(page);
@@ -102,7 +87,7 @@ test('speech: Watch talk-to-player uses Azure push-to-talk when available, the b
 test('speech: Broadcast Ask the producer shows and speaks a verified answer; an unverified one falls back to the desk answer', async ({ page }) => {
   test.setTimeout(420_000);
   const errs = collectErrors(page);
-  await page.addInitScript(fakeSdk);
+  await page.addInitScript(fakeSpeechSdk);
   await openShell(page, 'agents');
   await page.click('#tab-broadcast');
   await ready('broadcast')(page);

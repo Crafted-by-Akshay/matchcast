@@ -22,3 +22,19 @@ export const test = base.extend<{ azureHits: string[]; azureGuard: void }>({
     expect(azureHits, 'this test sent a request to an Azure host; fake it instead').toEqual([]);
   }, { auto: true }],
 });
+
+// A stand-in for the Azure Speech browser SDK and speechSynthesis, for `page.addInitScript(fakeSpeechSdk)`. It records voices, texts, tokens and recognitions in `window.__azure` and browser utterances in `window.__spoken`.
+export const fakeSpeechSdk = () => {
+  const w = window as any; w.__azure = { voices: [], texts: [], tokens: [], heard: 0 };
+  w.SpeechSDK = {
+    SpeechConfig: { fromAuthorizationToken: (t: string, r: string) => { w.__azure.tokens.push([t, r]); return { t, r }; } },
+    ResultReason: { SynthesizingAudioCompleted: 1, RecognizedSpeech: 2 },
+    AudioConfig: { fromDefaultMicrophoneInput: () => ({}), fromSpeakerOutput: (d: any) => ({ dest: d }) },
+    SpeakerAudioDestination: function (this: any) { this.pause = () => {}; this.close = () => {}; },
+    SpeechSynthesizer: function (this: any, c: any, a: any) { this.close = () => {}; this.speakTextAsync = (t: string, ok: any) => { w.__azure.voices.push(c.speechSynthesisVoiceName); w.__azure.texts.push(t); ok({ reason: 1 }); setTimeout(() => a.dest.onAudioEnd(), 30); }; },
+    SpeechRecognizer: function (this: any) { this.close = () => {}; this.recognizeOnceAsync = (ok: any) => { w.__azure.heard++; ok({ reason: 2, text: 'who is on the ball' }); }; },
+  };
+  w.__spoken = [];
+  (window as any).SpeechSynthesisUtterance = function (this: any, t: string) { this.text = t; };
+  Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u: any) => { w.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 10); }, cancel() {} }, configurable: true });
+};
