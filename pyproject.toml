@@ -8,7 +8,7 @@ dependencies = []
 package = false
 
 [tool.uv.workspace]
-members = ["services/api", "services/worker", "packages/contracts", "packages/agents", "packages/shared", "packages/metrics"]
+members = ["services/api", "services/worker", "services/mcp", "packages/contracts", "packages/agents", "packages/shared", "packages/metrics"]
 
 [dependency-groups]
 dev = [
@@ -23,7 +23,7 @@ smoke = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages/agents/tests", "packages/shared/tests", "packages/metrics/tests"]
+testpaths = ["tests", "packages/agents/tests", "packages/shared/tests", "packages/metrics/tests", "services/mcp/tests"]
 python_files = ["test_*.py"]
 pythonpath = ["services/api"]
 

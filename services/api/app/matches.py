@@ -11,6 +11,7 @@ import logging
 import os
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
@@ -19,8 +20,10 @@ from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agen
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
+from matchcast_agents.store import MemoryStore
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
+from matchcast_mcp.app import build_app
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
@@ -116,6 +119,7 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
+        self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
         self.require_role = require_role
         self._model_client: ModelClient | None = None
         self.exports: dict[str, tuple[bytes, str, str]] = {}
@@ -234,6 +238,7 @@ def build_router(registry: Registry) -> APIRouter:
                     seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
                 ),
                 config=config,
+                store=registry.store,
             )
         except (ContractError, TypeError, KeyError) as error:
             raise Problem(
@@ -483,6 +488,33 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
         return problem_response(error)
 
+    @app.exception_handler(404)
+    async def unknown_path(_request: Request, _error: Exception) -> JSONResponse:
+        return problem_response(Problem(404, "not_found", "no such path"))
+
     app.include_router(build_router(registry))
     app.include_router(build_internal_router(registry))
+    if os.environ.get("MATCHCAST_MCP_MOUNT") != "0":
+        _mount_mcp(app, registry)
     return registry
+
+
+def _mount_mcp(app: FastAPI, registry: Registry) -> None:
+    """Serve the MCP tools at /mcp from this process: the matches live in its memory (ADR-0005).
+
+    The separate `mcp` container takes over when a shared store exists (DAT-2).
+    """
+    mcp_app = build_app(registry.store)
+    outer = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        async with outer(application), mcp_app.router.lifespan_context(mcp_app):
+            yield
+
+    app.router.lifespan_context = lifespan
+    taken = {getattr(r, "path", None) for r in app.router.routes}
+    # only the MCP (and A2A) paths join the api, so unknown paths still return Problem JSON
+    app.router.routes.extend(
+        r for r in mcp_app.router.routes if getattr(r, "path", None) not in taken
+    )
