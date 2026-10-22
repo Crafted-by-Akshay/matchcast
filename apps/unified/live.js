@@ -76,6 +76,15 @@ const LV = (() => {
     return { text: j.answer, verdict: j.verdict === 'verified' || j.verdict === 'approved' ? 'verified' : 'abstained', source: 'model', citations: j.claim_ids || [] };
   };
 
+  // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one
+  const identify = async (trackId, team, crop) => {
+    if (!run) throw Object.assign(new Error('no match yet'), { status: 0 });
+    const res = await fetch(api() + '/v1/matches/' + run.id + '/vision/identify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: run.key.session_id, crop, track_id: trackId, team_hint: team }) });
+    if (!res.ok) throw Object.assign(new Error('identify ' + res.status), { status: res.status, retry_after: +res.headers.get('Retry-After') || 0 });
+    return res.json();
+  };
+
   // the server's audit records for this match (EXP-12), and the same check the server's verifyChain does (packages/contracts/src/audit.ts)
   const GENESIS = '0'.repeat(64);
   const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'
@@ -119,5 +128,5 @@ const LV = (() => {
   const setPersona = (p, l) => { l = l || 'en'; if (p === persona && l === lang) return; persona = p; lang = l; if (run) { if (run.es) run.es.close(); open(); } };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, stop, persona: setPersona, toPacket, ask, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
+    begin, events, stop, persona: setPersona, toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();
