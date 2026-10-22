@@ -41,3 +41,6 @@ Then assign the judge account the `Producer` role in Entra admin centre > Enterp
 Fallback if the tenant blocks app registrations: leave `ENTRA_CLIENT_ID` empty and use the signed demo code in the UI, labelled "Simulated sign-in", and record the reason here.
 
 Known exception to "no secret": `entra-client-secret` (Key Vault reference on the apps). Not yet run: the registration, the Easy Auth deployment and the sign-in flow need the Mac mini or portal.
+
+## Secret scan proof (PLT-4)
+CI job `secrets` runs gitleaks on the history, then `scripts/gitleaks_proof.sh`, which builds a throwaway repo, checks a clean commit passes, then commits a fake AWS key (assembled at run time, never stored in the repo) and requires the scan to fail. Run it locally with `scripts/gitleaks_proof.sh path/to/gitleaks`.
