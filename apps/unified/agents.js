@@ -174,6 +174,23 @@ const AG = (() => {
       say('Producer', c.minute, c.id + ' held: ' + v.reason, 'warn');
     }
   };
+  // Ask (rules): the question types the event log can answer. Each answer is counted from the log and names the events it used; anything else abstains.
+  const CANT = "I can't confirm that from the match data yet.";
+  const tally = (type) => { const m = new Map(); for (const e of run.events) if (e.type === type && e.player) { const k = e.player + '|' + e.team; m.set(k, (m.get(k) || []).concat(e.id)); } return [...m.entries()].map(([k, ids]) => ({ player: k.split('|')[0], team: k.split('|')[1], n: ids.length, ids })).sort((a, b) => b.n - a.n); };
+  const ask = (q) => {
+    if (!run || !run.events.length) return { text: CANT, verdict: 'abstained', source: 'rules', citations: [] };
+    const s = String(q).toLowerCase(), last = run.events[run.events.length - 1].minute, ix = (t) => teamName(teamIx(t));
+    let top;
+    if (/shots?/.test(s) && /(most|top|more|leads?|who)/.test(s) && (top = tally('shot')).length) {
+      const t = top[0]; return { text: t.player + ' (' + ix(t.team) + ') has the most shots: ' + t.n + ' by ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: t.ids };
+    }
+    if (/(goal|scor)/.test(s) && /(most|top|who|scorer)/.test(s) && (top = tally('goal')).length) {
+      const t = top[0]; return { text: t.player + ' (' + ix(t.team) + ') leads the scoring with ' + t.n + ' by ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: t.ids };
+    }
+    if (/score|winning|leading/.test(s)) { const g = run.roll.score; return { text: run.names.home + ' ' + g[0] + '–' + g[1] + ' ' + run.names.away + ' at ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: run.events.filter((e) => e.type === 'goal').map((e) => e.id) }; }
+    if (/xg|expected goals/.test(s)) { const x = run.roll.xg; return { text: 'xG so far: ' + run.names.home + ' ' + f2(x[0]) + ', ' + run.names.away + ' ' + f2(x[1]) + ' at ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: run.events.filter((e) => e.type === 'shot').map((e) => e.id) }; }
+    return { text: CANT, verdict: 'abstained', source: 'rules', citations: [] };
+  };
   const claim = (kind, minute, evidence, inputs, extra) => { run.n++; return MCC.claim(Object.assign({ id: 'c' + run.n, kind, minute, agent: 'analyst', evidence, inputs, source: 'rules' }, extra)); };
 
   // Watch's batch: the events first (so every recount sees the whole batch), then the moments, then the claims
@@ -218,5 +235,5 @@ const AG = (() => {
     c.source = src; changed();
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  return { approve, kill, edit, checkTranslation, ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { ask, approve, kill, edit, checkTranslation, ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();
