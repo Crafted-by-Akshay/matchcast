@@ -7,7 +7,7 @@ function bcEmbedStart(q) {
   const go = () => { if (q.get('seed')) { MCS.apply(q); bcNewMatch(q.get('seed')); } else bcNewMatch(); MCS.started(); };
   if (MCS.clubs.ready) go(); else MCS.clubs.load.then(go);
 }
-$('bc-new').addEventListener('click', () => MCS.started());
+$('bc-new').addEventListener('click', () => setTimeout(() => MCS.started(), 0));   // after the desk's own handler has set the new seed
 MCS.loop();
 
 // the shared score: while Watch runs the shared match, the scoreboard shows Watch's score and minute.
