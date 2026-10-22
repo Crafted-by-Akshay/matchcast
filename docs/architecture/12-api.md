@@ -9,7 +9,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 - JSON in and out, UTF-8, `snake_case`. Times are RFC 3339 UTC with `Z`. Match times are integer milliseconds.
 - Errors use RFC 9457 `application/problem+json`: `{type, title, status, detail, code, path, trace_id}`. `code` values are listed in §6.
 - `X-Request-Id` is accepted or generated and returned. `trace_id` is the OpenTelemetry trace ID.
-- FastAPI publishes `/openapi.json`. A snapshot lives at `docs/api/openapi.json`, and CI fails if the live schema differs from it.
+- FastAPI publishes `/openapi.json`. A snapshot lives at `docs/api/openapi.json`, and CI fails if the live schema differs from it. Refresh it with `make openapi-generate` in any PR that changes a route (committed 22 Oct, 23 paths).
 - The S03 local `/sessions` routes stay for local tests only and are not deployed in cloud mode.
 
 ## 2. REST endpoints
