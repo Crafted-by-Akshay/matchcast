@@ -135,3 +135,7 @@ Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.j
 
 ## Broadcast overlay layout
 - The replay bar, on-air log, lower-third and teleprompter sit inside the live view. Below 560 px wide they stack (teleprompter on one line at the top, replay bar under it, lower-third and on-air log at the bottom) so none cover each other. `tests/e2e/broadcast-layout.spec.ts` checks the four boxes for overlap on a desktop and a phone viewport.
+
+## Fast first load (EXP-15)
+- Only Watch loads at first; Broadcast and Analyst load on first switch (`tests/e2e/load.spec.ts`: no request to `analyst/` while only Watch runs). Compression, cache headers and the file list of the web image are in `nginx.conf` and the Dockerfile (PLT-7, `tests/test_web_image.py`).
+- Timings (headless Chromium, software WebGL, cache off, local server, 22 Oct): season picker 0.7 s, Watch started 11 s, Analyst ready 21 s, Broadcast ready 56 s. Software rendering is far slower than a real GPU, so the 4 s target is **not yet measured**; it needs the live URL with the api warm. `load.spec.ts` records these marks as a test annotation on every run.
