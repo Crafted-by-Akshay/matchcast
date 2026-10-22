@@ -60,37 +60,69 @@ test('reports: a sample report is drafted from the latest match and moves to app
   expect(errs).toEqual([]);
 });
 
-// AGT-14: the Data Scientist page asks the api; verified answers show table, chart and SQL, unverified ones show no chart.
-async function askDs(page: Page, reply: { status?: number; json?: object }) {
-  await page.route('**/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://api.test";' }));
-  await page.route('http://api.test/v1/ds/ask', (r) =>
-    r.fulfill({ status: reply.status ?? 200, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' }, json: reply.json ?? {} }));
+// AGT-14: the Data Scientist page asks the api; verified answers show table, chart and SQL, anything else shows a fixed sentence and no chart.
+async function askDs(page: Page, reply: { status?: number; json?: object; abort?: boolean }) {
+  await page.route('**/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://api.test/";' }));
+  await page.route('http://api.test/v1/ds/ask', (r) => {
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST' };
+    if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers }); // CORS preflight always passes
+    return reply.abort ? r.abort() : r.fulfill({ status: reply.status ?? 200, headers, json: reply.json ?? {} });
+  });
   const f = await openPage(page, 'ds-agent');
   await f.fill('#d2-ag-q', 'Which team has the highest average xG?');
   await f.press('#d2-ag-q', 'Enter');
   return f;
 }
+const verified = (over: object = {}) => ({ answer: 'Guanabara FC: 2.1', verdict: 'verified', sql: 'SELECT team, AVG(xg) FROM team_match GROUP BY team', columns: ['team', 'avg_xg'], rows: [['Guanabara FC', 2.1], ['<i>x</i>', 1.4]], chart_spec: { mark: 'bar' }, ...over });
 
-test('data scientist: a verified answer shows its table, chart and SQL', async ({ page }) => {
+test('data scientist: a verified answer shows its table, chart and SQL, escaped', async ({ page }) => {
   const errs = collectErrors(page);
-  const f = await askDs(page, { json: { answer: 'Guanabara FC: 2.1', verdict: 'verified', sql: 'SELECT team, AVG(xg) FROM team_match GROUP BY team', columns: ['team', 'avg_xg'], rows: [['Guanabara FC', 2.1], ['<i>x</i>', 1.4]], chart_spec: { mark: 'bar' } } });
+  const f = await askDs(page, { json: verified() });
   await expect(f.locator('.d2-a')).toContainText('Guanabara FC: 2.1');
   await expect(f.locator('.d2-a')).toContainText('verified');
-  await expect(f.locator('.d2-a [data-ds="table"]')).toContainText('2.1');
-  await expect(f.locator('.d2-a [data-ds="table"] i')).toHaveCount(0);
+  await expect(f.locator('.d2-a [data-ds="table"]')).toContainText('<i>x</i>');
+  await expect(f.locator('.d2-a i')).toHaveCount(0);
   await expect(f.locator('.d2-a svg[role="img"]')).toBeVisible();
+  await expect(f.locator('.d2-a svg text', { hasText: '<i>x</i>' })).toHaveCount(1);
   await expect(f.locator('.d2-a [data-ds="sql"]')).toContainText('SELECT team');
   expect(errs).toEqual([]);
 });
 
-test('data scientist: a result the Verifier rejects shows no chart', async ({ page }) => {
-  const f = await askDs(page, { json: { answer: 'Could not verify this result.', verdict: 'rejected', sql: 'SELECT 1', columns: ['x'], rows: [[1]], chart_spec: null } });
-  await expect(f.locator('.d2-a')).toContainText('Could not verify this result.');
-  await expect(f.locator('.d2-a svg[role="img"], .d2-a [data-ds="table"]')).toHaveCount(0);
+test('data scientist: a verified table without a chart_spec or with non-numeric values has no chart', async ({ page }) => {
+  const f = await askDs(page, { json: verified({ chart_spec: null }) });
+  await expect(f.locator('.d2-a [data-ds="table"]')).toBeVisible();
+  await expect(f.locator('.d2-a svg[role="img"]')).toHaveCount(0);
 });
 
-test('data scientist: with the api down the rules answer is used and labelled', async ({ page }) => {
-  const f = await askDs(page, { status: 503 });
-  await expect(f.locator('.d2-a')).toContainText('highest xG');
+test('data scientist: a rejected result shows a fixed sentence, no numbers, SQL or chart', async ({ page }) => {
+  const f = await askDs(page, { json: { ...verified(), answer: 'Guanabara FC: 9.9', verdict: 'rejected', mismatch: 'row 1' } });
+  await expect(f.locator('.d2-a')).toContainText('Could not verify this result.');
+  await expect(f.locator('.d2-a')).toContainText('unverified');
+  await expect(f.locator('.d2-a')).not.toContainText('9.9');
+  await expect(f.locator('.d2-a svg[role="img"], .d2-a [data-ds="table"], .d2-a [data-ds="sql"], .d2-a .steps')).toHaveCount(0);
+});
+
+test('data scientist: odd shapes (null row, missing columns, empty rows) never break the page', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await askDs(page, { json: verified({ rows: [null, ['a', 'b']], columns: null }) });
+  await expect(f.locator('.d2-a')).toContainText('Could not verify this result.');
+  await f.fill('#d2-ag-q', 'again'); await f.press('#d2-ag-q', 'Enter');
+  await expect(f.locator('.d2-q')).toHaveCount(2);
+  expect(errs).toEqual([]);
+});
+
+for (const [name, reply] of [['503', { status: 503 }], ['400', { status: 400 }], ['network error', { abort: true }]] as const) {
+  test(`data scientist: api ${name} falls back to a rules answer, once, labelled as rules`, async ({ page }) => {
+    const f = await askDs(page, reply);
+    await expect(f.locator('.d2-a')).toContainText('Data Scientist · rules');
+    await expect(f.locator('.d2-a')).not.toContainText('verified');
+    await expect(f.locator('.d2-q')).toHaveCount(1);
+  });
+}
+
+test('data scientist: a rate-limited api says so and the rules answer', async ({ page }) => {
+  const f = await askDs(page, { status: 429 });
+  await expect(f.locator('.d2-a')).toContainText('rate limited');
   await expect(f.locator('.d2-a')).toContainText('Data Scientist · rules');
+  await expect(f.locator('.d2-q')).toHaveCount(1);
 });
