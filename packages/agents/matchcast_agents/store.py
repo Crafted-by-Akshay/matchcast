@@ -43,6 +43,11 @@ class PublicationRepo(Protocol):
     def publications(self, sk: str) -> list[dict[str, Any]]: ...
 
 
+class RecapRepo(Protocol):
+    def put_recap(self, sk: str, persona: str, recap: dict[str, Any]) -> None: ...
+    def get_recap(self, sk: str, persona: str) -> dict[str, Any] | None: ...
+
+
 class AuditRepo(Protocol):
     def append_audit(self, sk: str, **fields: Any) -> dict[str, Any]: ...
     def audit_records(self, sk: str, from_sequence: int = 1, limit: int = 1000) -> list[dict]: ...
@@ -59,6 +64,7 @@ class MemoryStore:
         self._lines: dict[str, dict[str, LineRecord]] = {}
         self._publications: dict[str, list[dict[str, Any]]] = {}
         self._audit: dict[str, list[dict[str, Any]]] = {}
+        self._recaps: dict[str, dict[str, dict[str, Any]]] = {}
 
     def add_event(self, sk: str, event: dict[str, Any]) -> bool:
         """Store a semantic event once per (event_id, revision); False for a retry."""
@@ -105,6 +111,12 @@ class MemoryStore:
 
     def publications(self, sk: str) -> list[dict[str, Any]]:
         return list(self._publications.get(sk, []))
+
+    def put_recap(self, sk: str, persona: str, recap: dict[str, Any]) -> None:
+        self._recaps.setdefault(sk, {})[persona] = recap
+
+    def get_recap(self, sk: str, persona: str) -> dict[str, Any] | None:
+        return self._recaps.get(sk, {}).get(persona)
 
     def append_audit(self, sk: str, **fields: Any) -> dict[str, Any]:
         chain = self._audit.setdefault(sk, [])
