@@ -83,8 +83,8 @@
     },
     "known_gap_wrong_teammate": {
       "tried": 30,
-      "caught": 0,
-      "rate": 0.0
+      "caught": 30,
+      "rate": 1.0
     }
   },
   "seeded_bad_claim": {
