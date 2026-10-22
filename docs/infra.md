@@ -3,7 +3,7 @@
 Bicep under `infra/`, driven by `azd` (`azure.yaml`). Design: `docs/architecture/13-deployment-and-operations.md`.
 
 ## What the template creates
-Log Analytics + Application Insights, `id-matchcast`, Key Vault (RBAC), Storage (10 tables, 10 containers, lifecycle rules), Event Hubs Basic with hub `match-events`, Container Apps environment with `web`, `api`, `mcp`, Azure AI Content Safety (`cs-matchcast-<env>`, S0, local auth off) and AI Search Free (`srch-matchcast-<env>-<suffix>`) from `modules/ai.bicep`, and the role assignments for `id-matchcast` (including Cognitive Services User on Content Safety). Foundry is hand-made and passed in by parameter.
+Log Analytics + Application Insights, `id-matchcast`, Key Vault (RBAC), Storage (10 tables, 10 containers, lifecycle rules), Event Hubs Basic with hub `match-events`, Container Apps environment with `web`, `api`, `mcp`, Azure AI Content Safety (`cs-matchcast-<env>`, S0, local auth off) and AI Search Free (`srch-matchcast-<env>-<suffix>`) from `modules/ai.bicep`, the recap Function app `fn-matchcast-dev-recap-<suffix>` on Flex Consumption (`modules/function.bicep`), and the role assignments for `id-matchcast` (including Cognitive Services User on Content Safety and Blob Data Owner and Queue Data Contributor on storage for the Functions host). Foundry is hand-made and passed in by parameter.
 
 ## Run it (Mac mini, `az login` done)
 ```
@@ -35,7 +35,7 @@ SPID=$(az ad sp show --id "$APP" --query id -o tsv)
 az ad app federated-credential create --id "$APP" --parameters '{"name":"matchcast-production","issuer":"https://token.actions.githubusercontent.com","subject":"repo:Crafted-by-Akshay/matchcast:environment:production","audiences":["api://AzureADTokenExchange"]}'
 az role assignment create --assignee-object-id "$SPID" --assignee-principal-type ServicePrincipal --role Contributor --scope /subscriptions/$SUB/resourceGroups/rg-matchcast
 # Role Based Access Control Administrator, limited to the roles in infra/modules/roles.bicep
-ROLES="53ca6127-db72-4b80-b1b0-d745d6d5456d,0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3,ba92f5b4-2d11-453d-a403-e96b0029c9fe,2b629674-e913-4c01-ae53-ef4638d8f975,a638d3c7-ab3a-418d-83e6-5f17a39d4fde,4633458b-17de-406a-b5cd-9c4a5b5cd8ee,a97b65f3-24c7-4388-baec-2e87135dc908"
+ROLES="53ca6127-db72-4b80-b1b0-d745d6d5456d,0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3,ba92f5b4-2d11-453d-a403-e96b0029c9fe,2b629674-e913-4c01-ae53-ef4638d8f975,a638d3c7-ab3a-418d-83e6-5f17a39d4fde,4633458b-17de-406a-b5cd-9c4a5b5cd8ee,a97b65f3-24c7-4388-baec-2e87135dc908,b7e6dc6d-f1e8-4753-8033-0f276bb0955b,974c5e8b-45b9-4653-ba55-5f855dd0fb88"
 COND=$(cat <<EOF
 ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {$ROLES})) AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {$ROLES}))
 EOF
@@ -90,4 +90,12 @@ AI Search Free has no managed identity (ADR-0009), so the two keys are the only 
 4. `scripts/build_kb.py` reads `srch-admin-key` through the OIDC identity's Key Vault access (Key Vault Secrets User).
 Not verified: no live provision yet (`az bicep build` passes with no warnings on Bicep 0.48).
 
-**Re-run the role setup once.** The condition on the deploy identity's Role Based Access Control Administrator assignment lists the allowed roles. Cognitive Services User (`a97b65f3-...`) was added to that list (AGT-12), so update the assignment with the `COND` block above (`az role assignment update` on it, or delete and recreate it) before the next deploy, or the role assignment for Content Safety is refused.
+**Re-run the role setup once.** The condition on the deploy identity's Role Based Access Control Administrator assignment lists the allowed roles. Cognitive Services User (`a97b65f3-...`, AGT-12), Storage Blob Data Owner (`b7e6dc6d-...`) and Storage Queue Data Contributor (`974c5e8b-...`, AGT-15) were added to that list, so update the assignment with the `COND` block above (`az role assignment update` on it, or delete and recreate it) before the next deploy, or the role assignment for Content Safety is refused.
+
+## Recap function (AGT-15)
+`services/recap` is a Python v2 Azure Functions app: an Event Hubs trigger on `match-events` (`$Default`, identity-based `EVENTHUB__*` settings, retry 3 x 10 s) that spots the end of the final period (`RECAP_FINAL_PERIODS`, default `2`; use `2,4` if extra time is played) and calls `POST /internal/v1/recaps` on the api, which writes the recaps (03 F8). It holds no agent logic.
+- Hosting: Flex Consumption (`FC1`), one instance at most, no key or connection string; deployment package in the `app-package` container, host state and checkpoints in the storage account under `AzureWebJobsStorage__*`. The checkpoints are the Functions host's own (`azure-webjobs-eventhub`), not `eh-checkpoints/recap` as the first design said.
+- Code goes up with `azd deploy recap` (the deploy workflow runs it after provisioning; a failure is a warning).
+- The one plain connection string is `APPLICATIONINSIGHTS_CONNECTION_STRING` (an ingestion id, not a credential), as on the container apps before they reference it as a secret.
+- Sign-in: when `ENTRA_CLIENT_ID` is set, the function asks for a token for `api://<client id>/.default` and the api route needs the Producer role, so the identity `id-matchcast` must be assigned the `Producer` app role of `matchcast-web` (Entra step, with the judge account; one command, `az rest` on `appRoleAssignedTo`). With sign-in off no token is sent.
+- Not verified: no live provision or deploy yet; the function logic is tested with a mock api (`services/recap/tests`).
