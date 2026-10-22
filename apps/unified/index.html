@@ -178,14 +178,14 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   </div>
 </header>
 
-<dialog class="tour" id="tour" aria-labelledby="tour-h">
+<dialog class="tour" id="tour" aria-labelledby="tour-h" aria-describedby="tour-p">
   <div class="tour-n" id="tour-n"></div>
   <h2 id="tour-h"></h2>
   <p id="tour-p"></p>
   <div class="tour-row">
     <button type="button" id="tour-skip">Close</button>
     <button type="button" id="tour-back">Back</button>
-    <button type="button" id="tour-go" class="go"></button>
+    <button type="button" id="tour-go" class="go" autofocus></button>
   </div>
 </dialog>
 
@@ -637,7 +637,8 @@ function init(list) {
   // keys 1 to 4: the shell hears them itself, and from the views too (once a view has focus the shell never sees the key)
   const shortcut = (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.target.closest && e.target.closest('input,select,textarea,dialog,[contenteditable]')) return;
+    if ($('tour').open) return;
+    if (e.target.closest && e.target.closest('input,select,textarea,dialog,[role=dialog],[contenteditable]')) return;
     const map = { '1': 'watch', '2': 'analyst', '3': 'broadcast', '4': 'agents' };
     if (map[e.key]) location.hash = map[e.key];
   };
@@ -686,7 +687,6 @@ function init(list) {
   LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });
   paintPill(LV.status);
   show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'watch');
-  tourInit();
 }
 
 // first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
@@ -704,7 +704,7 @@ function tourShow(i) {
   $('tour-h').textContent = title; $('tour-p').textContent = text;
   $('tour-back').hidden = tourAt === 0;
   $('tour-go').textContent = tourAt === TOUR.length - 1 ? 'Done' : 'Next';
-  if (location.hash.slice(1) !== view) location.hash = view;   // the view behind the card is the one it talks about
+  if (location.hash.slice(1) !== view) location.replace('#' + view);   // the view behind the card is the one it talks about
 }
 function tourOpen() { const d = $('tour'); if (!d.open) d.showModal(); tourShow(0); }
 function tourInit() {
@@ -715,9 +715,10 @@ function tourInit() {
     if (tourAt === TOUR.length - 1) { $('tour').close(); return; }
     tourShow(tourAt + 1);
   };
-  if (/[?&]tour=1/.test(location.search)) tourOpen();
+  if (/[?&]tour=1(&|$)/.test(location.search)) tourOpen();
 }
 
+tourInit();
 fetch('shared/fixtures.json').then((r) => r.json()).then(init).catch((err) => {
   $('meta').textContent = 'Could not load the season fixtures: ' + err.message;
 });
