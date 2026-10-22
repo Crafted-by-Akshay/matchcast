@@ -247,11 +247,12 @@ test('status page: the api card lists each dependency with its own label, escape
   const errs = collectErrors(page);
   const f = await statusPage(page, { json: statusBody });
   const card = f.locator('#st-api');
-  await expect(card.locator('[data-st="table"] tr')).toHaveCount(4);
+  await expect(card.locator('[data-st="table"] tbody tr')).toHaveCount(4);
+  await expect(card.locator('[data-st="table"] thead th')).toHaveText(['Service', 'State', 'Detail']);
   await expect(card.locator('tr', { hasText: 'Agent api' })).toContainText('Live');
   await expect(card.locator('tr', { hasText: 'Fabric' })).toContainText('Planned');
   await expect(card.locator('tr', { hasText: 'Foundry' })).toContainText('Simulated');
-  await expect(card.locator('b')).toHaveCount(2);   // only the summary's mode and overall; the label's <b> is escaped
+  await expect(card.locator('b')).toHaveText(['local', 'degraded']);   // only the summary's mode and overall; the label's <b> is escaped
   await expect(card).toContainText('overall degraded');
   await expect(f.locator('.pf-banner')).toBeVisible();   // the console's own checks are still there
   expect(errs.filter((e) => !/api\.test/.test(e))).toEqual([]);
@@ -264,4 +265,39 @@ test('status page: no api connected says so, an api error says Unavailable', asy
   const g = await statusPage(p2, { status: 500, json: {} });
   await expect(g.locator('#st-api')).toContainText('Unavailable');
   await expect(g.locator('#st-api')).toContainText('HTTP 500');
+  await p2.close();
+});
+
+test('status page: odd bodies never crash the page or pose as a good answer', async ({ page }) => {
+  const errs = collectErrors(page);
+  const odd = { mode: 'local', overall: 'ok', counts: { live: 1 }, dependencies: [null, 'x', { key: 'k', label: 'Constructor test', status: 'constructor', detail: 'd' }, { key: 'u', label: 'Unreachable', status: 'unavailable', detail: 'no endpoint' }, { label: 'Empty' }] };
+  const f = await statusPage(page, { json: odd });
+  const card = f.locator('#st-api');
+  await expect(card.locator('tbody tr')).toHaveCount(3);
+  await expect(card.locator('tr', { hasText: 'Constructor test' })).toContainText('Unknown');
+  await expect(card.locator('tr', { hasText: 'Unreachable' })).toContainText('Unavailable');
+  await expect(f.locator('.pf-banner')).toBeVisible();
+  expect(errs.filter((e) => !/api\.test/.test(e))).toEqual([]);
+});
+
+test('status page: a body that is not an object with dependencies shows Unavailable, not an empty good answer', async ({ page }) => {
+  const f = await statusPage(page, { json: null as any });
+  await expect(f.locator('#st-api')).toContainText('Unavailable');
+  await expect(f.locator('#st-api')).not.toContainText('overall');
+});
+
+test('status page: a network failure says Unavailable without a stale HTTP code', async ({ page }) => {
+  const f = await statusPage(page, { abort: true });
+  await expect(f.locator('#st-api')).toContainText('Unavailable');
+  await expect(f.locator('#st-api')).not.toContainText('HTTP');
+});
+
+test('status page: Run checks again refetches the api card', async ({ page }) => {
+  let n = 0;
+  await page.route('**/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://api.test";' }));
+  await page.route('http://api.test/v1/status', (r) => { n++; return r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*' }, json: { ...statusBody, overall: 'pass' + n } }); });
+  const f = await openPage(page, 'status');
+  await expect(f.locator('#st-api')).toContainText('overall pass1');
+  await f.locator('#pf-rc').click();
+  await expect(f.locator('#st-api')).toContainText('overall pass2', { timeout: 20_000 });
 });
