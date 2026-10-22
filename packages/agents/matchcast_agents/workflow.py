@@ -234,6 +234,13 @@ class MatchWorkflow:
         self.hub.publish("audit", f"audit:{record['sequence']}", record)
         return record
 
+    def record_translation_rejected(self, publication_id: str, lang: str, reason: str) -> None:
+        """A translation failed its re-check or its service; the viewer keeps the English."""
+        self._audit(
+            "system", "translator", "translation_rejected", publication_id,
+            {"language": lang, "reason": reason},
+        )  # fmt: skip
+
     def _agent(self, action: str, agent: Any, subject: str, **details: Any) -> None:
         extra = {"mode": getattr(agent, "mode", "live"), **details}
         self._audit("agent", agent.agent_id, action, subject, extra)
@@ -279,8 +286,8 @@ class MatchWorkflow:
 
     # ---- ingest ------------------------------------------------------------------------
 
-    async def ingest(self, events: list[dict[str, Any]]) -> dict[str, int]:
-        """Validate the whole batch first (all or nothing), then process each event in order."""
+    def validate_batch(self, events: list[dict[str, Any]]) -> None:
+        """Raise ContractError (with ``index``) for the first event that is not valid here."""
         for index, event in enumerate(events):
             try:
                 validate(event, roster=self.roster)
@@ -291,6 +298,10 @@ class MatchWorkflow:
             except ContractError as error:
                 error.index = index  # type: ignore[attr-defined]
                 raise
+
+    async def ingest(self, events: list[dict[str, Any]]) -> dict[str, int]:
+        """Validate the whole batch first (all or nothing), then process each event in order."""
+        self.validate_batch(events)
         async with self._lock:
             await self._catch_up()
             for event in events:

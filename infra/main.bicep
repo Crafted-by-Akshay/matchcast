@@ -26,6 +26,10 @@ param mcpImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 @description('True once scripts/set_search_secrets.sh has stored srch-query-key in Key Vault (the post-provision hook sets it for the next provision).')
 param searchKeysInVault string = 'false'
 
+@allowed(['direct', 'eventhubs'])
+@description('How the api reaches the workflow: direct, or through the Event Hubs match-events hub (docs/infra.md, Event stream). Flip to eventhubs after scripts/smoke_pipeline.py passes.')
+param pipelineMode string = 'direct'
+
 var name = 'matchcast-${environmentName}'
 var tags = {
   project: 'matchcast'
@@ -87,8 +91,11 @@ module containerapps 'modules/containerapps.bicep' = {
     contentSafetyEndpoint: ai.outputs.contentSafetyEndpoint
     speechEndpoint: ai.outputs.speechEndpoint
     speechRegion: ai.outputs.speechRegion
+    translatorEndpoint: ai.outputs.translatorEndpoint
+    translatorRegion: ai.outputs.translatorRegion
     searchEndpoint: ai.outputs.searchEndpoint
     searchKeysInVault: searchKeysInVault == 'true'
+    pipelineMode: pipelineMode
   }
 }
 
@@ -149,3 +156,5 @@ output SEARCH_ENDPOINT string = ai.outputs.searchEndpoint
 output CONTENT_SAFETY_ENDPOINT string = ai.outputs.contentSafetyEndpoint
 output SPEECH_ENDPOINT string = ai.outputs.speechEndpoint
 output SPEECH_REGION string = ai.outputs.speechRegion
+output TRANSLATOR_ENDPOINT string = ai.outputs.translatorEndpoint
+output TRANSLATOR_REGION string = ai.outputs.translatorRegion
