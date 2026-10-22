@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import SettingsResult, load_settings
+from app.matches import install as install_match_routes
 from app.sessions import (
     InMemorySessionStore,
     SessionCreate,
@@ -166,6 +167,7 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
         return _record_json(record)
 
+    install_match_routes(application)
     return application
 
 
