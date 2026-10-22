@@ -52,8 +52,8 @@ def test_reducer_and_workflow_agree_on_the_counters_after_a_messy_delivery() -> 
     reducer_state = repo.get(stream_key(MATCH["roster"]["stream"]))
     assert reducer_state is not None and not held_back(reducer_state)
 
-    flow = workflow()
-    asyncio.run(flow.ingest(events))
+    flow = workflow()  # the workflow gets the same duplicates, in sequence order
+    asyncio.run(flow.ingest(sorted(messy, key=lambda e: e["stream_sequence"])))
     flow_state = flow.store.get_state(flow.sk)
     for field in COUNTERS:
         assert getattr(reducer_state, field) == getattr(flow_state, field), field
@@ -72,11 +72,13 @@ def test_a_workflow_that_does_not_own_the_table_leaves_matchstate_to_the_reducer
     assert TableStateRepo(service).get(sk) is None  # the workflow wrote no matchstate row
 
     repo = TableStateRepo(service)
-    process(repo, events)
+    ahead = MATCH["events"][:80]  # the reducer got further than the workflow before the crash
+    process(repo, ahead)
     saved = repo.get(sk)
-    assert saved is not None and saved.max_sequence == events[-1]["stream_sequence"]
+    assert saved is not None and saved.max_sequence == ahead[-1]["stream_sequence"]
 
     restarted = BufferedTableStore(TableStore(service, FakeContainer()), write_state=False)
-    after = restarted.get_state(sk)  # comes from the checkpoint, not the reducer's row
+    after = restarted.get_state(sk)  # from the checkpoint, not the reducer's row
     assert isinstance(after, MatchState)
-    assert after.max_sequence == events[-1]["stream_sequence"]
+    assert after.max_sequence == events[-1]["stream_sequence"] < saved.max_sequence
+    assert restarted.get_checkpoint(sk)["state"] == after.model_dump()
