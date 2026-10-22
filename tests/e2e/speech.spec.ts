@@ -98,3 +98,30 @@ test('speech: Watch talk-to-player uses Azure push-to-talk when available, the b
   await expect.poll(() => w.evaluate(() => (window as any).__brStarts)).toBe(1);   // the browser recognition really started
   expect(errs).toEqual([]);
 });
+
+test('speech: Broadcast Ask the producer shows and speaks a verified answer; an unverified one falls back to the desk answer', async ({ page }) => {
+  test.setTimeout(420_000);
+  const errs = collectErrors(page);
+  await page.addInitScript(fakeSdk);
+  await openShell(page, 'agents');
+  await page.click('#tab-broadcast');
+  await ready('broadcast')(page);
+  const bc = await viewFrame(page, 'broadcast');
+  await expect.poll(() => bc.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
+  await page.click('#voice-btn');
+  await page.evaluate(() => {
+    const w = window as any; w.__said = []; const say = VC.say; VC.say = (t: string, x: any) => { w.__said.push(t); return say(t, x); };
+    AG.ask = (q: string) => (q === 'who leads' ? { text: 'Harbor City lead 1-0.', verdict: 'verified', note: 'rules recount' } : { text: 'I cannot confirm that.', verdict: 'abstained' });
+  });
+  await bc.locator('#bc-tabs button[data-p="desk"]').click();
+  await bc.locator('#bcd-q').fill('who leads');
+  await bc.locator('#bcd-ask').click();
+  await expect(bc.locator('#bcd-ans')).toHaveText('Harbor City lead 1-0.');
+  await expect(bc.locator('#bcd-ai')).toContainText('Verified by the Verifier');
+  await expect.poll(() => page.evaluate(() => (window as any).__said)).toEqual(['Harbor City lead 1-0.']);
+  await bc.locator('#bcd-q').fill('what is the weather like');
+  await bc.locator('#bcd-ask').click();
+  await expect(bc.locator('#bcd-ai')).not.toContainText('Verified by the Verifier', { timeout: 20_000 });
+  expect(await page.evaluate(() => (window as any).__said.length)).toBe(1);   // the unverified question was not spoken
+  expect(errs).toEqual([]);
+});

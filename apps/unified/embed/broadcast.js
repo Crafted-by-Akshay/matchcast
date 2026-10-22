@@ -121,3 +121,24 @@ window.addEventListener('message', (e) => {
   if (typeof BC !== 'undefined' && BC.lang !== d.lang) { BC.lang = d.lang; if (typeof bcPaintScript === 'function') bcPaintScript(); }
   if (mcAired.length) mcPaintTele();
 });
+
+// ---- EXP-8/16: Ask the producer goes to the shell's verified path first (the api's /ask, or the in-page Verifier recount) so a verified answer can be spoken;
+// an answer the Verifier cannot confirm falls back to the desk's own answer, which stays labelled as not checked. The desk pane is redrawn often and binds `bcAsk` each time, so it is replaced here.
+if (MCS.framed) {
+  const bcAskLocal = bcAsk; let n = 0; const pending = new Map();
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'answer' || !pending.has(d.id)) return;
+    const fallback = pending.get(d.id); pending.delete(d.id);
+    const a = d.answer || {};
+    if (a.verdict === 'verified' && a.text) { $('bcd-ans').textContent = String(a.text).trim(); $('bcd-ai').textContent = 'Verified by the Verifier' + (a.note ? ' · ' + a.note : ''); } else fallback();
+  });
+  bcAsk = function () {
+    const text = $('bcd-q').value.trim(); if (!text) return;
+    if (!S.started) { bcAskLocal(); return; }
+    const id = 'b' + Date.now().toString(36) + (++n); $('bcd-ans').textContent = 'Checking with the Verifier…';
+    pending.set(id, () => bcAskLocal());
+    MCS.send({ type: 'ask', id, q: text });
+    setTimeout(() => { const f = pending.get(id); if (f) { pending.delete(id); f(); } }, 9000);   // no answer in time: the desk's own
+  };
+}
