@@ -1,6 +1,6 @@
 // DAT-11 (task 278): live accuracy of Watch's pixel-only tracker, shown at the top of the Tracking lab.
 // The numbers come from Watch's scorer (visReport in autoevent.js): the tracker reads pixels only, the scorer compares with engine truth.
-// Identity with Azure Read OCR as a second opinion is Planned (tasks 275 and 277), so only the glyph-reader figure is shown.
+// Identity with Azure Read OCR as a second opinion (tasks 275 and 277): scored only on the tracks OCR answered.
 {
   const num = (v, unit) => (typeof v === 'number' && isFinite(v) ? v + (unit || '') : 'n/a');
   const draw = (box) => {
@@ -15,7 +15,7 @@
       ['Detection precision', num(r.detection.precision, '%'), 'detections that were real players'],
       ['Position error', num(r.detection.posErr, ' m'), 'mean distance to the true position'],
       ['Identity, glyph reader only', num(r.identity.accuracy, '%'), 'shirt number read from pixels; ' + num(r.identity.unknownPct, '%') + ' not yet identified, ' + num(r.identity.switches) + ' switches'],
-      ['Identity, glyph + Azure OCR', 'Planned', 'second opinion from Azure AI Vision Read (DAT-11, tasks 275 and 277)'],
+      ['Identity, glyph + Azure OCR', r.ocr && r.ocr.accepted ? num(r.ocr.accepted) + ' accepted' : 'None accepted yet', r.ocr && r.ocr.accepted ? (r.ocr.scored ? 'low-confidence tracks only, ' + num(r.ocr.scored) + ' scored of ' + num(r.ocr.accepted) + ' accepted: glyph alone ' + num(Math.round(r.ocr.glyph_right / r.ocr.scored * 1000) / 10) + '%, glyph + OCR ' + num(Math.round(r.ocr.ocr_right / r.ocr.scored * 1000) / 10) + '%' : 'none scorable against truth') + ' (agreed ' + num(r.ocr.agreed) + ', changed ' + num(r.ocr.changed) + '); not comparable with the whole-run figure above' : 'OCR answers are accepted only as 1 or 2 digits, confidence 0.7 or more, on a number the team has (DAT-11, task 277)'],
       ...(r.ocr ? [['OCR crops sent', num(r.ocr.sent), 'answered ' + num(r.ocr.answered) + ', digits read ' + num(r.ocr.read) + ', none found ' + num(r.ocr.no_digits) + '; too small to read ' + num(r.ocr.skipped_small) +
         ', no api ' + num(r.ocr.unavailable) + ', errors ' + num(r.ocr.errors) + '; at most ' + num(r.ocr.per_minute_cap) + ' a minute (task 275)']] : []),
       ['Pass recall / precision', num(r.passes.recall, '%') + ' / ' + num(r.passes.precision, '%'), num(r.passes.gt) + ' real passes, ' + num(r.passes.vis) + ' detected'],
