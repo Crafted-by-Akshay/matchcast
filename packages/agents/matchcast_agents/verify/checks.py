@@ -125,7 +125,7 @@ PLAYER_MOMENTS = ("goal", "card", "shot", "tackle", "foul")
 def moment_team_problem(
     ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]
 ) -> str | None:
-    """A player named in a moment line must belong to the moment's team or be named in its event.
+    """A player named in a moment line must be one the moment's event names (scorer, assist, ...).
 
     The moment is the event at the claims' evidence sequence (the latest revision of it).
     Names are matched whole and longest first, so "Ben Cole" is not found inside "Ben Coleman".
@@ -139,8 +139,8 @@ def moment_team_problem(
     payload = event["payload"]
     allowed = {v for v in payload.values() if isinstance(v, str) and v in ctx.names}
     team = payload.get("team_id")
-    if team:
-        allowed |= {p["player_id"] for p in ctx.roster["players"] if p["team_id"] == team}
+    if team and not allowed:  # an event that names no player: any player of its team
+        allowed = {p["player_id"] for p in ctx.roster["players"] if p["team_id"] == team}
     ok = {ctx.names[pid].casefold() for pid in allowed}
     text = line.text.casefold()
     for name in sorted(ctx.names.values(), key=len, reverse=True):
