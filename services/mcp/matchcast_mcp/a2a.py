@@ -5,6 +5,7 @@ one skill, ``compare_to_season``, answers from the DuckDB season views; there is
 """
 
 import json
+import math
 import uuid
 from typing import Any
 
@@ -80,7 +81,10 @@ def _error(request_id: Any, code: int, message: str) -> JSONResponse:
 
 
 def _data_part(message: dict[str, Any]) -> dict[str, Any] | None:
-    for part in message.get("parts", []):
+    parts = message.get("parts", [])
+    for part in parts if isinstance(parts, list) else []:
+        if not isinstance(part, dict):
+            continue
         if part.get("kind") == "data" and isinstance(part.get("data"), dict):
             return part["data"]
         if part.get("kind") == "text":
@@ -107,21 +111,28 @@ def routes(season: Season) -> list[Route]:
             return _error(request_id, -32600, "invalid request")
         if body.get("method") != "message/send":
             return _error(request_id, -32601, f"method not found: {body.get('method')}")
-        args = _data_part((body.get("params") or {}).get("message") or {})
+        params = body.get("params")
+        message = params.get("message") if isinstance(params, dict) else None
+        args = _data_part(message if isinstance(message, dict) else {})
         if not args or args.get("skill") != "compare_to_season":
             return _error(request_id, -32602, "send a data part with skill compare_to_season")
         try:
-            value = float(args["value"])
+            value = args["value"]
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("value must be a number")
+            if not math.isfinite(value):
+                raise ValueError("value must be finite")
+            value = float(value)
             result = season.compare(args["metric"], args["scope"], value, args.get("team_id"))
         except (KeyError, TypeError, ValueError, SeasonError) as error:
             return _error(request_id, -32602, f"invalid params: {error}")
-        message = {
+        reply = {
             "kind": "message",
             "role": "agent",
             "messageId": uuid.uuid4().hex,
             "parts": [{"kind": "data", "data": result}],
         }
-        return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": message})
+        return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": reply})
 
     return [
         Route("/.well-known/agent-card.json", card, methods=["GET"]),

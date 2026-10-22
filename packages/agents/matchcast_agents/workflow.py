@@ -540,16 +540,19 @@ class MatchWorkflow:
         claim = next((c for c in claims if c["metric"].split(":")[0] in TEAM_METRICS), None)
         if claim is None:
             return
-        metric = claim["metric"].split(":")[0]
+        metric, _, team_id = claim["metric"].partition(":")
         details: dict[str, Any] = {
             "skill": "compare_to_season",
             "metric": metric,
             "value": claim["value"],
             "claim_id": claim["claim_id"],
+            "team_id": team_id,
+            "as_of_ms": claim["snapshot"]["event_time_ms"],  # running total vs full-match season
+            "transport": getattr(self.stats_desk, "transport", "a2a"),
         }
         try:
             result = await self.stats_desk.compare(  # type: ignore[union-attr]
-                metric, "team", claim["value"]
+                metric, "team", claim["value"], team_id
             )
         except StatsDeskError as error:
             self._audit(

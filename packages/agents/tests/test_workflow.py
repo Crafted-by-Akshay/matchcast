@@ -145,7 +145,7 @@ class FakeDesk:
     async def compare(self, metric, scope, value, team_id=None):
         from matchcast_agents.statsdesk import StatsDeskError
 
-        self.calls.append((metric, scope, value))
+        self.calls.append((metric, scope, value, team_id))
         if self.fail:
             raise StatsDeskError("down")
         return {"metric": metric, "value": value, "season_average": 1.2, "rank": 3, "of": 56}
@@ -161,6 +161,8 @@ def test_priority_one_moments_call_the_stats_desk_and_audit_it(match) -> None:
     audit = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "a2a_call"]
     assert audit and len(audit) == len(desk.calls)
     assert all(r["details"]["result"]["rank"] == 3 for r in audit)
+    assert all(r["details"]["team_id"] and r["details"]["as_of_ms"] >= 0 for r in audit)
+    assert all(call[3] == r["details"]["team_id"] for call, r in zip(desk.calls, audit))
     priorities = {
         r["details"]["priority"]
         for r in flow.store.audit_records(flow.sk)

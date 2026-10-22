@@ -130,6 +130,8 @@ class RecapTrigger(BaseModel):
 class _LocalStatsDesk:
     """The Stats Desk skill called in-process; the mcp container serves the same over A2A."""
 
+    transport = "in_process"
+
     def __init__(self, season: Season) -> None:
         self._season = season
 
@@ -146,6 +148,7 @@ def _local_stats_desk() -> _LocalStatsDesk | None:
     try:
         return _LocalStatsDesk(Season())
     except Exception:  # noqa: BLE001 - no season Parquet in this image
+        logging.getLogger(__name__).warning("season data missing; Stats Desk disabled")
         return None
 
 
@@ -582,7 +585,10 @@ def _mount_mcp(app: FastAPI, registry: Registry) -> None:
 
     app.router.lifespan_context = lifespan
     taken = {getattr(r, "path", None) for r in app.router.routes}
-    # only the MCP (and A2A) paths join the api, so unknown paths still return Problem JSON
+    # only the MCP paths join the api (A2A stays on the mcp container, which is not public), so
+    # unknown paths still return Problem JSON
     app.router.routes.extend(
-        r for r in mcp_app.router.routes if getattr(r, "path", None) not in taken
+        r
+        for r in mcp_app.router.routes
+        if getattr(r, "path", None) not in taken and str(getattr(r, "path", "")).startswith("/mcp")
     )

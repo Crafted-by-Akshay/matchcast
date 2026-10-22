@@ -21,6 +21,8 @@ class StatsDeskError(RuntimeError):
 class A2AStatsDesk:
     """Calls the Stats Desk at ``url`` (for example ``https://mcp.../a2a``)."""
 
+    transport = "a2a"
+
     def __init__(self, url: str, *, client: httpx.AsyncClient | None = None) -> None:
         self.url = url
         self._client = client or httpx.AsyncClient(timeout=5.0)
@@ -45,9 +47,15 @@ class A2AStatsDesk:
         }
         try:
             response = await self._client.post(self.url, json=body)
+            response.raise_for_status()
             reply = response.json()
-        except (httpx.HTTPError, ValueError) as error:
-            raise StatsDeskError(str(error)) from error
-        if "error" in reply:
-            raise StatsDeskError(reply["error"].get("message", "stats desk error"))
-        return reply["result"]["parts"][0]["data"]
+            if "error" in reply:
+                raise StatsDeskError(str(reply["error"].get("message", "stats desk error")))
+            out = reply["result"]["parts"][0]["data"]
+        except StatsDeskError:
+            raise
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
+            raise StatsDeskError(f"bad stats desk reply: {e}") from e
+        if not isinstance(out, dict):
+            raise StatsDeskError("bad stats desk reply: data part is not an object")
+        return out

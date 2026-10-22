@@ -64,3 +64,26 @@ def test_team_filter_and_unknown_scope() -> None:
     assert one["team_id"] == "HAR" and 1 <= one["of"] < 56
     with pytest.raises(SeasonError):
         season.compare("goals", "club", 1)
+
+
+def test_malformed_requests_get_errors_not_a_500(client) -> None:
+    ok = {"skill": "compare_to_season", "metric": "shots", "scope": "team"}
+    for bad in ("8", True, None):
+        assert send(client, {**ok, "value": bad})["error"]["code"] == -32602, bad
+    nan = client.post(
+        "/a2a",
+        content=b'{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":'
+        b'{"parts":[{"kind":"data","data":{"skill":"compare_to_season","metric":"shots",'
+        b'"scope":"team","value":NaN}}]}}}',
+        headers={"content-type": "application/json"},
+    )
+    assert nan.status_code == 200 and nan.json()["error"]["code"] == -32602
+    for params in ([], "x", {"message": []}, {"message": {"parts": ["x", 3]}}):
+        body = {"jsonrpc": "2.0", "id": 1, "method": "message/send", "params": params}
+        reply = client.post("/a2a", json=body)
+        assert reply.status_code == 200 and reply.json()["error"]["code"] == -32602
+
+
+def test_an_unknown_team_is_an_error_not_an_empty_success() -> None:
+    with pytest.raises(SeasonError):
+        Season().compare("shots", "team", 5, "ZZZ")

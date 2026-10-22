@@ -58,6 +58,8 @@ class Season:
             f"{metric} > ?",
             [*args, value],
         ).fetchone()[0]
+        if n == 0:
+            raise SeasonError(f"no {scope} rows for team {team_id!r}")
         return {
             "metric": metric,
             "scope": scope,
