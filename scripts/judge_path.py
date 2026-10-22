@@ -22,6 +22,19 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
+CLOUD_PREFIXES = (
+    "AZURE_",
+    "FOUNDRY_",
+    "STORAGE_",
+    "EVENTHUB_",
+    "APPLICATIONINSIGHTS_",
+    "SPEECH_",
+    "TRANSLATOR_",
+    "VISION_",
+    "SEARCH_",
+    "CONTENT_SAFETY_",
+    "MATCHCAST_",
+)
 VIEWS = ("watch", "analyst", "broadcast")
 ROUTES = ("/v1/matches", "/v1/matches/{match_id}/events", "/v1/matches/{match_id}/claims")
 
@@ -60,27 +73,41 @@ def main() -> int:
     args = parser.parse_args()
     port = free_port()
     base = f"http://127.0.0.1:{port}"
-    env = {
-        **os.environ,
-        "MATCHCAST_PIPELINE": "memory",
-        "MATCHCAST_STORE": "memory",
-        "MATCHCAST_AGENT_MODE": "rules",
-    }
-    env.pop("MATCHCAST_MODE", None)
+    # Nothing inherited from the shell may point the api at Azure: drop every cloud setting.
+    env = {k: v for k, v in os.environ.items() if not k.startswith(CLOUD_PREFIXES)}
+    env.update(
+        MATCHCAST_PIPELINE="memory",
+        MATCHCAST_STORE="memory",
+        MATCHCAST_AGENT_MODE="rules",
+        AZURE_CONFIG_DIR=tempfile.mkdtemp(prefix="judge-az-"),
+    )
+    log = tempfile.NamedTemporaryFile("w+", prefix="judge-api-", suffix=".log")
     api = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "app.main:app", "--app-dir", "services/api"]
         + ["--host", "127.0.0.1", "--port", str(port)],
         cwd=ROOT,
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log,
+        stderr=subprocess.STDOUT,
     )
     try:
-        step("api boots", wait_ready(base, api), base)
-        step("api ready", get(f"{base}/ready") is not None)
+        booted = wait_ready(base, api)
+        if not booted:
+            log.seek(0)
+            print(log.read()[-1500:])
+        step("api boots", booted and api.poll() is None, base)
+        try:
+            get(f"{base}/ready")  # a 503 raises: the api reports itself not ready
+            ready = True
+        except OSError:
+            ready = False
+        step("api ready", ready)
         with tempfile.TemporaryDirectory() as dist:
             built = subprocess.run(
-                [sys.executable, "apps/unified/build.py", dist], cwd=ROOT, capture_output=True
+                [sys.executable, "apps/unified/build.py", dist],
+                cwd=ROOT,
+                capture_output=True,
+                timeout=120,
             )
             step("unified app builds", built.returncode == 0, built.stderr.decode()[-200:])
             shell = (Path(dist) / "index.html").read_text(errors="ignore")
@@ -94,6 +121,7 @@ def main() -> int:
             cwd=ROOT,
             capture_output=True,
             text=True,
+            timeout=120,
         )
         step(
             "match to verified claims",
@@ -104,12 +132,15 @@ def main() -> int:
         step("openapi lists the app routes", all(route in spec for route in ROUTES))
         if args.e2e:
             e2e = subprocess.run(
-                ["npx", "playwright", "test", "tests/e2e/unified.spec.ts"], cwd=ROOT
+                ["npx", "playwright", "test", "tests/e2e/unified.spec.ts"], cwd=ROOT, timeout=1200
             )
             step("playwright unified spec", e2e.returncode == 0)
     finally:
         api.terminate()
-        api.wait(timeout=15)
+        try:
+            api.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            api.kill()
     print("Judge path OK")
     return 0
 
