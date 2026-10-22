@@ -66,6 +66,39 @@ const LV = (() => {
     r.sending = false;
   };
 
+  // the server's audit records for this match (EXP-12), and the same check the server's verifyChain does (packages/contracts/src/audit.ts)
+  const GENESIS = '0'.repeat(64);
+  const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'
+    : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}' : JSON.stringify(v);
+  const sha = (t) => crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)).then((b) => [...new Uint8Array(b)].map((n) => n.toString(16).padStart(2, '0')).join(''));
+  const verifyChain = async (records) => {
+    let prev = GENESIS;
+    const stream = records.length ? canon(records[0].stream) : null;
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i], bad = (reason) => ({ valid: false, count: records.length, first_broken_sequence: Number.isInteger(r && r.sequence) && r.sequence >= 1 ? r.sequence : i + 1, reason });
+      if (!r || r.kind !== 'audit_record') return bad('invalid_schema');
+      if (canon(r.stream) !== stream) return bad('stream_mismatch');
+      if (r.sequence !== i + 1) return bad('sequence_gap');
+      if (r.prev_hash !== prev) return bad('prev_hash_mismatch');
+      const body = Object.assign({}, r); delete body.hash;
+      if (r.hash !== await sha(canon(body))) return bad('hash_mismatch');
+      prev = r.hash;
+    }
+    return { valid: true, count: records.length, final_hash: prev, first_broken_sequence: null, reason: null };
+  };
+  const audit = async () => {
+    if (!run) throw new Error('no match yet');
+    const all = [], LIMIT = 1000;
+    for (let page = 0; page < 20; page++) {   // the api returns at most 1000 records a call; from_seq is the first sequence wanted
+      const res = await fetch(url('/v1/matches/' + run.id + '/audit', { limit: LIMIT, from_seq: all.length + 1 }));
+      if (!res.ok) throw new Error('audit ' + res.status);
+      const j = await res.json(), got = Array.isArray(j) ? j : (j.records || j.items || []);
+      all.push(...got);
+      if (got.length < LIMIT) return all;
+    }
+    throw new Error('more than 20,000 records');
+  };
+
   // Watch's batch, as the shell receives it
   const events = (batch) => {
     if (!run) return;
@@ -76,5 +109,5 @@ const LV = (() => {
   const setPersona = (p) => { if (p === persona) return; persona = p; if (run) { if (run.es) run.es.close(); open(); } };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, stop, persona: setPersona, toPacket, get status() { return st; }, get enabled() { return !!api(); } };
+    begin, events, stop, persona: setPersona, toPacket, audit, verifyChain, get status() { return st; }, get enabled() { return !!api(); } };
 })();
