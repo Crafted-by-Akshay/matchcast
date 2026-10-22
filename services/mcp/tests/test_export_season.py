@@ -52,14 +52,54 @@ def test_counts_and_files(exported: tuple[Path, dict[str, int]]) -> None:
     assert sorted(p.name for p in out.iterdir()) == sorted(f"{t}.parquet" for t in TABLES)
 
 
-def test_columns_cover_every_queryable_metric(exported: tuple[Path, dict[str, int]]) -> None:
+EXPECTED_COLUMNS = {
+    "matches": {
+        "match_id",
+        "date",
+        "home_team_id",
+        "away_team_id",
+        "score_home",
+        "score_away",
+        "venue",
+    },
+    "team_match_stats": {
+        "match_id",
+        "team_id",
+        "side",
+        "goals",
+        "shots",
+        "xg",
+        "passes",
+        "passes_completed",
+        "possession_pct",
+        "fouls",
+        "yellow_cards",
+        "red_cards",
+        "offsides",
+    },
+    "player_match_stats": {
+        "match_id",
+        "player",
+        "team_id",
+        "passes",
+        "passes_completed",
+        "tackles",
+        "shots",
+        "xg",
+        "distance_km",
+    },
+}  # fmt: skip  (the columns in docs/architecture/07 section 6)
+
+
+def test_columns_match_the_documented_views(exported: tuple[Path, dict[str, int]]) -> None:
     out, _ = exported
     con = duckdb.connect()
-    for table, scope in (("team_match_stats", "team"), ("player_match_stats", "player")):
+    for table, expected in EXPECTED_COLUMNS.items():
         path = out / f"{table}.parquet"
         cols = {r[0] for r in con.execute(f"DESCRIBE SELECT * FROM '{path}'").fetchall()}
-        assert set(METRICS[scope]) <= cols
-        assert {"match_id", "team_id"} <= cols
+        assert cols == expected, table
+    for scope, table in (("team", "team_match_stats"), ("player", "player_match_stats")):
+        assert set(METRICS[scope]) <= EXPECTED_COLUMNS[table]
 
 
 def test_season_reads_exported_files(exported: tuple[Path, dict[str, int]]) -> None:
