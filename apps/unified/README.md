@@ -30,6 +30,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 ## Files
 - `index.html`: the shell (switcher, match bar, Agents tab, message handling).
 - `contracts.js`, `agents.js`: the shared contracts and the agent pipeline, loaded by the shell.
+- `live.js` (`LV`, EXP-1): posts Watch's goal and shot events to the agent api (`POST /v1/matches`, `/events`) and subscribes to its SSE stream (claims, lines, publications), which `AG.ingest` shows beside the rules claims. The top-bar pill reads 'Live agents', 'Rules fallback' (api silent for 45 s or on rules), 'Warming up the match engine' or 'Offline (simulated)' (no api). Build with `python3 build.py --api https://<api>` to set `config.js`; without it nothing is called. Only goal and shot events are mapped to contract events so far.
 - `watch/index.html`, `broadcast/index.html`, `analyst/index.html`: built views. Each has `embed/hook.js` plus its own hook appended.
 - `embed/`: the hooks. `hook.js` (shared by Watch and Broadcast), `watch.js`, `broadcast.js`, `analyst.js`.
 - `shared/`: `players.json`, `intl.json` (3D engine), `fixtures.json` and `clubs.json` (season, generated from the Analyst data), `analyst/data/` (28 matches and the league).
@@ -39,6 +40,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - `python3 build.py <dir>`: also writes a copy in `<dir>` for tests, with three.js served from `<dir>/node_modules/three`.
 
 ## Tests
+- `tests/connection.cjs <appDir> <outDir>`: live, rules fallback and offline against a mock api (drives the shell directly).
 - `tests/unified.cjs <url> <outDir>`: headless Chromium. Checks the season loads, Watch and Broadcast start on the shared fixture with its clubs, the Analyst routes to it, switching keeps Watch running, Watch's events reach the agents, the audit chain verifies, the Broadcast scoreboard shows Watch's score, full time reaches the Analyst, a fixture change reloads Watch, the keyboard shortcuts work (1 to 4), and the phone layout has no horizontal scroll. Saves screenshots.
 
 ## Limits
