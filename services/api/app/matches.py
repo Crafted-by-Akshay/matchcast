@@ -21,7 +21,7 @@ from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.auth import PRODUCER_ROLES, caller_role
+from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 
 TENANT = "demo"
 HEARTBEAT_S = 15
@@ -309,19 +309,28 @@ def build_router(registry: Registry) -> APIRouter:
         rows = [ln for ln in flow.store.lines(flow.sk) if status in (None, ln.status)]
         return {"items": [_line_json(ln) for ln in rows]}
 
-    async def act(line_id: str, body: LineAction, role: str | None, action: str) -> dict[str, Any]:
+    async def act(
+        line_id: str,
+        body: LineAction,
+        role: str | None,
+        action: str,
+        actor: tuple[str, str | None] = ("producer", None),
+    ) -> dict[str, Any]:
         need_producer(role)
+        actor_id, actor_name = actor
         flow = registry.get(body.session_id, body.match_id)
         try:
             if action == "approve":
-                line = await flow.approve(line_id)
+                line = await flow.approve(line_id, actor_id, actor_name)
                 return {"line": _line_json(line)}
             if action == "kill":
-                line = await flow.kill(line_id, body.reason or "killed by producer")
+                line = await flow.kill(
+                    line_id, body.reason or "killed by producer", actor_id, actor_name
+                )
                 return {"line": _line_json(line)}
             if body.text is None:
                 raise Problem(422, "contract_invalid", "text is required", "/text")
-            line, verdict = await flow.edit(line_id, body.text)
+            line, verdict = await flow.edit(line_id, body.text, actor_id, actor_name)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         if verdict.verdict == "rejected":
@@ -330,21 +339,30 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/lines/{line_id}/approve")
     async def approve(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "approve")
+        return await act(line_id, body, x_matchcast_role, "approve", actor)
 
     @router.post("/lines/{line_id}/edit")
     async def edit(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "edit")
+        return await act(line_id, body, x_matchcast_role, "edit", actor)
 
     @router.post("/lines/{line_id}/kill")
     async def kill(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "kill")
+        return await act(line_id, body, x_matchcast_role, "kill", actor)
 
     @router.get("/matches/{match_id}/audit")
     async def audit(
