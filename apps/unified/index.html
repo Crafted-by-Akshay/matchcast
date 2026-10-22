@@ -103,6 +103,8 @@ button,select{font:inherit;color:inherit}
 .ag-prov dd{margin:0;overflow-wrap:anywhere}
 .ag-prov code{font-size:12px;overflow-wrap:anywhere}
 .ag-table{overflow-x:auto}
+.ag-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 8px;font-size:12px;color:var(--muted)}
+.ag-filters select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
 .ag-panel table{width:100%;border-collapse:collapse;font-size:13px}
 .ag-panel th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
 .ag-panel td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -201,7 +203,11 @@ button,select{font:inherit;color:inherit}
         <section class="ag-panel"><h3>Provenance</h3><div class="ag-prov" id="ag-prov"></div></section>
       </div>
       <section class="ag-panel"><h3>Claims <span class="muted" id="ag-n"></span></h3>
-        <div class="ag-table"><table><thead><tr><th>ID</th><th>Min</th><th>Agent</th><th>Claim</th><th>Evidence</th><th>Verdict</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
+        <div class="ag-filters"><label>Verdict <select id="lg-verdict"><option value="">all</option><option>verified</option><option>pending</option><option>abstained</option></select></label>
+          <label>Agent <select id="lg-agent"><option value="">all</option><option>analyst</option><option>verifier</option><option>producer</option></select></label>
+          <label>Metric <select id="lg-metric"><option value="">all</option><option>score</option><option>shot_xg</option><option>xg_total</option><option>moment</option><option>line</option></select></label>
+          <button type="button" id="lg-export">Export CSV</button> <span class="muted" id="lg-hash" aria-live="polite"></span></div>
+        <div class="ag-table"><table><thead><tr><th>Time</th><th>Metric</th><th>Value</th><th>Units</th><th>Agent</th><th>Source</th><th>Verdict</th><th>Reason</th><th>Approval</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
       </section>
       <section class="ag-panel"><h3>Audit chain</h3>
         <div class="ag-audit"><button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
@@ -352,6 +358,26 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const mins = (m) => Math.floor(m) + "'";
 const nameOf = (k) => { const f = FX.find((x) => x.home.key === k || x.away.key === k); return f ? (f.home.key === k ? f.home.club : f.away.club) : k; };
 const teamsOf = (s) => ({ hk: s.h, ak: s.a, home: nameOf(s.h), away: nameOf(s.a) });
+// the claims ledger (EXP-10): one row per claim, newest first, filtered by verdict, agent and metric; the export is the same rows
+const METRIC = { score: ['score', 'goals'], shot: ['shot_xg', 'xG'], xg_total: ['xg_total', 'xG'] };
+const valueOf = (c) => c.kind === 'score' ? c.inputs.score.join('–') : c.kind === 'shot' ? (+c.inputs.xg).toFixed(2) : c.kind === 'xg_total' ? c.inputs.xg.map((x) => (+x).toFixed(2)).join(' / ')
+  : c.inputs && c.inputs.value != null ? String(c.inputs.value) : '';
+function ledgerRows(claims) {
+  const f = { verdict: $('lg-verdict').value, agent: $('lg-agent').value, metric: $('lg-metric').value };
+  return claims.slice().reverse().map((c) => ({ id: c.id, time: mins(c.minute), metric: (METRIC[c.kind] || [c.inputs && c.inputs.metric ? c.inputs.metric : c.kind])[0], value: valueOf(c), units: (METRIC[c.kind] || [null, c.inputs && c.inputs.units || ''])[1],
+    agent: c.agent, source: c.source === 'model' ? 'model' : 'rules', verdict: c.verdict, repaired: c.repaired, reason: c.reason || '', approval: c.verdict === 'verified' ? 'approved' : c.verdict === 'pending' ? 'pending' : 'held' }))
+    .filter((x) => (!f.verdict || x.verdict === f.verdict) && (!f.agent || x.agent === f.agent) && (!f.metric || x.metric === f.metric));
+}
+const csvCell = (s) => /[",\n]/.test(String(s)) ? '"' + String(s).replace(/"/g, '""') + '"' : String(s);
+async function exportLedger() {
+  const rows = ledgerRows(AG.run ? AG.run.claims : []);
+  const head = ['time', 'metric', 'value', 'units', 'agent', 'source', 'verdict', 'reason', 'approval'];
+  const csv = [head.join(',')].concat(rows.map((x) => head.map((k) => csvCell(x[k])).join(','))).join('\n') + '\n';
+  const bytes = new TextEncoder().encode(csv);
+  const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((n) => n.toString(16).padStart(2, '0')).join('');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: 'text/csv' })); a.download = 'matchcast-claims.csv'; document.body.appendChild(a); a.click(); a.remove();
+  $('lg-hash').textContent = rows.length + ' rows · SHA-256 ' + hash;
+}
 let picked = null;   // the claim the provenance panel shows; the latest one when none is picked
 function renderAgents() {
   if (current !== 'agents') return;
@@ -371,9 +397,10 @@ function renderAgents() {
     ? r.feed.slice(-40).reverse().map((f) => '<li class="' + f.tone + '"><span class="m">' + mins(f.minute) + '</span><b>' + esc(f.who) + '</b> ' + esc(f.text) + '</li>').join('')
     : '<li class="empty">Waiting for the kick-off in Watch. Events and claims appear here as the match runs.</li>';
   $('ag-n').textContent = r ? r.claims.length + ' claims' : '';
-  $('ag-claims').innerHTML = r && r.claims.length
-    ? r.claims.slice(-40).reverse().map((c) => '<tr data-id="' + c.id + '" title="' + esc(c.agent + ' · ' + c.verdict + ' · ' + (c.source === 'model' ? 'model' : 'rules')) + '"' + (c.id === sel ? ' class="on"' : '') + '><td>' + c.id + '</td><td>' + mins(c.minute) + '</td><td>' + c.agent + '</td><td>' + esc(c.text) + '</td><td>' + esc(c.evidence.join(' ') || c.basis || '') + '</td><td class="v ' + c.verdict + '">' + c.verdict + (c.repaired ? ' · repaired' : '') + '</td></tr>').join('')
-    : '<tr><td colspan="6" class="empty">No claims yet</td></tr>';
+  const rows = ledgerRows(r ? r.claims : []);
+  $('ag-claims').innerHTML = rows.length
+    ? rows.slice(0, 40).map((x) => '<tr data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td>' + esc(x.time) + '</td><td>' + esc(x.metric) + '</td><td>' + esc(x.value) + '</td><td>' + esc(x.units) + '</td><td>' + esc(x.agent) + '</td><td>' + esc(x.source) + '</td><td class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td>' + esc(x.reason) + '</td><td>' + esc(x.approval) + '</td></tr>').join('')
+    : '<tr><td colspan="9" class="empty">No claims yet</td></tr>';
   const c = r && r.claims.find((x) => x.id === sel);
   $('ag-prov').innerHTML = c ? '<dl>' + [
     ['Claim', c.id + ' · ' + c.kind + ' · ' + mins(c.minute)],
@@ -495,6 +522,8 @@ function init(list) {
     if (map[e.key]) location.hash = map[e.key];
   });
   window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'watch'));
+  for (const id of ['lg-verdict', 'lg-agent', 'lg-metric']) $(id).onchange = renderAgents;
+  $('lg-export').onclick = exportLedger;
   $('ag-claims').onclick = (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) { picked = tr.dataset.id; renderAgents(); } };
   $('ag-verify').onclick = async () => {
     const v = await MCC.verify();
