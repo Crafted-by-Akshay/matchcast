@@ -40,6 +40,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - `python3 build.py <dir>`: also writes a copy in `<dir>` for tests, with three.js served from `<dir>/node_modules/three`.
 
 ## Tests
+- `tests/e2e/trace.spec.ts` (EXP-6): four agents in order with durations and tools; the seeded bad claim shows the repair.
 - `tests/e2e/ledger.spec.ts` (EXP-10): newest first, filters, provenance, CSV export with a matching SHA-256.
 - `tests/e2e/pulse.spec.ts` (was `watch.cjs`): Match Pulse cards (tick, chips, Rules fallback chip, Why?, last 10), Casual v Analyst text and chips, Player focus lead, mode saved and restored after reload, Planned language labels.
 - `tests/e2e/connection.spec.ts` (was `connection.cjs`): live, rules fallback and offline against a mock api (drives the shell directly).
@@ -51,6 +52,11 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - Casual shows the plain line and no chips; the other modes show the full line with chips. Player focus leads the line with the player's name; My club accents the club's cards.
 - The watch mode is saved in localStorage (`mcx-mode`) and restored on reload. It is sent to the shell as the persona (`casual`, `analyst`, `club:<key>`, `player:<name>`, `metric:<name>`), and `live.js` reopens the api stream for it.
 - The language picker labels everything except English, Spanish and Hindi as Planned.
+
+## Trace panel (EXP-6)
+- `trace-panel.js` (`TP`): 'How was this made?' on any line (a Match Pulse card or the Agents tab's Provenance) opens a timeline: Producer task, Analyst claim with its tool names, Narrator draft, Verifier verdict and repair, Producer approval and publication, each with its time and 'rules' or 'model'. Rules steps carry no tokens. Data is the claim's own trace (`agents.js`) and its audit records.
+- 'Seed a bad claim' (Agents tab) makes the next score claim wrong so the Verifier rejects and repairs it; the trace shows the reason and the repair. Lines from the api show what the stream carried until the server trace summaries (AGT-3) are added to it.
+
 
 ## One match source (EXP-2)
 - Watch is the only engine. Four times a second it sends the pitch state (22 players' positions, velocities and headings, the ball, score, clock, pause, speed and stats) and the shell forwards it to Broadcast, along with Watch's events.
@@ -70,12 +76,47 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - Tested in local headless Chromium. Not yet tested inside the claude.ai artifact host.
 
 ## Lower-thirds, teleprompter and the approval queue (EXP-7, EXP-11)
+- The lower-third and teleprompter sit inside the live view (`#bc-view`), because the desk's CSS hides every other direct child of `body`. `tests/e2e/broadcast.spec.ts` (QUA-2) checks they are visible on screen, not only un-hidden.
 - Agents tab, Approval queue: **Demo** mode airs verified Broadcast lines at once. **Producer** mode holds each one until a person approves, edits or kills it. The signed-in producer is a simulated account (Planned: Entra ID).
 - Broadcast shows an approved line as a lower-third for 8 seconds and keeps the last five in the teleprompter list. A pending or killed line reaches no view, including Watch's Match Pulse.
 - Edit is re-verified: every number in the new text must already be in the verified line (or its minute), otherwise it is rejected and not aired. Approve, edit and kill each write `line_approved`, `line_edited` or `line_killed` to the audit chain with the person's name.
 
+## Captions and voice (EXP-8)
+`voice.js` shows every verified line as a caption and, when "Voice" in the top bar is on, speaks it. With the api, a publication's `audio_url` (Azure Speech mp3 from `/v1/audio/...`) is played; without it the browser's own voice is used and labelled "Browser voice (simulated)"; the Azure Speech voice is Planned. A line older than 5 s is shown but never spoken. Each claim is spoken once. Voice names live in `voices.json` (shown on the button; the api reads them, the browser fallback cannot use Azure voice names)`voices.json` (play-by-play, analyst, Spanish, Hindi). Voice is off by default (browsers need a click to play audio) and the choice is remembered. Planned: the Speech resource and synthesis service (api and Bicep), Spanish/Hindi voices once EXP-17 lands, and per-role voice choice.
+
+## Spanish and Hindi lines (EXP-17)
+Choosing Spanish or Hindi in Watch shows Match Pulse cards in that language. With no api, a rules Translator writes each verified score, shot and xG line from fixed templates; names and numbers are copied untouched. The Verifier then re-checks the translation: the names and numbers must be the same and in the same order as the English line (so a swapped score or swapped clubs fails) and it may contain no name that is not in the English line or the roster, otherwise the translation is rejected (`translation_rejected` in the audit chain) and the card keeps the English line with "Translation unavailable". Moment prose from Watch has no template, so it stays English. The chosen language is also sent to the api stream (`lang`) for the model Translator. This re-check covers the rules Translator only; re-checking the api's model translations in the page is Planned. Also Planned: Azure AI Translator, voices (EXP-8), Broadcast captions, the 500,000-character guard and Content Safety on translations, which live in the api.
+
+## Audit chain from the server (EXP-12)
+With an api configured, "Verify chain" in the Agents tab fetches `GET /v1/matches/{id}/audit`, pages through the records (1000 a call, `from_seq`), recomputes every hash in the page (same rules as `verifyChain` in packages/contracts: sorted-key canonical JSON, SHA-256, genesis of 64 zeros) and shows "Chain intact · N records · server" or the first broken sequence and reason. With no api, or if the api cannot answer, it checks the in-page chain and says so. The Analyst's own Trust & audit page still verifies its in-page chain (Planned: switch it to the same call).
 ## Wild-moment alerts (EXP-9)
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
+
+## Accessibility (EXP-14)
+The shell: arrow keys, Home and End move between the dashboard tabs (tab 1 to 4 still switch from anywhere outside a field); a skip link jumps to the match view; every button and tab shows a focus ring; each published line is announced through a polite live region (`#sr-lines`); tab labels, the selected tab and the filter buttons meet WCAG AA contrast (axe-core reports no serious or critical issue on the Agents tab). The trace panel is a native dialog, so Esc closes it. Not yet checked: the three views inside their frames (QUA-9 `a11y.spec.ts` covers them) and a VoiceOver listen-through.
+## Analyst Data platform page (EXP-13)
+- `analyst-pages/*.js` holds Analyst pages we own; `build.py` appends them after the prototype pages. `10_data_platform.js` adds Platform > Data platform.
+- It shows the Fabric dashboard clip or screenshot (`shared/fabric-dashboard.mp4` / `.png`) and the Databricks model card (`shared/model-card.json`). Each block says **Planned** and names its ticket (DAT-8, DAT-6) until the file exists. Fabric is labelled paused after filming.
+- Test: `tests/e2e/analyst.spec.ts`.
+
+## Data Scientist page uses the agent api (AGT-14, task 139)
+- `analyst-pages/20_ds_agent.js` wraps the prototype's `d2_agAsk`/`d2_agDraw`. With an api configured (`window.parent.MATCHCAST_API`) the question goes to `POST /v1/ds/ask`; a verified answer shows its table, a bar chart drawn from the rows and the SQL. Any other verdict shows the api's text and no chart ("Could not verify this result."). If the api is silent or errors, the in-page rules answer and the chip says "Data Scientist · rules".
+- Tests: the three `data scientist:` cases in `tests/e2e/analyst.spec.ts`.
+
+## Analyst accessibility (EXP-14)
+- `analyst-pages/00_a11y.js` sets `lang`, redefines the light-theme `--good`/`--warn` tokens (the dark theme keeps its own) and darkens club crests that failed WCAG AA contrast, names unlabelled chart SVGs and makes `#main` keyboard-focusable. It exists because `sources/` is read only.
+- `tests/e2e/a11y-analyst.spec.ts` runs axe (WCAG 2 A/AA) on 13 Analyst pages in both the light and dark scheme and fails on any serious or critical violation (minor and moderate are not checked). Uses `@axe-core/playwright` (dev dependency). Watch and Broadcast are still to audit.
+## Copilot Ask answered by the agents (EXP-5)
+A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chips still use Watch's own live-data answers). With the api live, the shell posts it to `POST /v1/matches/{id}/ask` and shows the answer with its verdict. Otherwise the in-page rules answer from the event log: who has the most shots or goals, the score, xG, each counted from the log with the events cited and a "Verified" tick; anything else gets "I can't confirm that from the match data yet." Questions are cut at 300 characters and limited to 5 a minute per browser. Planned: Prompt Shields on input and the knowledge-base route (AGT-12, AGT-16), which live in the api.
+
+## Full-time recap in the Analyst library (AGT-15, task 105)
+- At full time the shell adds `recap: { api, session_id, match_id }` to the import message it sends the Analyst (only when Watch is the source and an api is configured; `LV.key` exposes the run's key). `embed/analyst.js` stores it on the imported match.
+- `analyst-pages/30_recap.js` wraps the Match centre page: for such a match it shows a Full-time recap card from `GET /v1/matches/{id}/recap/analyst`, polling every 5 s for a minute ("Being written by the agents…"), then "Planned: not ready". It shows the Verifier tick only when every sentence has verdict `verified`, and "Rules fallback" when the api's mode is `rules`. Recorded season matches have no recap card. Watch and Broadcast recap cards belong to their lanes.
+
+## Instant replay (Broadcast)
+- `embed/replay.js` (appended after `broadcast.js` by `build.py`) keeps the last 60 s of Watch's frames in Broadcast. The "Instant replay" bar on the live view plays back the last 10, 20 or 30 s at normal or half speed, with a red REPLAY tag and a Back to live button; it returns to live by itself at the end.
+- Only player and ball positions are replayed. Clock, score and stats stay live, events and agent lines are not replayed, and Watch keeps running underneath. The buttons stay disabled until two frames are buffered. The buffer is in the page, so it is empty after a reload. Test: `tests/e2e/replay.spec.ts`.
+- The desk's CSS hides every direct child of `body` except `#bc`, `#stage` and `#load`, so overlays for Broadcast must be appended inside `#bc-view`.
 
 ## Talk by voice (EXP-16)
 Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.js`): hold, speak, release and the words fill the box and submit it; Space or Enter on the focused button works too, and typing always works. Watch's talk-to-player already had a mic. Both use the browser's speech recognition (the button is disabled where the browser has none). Orders that change play are labelled "Game mode" in Watch and never touch the event record behind the claims. Planned, all needing the api: the Speech token endpoint with the Azure Speech SDK, the `/talk` role agents with Verifier and Content Safety, and a spoken reply from the api's voices. No Speech key is ever placed in the page.

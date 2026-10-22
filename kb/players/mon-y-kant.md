@@ -1,0 +1,13 @@
+---
+title: Y. Kanté
+entities: mon-y-kant, MON
+generated: scripts/build_profiles.py
+---
+## Profile
+
+Y. Kanté wears number 6 for Montaña CF (MON) and plays as DM.
+Rating 86. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 110 passes (81% completed), 28 tackles, 0 shots, 0.00 xG, 3.9 km on average per match.

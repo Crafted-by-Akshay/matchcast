@@ -6,6 +6,8 @@ This file follows the [C4 model](https://c4model.com): level 1 shows MatchCast w
 
 ## 1. System context (C4 level 1)
 
+Exported image: [img/1-system-context.png](img/1-system-context.png) (regenerate with `scripts/export_diagrams.sh`).
+
 ```mermaid
 flowchart LR
   fan([Fan / judge<br/>browser]):::person
@@ -38,6 +40,8 @@ flowchart LR
 ```
 
 ## 2. Containers (C4 level 2)
+
+Exported image: [img/5-data-flow.png](img/5-data-flow.png) (regenerate with `scripts/export_diagrams.sh`).
 
 ```mermaid
 flowchart TB
@@ -111,7 +115,7 @@ Every deployable part, where its code lives, and who owns it. "Lane" is the Clau
 | Databricks job | Trains the danger model and fits xG; logs to MLflow; exports ONNX | PySpark notebooks, MLflow, Unity Catalog | `data/databricks/` | Databricks Premium jobs compute, single node | Run once, then stopped | b | Data |
 | Fabric | Eventstream from Event Hubs into an Eventhouse; Real-Time Dashboard (4 tiles) | Fabric RTI, KQL | `data/fabric/` | F2 capacity, about 12 active hours, then paused | n/a | b, d | Data |
 
-Folders that exist today and keep their name: `services/api`, `services/worker`, `services/simulation`, `packages/contracts`, `packages/agents`, `apps/unified`. `apps/broadcast-web` (Next.js scaffold) is retired once `apps/unified` is the demo app; it is deleted in the PR that adds the `web` container. `services/commentary` and `services/match-state` are empty placeholders and are deleted in the same PR, because the Narrator lives in `packages/agents` and the reducer lives in `services/worker`.
+Folders that exist today and keep their name: `services/api`, `services/worker`, `services/simulation`, `packages/contracts`, `packages/agents`, `apps/unified`. The early Next.js scaffold `apps/broadcast-web` and the empty placeholders `services/commentary` and `services/match-state` were deleted on 22 Oct, because `apps/unified` is the demo app and the Narrator lives in `packages/agents` and the reducer lives in `services/worker`.
 
 ## 4. Azure resources
 

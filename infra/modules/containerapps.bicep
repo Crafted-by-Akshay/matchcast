@@ -19,6 +19,11 @@ param mcpImage string
 @description('Client ID of the Entra app registration matchcast-web (PLT-5). Empty leaves Easy Auth off.')
 param entraClientId string = ''
 param keyVaultUri string = ''
+param contentSafetyEndpoint string = ''
+param searchEndpoint string = ''
+
+@description('True when Key Vault already holds srch-query-key; a Key Vault secret reference to a missing secret fails the revision.')
+param searchKeysInVault bool = false
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsName
@@ -73,6 +78,11 @@ var appInsightsSecrets = concat(
     : []
 )
 
+var searchSecrets = searchKeysInVault
+  ? [{ name: 'srch-query-key', keyVaultUrl: '${keyVaultUri}secrets/srch-query-key', identity: identityId }]
+  : []
+var searchEnv = searchKeysInVault ? [{ name: 'SEARCH_QUERY_KEY', secretRef: 'srch-query-key' }] : []
+
 var authEnv = authEnabled
   ? [
       { name: 'MATCHCAST_EASY_AUTH', value: '1' }
@@ -119,7 +129,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
-      secrets: appInsightsSecrets
+      secrets: concat(appInsightsSecrets, searchSecrets)
       ingress: { external: true, targetPort: 8000, transport: 'auto' }
     }
     template: {
@@ -138,7 +148,12 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'EVENTHUB_FQDN', value: eventHubFqdn }
             { name: 'EVENTHUB_NAME', value: eventHubName }
             { name: 'MATCHCAST_STORE', value: 'table' }
-          ])
+            { name: 'CONTENT_SAFETY_ENDPOINT', value: contentSafetyEndpoint }
+            { name: 'SEARCH_ENDPOINT', value: searchEndpoint }
+            { name: 'SEARCH_INDEX', value: 'kb-matchcast-v1' }
+            // Easy Auth and the ingress already restrict Host; the FQDN is not known inside its own app
+            { name: 'MATCHCAST_MCP_ALLOWED_HOSTS', value: '*' }
+          ], searchEnv)
           probes: [
             { type: 'Liveness', httpGet: { path: '/health', port: 8000 } }
             { type: 'Readiness', httpGet: { path: '/ready', port: 8000 } }

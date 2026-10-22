@@ -20,6 +20,8 @@ Each flow is a sequence diagram plus numbered rules. Names in `code` are real en
 
 ## F1 Live match loop
 
+Exported image: [img/3-life-of-one-claim.png](img/3-life-of-one-claim.png) (regenerate with `scripts/export_diagrams.sh`).
+
 ```mermaid
 sequenceDiagram
   autonumber

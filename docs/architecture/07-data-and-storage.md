@@ -66,7 +66,7 @@ A **claim** is one measured fact (Analyst). A **line** is the Narrator's text fo
 
 ## 4. Tables
 
-All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A string column is at most 60 KB; anything larger goes to Blob `overflow/{prefix}/{table}/{RowKey}.json` and the column holds `blob:<path>`.
+All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A string property holds at most 64 KB of UTF-16 (32,768 units; the code uses 32,000); anything larger goes to Blob `overflow/{prefix}/{table}/{RowKey}.<sha256 prefix>.json` and the column holds `blob:<path>`.
 
 | Table | PartitionKey | RowKey | Columns | Written by | Read by |
 | --- | --- | --- | --- | --- | --- |
@@ -80,10 +80,12 @@ All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A
 | `checkpoints` | `sk` | `<moment_id>:<executor>` | checkpoint (JSON), created_at | workflow | workflow on resume |
 | `conversations` | `sk|browser_session_id` | `turn` (4 digits) | question, persona, answer, citations (JSON), verdict, created_at | `api /ask` | `api /ask` |
 
+Built today (`packages/agents/matchcast_agents/tables.py`, AGT-3 and AGT-13): `TableStore` implements the repositories for `matches`, `events`, `matchstate`, `claims`, `lines`, `publications`, `recaps`, `checkpoints` and `audit` with the keys above. Each row stores the whole record as JSON in a `doc` column beside its key columns (`event_id` and `revision` on events, `revision` and `last_sequence` on matchstate, `processed_sequence` on checkpoints), and a value over 32,000 UTF-16 units goes to the `overflow` container as described (`build_store` creates the container if it is missing). Claims, lines and publications also carry `ord` (a zero-padded nanosecond clock) so lists keep insertion order. The checkpoint is one row per match (`current`) holding the processed sequence, the state and the Producer memory, which is what the workflow resumes from. Events are keyed by `stream_sequence`, unique per stream, so a retry is the same row. `conversations` has no repository yet.
+
 Write rules:
 1. Idempotent keys: `claim_id = sha256(sk, moment_id, agent, derivation_version)[:24]`; `line_id = sha256(claim_ids, persona, attempt)[:24]`; `publication_id = sha256(line_id)[:24]`. Upserts with the same key are safe on replay.
 2. `audit.sequence` is assigned by a single writer per match (the `api` replica) with an optimistic insert; a 409 Conflict means another writer won, so re-read the tail and retry once.
-3. `matchstate/current` is updated with an ETag check (`If-Match`), so a stale writer fails instead of overwriting.
+3. `matchstate/current` is updated with an ETag check (`If-Match`), so a stale writer fails instead of overwriting. `TableStore.put_state` is a plain upsert today (one writer, ADR-0005); the check comes with a second writer.
 
 ## 5. Blob containers
 
@@ -106,12 +108,14 @@ The `mcp` container opens an in-memory DuckDB at start, reads the season Parquet
 
 | View | Grain | Key columns |
 | --- | --- | --- |
-| `matches` | one row per match | match_id, date, home_team_id, away_team_id, score_home, score_away, venue_id, weather |
+| `matches` | one row per match | match_id, date, home_team_id, away_team_id, score_home, score_away, venue (stadium name) |
 | `events` | one row per event | match_id, stream_sequence, kind, team_id, player_id, x, y, event_time_ms, outcome, xg |
 | `players` | one row per player | player_id, team_id, name, shirt, position, rating |
-| `team_match_stats` | team × match | goals, shots, xg, passes, pass_pct, duels, possession_pct, ppda |
-| `player_match_stats` | player × match | minutes, goals, shots, xg, passes, key_passes, tackles, distance_km |
+| `team_match_stats` | team × match | match_id, team_id, side, goals, shots, xg, passes, passes_completed, possession_pct, fouls, yellow_cards, red_cards, offsides |
+| `player_match_stats` | player × match | match_id, player (name), team_id, passes, passes_completed, tackles, shots, xg, distance_km |
 | `player_vectors` | one row per player | per-90 vector of 12 metrics, used for similarity |
+
+Built today (`scripts/export_season.py`, 28 matches, `data/season/v1/*.parquet`): `matches`, `team_match_stats` and `player_match_stats`, with exactly the columns shown for them above. `events`, `players` and `player_vectors` are planned. The tests in `services/mcp/tests/test_export_season.py` keep the exported columns and the queryable metrics in step.
 
 ## 7. Event Hubs
 
@@ -120,7 +124,7 @@ The `mcp` container opens an in-memory DuckDB at start, reads the season Parquet
 
 ## 8. Fabric Eventhouse
 
-Table `events` (KQL): `tenant_id: string, session_id: string, match_id: string, stream_sequence: long, event_id: string, kind: string, team_id: string, player_id: string, x: real, y: real, event_time_ms: long, period: int, payload: dynamic, ingested_at: datetime`. Queries for the four dashboard tiles are in `data/fabric/queries.kql`.
+Table `events` (KQL): `tenant_id: string, session_id: string, match_id: string, stream_sequence: long, event_id: string, revision: int, kind: string, team_id: string, player_id: string, x: real, y: real, event_time_ms: long, period: int, payload: dynamic, ingested_at: datetime`. Queries for the four dashboard tiles are in `data/fabric/queries.kql`.
 
 ## 9. Databricks Unity Catalog
 

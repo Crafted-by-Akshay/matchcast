@@ -1,3 +1,3 @@
 # Engineering guidance
 
-Engineering rules for contributors and AI coding agents will be established in Phase 1, Step 4. Until then, follow the task requirements and keep changes scoped to the requested work.
+This repo is built with Claude Code. The rules are in `CLAUDE.md` (root) and the `CLAUDE.md` of each lane folder. Other tools: read those files.
