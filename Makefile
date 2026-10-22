@@ -30,7 +30,7 @@ serve-e2e:
 	node tests/e2e/serve.mjs
 
 e2e:
-	npm run e2e
+	npm run e2e -- $(E2E_ARGS)
 
 e2e-webkit:
 	npm run e2e-webkit
