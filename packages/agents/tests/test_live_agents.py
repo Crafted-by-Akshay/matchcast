@@ -129,3 +129,69 @@ def test_malformed_narrator_output_is_a_model_error(match) -> None:
     flow = build(match, client)
     run(flow.ingest(match["events"]))
     assert "fallback_used" in actions(flow) and ModelError.__name__
+
+
+class FakeCompletions:
+    def __init__(self, outcome):
+        self.outcome = outcome
+
+    async def create(self, **kwargs):
+        if isinstance(self.outcome, Exception):
+            raise self.outcome
+        self.kwargs = kwargs
+        return self.outcome
+
+
+def fake_openai(outcome):
+    from types import SimpleNamespace
+
+    completions = FakeCompletions(outcome)
+    return SimpleNamespace(chat=SimpleNamespace(completions=completions)), completions
+
+
+def message(content: str):
+    from types import SimpleNamespace
+
+    usage = SimpleNamespace(prompt_tokens=11, completion_tokens=7)
+    choice = SimpleNamespace(message=SimpleNamespace(content=content))
+    return SimpleNamespace(choices=[choice], usage=usage)
+
+
+def test_foundry_client_sends_a_json_schema_and_counts_tokens() -> None:
+    from matchcast_agents.live import FoundryModelClient
+
+    fake, completions = fake_openai(message('{"metrics": ["goals:home"]}'))
+    client = FoundryModelClient(deployment="gpt-6-luna", client=fake)
+    result = run(client.complete("sys", "user", {"type": "object"}))
+    assert result == {"metrics": ["goals:home"]}
+    assert completions.kwargs["model"] == "gpt-6-luna"
+    assert completions.kwargs["response_format"]["json_schema"]["strict"] is True
+    assert (client.usage.calls, client.usage.prompt_tokens, client.usage.completion_tokens) == (
+        1,
+        11,
+        7,
+    )
+
+
+def test_foundry_client_maps_failures_to_the_resilience_vocabulary() -> None:
+    import pytest
+    from matchcast_agents.live import FoundryModelClient
+    from matchcast_agents.resilience import ModelRateLimited
+
+    class RateLimitError(Exception):
+        response = type("R", (), {"headers": {"retry-after": "3"}})()
+
+    class APITimeoutError(Exception):
+        pass
+
+    for failure, expected in (
+        (RateLimitError("429"), ModelRateLimited),
+        (APITimeoutError("slow"), ModelTimeout),
+        (RuntimeError("500"), ModelError),
+    ):
+        fake, _ = fake_openai(failure)
+        with pytest.raises(expected):
+            run(FoundryModelClient(client=fake).complete("s", "u", {}))
+    fake, _ = fake_openai(message("not json"))
+    with pytest.raises(ModelError):
+        run(FoundryModelClient(client=fake).complete("s", "u", {}))

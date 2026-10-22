@@ -32,8 +32,12 @@ class LiveAnalyst:
         menu = [f"{m}:{t}" for m in METRIC_UNITS for t in teams]
         request = {"moment": task.reason, "metrics_available": menu, "max": 3}
         answer = await self._client.complete(prompt("analyst"), json.dumps(request), SCHEMA)
-        chosen = [m for m in dict.fromkeys(answer.get("metrics", [])) if m in menu][:3]
+        chosen = [m for m in dict.fromkeys(answer.get("metrics", [])) if m in menu]
         if not chosen:
             raise ModelError("the Analyst chose no known metric")
-        # the model picks names; the numbers, units and evidence come from the tools
-        return await self._tools.analyse(ctx, task, repair=repair, metrics=chosen)
+        # The moment's required metrics always come first, so the rules Narrator can still write
+        # from these claims after a fallback; the model only adds to them. Numbers, units and
+        # evidence come from the tools, never from the model.
+        required = self._tools.required(ctx, task)
+        metrics = [*required, *(m for m in chosen if m not in required)][:3]
+        return await self._tools.analyse(ctx, task, repair=repair, metrics=metrics)

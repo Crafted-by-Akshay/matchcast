@@ -42,6 +42,15 @@ class AnalystRules:
         self._corrupt_after_ms = corrupt_after_ms
         self._failing = failing_tools
 
+    def required(self, ctx: MatchContext, task: ProducerTask) -> list[str]:
+        """The metrics the rules Narrator needs for this moment; a live Analyst never drops them."""
+        event = ctx.event(task.event_ids[0])
+        assert event is not None
+        team = event["payload"].get("team_id", ctx.home)
+        return [
+            m.format(t=team, h=ctx.home, a=ctx.away) for m in COUNT_METRICS.get(task.reason, ())
+        ]
+
     async def analyse(
         self,
         ctx: MatchContext,

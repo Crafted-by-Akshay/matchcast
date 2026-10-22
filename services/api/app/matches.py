@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -10,8 +11,9 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.hub import StreamEvent
+from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
@@ -102,6 +104,22 @@ class Registry:
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
         self.require_role = require_role
+        self._model_client: ModelClient | None = None
+
+    def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
+        """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
+        client = self.model_client()
+        if client is None:
+            return rules_agents(personas, **seed)
+        return live_agents(client, personas, **seed)
+
+    def model_client(self) -> ModelClient | None:
+        if self._model_client is None and os.environ.get("MATCHCAST_AGENT_MODE") == "live":
+            try:
+                self._model_client = FoundryModelClient()
+            except Exception:  # noqa: BLE001 - no endpoint, SDK or credential: stay on rules
+                logging.getLogger(__name__).warning("live mode requested; using rules agents")
+        return self._model_client
 
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))
@@ -165,7 +183,7 @@ def build_router(registry: Registry) -> APIRouter:
                 roster=body.roster,
                 names=names,
                 clubs=clubs,
-                agents=rules_agents(
+                agents=registry.agents_for(
                     config.personas,
                     seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
                     seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
