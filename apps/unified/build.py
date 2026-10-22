@@ -105,6 +105,15 @@ def build_watch():
     main = sub(main, LANG_OLD, LANG_NEW, "watch language labels")
     # EXP-5: a typed question goes to the shell (the agents), not to a stand-in model
     main = sub(main, ASK_OLD, ASK_NEW, "watch ask")
+    # EXP-4: passes carry start and end positions (metres) so the shell can send the contract's pass event
+    main = sub(
+        main,
+        "dataEvent('pass', { team: p.T.key, player: p.name, to: q.name, kind:",
+        "dataEvent('pass', { x0: +p.pos2.x.toFixed(1), y0: +p.pos2.y.toFixed(1),"
+        " x1: +q.pos2.x.toFixed(1), y1: +q.pos2.y.toFixed(1),"
+        " team: p.T.key, player: p.name, to: q.name, kind:",
+        "watch pass positions",
+    )
     head = sub(
         r(W + "head.html"),
         "<title>MatchCast 3D</title>",

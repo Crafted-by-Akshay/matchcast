@@ -30,10 +30,13 @@ test('Match Pulse cards and watch modes', async ({ page }) => {
   await expect(f.locator('#mcx-live .mcx-c .mcx-t')).toContainText(/Verified/, { timeout: 1000 });
   const analyst = await card();
   expect(analyst.chips, 'Analyst shows at least two metric chips').toBeGreaterThanOrEqual(2);
-  expect(analyst.fb, 'a model claim has no Rules fallback chip').toBe(false);
+  expect(analyst.fb, 'a model claim has no In-page (Simulated) chip').toBe(false);
 
+  expect(analyst.tick, 'a server-checked card says so').toBe('✓ API-Verified');
+  await send(page, goal('c2b', { source: 'rules', verdict: 'verified' }));
+  await expect(f.locator('#mcx-live .mcx-c .mcx-t').first()).toHaveText('✓ Verified in page');
   await send(page, goal('c2', { source: 'rules', verdict: 'pending' }));
-  await expect(f.locator('#mcx-live .mcx-c .mcx-ch.fb')).toBeVisible();
+  await expect(f.locator('#mcx-live .mcx-c .mcx-ch.fb').first()).toHaveText('In-page (Simulated)');
   expect((await card()).wait, 'an unverified card shows the amber dot').toBe(true);
   await f.evaluate(() => (document.querySelector('#mcx-live .mcx-c [data-why]') as HTMLElement).click());
   await expect(f.locator('#mcx-live .mcx-w:not([hidden])')).toContainText(/goal/);
