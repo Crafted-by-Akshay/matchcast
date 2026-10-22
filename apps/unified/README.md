@@ -135,3 +135,8 @@ Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.j
 
 ## Broadcast overlay layout
 - The replay bar, on-air log, lower-third and teleprompter sit inside the live view. Below 560 px wide they stack (teleprompter on one line at the top, replay bar under it, lower-third and on-air log at the bottom) so none cover each other. `tests/e2e/broadcast-layout.spec.ts` checks the four boxes for overlap on a desktop and a phone viewport.
+
+### Vision OCR crop queue (DAT-11 task 275, browser side)
+- `embed/vision-crops.js` (Watch build, after `watch.js`). While 👁 Vision is on and the agent api is live, a confirmed track (6+ hits, in view, identity assigned, a player or goalkeeper class) whose identity-hold confidence (`min(1, stable/6)`) is below 0.8 gets a 128x128 PNG of its shirt (the blob widened 1.4x, at least 70% of the player's pixel height) sent to the shell as `vision-crop`; the shell calls `LV.identify` (`POST /v1/matches/{id}/vision/identify`) and answers `vision-ocr`. Lowest confidence first, one in flight, one every 4.1 s at most (under the api's 15 a minute; a track is tried twice at most; a timeout or error backs off 10 s). Answers are kept per track in `window.mcOcr.results` for the combiner (task 277); nothing is stored or uploaded beyond the call.
+- A track whose player is under 24 px tall is counted as "too small to read" (re-checked as it grows) and not sent: on the Broadcast camera players are about 10 px tall, so this is expected to dominate. The counts go to the Tracking lab in the vision report (`report.ocr`).
+- Without a live api the shell answers `unavailable` and Watch backs off 30 s.

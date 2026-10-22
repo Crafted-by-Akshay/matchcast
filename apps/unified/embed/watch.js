@@ -126,6 +126,6 @@ MCS.progress('Loading the stadium and players');
     if (typeof visReport !== 'function' || typeof VIS === 'undefined') return;
     if (!VIS.on && !wasOn) return;
     wasOn = VIS.on;
-    MCS.send({ type: 'vision', report: visReport() });
+    MCS.send({ type: 'vision', report: Object.assign(visReport(), { ocr: window.mcOcrStats ? window.mcOcrStats() : null }) });
   }, 5000);
 })();

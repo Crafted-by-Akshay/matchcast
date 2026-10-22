@@ -489,6 +489,12 @@ window.addEventListener('message', (e) => {
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
+  if (d.type === 'vision-crop' && view === 'watch') {   // the tracker's OCR second opinion (DAT-11); only when the agent api is live
+    const reply = (extra) => post('watch', Object.assign({ src: 'matchcast-shell', type: 'vision-ocr', id: d.id }, extra));
+    if (!(LV.enabled && LV.status === 'live')) { reply({ error: 'unavailable' }); return; }
+    LV.identify(d.track_id, d.team_hint, d.crop).then((result) => reply({ result }), (err) => reply({ error: !err.status ? 'unavailable' : err.status === 429 ? 'rate_limited' : 'failed', retry_after: err.retry_after || 0 }));
+    return;
+  }
   if (d.type === 'ask' && view === 'watch') { answerAsk(d.id, d.q); return; }
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
   if (d.type === 'vision' && view === 'watch') {   // Watch's pixel-only tracker, scored against engine truth (DAT-11); the Analyst's Tracking lab shows it
