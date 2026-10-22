@@ -91,6 +91,7 @@ test('a fixture change reloads Watch with the new seed; New match in Broadcast m
 });
 
 test('keys 3 and 1 switch views', async () => {
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());   // the shortcuts are ignored while a select has focus, and the previous test leaves #fx focused
   await page.keyboard.press('3'); await expect(page.locator('#v-broadcast')).toBeVisible();
   await page.keyboard.press('1'); await expect(page.locator('#v-watch')).toBeVisible();
 });
