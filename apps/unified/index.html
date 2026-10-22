@@ -49,6 +49,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 #status-dlg::backdrop{background:rgba(0,0,0,.55)}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
+#lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
@@ -169,6 +170,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visi
   </nav>
   <div class="status" aria-label="Environment">
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span>
+    <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" aria-pressed="false">हिन्दी</button></span>
     <span class="pill" id="api-pill" role="status" title="">Offline (simulated)</span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
     <span class="pill">Browser prototype</span>
@@ -494,6 +496,7 @@ function cardOf(c) {
 }
 // ---------------------------------------------------------------- Ask (EXP-5)
 // 300 characters, 5 questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
+const LANGS_OK = ['en', 'es', 'hi'];
 const askTimes = [];
 async function answerAsk(id, q) {
   const reply = (answer) => { post('watch', { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
@@ -514,7 +517,7 @@ function pushCards() {
     if (sentCards.get(c.id) === sig) continue;
     sentCards.set(c.id, sig);
     post('watch', { src: 'matchcast-shell', type: 'pulse', card: cardOf(c) });
-    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); VC.say(c.text, { id: c.id, lang: 'en', at: c.airedAt, audio: c.audioUrl || null }); }
+    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); { const t = M.lang !== 'en' && c.tr && c.tr[M.lang] && c.tr[M.lang].ok && c.tr[M.lang].text; VC.say(t || c.text, { id: c.id + '|' + (t ? M.lang : 'en'), lang: t ? M.lang : 'en', at: c.airedAt, audio: t ? null : (c.audioUrl || null) }); } }
     $('sr-lines').textContent = (c.verdict === 'verified' ? 'Verified line: ' : 'Line awaiting review: ') + c.text;   // screen readers hear each published line
   }
 }
@@ -546,8 +549,10 @@ window.addEventListener('message', (e) => {
     }
     return;
   }
+  if (d.type === 'lang' && LANGS_OK.includes(d.lang)) { window.setLang(d.lang, view); return; }   // the Broadcast desk's own language buttons
+  if (d.type === 'audit' && view === 'broadcast' && d.action === 'translation_rejected') { AG.note('verifier', 'translation_rejected', String(d.id).slice(0, 60), { lang: String(d.lang).slice(0, 4), reason: String(d.reason).slice(0, 120) }, +d.minute || 0); return; }
   if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
-  if (d.type === 'persona' && view === 'watch') { LV.persona(d.persona, d.lang); return; }   // the viewer's watch mode changed (EXP-4)
+  if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); if (LANGS_OK.includes(d.lang)) window.setLang(d.lang, 'watch'); return; }   // the viewer's watch mode changed (EXP-4)
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
@@ -645,6 +650,19 @@ function init(list) {
     $('ag-verify-out').textContent = pre + (v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '… · in-page (simulated)' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count + ' · in-page (simulated)');
   };
   $('ag-bad').onchange = (e) => AG.seedBad(e.target.checked);
+  // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
+  M.lang = 'en'; M.persona = M.persona || 'fan';
+  const LANGS = ['en', 'es', 'hi'];
+  window.setLang = (l, from) => {
+    if (!LANGS.includes(l) || l === M.lang) return;
+    M.lang = l; try { localStorage.setItem('mc-lang', l); } catch (e) { /* storage may be blocked */ }
+    for (const b of document.querySelectorAll('#lang-sel button')) b.setAttribute('aria-pressed', String(b.dataset.lang === l));
+    document.documentElement.dataset.lang = l;
+    for (const v of ['watch', 'broadcast']) if (v !== from) post(v, { src: 'matchcast-shell', type: 'lang', lang: l });
+    if (LV.enabled && from !== 'watch') LV.persona(M.persona, l);   // the api translates for the language the stream asks for
+  };
+  for (const b of document.querySelectorAll('#lang-sel button')) b.onclick = () => window.setLang(b.dataset.lang, null);
+  try { const sv = localStorage.getItem('mc-lang'); if (LANGS.includes(sv) && sv !== 'en') setTimeout(() => window.setLang(sv, null), 0); } catch (e) { /* storage may be blocked */ }
   const vb = $('voice-btn'), vshow = () => {
     vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
     $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') : '';

@@ -130,3 +130,31 @@ MCS.progress('Loading the stadium and players');
     MCS.send({ type: 'vision', report: Object.assign(visReport(), { ocr: window.mcOcrStats ? window.mcOcrStats() : null }) });
   }, 5000);
 })();
+
+// ---- EXP-16: talk-to-player push-to-talk on the shell's Azure Speech (window.parent.SPX) when the api has issued a token; otherwise Watch's own browser mic runs unchanged.
+(() => {
+  const mic = document.getElementById('tk-mic'), orig = mic && mic.onclick;
+  let az = null; try { az = window.parent !== window && window.parent.SPX && typeof window.parent.SPX.listen === 'function' ? window.parent.SPX : null; } catch (e) { /* cross-origin parent */ }
+  if (!mic || !az || !orig) return;
+  mic.hidden = false; mic.title = 'Talk to the player (Azure Speech when the api issues a token, otherwise browser speech recognition)';
+  let busy = false;
+  mic.addEventListener('click', (e) => {
+    if (TK.rec) return;   // a browser recognition is running: the original handler stops it
+    e.stopImmediatePropagation();
+    if (busy) return;
+    busy = true; mic.classList.add('live'); document.getElementById('tk-q').placeholder = 'Listening…';
+    az.listen('en-US').then((text) => {
+      busy = false; mic.classList.remove('live'); document.getElementById('tk-q').placeholder = 'Talk to the player…';
+      if (text) { document.getElementById('tk-q').value = text.slice(0, 300); document.getElementById('tk-form').requestSubmit(); return; }
+      if (text === null && (window.SpeechRecognition || window.webkitSpeechRecognition)) orig.call(mic);   // Azure unavailable: the browser mic
+      else document.getElementById('tk-note').textContent = 'Could not hear that. Try again or type.';
+    });
+  }, true);
+})();
+
+// ---- EXP-17: the shell's language selector (EN, ES, HI) sets Watch's language too; Watch's own picker keeps the others (Tamil, French, Arabic).
+window.addEventListener('message', (e) => {
+  const d = e.data || {};
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !['en', 'es', 'hi'].includes(d.lang)) return;
+  if (FAN.lang !== d.lang) fanSet({ lang: d.lang }, 'shell');
+});
