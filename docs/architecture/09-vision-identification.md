@@ -83,3 +83,16 @@ If the target is missed, we report the measured number. We never round it up.
 ## Combining OCR with the glyph reading (task 277)
 
 `combine` in `embed/vision-crops.js` applies rule 3 above: 1 or 2 digits, confidence at least 0.7, a shirt number the track's team has and that is not sent off (home for kit classes 1 and 3, away for 2 and 4; "07" is not a shirt number). An accepted reading is kept in `mcOcr.accepted` (track to player); the tracker's own tracks are not written to, because its identity score compares `track.pid` with truth and OCR would contaminate the glyph-only figure. Each accepted answer is scored from a snapshot taken when the crop was sent (the glyph pid then, and the player of that team nearest the track within 1.5 m from engine truth), since the answer arrives seconds later. The Tracking lab shows glyph alone against glyph + OCR **on the low-confidence tracks OCR answered** (those are the glyph reader's weakest, so the figure is not comparable with the whole-run identity row), with the scored and accepted counts side by side. A whole-run glyph + OCR identity would need the scorer in the prototype source to read `accepted`; not done. Posting vision events on the `<session>.vision` stream is not done yet.
+
+## Measurement (task 279)
+
+`MEASURE=1 make e2e E2E_ARGS="tests/e2e/vision-measure.spec.ts"` loads Watch on 3 seeds (`MEASURE_SEEDS`, default 11, 22, 33) on the Broadcast and the Tactical camera, waits for `MEASURE_CAPTURES` tracker captures (default 150, at most `MEASURE_TIMEOUT_S` seconds per run, default 1800; a run that falls short fails and records `reached: false`) and writes the tracker's own report (detection, identity, speed, ball, passes, cost per capture) to `$MEASURE_OUT` (default `/tmp/vision-measure.json`). Targets from §3: identity at least 85% on the Broadcast camera and at least 92% on the Tactical camera; the measured value is reported whatever it is.
+
+**Status: not measured at full length.** A capture costs about 6.5 s in the sandbox (software WebGL, 6.3 to 6.8 s per capture), so a representative run (the tracker needs the kick-off calibration window and some minutes of play) takes hours. It must run on a machine with a GPU, the Mac mini. Smoke result only, seed 11, 40 captures (about 8 s of match time, so the identity gallery had barely started to learn):
+
+| Camera | Resolution | Captures | Detection recall | Precision | Position error | Identity | Unknown | Switches |
+|---|---|---|---|---|---|---|---|---|
+| Broadcast | 640x400 | 40 | 96.4% | 79.4% | 0.42 m | 29.2% | 18.9% | 78 |
+| Tactical | 1120x700 | 40 | 95.9% | 69.6% | 0.37 m | 31.8% | 33.4% | 84 |
+
+These identity figures are far below target and say nothing about a full match; do not quote them as results.

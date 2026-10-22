@@ -230,3 +230,23 @@ test('vision on in Watch reaches the Tracking lab', async ({ page }) => {
   await expect(f.locator('#vis-panel')).toContainText(/frames at 640x\d+/, { timeout: 20_000 });
   await expect(f.locator('#vis-panel')).toContainText('Identity, glyph reader only');
 });
+
+test('service status: shows the api account of what is live, simulated and planned', async ({ page }) => {
+  const errs = collectErrors(page);
+  const doc = { mode: 'cloud', overall: 'simulated', counts: { live: 1, planned: 1 }, dependencies: [
+    { key: 'a', label: 'Fabric', status: 'planned', detail: 'not connected yet' },
+    { key: 'b', label: 'Table Storage', status: 'live', detail: 'events and audit are in Table Storage' }] };
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://127.0.0.1:9";' }));
+  await page.route('**/v1/status', (rt) => rt.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(doc) }));
+  const f = await openPage(page, 'status');
+  await expect(f.locator('#ss-card')).toContainText('Table Storage');
+  await expect(f.locator('#ss-card')).toContainText('Planned');
+  expect(errs.filter((e) => !/127\.0\.0\.1:9|ERR_|Failed to load resource/.test(e))).toEqual([]);
+});
+
+test('service status: without an api it says the console is simulated', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await openPage(page, 'status');
+  await expect(f.locator('#ss-card')).toContainText('No api is configured');
+  expect(errs).toEqual([]);
+});
