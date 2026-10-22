@@ -1,0 +1,116 @@
+{
+  "name": "matchcast.ml.danger",
+  "version": "1",
+  "label": "danger = same-team shot within 10 s",
+  "features": [
+    "t_rel_s",
+    "dist_m",
+    "quality",
+    "difficulty",
+    "xg",
+    "x",
+    "y",
+    "own_x",
+    "stamina",
+    "passes_prev_10s",
+    "turnovers_prev_10s",
+    "shots_prev_10s",
+    "type=pass",
+    "type=turnover",
+    "type=shot",
+    "type=take_on",
+    "type=slide_tackle",
+    "type=aerial_duel",
+    "type=foul",
+    "type=corner",
+    "type=goal",
+    "phase=",
+    "phase=build-up",
+    "phase=counter",
+    "phase=counter-press",
+    "phase=final third",
+    "phase=high press",
+    "phase=low block",
+    "phase=mid block",
+    "phase=progression",
+    "kind=",
+    "kind=cross",
+    "kind=driven pass",
+    "kind=first-time pass",
+    "kind=free kick",
+    "kind=from behind",
+    "kind=lofted pass",
+    "kind=long ball",
+    "kind=one-two",
+    "kind=open play",
+    "kind=pull",
+    "kind=short pass",
+    "kind=slide",
+    "kind=switch of play",
+    "kind=through ball",
+    "kind=trip"
+  ],
+  "missing_value": -1.0,
+  "metrics": {
+    "auc": 0.8843,
+    "brier": 0.0448,
+    "base_rate_brier": 0.0447,
+    "train_rows": 1608,
+    "heldout_rows": 534,
+    "heldout_matches": 4,
+    "positive_rate": 0.0397
+  },
+  "calibration": [
+    {
+      "bin": "0.0-0.1",
+      "n": 503,
+      "predicted": 0.0083,
+      "observed": 0.0318
+    },
+    {
+      "bin": "0.1-0.2",
+      "n": 14,
+      "predicted": 0.1581,
+      "observed": 0.2857
+    },
+    {
+      "bin": "0.2-0.3",
+      "n": 4,
+      "predicted": 0.2412,
+      "observed": 0.25
+    },
+    {
+      "bin": "0.4-0.5",
+      "n": 1,
+      "predicted": 0.4781,
+      "observed": 0.0
+    },
+    {
+      "bin": "0.5-0.6",
+      "n": 4,
+      "predicted": 0.549,
+      "observed": 0.0
+    },
+    {
+      "bin": "0.6-0.7",
+      "n": 1,
+      "predicted": 0.6659,
+      "observed": 0.0
+    },
+    {
+      "bin": "0.8-0.9",
+      "n": 2,
+      "predicted": 0.8714,
+      "observed": 0.5
+    },
+    {
+      "bin": "0.9-1.0",
+      "n": 5,
+      "predicted": 0.9704,
+      "observed": 0.6
+    }
+  ],
+  "training_data": "synthetic scenes from scripts/generate_scenes.py; no real match data",
+  "limits": "learned from simulator events; describes the simulator, not real football",
+  "onnx": true
+}

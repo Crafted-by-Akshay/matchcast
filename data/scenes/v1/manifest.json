@@ -1,0 +1,18 @@
+{
+  "seed": 2026,
+  "matches": 16,
+  "half": 45,
+  "scenes": 240,
+  "scenes_per_family": {
+    "counter_attack": 40,
+    "high_press": 40,
+    "possession_build_up": 40,
+    "set_piece": 40,
+    "chaotic_scramble": 40,
+    "quiet_spell": 40
+  },
+  "rows": 2142,
+  "danger_rate": 0.0397,
+  "window_s": 30.0,
+  "danger_horizon_s": 10.0
+}

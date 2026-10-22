@@ -22,6 +22,11 @@ dev = [
 smoke = [
     "azure-ai-projects>=1.0,<2",
 ]
+ml = [
+    "onnxruntime>=1.19,<2",
+    "scikit-learn>=1.5,<2",
+    "skl2onnx>=1.17,<2",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages/agents/tests", "packages/shared/tests", "packages/metrics/tests", "services/mcp/tests", "services/recap/tests", "services/worker/tests"]

@@ -2,7 +2,7 @@
 """Train the danger-moment model (DAT-6).
 
 Reads the scene Parquet written by scripts/generate_scenes.py (DAT-5), trains a gradient-boosted
-classifier for `danger` (the event's team shoots within 10 s), logs to MLflow when it is installed
+gradient-boosted classifier for `danger` (the event's team shoots within 10 s), logs to MLflow when it is installed
 (always, on Databricks), and exports `model.onnx` plus `model-card.json`.
 
     Databricks job : pass --scenes as an abfss:// or /Volumes path; UC_MODEL names the UC model.
@@ -30,6 +30,7 @@ NUMERIC = ("t_rel_s", "dist_m", "quality", "difficulty", "xg", "x", "y", "own_x"
            "passes_prev_10s", "turnovers_prev_10s", "shots_prev_10s")  # fmt: skip
 SEED = 2026
 HOLDOUT_SHARE = 0.25
+MISSING = -1.0  # a numeric field the event did not carry; predict_danger must fill it the same way
 UC_MODEL = "matchcast.ml.danger"
 
 
@@ -45,7 +46,7 @@ def load(path: str):
     kinds = sorted({k or "" for k in t["kind"]})
     rows = np.zeros((n, len(feature_names(phases, kinds))), dtype=np.float32)
     for j, c in enumerate(NUMERIC):
-        rows[:, j] = [np.nan if v is None else v for v in t[c]]
+        rows[:, j] = [MISSING if v is None else v for v in t[c]]
     off = len(NUMERIC)
     for i in range(n):
         if t["type"][i] in TYPES:
@@ -93,7 +94,7 @@ def main() -> int:
     ap.add_argument("--version", default="1")
     a = ap.parse_args()
 
-    from sklearn.ensemble import HistGradientBoostingClassifier
+    from sklearn.ensemble import GradientBoostingClassifier
     from sklearn.metrics import brier_score_loss, roc_auc_score
 
     X, y, seeds, phases, kinds = load(a.scenes)
@@ -103,8 +104,8 @@ def main() -> int:
         raise SystemExit("need scenes from at least two matches to hold one out")
     if len(set(y[held].tolist())) < 2 or len(set(y[~held].tolist())) < 2:
         raise SystemExit("both sides of the split need danger and non-danger rows")
-    model = HistGradientBoostingClassifier(
-        max_iter=200, learning_rate=0.06, max_depth=4, l2_regularization=1.0, random_state=SEED
+    model = GradientBoostingClassifier(
+        n_estimators=200, learning_rate=0.06, max_depth=3, subsample=0.8, random_state=SEED
     ).fit(X[~held], y[~held])
     p = model.predict_proba(X[held])[:, 1]
     metrics = {
@@ -119,7 +120,7 @@ def main() -> int:
     }  # fmt: skip
     card = {
         "name": UC_MODEL, "version": a.version, "label": "danger = same-team shot within 10 s",
-        "features": names, "metrics": metrics, "calibration": calibration_bins(y[held], p),
+        "features": names, "missing_value": MISSING, "metrics": metrics, "calibration": calibration_bins(y[held], p),
         "training_data": "synthetic scenes from scripts/generate_scenes.py; no real match data",
         "limits": "learned from simulator events; describes the simulator, not real football",
     }  # fmt: skip
@@ -142,7 +143,7 @@ def main() -> int:
         mlflow = None
     if mlflow:
         with mlflow.start_run(run_name="train-danger"):
-            mlflow.log_params({"model": "HistGradientBoosting", "max_iter": 200, "max_depth": 4,
+            mlflow.log_params({"model": "GradientBoosting", "n_estimators": 200, "max_depth": 3,
                                "seed": SEED})
             mlflow.log_metrics({k: v for k, v in metrics.items() if isinstance(v, float)})
             mlflow.log_artifacts(str(out))
