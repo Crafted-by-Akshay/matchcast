@@ -2,6 +2,7 @@
 
 install:
 	npm ci
+	npm ci --prefix services/simulation
 	uv sync --locked --all-packages
 
 lint:
