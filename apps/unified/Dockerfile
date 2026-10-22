@@ -5,12 +5,15 @@ ARG API_URL=""
 WORKDIR /app
 COPY . .
 RUN if [ -n "$API_URL" ]; then python build.py --api "$API_URL"; else python build.py; fi
+# Everything the shell loads (tests/test_web_image.py checks this list against index.html).
+RUN mkdir /site && cp -r index.html config.js contracts.js agents.js live.js trace-panel.js \
+      voice.js voices.json watch broadcast analyst shared /site/
+# Pre-compress for nginx gzip_static; config.js stays plain so a deploy can overwrite it.
+RUN find /site -type f -size +1k ! -name config.js \
+      \( -name '*.html' -o -name '*.js' -o -name '*.json' -o -name '*.css' -o -name '*.svg' \) \
+      -exec gzip -9 -k {} +
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/index.html /app/config.js /app/contracts.js /app/agents.js /app/live.js /usr/share/nginx/html/
-COPY --from=build /app/watch /usr/share/nginx/html/watch
-COPY --from=build /app/broadcast /usr/share/nginx/html/broadcast
-COPY --from=build /app/analyst /usr/share/nginx/html/analyst
-COPY --from=build /app/shared /usr/share/nginx/html/shared
+COPY --from=build /site /usr/share/nginx/html
 EXPOSE 8080

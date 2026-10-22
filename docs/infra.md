@@ -55,6 +55,9 @@ The deploy job runs in the GitHub environment `production` (create it under Sett
 These are variables, not secrets (client, tenant and subscription IDs are not credentials). After the first workflow run pushes the images, make each GHCR package public (GitHub > Packages > matchcast-api, -web > Package settings > Change visibility) so Container Apps can pull without a registry secret. Until they are public, the deploy job warns and provisions with the placeholder image, so the first run is safe; re-run it after the switch.
 
 Not verified yet: the workflow has not run, the Dockerfiles were checked by running their steps by hand (no Docker daemon in the build session), and the `mcp` image waits for `services/mcp`.
+## Web image delivery
+`apps/unified/Dockerfile` stages exactly the files the shell loads into `/site` (`tests/test_web_image.py` fails if `index.html` loads a script the image lacks; until 22 Oct `trace-panel.js`, `voice.js` and `voices.json` were missing), gzips the large ones once at build time, and `nginx.conf` serves them with `gzip_static` (players.json 5.8 MB goes out as 2.6 MB with no per-request CPU). Files are not content-hashed, so every response is `Cache-Control: no-cache`: the browser revalidates with the ETag and gets a 304. Checked 22 Oct with a local nginx 1.24 against the staged site (gzip, 304, 404, headers); the image itself was not built (no Docker daemon here).
+
 ## Entra sign-in (PLT-5)
 Viewing stays open to everyone (Easy Auth is configured to allow anonymous requests). Producer routes need an Entra account with the `Producer` or `Admin` app role. Bicep adds Easy Auth to `web` and `api` and sets `MATCHCAST_EASY_AUTH=1` and `MATCHCAST_REQUIRE_ROLE=1` only when `ENTRA_CLIENT_ID` is set in the azd environment.
 
