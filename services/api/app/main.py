@@ -9,6 +9,8 @@ from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from matchcast_shared.azure_clients import foundry_token
+from matchcast_shared.telemetry import configure_telemetry
 
 from app.config import SettingsResult, load_settings
 from app.matches import install as install_match_routes
@@ -24,13 +26,9 @@ from app.sessions import (
 CredentialProbe = Callable[[], None]
 """Raises when no Entra credential can be obtained for Azure AI; never returns a token."""
 
-FOUNDRY_SCOPE = "https://ai.azure.com/.default"
-
 
 def default_credential_probe() -> None:
-    from azure.identity import DefaultAzureCredential
-
-    DefaultAzureCredential().get_token(FOUNDRY_SCOPE)
+    foundry_token()
 
 
 def _record_json(record: SessionRecord) -> dict[str, Any]:
@@ -48,6 +46,8 @@ def create_app(
     credential_probe: CredentialProbe | None = None,
 ) -> FastAPI:
     """Build an app with injectable config and storage for deterministic tests."""
+
+    configure_telemetry("matchcast-api")
 
     resolved_settings = settings_result or load_settings()
     store = InMemorySessionStore() if session_store is None else session_store

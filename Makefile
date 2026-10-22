@@ -1,4 +1,4 @@
-.PHONY: smoke-foundry install lint typecheck test build contracts-generate contracts-check
+.PHONY: smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
 
 install:
 	npm ci
@@ -25,6 +25,18 @@ contracts-generate:
 
 contracts-check:
 	npm run check:generated --workspace @matchcast/contracts
+
+serve-e2e:
+	node tests/e2e/serve.mjs
+
+e2e:
+	npm run e2e
+
+e2e-webkit:
+	npm run e2e-webkit
+
+e2e-live:
+	npm run e2e-live
 
 smoke-foundry:
 	uv run --locked --group smoke python scripts/smoke_foundry.py

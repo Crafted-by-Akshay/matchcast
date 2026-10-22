@@ -38,3 +38,8 @@ apps/unified/watch/
 apps/unified/broadcast/
 apps/unified/analyst/
 apps/unified/shared/
+
+# E2E
+.e2e-dist/
+playwright-report/
+test-results/
