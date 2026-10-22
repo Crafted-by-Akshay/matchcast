@@ -56,3 +56,18 @@ test('lower-third waits for approval in producer mode and airs at once in demo m
   await expect(bc.locator('#mc-tele li')).toHaveCount(2, { timeout: 1000 });
   expect(errs).toEqual([]);
 });
+
+test('wild moment: a red card alerts in Broadcast within 3 s with a verified line', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openShell(page, 'agents');
+  await page.click('#tab-broadcast');
+  await ready('broadcast')(page);
+  const bc = await viewFrame(page, 'broadcast');
+  await page.click('#tab-agents');
+  await page.evaluate(() => {
+    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
+    AG.onWatch('k1', [], [{ id: 'm1', minute: 55, type: 'red_card', title: 'Red card for C One', why: 'Chelsea down to ten men at 55\'.' }]);
+  });
+  await expect(bc.locator('#mc-l3')).toContainText('ALERT · Red card · verified', { timeout: 3000 });
+  expect(errs).toEqual([]);
+});
