@@ -56,7 +56,7 @@ Target: **Best Multi-Agent System Prize** (one category prize per entrant), also
 | --- | --- | --- |
 | Newly built Project (§4.3: created after registration opened 29 Sep) | Work began 17 Oct (project notes); `main`'s history starts 22 Oct with PR #5, earlier prototypes are not in this repo | Akshay to confirm no code predates 29 Sep |
 | Pitch: what you built, which Microsoft and Azure technologies, what it does, what problem it solves | `docs/submission/devpost.md` | Draft, update after deploy |
-| Demo video under 2 minutes, public URL on YouTube, Vimeo, Facebook Video or Youku, showing the Project running on its platform | `docs/video-script.md`, `docs/submission/shot-list.md`; shots come from `make judge-path` and the live URL | Pending: record 26 Oct |
+| Demo video under 2 minutes, public URL on YouTube, Vimeo, Facebook Video or Youku, footage that shows the Project functioning on the device and platform for which it was built | `docs/video-script.md`, `docs/submission/shot-list.md`; shots come from `make judge-path` and the live URL | Pending: record 26 Oct |
 | No third-party trademarks or copyrighted music in the video | Fictional brands only, no music, or a CC0 track with the licence in the README | Pending |
 | Public GitHub repository URL | `Crafted-by-Akshay/matchcast`; must be public at submission | Akshay (visibility) |
 | Not a winner of another contest | n/a | Akshay |

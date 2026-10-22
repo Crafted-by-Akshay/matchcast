@@ -9,7 +9,7 @@ MatchCast
 
 Football data is everywhere; explanations are not. MatchCast turns a stream of synthetic football events into explainable match intelligence. Four agents with distinct roles (Producer, Analyst, Narrator, Verifier) read each event, write commentary and insight, and the Verifier recounts every number from the stored event log before a line reaches a screen. The same moment reads differently for a data-hungry analyst, a casual fan and a producer, and nothing goes to air without a producer's approval.
 
-Built on Microsoft Foundry with the Microsoft Agent Framework for the agent workflow, an MCP tool server so GitHub Copilot Agent Mode can ask for verified match facts, Azure Container Apps, Event Hubs, Table and Blob Storage, Azure AI Speech, Azure AI Translator and Azure AI Search, defined as Bicep and deployed with `azd` and GitHub Actions using OIDC (no keys in the repo). All clubs, players and matches are fictional and come from our own seeded simulator.
+Built on Microsoft Foundry with the Microsoft Agent Framework for the agent workflow, an MCP tool server for verified match facts (Planned: a recorded run of GitHub Copilot Agent Mode calling it), Azure Container Apps, Event Hubs, Table and Blob Storage, Azure AI Speech, Azure AI Translator and Azure AI Search, defined as Bicep and deployed with `azd` and GitHub Actions using OIDC (no keys in the repo). All clubs, players and matches are fictional and come from our own seeded simulator.
 
 The problem: studios, broadcasters and streamers need live narratives and recaps they can trust and tailor per audience and language. A single model that writes fluent text can also write a wrong score. MatchCast makes every claim cite its evidence and checks it before air.
 
@@ -18,11 +18,11 @@ The problem: studios, broadcasters and streamers need live narratives and recaps
 Replace this section with the final state at submission.
 
 - Working end to end locally and in the browser: simulator, agents (rules mode and Foundry-ready live mode), Verifier, Watch / Analyst / Broadcast views, approval queue, audit chain, MCP server, Event Hubs pipeline mode (tested with fakes), Table-backed storage (tested on Azurite).
-- Written, not yet provisioned: the Azure deployment. **No live URL until the first deploy.** Speech, Translator, Vision, Content Safety and Search are in Bicep; the app labels them Simulated or Planned until they are called for real.
+- Written, not yet provisioned: the Azure deployment. **No live URL until the first deploy.** Speech, Translator, Content Safety and Search are in Bicep (Vision is planned for its own story); the app labels them Simulated or Planned until they are called for real.
 - Planned: Microsoft Fabric and Azure Databricks season data jobs; video auto-eventing.
 
 ## Built with
-Microsoft Foundry, Microsoft Agent Framework, Model Context Protocol, GitHub Copilot Agent Mode, Azure Container Apps, Azure Event Hubs, Azure Table and Blob Storage, Azure AI Speech, Azure AI Translator, Azure AI Search, Azure Key Vault, Application Insights, Bicep, azd, GitHub Actions (OIDC), Python (FastAPI), JavaScript, three.js, Playwright.
+Microsoft Foundry, Microsoft Agent Framework, Model Context Protocol, Azure Container Apps, Azure Event Hubs, Azure Table and Blob Storage, Azure AI Speech, Azure AI Translator, Azure AI Search, Azure Key Vault, Application Insights, Bicep, azd, GitHub Actions (OIDC), Python (FastAPI), JavaScript, three.js, Playwright.
 
 ## How to try it (testing instructions, §4.8)
 
