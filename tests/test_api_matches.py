@@ -447,3 +447,11 @@ def test_ds_ask_answers_refuses_and_limits(client: TestClient) -> None:
     for _ in range(4):
         assert client.post("/v1/ds/ask", json=body).status_code == 200
     assert client.post("/v1/ds/ask", json=body).status_code == 429
+
+
+def test_ds_ask_abstains_and_reports_a_missing_season(client: TestClient) -> None:
+    abstain = client.post("/v1/ds/ask", json={"session_id": "short", "question": "how are you?"})
+    assert abstain.status_code == 200 and abstain.json()["verdict"] == "abstained"
+    client.app.state.matches.season = None
+    missing = client.post("/v1/ds/ask", json={"session_id": "short", "question": "total goals"})
+    assert missing.status_code == 503 and missing.json()["code"] == "not_ready"

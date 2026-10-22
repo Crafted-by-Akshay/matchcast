@@ -45,7 +45,14 @@ class Season:
         self._con = duckdb.connect()
         for table in TABLES:
             path = self.root / f"{table}.parquet"
-            self._con.execute(f"CREATE VIEW {table} AS SELECT * FROM read_parquet('{path}')")
+            quoted = str(path).replace("'", "''")  # a view cannot take a parameter
+            self._con.execute(f"CREATE VIEW {table} AS SELECT * FROM read_parquet('{quoted}')")
+        # the check_sql guard is the first line; this stops file and setting access if it is beaten
+        self._con.execute(
+            f"SET allowed_directories=['{str(self.root).replace(chr(39), chr(39) * 2)}']"
+        )
+        self._con.execute("SET enable_external_access=false")
+        self._con.execute("SET lock_configuration=true")
 
     @property
     def matches(self) -> int:
@@ -130,7 +137,7 @@ class Season:
         timer = threading.Timer(TIMEOUT_S, cursor.interrupt)
         timer.start()
         try:
-            cursor.execute(f"SELECT * FROM ({sql}) LIMIT {ROW_LIMIT}")
+            cursor.execute(f"SELECT * FROM (\n{sql}\n) LIMIT {ROW_LIMIT}")
             columns = [d[0] for d in cursor.description]
             rows = [list(r) for r in cursor.fetchall()]
         except Exception as error:  # noqa: BLE001 - surface any engine error as a refusal

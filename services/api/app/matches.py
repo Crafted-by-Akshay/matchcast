@@ -141,6 +141,7 @@ class _LocalStatsDesk:
     transport = "in_process"
 
     def __init__(self, season: Season) -> None:
+        self.season = season
         self._season = season
 
     async def compare(
@@ -171,7 +172,7 @@ class Registry:
         self._model_client: ModelClient | None = None
         self.asked: dict[str, deque[float]] = {}
         self.exports: dict[str, tuple[bytes, str, str]] = {}
-        self.season = self.stats_desk._season if self.stats_desk else None
+        self.season = self.stats_desk.season if self.stats_desk else None
         self.ds_asked: dict[str, deque[float]] = {}
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
@@ -523,11 +524,11 @@ def build_router(registry: Registry) -> APIRouter:
     async def ds_ask(body: DsAsk, request: Request) -> dict[str, Any]:
         """Data Scientist: a season question, answered from one verified SELECT (F10)."""
         if registry.season is None:
-            raise Problem(503, "season_unavailable", "the season data is not loaded")
+            raise Problem(503, "not_ready", "the season data is not loaded")
         if not registry.allow_ds(request.client.host if request.client else "local"):
             raise Problem(429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute")
         try:
-            result = ds_ask_season(body.question, registry.season)
+            result = await asyncio.to_thread(ds_ask_season, body.question, registry.season)
         except SeasonError as error:
             raise Problem(400, "invalid_query", str(error)) from error
         stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": "season"}

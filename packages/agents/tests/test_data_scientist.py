@@ -71,3 +71,50 @@ def test_query_season_refuses_anything_but_one_select_on_the_views(season, sql) 
 def test_rows_are_capped_and_views_are_described(season) -> None:
     assert len(season.query("SELECT * FROM player_match_stats")["rows"]) == 616
     assert {c["name"] for c in season.describe_views()["team_match_stats"]} >= {"xg", "shots"}
+
+
+def test_passes_completed_is_its_own_metric(season) -> None:
+    answer = ask("which team has the most passes completed in total?", season)
+    assert answer.verdict == "verified" and "passes_completed" in answer.sql
+
+
+def test_ties_and_the_season_size_are_stated_correctly(season) -> None:
+    answer = ask("which team has the lowest total red cards?", season)
+    assert answer.verdict == "verified"
+    assert f"{season.matches}-match season" in answer.answer
+
+
+def test_a_different_shape_or_column_set_on_the_rerun_is_rejected(season) -> None:
+    class Reshaped:
+        matches = 28
+        calls = 0
+
+        def query(self, sql):
+            result = season.query(sql)
+            Reshaped.calls += 1
+            if Reshaped.calls == 2:
+                result["rows"][0] = result["rows"][0][:1]
+            return result
+
+    answer = ask("which team has the highest average xG?", Reshaped())
+    assert answer.verdict == "rejected" and "columns" in answer.mismatch
+
+    class Renamed(Reshaped):
+        calls = 0
+
+        def query(self, sql):
+            result = season.query(sql)
+            Renamed.calls += 1
+            if Renamed.calls == 2:
+                result["columns"] = ["a", "b"]
+            return result
+
+    assert "columns changed" in ask("which team has the highest average xG?", Renamed()).mismatch
+
+
+def test_the_connection_cannot_read_files_or_change_its_settings(season) -> None:
+    with pytest.raises(Exception, match="file system operations are disabled"):
+        season._con.execute("SELECT * FROM read_text('/etc/hostname')")
+    with pytest.raises(Exception, match="configuration"):
+        season._con.execute("SET enable_external_access=true")
+    assert season.query("SELECT count(*) FROM matches -- trailing comment")["rows"] == [[28]]
