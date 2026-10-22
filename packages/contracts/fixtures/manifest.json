@@ -18,7 +18,14 @@
     "caption-ta.json",
     "sparse-tracking.json",
     "claim-count-zero.json",
-    "claim-count-max.json"
+    "claim-count-max.json",
+    "tackle.json",
+    "foul.json",
+    "card.json",
+    "carry.json",
+    "possession-change.json",
+    "pressure.json",
+    "audit-record.json"
   ],
   "invalid": [
     {
@@ -448,6 +455,64 @@
       "code": "invalid_schema",
       "with_roster": true,
       "path": "/value"
+    },
+    {
+      "file": "invalid/tackle-same-team-target.json",
+      "code": "player_team_mismatch",
+      "with_roster": true,
+      "path": "/payload/target_player_id"
+    },
+    {
+      "file": "invalid/foul-unknown-victim.json",
+      "code": "unknown_player",
+      "with_roster": true,
+      "path": "/payload/victim_player_id"
+    },
+    {
+      "file": "invalid/card-wrong-team.json",
+      "code": "player_team_mismatch",
+      "with_roster": true,
+      "path": "/payload/player_id"
+    },
+    {
+      "file": "invalid/carry-out-of-pitch.json",
+      "code": "invalid_coordinates",
+      "with_roster": true,
+      "path": "/payload/end_position"
+    },
+    {
+      "file": "invalid/possession-change-same-team.json",
+      "code": "invalid_possession_change",
+      "with_roster": true,
+      "path": "/payload"
+    },
+    {
+      "file": "invalid/pressure-negative-distance.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/tackle-needs-1-1.json",
+      "code": "unsupported_schema_version",
+      "with_roster": true,
+      "path": "/payload/type"
+    },
+    {
+      "file": "invalid/card-unknown-colour.json",
+      "code": "invalid_schema",
+      "with_roster": true
+    },
+    {
+      "file": "invalid/audit-details-too-large.json",
+      "code": "details_too_large",
+      "with_roster": false,
+      "path": "/details"
+    },
+    {
+      "file": "invalid/audit-first-not-genesis.json",
+      "code": "invalid_chain",
+      "with_roster": false,
+      "path": "/prev_hash"
     }
   ]
 }

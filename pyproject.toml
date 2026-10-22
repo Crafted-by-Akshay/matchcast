@@ -8,7 +8,7 @@ dependencies = []
 package = false
 
 [tool.uv.workspace]
-members = ["services/api", "services/worker", "packages/contracts"]
+members = ["services/api", "services/worker", "packages/contracts", "packages/agents"]
 
 [dependency-groups]
 dev = [
@@ -16,9 +16,12 @@ dev = [
     "pytest>=8.3,<9",
     "ruff>=0.11,<1",
 ]
+smoke = [
+    "azure-ai-projects>=1.0,<2",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "packages/agents/tests"]
 python_files = ["test_*.py"]
 pythonpath = ["services/api"]
 

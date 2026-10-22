@@ -1,0 +1,35 @@
+{
+  "kind": "event",
+  "schema_version": "1.1.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "event_id": "event-carry",
+  "stream_sequence": 23,
+  "revision": 0,
+  "event_time_ms": 23000,
+  "emitted_at": "2026-10-17T10:00:00.000Z",
+  "clock": {
+    "period": 1,
+    "period_elapsed_ms": 23000
+  },
+  "payload": {
+    "type": "carry",
+    "player_id": "home2",
+    "team_id": "home",
+    "position_unit": "m",
+    "start_position": {
+      "x": 30,
+      "y": 34,
+      "z": 0
+    },
+    "end_position": {
+      "x": 120,
+      "y": 36,
+      "z": 0
+    },
+    "duration_ms": 3200
+  }
+}

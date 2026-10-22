@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:matchcast:contracts:1.0.0",
+  "$id": "urn:matchcast:contracts:1.1.0",
   "title": "MatchCastContract",
-  "description": "MatchCast wire contracts v1.0.0. Contextual validation is specified in docs/contracts.md.",
+  "description": "MatchCast wire contracts v1.1.0. Contextual validation is specified in docs/contracts.md.",
   "oneOf": [
     {
       "$ref": "#/definitions/Roster"
@@ -21,6 +21,9 @@
     },
     {
       "$ref": "#/definitions/PublicationPacket"
+    },
+    {
+      "$ref": "#/definitions/AuditRecord"
     }
   ],
   "definitions": {
@@ -39,7 +42,10 @@
       "maximum": 9007199254740991
     },
     "SchemaVersion": {
-      "const": "1.0.0",
+      "enum": [
+        "1.0.0",
+        "1.1.0"
+      ],
       "type": "string"
     },
     "Timestamp": {
@@ -357,6 +363,24 @@
         },
         {
           "$ref": "#/definitions/PeriodBoundary"
+        },
+        {
+          "$ref": "#/definitions/Tackle"
+        },
+        {
+          "$ref": "#/definitions/Foul"
+        },
+        {
+          "$ref": "#/definitions/Card"
+        },
+        {
+          "$ref": "#/definitions/Carry"
+        },
+        {
+          "$ref": "#/definitions/PossessionChange"
+        },
+        {
+          "$ref": "#/definitions/Pressure"
         }
       ]
     },
@@ -479,6 +503,24 @@
             },
             {
               "$ref": "#/definitions/PeriodBoundary"
+            },
+            {
+              "$ref": "#/definitions/Tackle"
+            },
+            {
+              "$ref": "#/definitions/Foul"
+            },
+            {
+              "$ref": "#/definitions/Card"
+            },
+            {
+              "$ref": "#/definitions/Carry"
+            },
+            {
+              "$ref": "#/definitions/PossessionChange"
+            },
+            {
+              "$ref": "#/definitions/Pressure"
             },
             {
               "$ref": "#/definitions/Correction"
@@ -914,6 +956,330 @@
         "expires_at",
         "audio_generation_id",
         "text"
+      ]
+    },
+    "Tackle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "tackle",
+          "type": "string"
+        },
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "target_player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "won",
+            "lost"
+          ]
+        },
+        "position_unit": {
+          "const": "m",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/definitions/GroundPosition"
+        }
+      },
+      "required": [
+        "type",
+        "player_id",
+        "team_id",
+        "target_player_id",
+        "outcome",
+        "position_unit",
+        "position"
+      ]
+    },
+    "Foul": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "foul",
+          "type": "string"
+        },
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "victim_player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "advantage": {
+          "type": "boolean"
+        },
+        "position_unit": {
+          "const": "m",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/definitions/GroundPosition"
+        }
+      },
+      "required": [
+        "type",
+        "player_id",
+        "team_id",
+        "victim_player_id",
+        "advantage",
+        "position_unit",
+        "position"
+      ]
+    },
+    "Card": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "card",
+          "type": "string"
+        },
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "colour": {
+          "type": "string",
+          "enum": [
+            "yellow",
+            "second_yellow",
+            "red"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "type",
+        "player_id",
+        "team_id",
+        "colour",
+        "reason"
+      ]
+    },
+    "Carry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "carry",
+          "type": "string"
+        },
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "position_unit": {
+          "const": "m",
+          "type": "string"
+        },
+        "start_position": {
+          "$ref": "#/definitions/GroundPosition"
+        },
+        "end_position": {
+          "$ref": "#/definitions/GroundPosition"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "player_id",
+        "team_id",
+        "position_unit",
+        "start_position",
+        "end_position",
+        "duration_ms"
+      ]
+    },
+    "PossessionChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "possession_change",
+          "type": "string"
+        },
+        "from_team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "to_team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "cause": {
+          "type": "string",
+          "enum": [
+            "tackle",
+            "interception",
+            "loose_ball",
+            "out_of_play",
+            "foul"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "from_team_id",
+        "to_team_id",
+        "cause"
+      ]
+    },
+    "Pressure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "pressure",
+          "type": "string"
+        },
+        "player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "team_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "target_player_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "distance_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "closing_speed_mps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position_unit": {
+          "const": "m",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/definitions/GroundPosition"
+        }
+      },
+      "required": [
+        "type",
+        "player_id",
+        "team_id",
+        "target_player_id",
+        "distance_m",
+        "closing_speed_mps",
+        "position_unit",
+        "position"
+      ]
+    },
+    "Sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "AuditRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "audit_record",
+          "type": "string"
+        },
+        "schema_version": {
+          "$ref": "#/definitions/SchemaVersion"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "audit_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "sequence": {
+          "$ref": "#/definitions/Sequence"
+        },
+        "time": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "actor_kind": {
+          "type": "string",
+          "enum": [
+            "agent",
+            "person",
+            "system"
+          ]
+        },
+        "actor_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "event_rejected",
+            "moment_skipped",
+            "claim_created",
+            "line_drafted",
+            "line_verified",
+            "line_review",
+            "line_rejected",
+            "line_repair_requested",
+            "line_abstained",
+            "line_approved",
+            "line_edited",
+            "line_killed",
+            "publication_created",
+            "translation_rejected",
+            "fallback_used",
+            "recap_created",
+            "ask_answered",
+            "talk_answered",
+            "export_created",
+            "safety_blocked"
+          ]
+        },
+        "subject_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "details": {
+          "type": "object"
+        },
+        "prev_hash": {
+          "$ref": "#/definitions/Sha256"
+        },
+        "hash": {
+          "$ref": "#/definitions/Sha256"
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "audit_id",
+        "sequence",
+        "time",
+        "actor_kind",
+        "actor_id",
+        "action",
+        "subject_id",
+        "details",
+        "prev_hash",
+        "hash"
       ]
     }
   }

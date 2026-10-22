@@ -11,8 +11,11 @@ The API reads these process environment variables at startup. It does not load
 | Variable | Default | Validation and use |
 | --- | --- | --- |
 | `MATCHCAST_MODE` | `local` | `local` or `cloud` |
-| `MATCHCAST_MODEL_ENDPOINT` | unset | Required in `cloud` mode; absolute HTTPS URL |
-| `MATCHCAST_MODEL_API_KEY` | unset | Required and non-blank in `cloud` mode; treated as a secret and never returned by readiness |
+| `FOUNDRY_PROJECT_ENDPOINT` | unset | Required in `cloud` mode; absolute HTTPS URL of the Foundry project |
+| `FOUNDRY_MODEL_DEPLOYMENT` | unset | Required and non-blank in `cloud` mode; deployment name, `gpt-6-luna` |
+
+There is no API key. Cloud mode authenticates with Microsoft Entra ID through
+`DefaultAzureCredential` (`az login` locally, the managed identity `id-matchcast` in Azure).
 
 Local mode requires no credentials and makes no model connection. Cloud mode
 configuration is validated at startup. The API process stays live when configuration
@@ -31,17 +34,16 @@ model or assert that dependencies are ready.
 | --- | --- | --- |
 | Valid local configuration | service `ready` / model and store `local_mock` | 200 |
 | Invalid or incomplete configuration | `not_ready` / `unavailable` | 503 |
-| Valid cloud configuration, adapter not implemented | `not_ready` / `pending` | 503 |
-| A real dependency connection succeeds | dependency `ready` is reserved for a future adapter that performs a successful real probe | Not implemented |
+| Valid cloud configuration, no Entra credential obtainable | `not_ready` / `unavailable` | 503 |
+| Valid cloud configuration, credential obtained | `ready` / `ready` (the credential is probed; no model call is made) | 200 |
 
 The top-level `ready` status in local mode means the local API profile can serve
 requests; it does not mean a dependency is genuinely ready. Each dependency reports
-its own state. `local_mock` marks a local substitute, `pending` means configuration
-is valid but that adapter/probe has not been implemented, `unavailable` means
-readiness cannot be established because configuration is invalid, and `ready` is
-reserved for a future dependency adapter after its real probe succeeds. No current
-cloud configuration can produce dependency `ready`. The status strings are
-diagnostic states, not a claim that the full product readiness gates pass.
+its own state. `local_mock` marks a local substitute, `unavailable` means
+readiness cannot be established (invalid configuration or no credential), and
+`ready` means a token for Azure AI was obtained. Readiness never calls the model;
+`scripts/smoke_foundry.py` does that. The status strings are diagnostic states, not
+a claim that the full product readiness gates pass.
 
 Run locally with defaults:
 
@@ -52,9 +54,13 @@ curl -i http://localhost:8000/ready
 ```
 
 For an intentional negative configuration probe, start with
-`MATCHCAST_MODE=cloud` and omit the model endpoint/key. `/health` remains 200;
-`/ready` returns 503 with the missing settings. Supplying both values changes the
-model dependency to `pending` until a real adapter is delivered.
+`MATCHCAST_MODE=cloud` and omit the Foundry settings. `/health` remains 200;
+`/ready` returns 503 with the missing settings. With both set and `az login` done,
+`/ready` returns 200 and the model dependency is `ready`.
+
+Prove one keyless model call (needs the `gpt-6-luna` deployment and the Azure AI User
+role): `make smoke-foundry`. It prints the model name, token counts and latency, never
+credentials.
 
 ## Local session API
 
@@ -76,3 +82,18 @@ This S03 store exists only in process memory: restart loses sessions, separate A
 replicas do not share them, and no authorization boundary is implemented. A
 durable store, authenticated tenant enforcement, replay/history, and production
 readiness probes are later work.
+
+## Match routes (AGT-3)
+
+`services/api/app/matches.py` mounts the `/v1` routes from `docs/architecture/12-api.md` on the
+rules-mode workflow in `packages/agents`: create a match with its roster, post contract event
+batches, read `claims`, `lines`, `audit` and `trace/{line_id}`, follow the SSE `stream`, and
+approve, edit or kill lines. Errors are RFC 9457 problems with a `code`.
+
+- The tenant is `demo`; the roster's `stream` must equal `(demo, session_id, match_id)`.
+- Everything is in memory in one process (ADR-0005). No model is called.
+- `GET .../stream?follow=false` sends status, state and the replay, then closes (useful for curl and tests).
+- Producer routes check the `X-MatchCast-Role` header (`Producer` or `Admin`) only when
+  `MATCHCAST_REQUIRE_ROLE=1`; real Entra roles replace it in PLT-5.
+- Not built yet: `/ask`, `/talk`, `/ds/ask`, vision, speech, audio, recap and exports routes;
+  rate limits; `docs/api/openapi.json` snapshot.

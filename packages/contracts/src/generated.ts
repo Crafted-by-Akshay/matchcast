@@ -1,16 +1,17 @@
 /* Generated from matchcast_contracts/schemas/v1.json. Do not edit. Run make contracts-generate. */
 
 /**
- * MatchCast wire contracts v1.0.0. Contextual validation is specified in docs/contracts.md.
+ * MatchCast wire contracts v1.1.0. Contextual validation is specified in docs/contracts.md.
  */
 export type MatchCastContract =
-  Roster | EventEnvelope | TrackingFrame | StateRevisionPacket | ClaimPacket | PublicationPacket;
-export type SchemaVersion = "1.0.0";
+  Roster | EventEnvelope | TrackingFrame | StateRevisionPacket | ClaimPacket | PublicationPacket | AuditRecord;
+export type SchemaVersion = "1.0.0" | "1.1.0";
 export type Identifier = string;
 export type Sequence = number;
 export type Counter = number;
 export type Timestamp = string;
-export type FootballPayload = Goal | Pass | Shot | PeriodBoundary;
+export type FootballPayload =
+  Goal | Pass | Shot | PeriodBoundary | Tackle | Foul | Card | Carry | PossessionChange | Pressure;
 export type ClaimPacket = {
   kind: "claim";
   schema_version: SchemaVersion;
@@ -25,6 +26,7 @@ export type ClaimPacket = {
   max_evidence_sequence: Counter;
   approval_status: "pending" | "approved" | "rejected" | "retracted";
 };
+export type Sha256 = string;
 
 export interface Roster {
   kind: "roster";
@@ -65,7 +67,19 @@ export interface EventEnvelope {
   event_time_ms: Counter;
   emitted_at: Timestamp;
   clock: MatchClock;
-  payload: Goal | Pass | Shot | PeriodBoundary | Correction | Retraction;
+  payload:
+    | Goal
+    | Pass
+    | Shot
+    | PeriodBoundary
+    | Tackle
+    | Foul
+    | Card
+    | Carry
+    | PossessionChange
+    | Pressure
+    | Correction
+    | Retraction;
 }
 export interface MatchClock {
   period: 1 | 2 | 3 | 4;
@@ -104,6 +118,56 @@ export interface Shot {
 export interface PeriodBoundary {
   type: "period_boundary";
   boundary: "started" | "ended";
+}
+export interface Tackle {
+  type: "tackle";
+  player_id: Identifier;
+  team_id: Identifier;
+  target_player_id: Identifier;
+  outcome: "won" | "lost";
+  position_unit: "m";
+  position: GroundPosition;
+}
+export interface Foul {
+  type: "foul";
+  player_id: Identifier;
+  team_id: Identifier;
+  victim_player_id: Identifier;
+  advantage: boolean;
+  position_unit: "m";
+  position: GroundPosition;
+}
+export interface Card {
+  type: "card";
+  player_id: Identifier;
+  team_id: Identifier;
+  colour: "yellow" | "second_yellow" | "red";
+  reason: string;
+}
+export interface Carry {
+  type: "carry";
+  player_id: Identifier;
+  team_id: Identifier;
+  position_unit: "m";
+  start_position: GroundPosition;
+  end_position: GroundPosition;
+  duration_ms: number;
+}
+export interface PossessionChange {
+  type: "possession_change";
+  from_team_id: Identifier;
+  to_team_id: Identifier;
+  cause: "tackle" | "interception" | "loose_ball" | "out_of_play" | "foul";
+}
+export interface Pressure {
+  type: "pressure";
+  player_id: Identifier;
+  team_id: Identifier;
+  target_player_id: Identifier;
+  distance_m: number;
+  closing_speed_mps: number;
+  position_unit: "m";
+  position: GroundPosition;
 }
 export interface Correction {
   type: "correction";
@@ -205,4 +269,41 @@ export interface PublicationPacket {
   expires_at: Timestamp;
   audio_generation_id: Identifier | null;
   text: string;
+}
+export interface AuditRecord {
+  kind: "audit_record";
+  schema_version: SchemaVersion;
+  stream: StreamIdentity;
+  audit_id: Identifier;
+  sequence: Sequence;
+  time: Timestamp;
+  actor_kind: "agent" | "person" | "system";
+  actor_id: Identifier;
+  action:
+    | "event_rejected"
+    | "moment_skipped"
+    | "claim_created"
+    | "line_drafted"
+    | "line_verified"
+    | "line_review"
+    | "line_rejected"
+    | "line_repair_requested"
+    | "line_abstained"
+    | "line_approved"
+    | "line_edited"
+    | "line_killed"
+    | "publication_created"
+    | "translation_rejected"
+    | "fallback_used"
+    | "recap_created"
+    | "ask_answered"
+    | "talk_answered"
+    | "export_created"
+    | "safety_blocked";
+  subject_id: Identifier;
+  details: {
+    [k: string]: unknown;
+  };
+  prev_hash: Sha256;
+  hash: Sha256;
 }

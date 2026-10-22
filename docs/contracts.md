@@ -1,7 +1,7 @@
-# MatchCast wire contracts v1.0.0
+# MatchCast wire contracts v1.1.0
 
 These contracts implement the v1.1 **requirements** from MHACK832-23 and the
-readiness contract on MHACK832-1. The initial **wire schema** is `1.0.0`; the two
+readiness contract on MHACK832-1. The **wire schema** is `1.1.0` (initial release `1.0.0`); the two
 version numbers describe different things. This is a local contract definition,
 not evidence of a running football engine, verified broadcast, or cloud service.
 
@@ -62,7 +62,28 @@ Every top-level packet has `kind`, `schema_version`, and `stream`.
 | `tracking_frame` | Same identity/order/clock header plus player and ball positions |
 | `state_revision` | `snapshot` reference to a committed state revision and evidence boundary |
 | `claim` | Source references/interval, numeric metric and units, derivation version, snapshot, evidence limit, approval status |
+| `audit_record` | One agent, person or system decision: `audit_id`, per-stream `sequence`, `time`, `actor_kind`/`actor_id`, `action` (closed list in `docs/architecture/04-agents.md` §4), `subject_id`, `details`, `prev_hash`, `hash` |
 | `publication` | Stable publication ID, claim IDs, state reference, persona/language, match time, wall-clock expiry, audio generation ID, text |
+
+### Event payload types
+
+All positions are metres on the ground (z=0) inside the roster pitch. Types marked
+1.1 need `schema_version: "1.1.0"`; a `1.0.0` packet carrying them is rejected with
+`unsupported_schema_version` at `/payload/type`. `player_id` is the acting player and
+`team_id` the actor's team unless stated.
+
+| `type` | Since | Fields |
+| --- | --- | --- |
+| `goal`, `pass`, `shot`, `period_boundary` | 1.0 | as in the schema |
+| `tackle` | 1.1 | `player_id`, `team_id`, `target_player_id` (opposing team), `outcome` (`won`/`lost`), `position` |
+| `foul` | 1.1 | `player_id`, `team_id`, `victim_player_id` (opposing team), `advantage` (bool), `position` |
+| `card` | 1.1 | `player_id`, `team_id`, `colour` (`yellow`/`second_yellow`/`red`), `reason` (1-256 chars) |
+| `carry` | 1.1 | `player_id`, `team_id`, `start_position`, `end_position`, `duration_ms` (integer, at least 1) |
+| `possession_change` | 1.1 | `from_team_id`, `to_team_id` (different, both in roster), `cause` (`tackle`/`interception`/`loose_ball`/`out_of_play`/`foul`) |
+| `pressure` | 1.1 | `player_id` (presser), `team_id`, `target_player_id` (opposing team), `position`, `distance_m` (at least 0), `closing_speed_mps` (at least 0) |
+
+Both versions are accepted by the validators, so old packets stay valid. `schema_version`
+in the contract above is a set (`SUPPORTED_VERSIONS`), and `SCHEMA_VERSION` is the newest.
 
 `fixtures/manifest.json` indexes shared positive/negative fixtures. `contexts.json`
 contains publication and correction reference-validation cases. These are small
@@ -233,9 +254,27 @@ trusted current state/approval records. This is reference validation, not a
 publication service or authorization check. Semantic fast-path and model-draft
 review remain mandatory before actual publication/synthesis under v1.1.
 
+## Audit records and the hash chain
+
+Audit records are append-only. `hash` is the SHA-256 (lowercase hex) of the canonical
+JSON of the record without `hash`: keys sorted, no spaces, UTF-8, integral numbers
+written as integers. `prev_hash` is the previous record's `hash`; the first record
+(`sequence` 1) uses 64 zeros. `details` is a JSON object of at most 2,048 canonical
+bytes (`details_too_large`); numbers that Python and JavaScript could print differently
+(non-finite, exponent form, integers beyond 2^53-1) are rejected.
+
+`append_audit(previous, ...)` / `appendAudit(previous, input)` return the next record
+and store nothing; callers must serialise appends per stream. `verify_chain(records)` /
+`verifyChain(records)` return `{valid, final_hash, first_broken_sequence, reason}`, where
+`reason` is one of `invalid_schema`, `stream_mismatch`, `sequence_gap`,
+`prev_hash_mismatch` or `hash_mismatch`. Shared vectors: `fixtures/audit-valid.json` and
+`fixtures/audit-tampered.json`; both languages must produce the same final hash.
+Python: `matchcast_contracts.audit`; TypeScript: `src/audit.ts` (synchronous SHA-256, so it
+also runs in the browser).
+
 ## Versioning and compatibility
 
-Only wire `schema_version: "1.0.0"` is currently supported. Unknown or future
+Wire `schema_version` values `"1.0.0"` and `"1.1.0"` are currently supported. Unknown or future
 versions return `unsupported_schema_version` before payload interpretation; an
 unknown kind/type or extra property fails schema validation. Do not guess or
 silently downgrade. IDs, units, time semantics, sequence/revision meanings, and

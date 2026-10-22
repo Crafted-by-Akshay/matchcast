@@ -1,0 +1,8 @@
+title = "matchcast gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Built-in Azure role definition IDs are public GUIDs, not secrets"
+paths = ['''infra/modules/roles\.bicep''']

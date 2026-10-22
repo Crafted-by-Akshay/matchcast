@@ -30,6 +30,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 ## Files
 - `index.html`: the shell (switcher, match bar, Agents tab, message handling).
 - `contracts.js`, `agents.js`: the shared contracts and the agent pipeline, loaded by the shell.
+- `live.js` (`LV`, EXP-1): posts Watch's goal and shot events to the agent api (`POST /v1/matches`, `/events`) and subscribes to its SSE stream (claims, lines, publications), which `AG.ingest` shows beside the rules claims. The top-bar pill reads 'Live agents', 'Rules fallback' (api silent for 45 s or on rules), 'Warming up the match engine' or 'Offline (simulated)' (no api). Build with `python3 build.py --api https://<api>` to set `config.js`; without it nothing is called. Only goal and shot events are mapped to contract events so far.
 - `watch/index.html`, `broadcast/index.html`, `analyst/index.html`: built views. Each has `embed/hook.js` plus its own hook appended.
 - `embed/`: the hooks. `hook.js` (shared by Watch and Broadcast), `watch.js`, `broadcast.js`, `analyst.js`.
 - `shared/`: `players.json`, `intl.json` (3D engine), `fixtures.json` and `clubs.json` (season, generated from the Analyst data), `analyst/data/` (28 matches and the league).
@@ -39,7 +40,15 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - `python3 build.py <dir>`: also writes a copy in `<dir>` for tests, with three.js served from `<dir>/node_modules/three`.
 
 ## Tests
+- `tests/watch.cjs <appDir> <outDir>`: Match Pulse cards (tick, chips, Rules fallback chip, Why?, last 10), Casual v Analyst text and chips, Player focus lead, mode saved and restored after reload, Planned language labels.
+- `tests/connection.cjs <appDir> <outDir>`: live, rules fallback and offline against a mock api (drives the shell directly).
 - `tests/e2e/unified.spec.ts` (run with `make e2e`; was `unified.cjs`): headless Chromium. Checks the season loads, Watch and Broadcast start on the shared fixture with its clubs, the Analyst routes to it, switching keeps Watch running, Watch's events reach the agents, the audit chain verifies, the Broadcast scoreboard shows Watch's score, full time reaches the Analyst, a fixture change reloads Watch, the keyboard shortcuts work (1 to 4), and the phone layout has no horizontal scroll. Saves screenshots.
+
+## Match Pulse and watch modes (EXP-3, EXP-4)
+- The shell posts one card per agent line to Watch (`type: 'pulse'`). Watch shows it for 12 s, keeps the last 10 in a scrollable log, and marks each with the Verifier's tick (green) or an amber dot, plus a 'Rules fallback' chip when the in-page rules wrote it. 'Why?' lists the cited events; the 3D replay with highlights is Planned.
+- Casual shows the plain line and no chips; the other modes show the full line with chips. Player focus leads the line with the player's name; My club accents the club's cards.
+- The watch mode is saved in localStorage (`mcx-mode`) and restored on reload. It is sent to the shell as the persona (`casual`, `analyst`, `club:<key>`, `player:<name>`, `metric:<name>`), and `live.js` reopens the api stream for it.
+- The language picker labels everything except English, Spanish and Hindi as Planned.
 
 ## Limits
 - The views are separate engines inside frames. Their own headers stay under the shell bar, and the Analyst keeps its own design. A single merged code base would be a larger job.
