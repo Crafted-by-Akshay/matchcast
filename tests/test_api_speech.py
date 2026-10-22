@@ -8,21 +8,18 @@ from app.main import create_app
 from app.speech import SpeechToken, SpeechTokenService
 from fastapi.testclient import TestClient
 
-RESOURCE = (
-    "/subscriptions/s1/resourceGroups/rg-matchcast"
-    "/providers/Microsoft.CognitiveServices/accounts/speech"
-)
+ENDPOINT = "https://matchcast-speech.cognitiveservices.azure.com/"
 
 
-def make(issuer=None, resource=RESOURCE, region="eastus") -> tuple[TestClient, SpeechTokenService]:
+def make(issuer=None, endpoint=ENDPOINT, region="eastus") -> tuple[TestClient, SpeechTokenService]:
     app = create_app()
-    service = SpeechTokenService(resource, region, issuer)
+    service = SpeechTokenService(endpoint, region, issuer)
     app.state.matches.speech = service
     return TestClient(app), service
 
 
 def test_without_a_resource_the_route_is_not_ready():
-    client, _ = make(resource="", region="")
+    client, _ = make(endpoint="", region="")
     r = client.get("/v1/speech/token")
     assert r.status_code == 503 and r.json()["code"] == "not_ready"
 
@@ -36,7 +33,7 @@ def test_returns_token_region_and_expiry_in_sdk_shape():
 
     client, _ = make(issuer)
     body = client.get("/v1/speech/token").json()
-    assert body["token"] == f"aad#{RESOURCE}#entra-token"
+    assert body["token"] == "entra-token"  # the issuer returns the Speech-only STS token
     assert body["region"] == "eastus" and body["expires_at"].endswith("Z")
     client.get("/v1/speech/token")
     assert len(calls) == 1  # cached until a minute before expiry
@@ -45,8 +42,8 @@ def test_returns_token_region_and_expiry_in_sdk_shape():
 def test_an_expiring_token_is_refreshed():
     tokens = iter([SpeechToken("old", time.time() + 30), SpeechToken("new", time.time() + 3600)])
     client, _ = make(lambda: next(tokens))
-    assert client.get("/v1/speech/token").json()["token"].endswith("#old")
-    assert client.get("/v1/speech/token").json()["token"].endswith("#new")
+    assert client.get("/v1/speech/token").json()["token"] == "old"
+    assert client.get("/v1/speech/token").json()["token"] == "new"
 
 
 def test_issuer_failure_is_a_503_without_the_cause():
@@ -58,8 +55,27 @@ def test_issuer_failure_is_a_503_without_the_cause():
     assert r.status_code == 503 and "secret" not in r.text
 
 
+def test_sts_issuer_posts_the_entra_bearer_and_returns_only_the_sts_token():
+    from unittest import mock
+
+    from app.speech import _StsIssuer
+
+    cred = mock.Mock()
+    cred.get_token.return_value = mock.Mock(token="ENTRA-BEARER")
+    response = mock.MagicMock()
+    response.__enter__.return_value.read.return_value = b"sts-token"
+    issuer = _StsIssuer(ENDPOINT)
+    issuer._credential = cred
+    with mock.patch("app.speech.urllib.request.urlopen", return_value=response) as opened:
+        token = issuer()
+    request = opened.call_args.args[0]
+    assert request.full_url == ENDPOINT + "sts/v1.0/issueToken" and request.method == "POST"
+    assert request.get_header("Authorization") == "Bearer ENTRA-BEARER"
+    assert token.token == "sts-token" and "ENTRA" not in token.token
+
+
 def test_malformed_settings_are_not_ready():
-    client, _ = make(resource="not-a-resource-id")
+    client, _ = make(endpoint="https://evil.example.com/")
     assert client.get("/v1/speech/token").status_code == 503
     client, _ = make(region="East US!")
     assert client.get("/v1/speech/token").status_code == 503
