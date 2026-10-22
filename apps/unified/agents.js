@@ -43,13 +43,23 @@ const AG = (() => {
   };
   let translator = (c, lang) => { const f = TPL[lang] && TPL[lang][c.kind]; return f ? f(Object.assign({ H: run.names.home, A: run.names.away }, c.inputs), Math.floor(c.minute)) : null; };
   const numbers = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
-  const namesOf = (c) => [c.inputs.scorer, c.inputs.player, c.inputs.teamName, run.names.home, run.names.away].filter((n) => n && c.text.includes(n));
-  // Verifier re-check on a translation: the same numbers and every player and club name, unchanged
+  // every name the run knows: the clubs, the players in the event log and in this claim
+  const knownNames = (c) => [...new Set([run.names.home, run.names.away, c.inputs.scorer, c.inputs.player, c.inputs.teamName].concat(run.events.map((e) => e.player)).filter(Boolean))].sort((x, y) => y.length - x.length);
+  // the line's facts in the order they are said: each known name and each number, with its position
+  const facts = (text, names) => {
+    const out = [], taken = [];
+    for (const n of names) for (let at = text.indexOf(n); at >= 0; at = text.indexOf(n, at + n.length)) { if (!taken.some(([s, e]) => at < e && at + n.length > s)) { taken.push([at, at + n.length]); out.push([at, n]); } }
+    for (const m of text.matchAll(/\d+(?:\.\d+)?/g)) if (!taken.some(([s, e]) => m.index >= s && m.index < e)) out.push([m.index, m[0]]);
+    return out.sort((x, y) => x[0] - y[0]).map((x) => x[1]);
+  };
+  // Verifier re-check on a translation: the same names and numbers, in the same order, and no name that is not in the English line
   const checkTranslation = (c, text) => {
-    const a = numbers(c.text).sort().join(','), b = numbers(text).sort().join(',');
-    if (a !== b) return { ok: false, reason: 'numbers differ from the English line' };
-    const lost = namesOf(c).find((n) => !text.includes(n));
-    return lost ? { ok: false, reason: 'name changed: ' + lost } : { ok: true, reason: 'numbers and names match the English line' };
+    const names = knownNames(c), en = facts(c.text, names), tr = facts(text, names);
+    if (numbers(c.text).join() !== numbers(text).join()) return { ok: false, reason: 'numbers differ from the English line' };
+    if (en.join('|') !== tr.join('|')) return { ok: false, reason: 'names or numbers are in a different order than the English line' };
+    const cap = /(?<![\p{L}\d'’-])\p{Lu}[\p{L}'’-]*/gu, inEn = new Set(c.text.match(cap) || []);
+    const extra = [...text.matchAll(cap)].filter((m) => m.index > 0 && !/(^|[.!?]\s)$/.test(text.slice(0, m.index)) && !inEn.has(m[0]) && !names.some((n) => n.includes(m[0]))).map((m) => m[0])[0];
+    return extra ? { ok: false, reason: 'name not in the English line: ' + extra } : { ok: true, reason: 'names and numbers match the English line' };
   };
   // only verified lines are translated; a rejected translation is audited and the viewer keeps the English line
   const translateClaim = (c) => {
@@ -180,5 +190,5 @@ const AG = (() => {
     c.source = src; changed();
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  return { approve, kill, edit, checkTranslation, setTranslator: (fn) => { translator = fn || translator; }, get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { approve, kill, edit, checkTranslation, ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();

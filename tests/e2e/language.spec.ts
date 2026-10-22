@@ -8,6 +8,8 @@ const goal = (page, minute: number, score: string) => page.evaluate(([m, s]) => 
   AG.onWatch('k1', [{ minute: m, type: 'goal', team: 'ars', player: 'A One', score: s, data: {} }], []);
 }, [minute, score]);
 
+test.beforeEach(({ page }) => page.addInitScript(() => { (window as any).MC_TEST = true; }));
+
 test('language: Spanish and Hindi keep numbers and names; a bad translation shows Translation unavailable', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'agents');
@@ -40,4 +42,27 @@ test('language: a moment with prose from Watch stays English with a note', async
   const t = await page.evaluate(() => AG.run.claims[0].tr);
   expect(t.es.ok).toBe(false);
   expect(t.es.reason).toContain('no template');
+});
+
+test('language: a swapped score, swapped clubs or an extra name is rejected', async ({ page }) => {
+  await openShell(page, 'agents');
+  await page.evaluate(() => AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' }));
+  await goal(page, 10.1, '1-0');
+  const bad = await page.evaluate(() => {
+    const c = AG.run.claims.find((q: any) => q.kind === 'score');
+    return ['Gol de Arsenal (A One) en el min 10. Arsenal 0–1 Chelsea.', 'Gol de Arsenal (A One) en el min 10. Chelsea 1–0 Arsenal.', 'Gol de Arsenal (Bob Smith) en el min 10. Arsenal 1–0 Chelsea.', 'Gol de Arsenal (A One) en el min 10. Arsenal 1–0 Chelsea.'].map((t) => AG.checkTranslation(c, t).ok);
+  });
+  expect(bad).toEqual([false, false, false, true]);
+});
+
+test('language: shot and xG lines translate and pass the re-check in both languages', async ({ page }) => {
+  await openShell(page, 'agents');
+  await page.evaluate(() => {
+    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
+    AG.onWatch('k1', [{ minute: 33.3, type: 'shot', team: 'che', player: 'C One', x: 90, y: 30, xg: 0.4, kind: 'open play', data: { xg: 0.4, kind: 'open play' } },
+      { minute: 36.1, type: 'shot', team: 'ars', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'penalty', data: { xg: 0.3, kind: 'penalty' } }], []);
+  });
+  const kinds = await page.evaluate(() => AG.run.claims.filter((c: any) => c.tr).map((c: any) => [c.kind, c.tr.es.ok, c.tr.hi.ok]));
+  expect(kinds.length).toBeGreaterThanOrEqual(3);
+  for (const k of kinds) expect(k.slice(1)).toEqual([true, true]);
 });
