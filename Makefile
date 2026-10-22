@@ -1,4 +1,4 @@
-.PHONY: judge-path openapi-generate smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
+.PHONY: realism judge-path openapi-generate smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
 
 install:
 	npm ci
@@ -35,6 +35,9 @@ serve-e2e:
 
 e2e:
 	npm run e2e -- $(E2E_ARGS)
+
+realism:
+	uv run --locked python scripts/check_realism.py --matches 200 $(REALISM_ARGS)
 
 e2e-webkit:
 	npm run e2e-webkit
