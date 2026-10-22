@@ -86,7 +86,8 @@ mcTele.style.cssText = 'position:absolute;right:10px;top:44px;width:280px;margin
 let mcL3Timer = 0; const mcAired = [];
 window.addEventListener('message', (e) => {
   const d = e.data || {};
-  if (d.src !== 'matchcast-shell' || d.type !== 'air' || !d.line) return;
+  // only the shell (the parent window) may put a line on air: the approval gate lives there
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'air' || !d.line) return;
   const l = d.line; if (mcAired.some((x) => x.id === l.id)) return;
   mcAired.push(l); if (mcAired.length > 5) mcAired.shift();
   mcL3.textContent = (l.alert ? 'ALERT · ' + l.alert + (l.verdict === 'verified' ? ' · verified' : '') + ' · ' : '') + Math.floor(l.minute) + "' " + l.text; mcL3.hidden = false;

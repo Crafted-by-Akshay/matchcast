@@ -77,6 +77,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - Tested in local headless Chromium. Not yet tested inside the claude.ai artifact host.
 
 ## Lower-thirds, teleprompter and the approval queue (EXP-7, EXP-11)
+- Broadcast accepts an `air` message only from the shell (`e.source === window.parent`), because the approval gate lives in the shell; `broadcast.spec.ts` sends a forged one and checks nothing airs.
 - The lower-third and teleprompter sit inside the live view (`#bc-view`), because the desk's CSS hides every other direct child of `body`. `tests/e2e/broadcast.spec.ts` (QUA-2) checks they are visible on screen, not only un-hidden.
 - Agents tab, Approval queue: **Demo** mode airs verified Broadcast lines at once. **Producer** mode holds each one until a person approves, edits or kills it. The signed-in producer is a simulated account (Planned: Entra ID).
 - Broadcast shows an approved line as a lower-third for 8 seconds and keeps the last five in the teleprompter list. A pending or killed line reaches no view, including Watch's Match Pulse.
