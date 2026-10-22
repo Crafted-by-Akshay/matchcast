@@ -41,6 +41,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 
 ## Tests
 - `tests/e2e/trace.spec.ts` (EXP-6): four agents in order with durations and tools; the seeded bad claim shows the repair.
+- `tests/e2e/ledger.spec.ts` (EXP-10): newest first, filters, provenance, CSV export with a matching SHA-256.
 - `tests/e2e/pulse.spec.ts` (was `watch.cjs`): Match Pulse cards (tick, chips, Rules fallback chip, Why?, last 10), Casual v Analyst text and chips, Player focus lead, mode saved and restored after reload, Planned language labels.
 - `tests/e2e/connection.spec.ts` (was `connection.cjs`): live, rules fallback and offline against a mock api (drives the shell directly).
 - `tests/e2e/unified.spec.ts` (run with `make e2e`; was `unified.cjs`): headless Chromium. Checks the season loads, Watch and Broadcast start on the shared fixture with its clubs, the Analyst routes to it, switching keeps Watch running, Watch's events reach the agents, the audit chain verifies, the Broadcast scoreboard shows Watch's score, full time reaches the Analyst, a fixture change reloads Watch, the keyboard shortcuts work (1 to 4), and the phone layout has no horizontal scroll. Saves screenshots.
@@ -54,6 +55,10 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 ## Trace panel (EXP-6)
 - `trace-panel.js` (`TP`): 'How was this made?' on any line (a Match Pulse card or the Agents tab's Provenance) opens a timeline: Producer task, Analyst claim with its tool names, Narrator draft, Verifier verdict and repair, Producer approval and publication, each with its time and 'rules' or 'model'. Rules steps carry no tokens. Data is the claim's own trace (`agents.js`) and its audit records.
 - 'Seed a bad claim' (Agents tab) makes the next score claim wrong so the Verifier rejects and repairs it; the trace shows the reason and the repair. Lines from the api show what the stream carried until the server trace summaries (AGT-3) are added to it.
+
+## Claims ledger (EXP-10)
+- The Agents tab's claims table is the ledger: time, metric, value, units, agent, source (model or rules), verdict, reason, approval; newest first. Filters for verdict, agent and metric. A row opens its provenance (source events, audit records, trace). 'Export CSV' downloads the filtered rows and shows the file's SHA-256, which equals `shasum -a 256` of the download.
+- It lives in the shell's Agents tab, not inside the Analyst view (the enterprise console's own ledger page still shows its prototype data). Tool calls per claim are in the trace panel (EXP-6).
 
 ## Limits
 - The views are separate engines inside frames. Their own headers stay under the shell bar, and the Analyst keeps its own design. A single merged code base would be a larger job.
