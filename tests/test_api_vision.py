@@ -3,19 +3,25 @@
 import base64
 import json
 import struct
+import threading
 import zlib
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from app.main import create_app
 from app.vision import (
+    AzureReadReader,
     Reading,
+    TokenError,
     UnavailableReader,
     VisionBudget,
     VisionError,
     VisionService,
     best_shirt,
+    check_endpoint,
     decode_crop,
+    reader_from_env,
 )
 from fastapi.testclient import TestClient
 
@@ -34,8 +40,8 @@ def png(side: int = 128, pad: int = 0) -> str:
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", struct.pack(">IIBBBBB", side, side, 8, 0, 0, 0, 0))
         + chunk(b"IDAT", zlib.compress(raw))
+        + (chunk(b"tEXt", b"k\x00" + b"x" * pad) if pad else b"")
         + chunk(b"IEND", b"")
-        + b"\x00" * pad
     )
     return base64.b64encode(data).decode()
 
@@ -92,7 +98,11 @@ def test_identify_returns_shirt_confidence_source_and_time():
 
 def test_without_a_vision_resource_the_route_says_unavailable_and_invents_nothing():
     r = post(client_with(UnavailableReader()))
-    assert r.json() == {**r.json(), "shirt": None, "source": "unavailable", "confidence": 0.0}
+    assert {k: v for k, v in r.json().items() if k != "elapsed_ms"} == {
+        "shirt": None,
+        "confidence": 0.0,
+        "source": "unavailable",
+    }
 
 
 def test_sixteenth_call_in_a_minute_is_429_with_retry_after():
@@ -128,8 +138,10 @@ def test_budget_window_slides():
         (base64.b64encode(b"hello").decode(), 422),
         (png(64), 422),
         (png(pad=41_000), 413),
+        (base64.b64encode(base64.b64decode(png()) + b"junk").decode(), 422),
+        ("data:image/png;base64," + png(), 422),
     ],
-    ids=["not-base64", "not-png", "wrong-size", "too-large"],
+    ids=["not-base64", "not-png", "wrong-size", "too-large", "trailing-junk", "data-uri"],
 )
 def test_bad_crops_are_refused_and_cost_no_budget(crop, status):
     budget = VisionBudget(total=5)
@@ -150,10 +162,13 @@ def test_unknown_match_is_404_and_extra_fields_are_refused():
 
 
 def test_reader_failure_is_502_and_the_api_stays_up():
-    c = client_with(Fake(RuntimeError("azure down")))
+    budget = VisionBudget(total=10)
+    c = client_with(Fake(RuntimeError("azure down")), budget)
     r = post(c)
     assert r.status_code == 502 and r.json()["code"] == "vision_unavailable"
     assert c.get("/health").status_code == 200
+    assert post(c).status_code == 502  # still answers, and the attempt is charged
+    assert budget.used == 2
 
 
 def test_best_shirt_takes_only_one_or_two_digit_words_by_confidence():
@@ -181,3 +196,108 @@ def test_best_shirt_takes_only_one_or_two_digit_words_by_confidence():
 
 def test_decode_crop_accepts_a_valid_png():
     assert decode_crop(png()).startswith(b"\x89PNG")
+
+
+def test_a_failure_before_azure_is_refunded():
+    budget = VisionBudget(total=10)
+    c = client_with(Fake(TokenError()), budget)
+    assert post(c).status_code == 502
+    assert budget.used == 0
+
+
+def test_body_over_the_envelope_is_413_before_it_is_read():
+    c = client_with(Fake(Reading("1", 0.9, "azure_read")))
+    r = post(c, "A" * 70_000)
+    assert r.status_code == 413 and r.json()["code"] == "crop_too_large"
+    assert post(c, "A" * 60_001).status_code == 422  # inside the envelope, over the field limit
+
+
+def test_budget_is_thread_safe():
+    b = VisionBudget(per_minute=1000, total=100)
+    taken, refused = [], []
+
+    def work():
+        for _ in range(50):
+            try:
+                b.take()
+                taken.append(1)
+            except VisionError:
+                refused.append(1)
+
+    threads = [threading.Thread(target=work) for _ in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert len(taken) == 100 and b.used == 100 and len(refused) == 300
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "http://r.cognitiveservices.azure.com",
+        "https://evil.example.com",
+        "https://user:pw@r.cognitiveservices.azure.com",
+        "https://r.cognitiveservices.azure.com/path",
+        "https://r.cognitiveservices.azure.com?x=1",
+        "https://r.cognitiveservices.azure.com.evil.com",
+    ],
+)
+def test_endpoint_must_be_an_azure_https_host(endpoint):
+    with pytest.raises(ValueError):
+        check_endpoint(endpoint)
+
+
+def test_reader_from_env_picks_the_reader(monkeypatch):
+    monkeypatch.delenv("VISION_ENDPOINT", raising=False)
+    assert isinstance(reader_from_env(), UnavailableReader)
+    monkeypatch.setenv("VISION_ENDPOINT", "http://x")
+    with pytest.raises(ValueError):
+        reader_from_env()
+    monkeypatch.setenv("VISION_ENDPOINT", "https://r.cognitiveservices.azure.com/")
+    assert isinstance(reader_from_env(), AzureReadReader)
+
+
+class Cred:
+    def get_token(self, scope):
+        self.scope = scope
+        return mock.Mock(token="TOKEN")
+
+
+READ_BODY = {
+    "readResult": {"blocks": [{"lines": [{"words": [{"text": "9", "confidence": 0.88}]}]}]}
+}
+    "readResult": {"blocks": [{"lines": [{"words": [{"text": "9", "confidence": 0.88}]}]}]}
+}
+
+
+def test_azure_reader_calls_image_analysis_with_a_bearer_token():
+    cred = Cred()
+    reader = AzureReadReader("https://r.cognitiveservices.azure.com/", cred)
+    response = mock.MagicMock()
+    response.__enter__.return_value = response
+    with (
+        mock.patch.object(reader._opener, "open", return_value=response) as opened,
+        mock.patch("app.vision.json.load", return_value=READ_BODY),
+    ):
+        assert reader.read(b"png") == Reading("9", 0.88, "azure_read")
+    request = opened.call_args.args[0]
+    assert request.full_url == (
+        "https://r.cognitiveservices.azure.com/computervision/imageanalysis:analyze"
+        "?api-version=2023-10-01&features=read"
+    )
+    assert request.get_method() == "POST" and request.data == b"png"
+    assert request.get_header("Authorization") == "Bearer TOKEN"
+    assert cred.scope == "https://cognitiveservices.azure.com/.default"
+
+
+def test_azure_reader_refuses_redirects_and_wraps_token_failures():
+    reader = AzureReadReader("https://r.cognitiveservices.azure.com", Cred())
+    handler = reader._opener.handlers
+    redirect = next(h for h in handler if h.__class__.__name__ == "_NoRedirect")
+    assert redirect.redirect_request(None, None, 302, "Found", {}, "https://evil") is None
+
+    class Bad:
+        def get_token(self, _scope):
+            raise RuntimeError("no identity")
+
+    with pytest.raises(TokenError):
+        AzureReadReader("https://r.cognitiveservices.azure.com", Bad()).read(b"x")

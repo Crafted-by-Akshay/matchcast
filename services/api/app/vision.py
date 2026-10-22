@@ -10,11 +10,16 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import logging
 import os
 import re
 import struct
+import threading
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
+import zlib
 from collections import deque
 from dataclasses import dataclass
 from typing import Protocol
@@ -23,8 +28,13 @@ VISION_PER_MINUTE = 15
 VISION_MAX_CALLS_DEFAULT = 3000
 MAX_CROP_BYTES = 40 * 1024
 CROP_SIDE = 128
+VISION_MAX_BODY = 64 * 1024  # JSON envelope around a 60,000-character base64 crop
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 SHIRT = re.compile(r"^\d{1,2}$")
+ENDPOINT_SUFFIXES = (".cognitiveservices.azure.com", ".cognitive.microsoft.com")
+IEND = b"\x00\x00\x00\x00IEND\xaeB`\x82"
+
+log = logging.getLogger("matchcast.vision")
 
 
 class VisionError(Exception):
@@ -51,14 +61,48 @@ class UnavailableReader:
         return Reading(None, 0.0, "unavailable")
 
 
+class TokenError(Exception):
+    """Managed identity gave no token: nothing was sent to Azure."""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """The bearer token must never follow a redirect to another host."""
+
+    def redirect_request(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        return None
+
+
+def check_endpoint(endpoint: str) -> str:
+    """An https Azure AI Services host with no credentials, path, query or fragment."""
+    url = urllib.parse.urlparse(endpoint)
+    host = url.hostname or ""
+    extra = tuple(x for x in os.environ.get("VISION_ENDPOINT_SUFFIXES", "").split(",") if x)
+    ok = (
+        url.scheme == "https"
+        and not url.username
+        and not url.password
+        and not url.query
+        and not url.fragment
+        and url.path in ("", "/")
+        and host.endswith(ENDPOINT_SUFFIXES + extra)
+    )
+    if not ok:
+        raise ValueError(
+            "VISION_ENDPOINT must be https://<resource>.cognitiveservices.azure.com "
+            "(or .cognitive.microsoft.com), with no credentials, path or query"
+        )
+    return endpoint.rstrip("/")
+
+
 class AzureReadReader:
     """Image Analysis 4.0, feature `read`, over REST with a managed-identity token (no API key)."""
 
     API = "2023-10-01"
 
     def __init__(self, endpoint: str, credential: object | None = None, timeout: float = 5.0):
-        self.endpoint, self.timeout = endpoint.rstrip("/"), timeout
+        self.endpoint, self.timeout = check_endpoint(endpoint), timeout
         self._credential = credential
+        self._opener = urllib.request.build_opener(_NoRedirect)
 
     def _token(self) -> str:
         if self._credential is None:
@@ -70,16 +114,20 @@ class AzureReadReader:
     def read(self, png: bytes) -> Reading:
         path = f"/computervision/imageanalysis:analyze?api-version={self.API}&features=read"
         url = self.endpoint + path
+        try:
+            token = self._token()
+        except Exception as error:
+            raise TokenError from error
         request = urllib.request.Request(  # noqa: S310 - https endpoint from our own config
             url,
             data=png,
             method="POST",
             headers={
                 "Content-Type": "application/octet-stream",
-                "Authorization": f"Bearer {self._token()}",
+                "Authorization": f"Bearer {token}",
             },
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310
+        with self._opener.open(request, timeout=self.timeout) as response:
             body = json.load(response)
         return best_shirt(body)
 
@@ -102,12 +150,19 @@ def best_shirt(body: dict) -> Reading:
 
 
 def reader_from_env() -> ShirtReader:
-    endpoint = os.environ.get("VISION_ENDPOINT", "")
-    return AzureReadReader(endpoint) if endpoint.startswith("https://") else UnavailableReader()
+    """Unset means no resource (the glyph reader works alone); a set but bad value fails loudly."""
+    endpoint = os.environ.get("VISION_ENDPOINT", "").strip()
+    return AzureReadReader(endpoint) if endpoint else UnavailableReader()
 
 
 class VisionBudget:
-    """At most VISION_PER_MINUTE calls in a rolling minute across the whole api, and a total cap."""
+    """At most VISION_PER_MINUTE calls in a rolling minute and a total cap, per api process.
+
+    One caller can use the whole allowance; that is accepted for a cost cap (ADR-0010). With more
+    than one replica each process keeps its own counters, so the real ceiling is the sum.
+    Calls that reach Azure are charged even when Azure fails; a failure before the call
+    (token acquisition) is refunded.
+    """
 
     def __init__(self, per_minute: int = VISION_PER_MINUTE, total: int | None = None):
         self.per_minute = per_minute
@@ -118,9 +173,20 @@ class VisionBudget:
         )
         self.used = 0
         self._window: deque[float] = deque()
+        self._lock = threading.Lock()
 
     def take(self, now: float | None = None) -> None:
-        now = time.monotonic() if now is None else now
+        with self._lock:
+            self._take(time.monotonic() if now is None else now)
+
+    def refund(self) -> None:
+        """Give back the latest slot when the call never reached Azure."""
+        with self._lock:
+            if self._window:
+                self._window.pop()
+                self.used -= 1
+
+    def _take(self, now: float) -> None:
         if self.used >= self.total:
             raise VisionError(
                 429,
@@ -149,8 +215,14 @@ def decode_crop(crop_b64: str) -> bytes:
         raise VisionError(422, "invalid_crop", "crop is not base64") from error
     if len(png) > MAX_CROP_BYTES:
         raise VisionError(413, "crop_too_large", f"crop is over {MAX_CROP_BYTES} bytes")
-    if len(png) < 24 or not png.startswith(PNG_MAGIC) or png[12:16] != b"IHDR":
-        raise VisionError(422, "invalid_crop", "crop is not a PNG")
+    if (
+        len(png) < 33 + len(IEND)
+        or not png.startswith(PNG_MAGIC)
+        or png[8:16] != b"\x00\x00\x00\x0dIHDR"
+        or zlib.crc32(png[12:29]) != struct.unpack(">I", png[29:33])[0]
+        or not png.endswith(IEND)
+    ):
+        raise VisionError(422, "invalid_crop", "crop is not a complete PNG")
     width, height = struct.unpack(">II", png[16:24])
     if (width, height) != (CROP_SIDE, CROP_SIDE):
         raise VisionError(
@@ -170,7 +242,14 @@ class VisionService:
         started = time.perf_counter()
         try:
             reading = self.reader.read(png)
+        except TokenError as error:
+            self.budget.refund()
+            log.warning("vision token acquisition failed: %s", type(error.__cause__).__name__)
+            raise VisionError(
+                502, "vision_unavailable", "the OCR service did not answer"
+            ) from error
         except Exception as error:  # noqa: BLE001 - Azure down or denied: the glyph reading stands
+            log.warning("vision read failed: %s", type(error).__name__, exc_info=True)
             raise VisionError(
                 502, "vision_unavailable", "the OCR service did not answer"
             ) from error

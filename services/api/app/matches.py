@@ -36,7 +36,7 @@ from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
-from app.vision import VisionError, VisionService
+from app.vision import VISION_MAX_BODY, VisionError, VisionService
 
 TENANT = "demo"
 HEARTBEAT_S = 15
@@ -574,7 +574,9 @@ def build_router(registry: Registry) -> APIRouter:
         )  # fmt: skip
 
     @router.post("/matches/{match_id}/vision/identify")
-    async def vision_identify(match_id: str, body: VisionIdentify) -> dict[str, Any]:
+    async def vision_identify(
+        match_id: str, body: VisionIdentify, request: Request
+    ) -> dict[str, Any]:
         """Second opinion on a shirt number from a torso crop (DAT-11); budgeted, never stored."""
         registry.get(body.session_id, match_id)
         try:
@@ -690,6 +692,16 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     @app.exception_handler(Problem)
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
         return problem_response(error)
+
+    @app.middleware("http")
+    async def vision_body_limit(request: Request, call_next: Any) -> Any:
+        """The vision route is anonymous: refuse an oversize body before it is buffered."""
+        size = request.headers.get("content-length", "0")
+        if request.url.path.endswith("/vision/identify") and (
+            not size.isdigit() or int(size) > VISION_MAX_BODY
+        ):
+            return problem_response(Problem(413, "crop_too_large", "request body is too large"))
+        return await call_next(request)
 
     @app.exception_handler(404)
     async def unknown_path(_request: Request, _error: Exception) -> JSONResponse:
