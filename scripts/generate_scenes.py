@@ -6,7 +6,7 @@ Runs services/simulation/run.cjs for a block of match seeds starting at --seed, 
 30 s windows, labels each window with one of six scene families by fixed rules, then keeps the same
 number of scenes per family (round-robin over seeds, so every family gets at least count/6).
 Output is `scenes.parquet` (a row per event in a kept scene) and `manifest.json`.
-The same --seed gives byte-identical files.
+The same --seed gives byte-identical files for the same simulator build and pyarrow version.
 
 Label: `danger` is 1 when the event's team takes a shot in the 10 s after the event.
 """
@@ -46,6 +46,8 @@ EVENT_TYPES = (
     "goal",
 )
 SET_PIECES = {"corner", "freekick", "penalty", "throw_in"}
+# throw-ins fall in most windows, so they do not make a scene a set piece
+SET_PIECE_FAMILY = {"corner", "freekick", "penalty"}
 SCHEMA = pa.schema(
     [
         ("scene_id", pa.string()),
@@ -79,17 +81,17 @@ def classify(window: list[dict]) -> str:
     kinds = [e["type"] for e in window]
     passes = [e for e in window if e["type"] == "pass"]
     turns = [e for e in window if e["type"] == "turnover"]
-    if any(k in SET_PIECES for k in kinds):
+    if any(k in SET_PIECE_FAMILY for k in kinds):
         return "set_piece"
     if sum(1 for e in passes if e.get("phase") == "counter") >= 2:
         return "counter_attack"
-    if sum(1 for e in turns if e.get("ownX", 0) >= 66) >= 2:
-        return "high_press"
-    if len(turns) >= 6:
+    if len(turns) >= 4:
         return "chaotic_scramble"
-    if len(passes) >= 12 and len(turns) <= 2:
+    if len(turns) >= 2 and any(e.get("ownX", 0) >= 66 for e in turns):
+        return "high_press"
+    if len(passes) >= 6 and len(turns) <= 1:
         return "possession_build_up"
-    if len(window) <= 12 and "shot" not in kinds:
+    if len(window) <= 6 and "shot" not in kinds:
         return "quiet_spell"
     return ""
 
