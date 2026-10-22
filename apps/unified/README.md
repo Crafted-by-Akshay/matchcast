@@ -95,3 +95,7 @@ A red card or turning point is a deterministic trigger. The Producer marks that 
 - `analyst-pages/*.js` holds Analyst pages we own; `build.py` appends them after the prototype pages. `10_data_platform.js` adds Platform > Data platform.
 - It shows the Fabric dashboard clip or screenshot (`shared/fabric-dashboard.mp4` / `.png`) and the Databricks model card (`shared/model-card.json`). Each block says **Planned** and names its ticket (DAT-8, DAT-6) until the file exists. Fabric is labelled paused after filming.
 - Test: `tests/e2e/analyst.spec.ts`.
+
+## Data Scientist page uses the agent api (AGT-14, task 139)
+- `analyst-pages/20_ds_agent.js` wraps the prototype's `d2_agAsk`/`d2_agDraw`. With an api configured (`window.parent.MATCHCAST_API`) the question goes to `POST /v1/ds/ask`; a verified answer shows its table, a bar chart drawn from the rows and the SQL. Any other verdict shows the api's text and no chart ("Could not verify this result."). If the api is silent or errors, the in-page rules answer and the chip says "Data Scientist · rules".
+- Tests: the three `data scientist:` cases in `tests/e2e/analyst.spec.ts`.

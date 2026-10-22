@@ -17,6 +17,7 @@
     "e2e-live": "playwright test --project=chromium --grep @live"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
     "@playwright/test": "1.56.1",
     "three": "0.160.0"
   }
