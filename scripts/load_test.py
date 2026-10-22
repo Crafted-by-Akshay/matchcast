@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PLT-9: replay the ten-minute fixture into N matches at once and report ingest latency.
 
-Usage: scripts/load_test.py [--base http://127.0.0.1:8000] [--matches 8] [--repeat 1] [--out report.json]
+Usage: scripts/load_test.py [--base URL] [--matches 8] [--repeat 1] [--out report.json]
 
 Standard library only. Each match gets its own session and match id, so the api sees N independent
 streams. Run it against a local api (rules mode) for a baseline, or the deployed api to record the
