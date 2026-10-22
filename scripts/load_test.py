@@ -9,6 +9,7 @@ replica graph (docs/infra.md, Scaling proof). Exit code 1 if any request failed.
 """
 
 import argparse
+import http.client
 import json
 import statistics
 import sys
@@ -33,15 +34,15 @@ def call(url: str, body: dict) -> tuple[int, float]:
             response.read()
     except urllib.error.HTTPError as error:
         status = error.code
-    except urllib.error.URLError:
+    except (OSError, http.client.HTTPException):
         status = 0
     return status, (time.perf_counter() - started) * 1000
 
 
-def run_match(base: str, fixture: dict, index: int, run: str) -> list[tuple[int, float]]:
+def run_match(base: str, fixture: dict, index: int, run: str) -> list[tuple[int, float, int]]:
     session, match = f"load-{run}-{index}", f"load-{run}-{index}"
     stream = {**fixture["events"][0]["stream"], "session_id": session, "match_id": match}
-    results = []
+    results: list[tuple[int, float, int]] = []
     created = call(
         f"{base}/v1/matches",
         {
@@ -52,7 +53,7 @@ def run_match(base: str, fixture: dict, index: int, run: str) -> list[tuple[int,
             "clubs": fixture["teams"],
         },
     )
-    results.append(created)
+    results.append((*created, 0))
     if created[0] != 201:
         return results
     events = []
@@ -60,7 +61,8 @@ def run_match(base: str, fixture: dict, index: int, run: str) -> list[tuple[int,
         events.append({**event, "stream": stream})
     for start in range(0, len(events), BATCH):
         url = f"{base}/v1/matches/{match}/events?session_id={session}"
-        results.append(call(url, {"events": events[start : start + BATCH]}))
+        batch = events[start : start + BATCH]
+        results.append((*call(url, {"events": batch}), len(batch)))
     return results
 
 
@@ -79,7 +81,7 @@ def main() -> int:
     fixture = json.loads(FIXTURE.read_text())
     run = str(int(time.time()))
     started = time.perf_counter()
-    results: list[tuple[int, float]] = []
+    results: list[tuple[int, float, int]] = []
     for round_ in range(args.repeat):
         with ThreadPoolExecutor(args.matches) as pool:
             futures = [
@@ -91,9 +93,9 @@ def main() -> int:
             for future in futures:
                 results.extend(future.result())
     elapsed = time.perf_counter() - started
-    latencies = [ms for _, ms in results]
-    failures = [status for status, _ in results if status not in (201, 202)]
-    sent = sum(len(f["events"]) for f in [fixture]) * args.matches * args.repeat
+    latencies = [ms for _, ms, _ in results]
+    failures = [status for status, _, _ in results if status not in (201, 202)]
+    sent = sum(n for status, _, n in results if status == 202)
     report = {
         "matches": args.matches * args.repeat,
         "requests": len(results),
