@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { createServer } from 'node:http';
 import { ready, viewFrame } from './helpers';
 
