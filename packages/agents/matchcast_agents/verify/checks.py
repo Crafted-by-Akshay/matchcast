@@ -5,12 +5,13 @@ from typing import Any
 
 from ..context import MatchContext
 from ..messages import Check, DraftLine, ReasonCode
+from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
 from ..state import counted
 from ..xg import team_xg
 
 FRESH_REVISIONS = 5
 FRESH_MS = 30_000
-TOLERANCE = {"count": 0.0, "ratio": 0.01, "m": 0.5, "m/s": 0.5, "s": 0.5, "ms": 500.0}
+EPSILON = 1e-9  # float noise: abs(0.35 - 0.34) is 0.010000000000000009
 MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 _NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w])")
 # two or more capitalised words in a row, e.g. "Arlo Dunne" or "Northgate FC"
@@ -34,7 +35,7 @@ def recompute(
     """Count a metric straight from the stored events up to a sequence; never from agent state."""
     name, team = metric.split(":", 1)
     if name == "xg":
-        return team_xg(events, team, upto, home)
+        return team_xg(events, team, upto)
     total = 0
     for event in events:
         if event["stream_sequence"] > upto or event["payload"]["type"] in (
@@ -80,8 +81,19 @@ def check_freshness(ctx: MatchContext, claims: list[dict[str, Any]]) -> Check:
 
 def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]) -> Check:
     for claim in claims:
-        expected = recompute(ctx.events, claim["metric"], claim["max_evidence_sequence"], ctx.home)
-        if abs(expected - claim["value"]) > TOLERANCE[claim["units"]]:
+        name = claim["metric"].split(":", 1)[0]
+        if (
+            METRIC_UNITS.get(name) != claim["units"]
+            or derivation_version(name) != claim["derivation_version"]
+        ):
+            return Check(
+                name="numbers",
+                passed=False,
+                detail=f"{claim['metric']} must be {METRIC_UNITS.get(name)} v"
+                f"{derivation_version(name)}, not {claim['units']} v{claim['derivation_version']}",
+            )
+        expected = recompute(ctx.events, claim["metric"], claim["max_evidence_sequence"])
+        if abs(expected - claim["value"]) > TOLERANCE[claim["units"]] + EPSILON:
             return Check(
                 name="numbers",
                 passed=False,

@@ -10,9 +10,12 @@ PITCH_LENGTH_M = 105.0
 VERSION = DERIVATION_VERSIONS["xg"]
 
 
-def team_xg(events: Iterable[dict[str, Any]], team: str, upto: int, home: str) -> float:
-    """Sum of shot xG for ``team`` up to a sequence; the home side attacks the far end."""
-    attack_x = PITCH_LENGTH_M if team == home else 0.0
+def team_xg(events: Iterable[dict[str, Any]], team: str, upto: int) -> float:
+    """Sum of shot xG for ``team`` up to a sequence.
+
+    A shot is taken at the goal it attacks, so the attacking end is the half of the pitch the shot
+    is in. That holds in every period whatever the teams' direction, with no side convention.
+    """
     total = 0.0
     for event in events:
         payload = event["payload"]
@@ -21,5 +24,6 @@ def team_xg(events: Iterable[dict[str, Any]], team: str, upto: int, home: str) -
         if payload.get("team_id") != team:
             continue
         position = payload["position"]
+        attack_x = PITCH_LENGTH_M if position["x"] > PITCH_LENGTH_M / 2 else 0.0
         total += shot_xg(Shot(x=position["x"], y=position["y"], attack_x=attack_x))
     return round(total, 2)

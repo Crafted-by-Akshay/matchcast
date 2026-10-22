@@ -65,3 +65,20 @@ def test_unknown_metric_is_a_tool_error(match) -> None:
         tools.get_metrics(["pass_quality:home"])
     call_id, state = tools.get_state()
     assert call_id == "tc-1" and state["up_to_sequence"] == 30
+
+
+def test_xg_comes_from_the_tool_with_ratio_units_and_its_own_version(match) -> None:
+    from matchcast_agents.metrics_spec import derivation_version
+
+    tools = InProcessTools(context(match, 40), up_to_sequence=40)
+    _, result = tools.get_metrics(["xg:home", "shots:home"])
+    assert result["values"]["xg:home"]["units"] == "ratio"
+    assert result["values"]["xg:home"]["derivation_version"] == derivation_version("xg")
+    assert result["values"]["shots:home"]["units"] == "count"
+    assert 0 < result["values"]["xg:home"]["value"] < 5
+
+
+def test_the_tool_never_counts_shots_after_up_to_sequence(match) -> None:
+    early = InProcessTools(context(match, 40), up_to_sequence=10).get_metrics(["xg:home"])[1]
+    late = InProcessTools(context(match, 40), up_to_sequence=40).get_metrics(["xg:home"])[1]
+    assert early["values"]["xg:home"]["value"] <= late["values"]["xg:home"]["value"]

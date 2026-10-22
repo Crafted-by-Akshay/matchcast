@@ -134,16 +134,75 @@ def test_extractors() -> None:
     ]
 
 
+def xg_claim(ctx, team: str, value: float) -> dict:
+    return claim(ctx, f"xg:{team}", value) | {"units": "ratio"}
+
+
+def xg_verdict(ctx, team: str, value: float, **override):
+    packet = xg_claim(ctx, team, value) | override
+    return verdict(ctx, line(f"Northgate FC xG: {value:.2f}."), [packet])
+
+
 def test_xg_claim_is_recomputed_from_shot_positions(match) -> None:
     from matchcast_agents.xg import team_xg
 
     ctx = context(match)
-    top = ctx.state.max_sequence
-    value = team_xg(ctx.events, "home", top, ctx.home)
+    value = team_xg(ctx.events, "home", ctx.state.max_sequence)
     assert 0 < value < ctx.state.count("shots", "home")  # xG per shot is well under 1
-    good = claim(ctx, "xg:home", value) | {"units": "ratio"}
-    ok = verdict(ctx, line(f"Northgate FC xG: {value:.2f}."), [good])
-    assert ok.verdict == "verified"
-    bad = claim(ctx, "xg:home", value + 0.5) | {"units": "ratio"}
-    wrong = verdict(ctx, line(f"Northgate FC xG: {value + 0.5:.2f}."), [bad])
+    assert xg_verdict(ctx, "home", value).verdict == "verified"
+    wrong = xg_verdict(ctx, "home", value + 0.5)
     assert (wrong.verdict, wrong.reason_code) == ("rejected", "number_mismatch")
+
+
+def test_a_claim_cannot_choose_its_own_units_or_version(match) -> None:
+    from matchcast_agents.xg import team_xg
+
+    ctx = context(match)
+    value = team_xg(ctx.events, "home", ctx.state.max_sequence)
+    for units in ("ms", "m", "s"):  # a loose tolerance must not rescue a wrong number
+        assert xg_verdict(ctx, "home", value + 9, units=units).reason_code == "number_mismatch"
+        shots = ctx.state.count("shots", "home") + 7
+        spoofed = claim(ctx, "shots:home", shots) | {"units": units}
+        assert verdict(ctx, line(f"Northgate FC shots: {shots}."), [spoofed]).verdict == "rejected"
+    assert xg_verdict(ctx, "home", value, derivation_version="9.9.9").verdict == "rejected"
+
+
+def test_xg_for_the_wrong_team_and_a_late_shot_are_rejected(match) -> None:
+    from matchcast_agents.xg import team_xg
+
+    ctx = context(match)
+    top = ctx.state.max_sequence
+    away = team_xg(ctx.events, "away", top)
+    home = team_xg(ctx.events, "home", top)
+    assert away != home
+    assert xg_verdict(ctx, "home", away).reason_code == "number_mismatch"
+    first_shot = next(e for e in ctx.events if e["payload"]["type"] == "shot")
+    early = team_xg(ctx.events, first_shot["payload"]["team_id"], first_shot["stream_sequence"] - 1)
+    late = team_xg(ctx.events, first_shot["payload"]["team_id"], top)
+    assert early < late
+    stale = xg_claim(ctx, first_shot["payload"]["team_id"], late) | {
+        "max_evidence_sequence": first_shot["stream_sequence"] - 1
+    }
+    assert verdict(ctx, line(f"xG: {late:.2f}."), [stale]).verdict == "rejected"
+
+
+def test_xg_tolerance_is_one_hundredth_with_float_noise_allowed(match) -> None:
+    from matchcast_agents.xg import team_xg
+
+    ctx = context(match)
+    value = team_xg(ctx.events, "home", ctx.state.max_sequence)
+    assert xg_verdict(ctx, "home", round(value + 0.01, 2)).verdict == "verified"
+    assert xg_verdict(ctx, "home", round(value + 0.02, 2)).verdict == "rejected"
+
+
+def test_xg_is_direction_free_so_second_half_shots_count_fully() -> None:
+    from matchcast_agents.xg import team_xg
+
+    def shot(seq: int, period: int, x: float) -> dict:
+        position = {"x": x, "y": 34.0, "z": 0}
+        payload = {"type": "shot", "team_id": "home", "position": position, "on_target": True}
+        return {"stream_sequence": seq, "clock": {"period": period}, "payload": payload}
+
+    first = team_xg([shot(1, 1, 90.0)], "home", 1)
+    second = team_xg([shot(1, 2, 15.0)], "home", 1)  # the same chance at the other end
+    assert first == second and first > 0.05
