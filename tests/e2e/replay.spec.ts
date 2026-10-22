@@ -14,7 +14,14 @@ test('instant replay plays earlier frames, shows a REPLAY tag, then returns to l
   await tab(page, 'broadcast');
   const b = await viewFrame(page, 'broadcast');
   await expect.poll(() => b.evaluate(() => !!(window as any).MCReplay && !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
-  for (let i = 0; i < 8; i++) { await stepSim(w, 150); await page.waitForTimeout(350); }
+  // step until the buffer holds frames and the ball has moved at least 1 m since the first one (under load the buffer samples wall-clock time, so a fixed number of steps can leave the ball where it started)
+  const ballAt = () => w.evaluate(() => { const m = (window as any).__mc; return [m.ball.p.x, m.ball.p.y]; });
+  const start = await ballAt();
+  for (let i = 0; i < 40; i++) {
+    await stepSim(w, 150); await page.waitForTimeout(350);
+    const now = await ballAt();
+    if (i >= 7 && Math.hypot(now[0] - start[0], now[1] - start[1]) > 1 && (await b.evaluate(() => (window as any).MCReplay.buffered)) > 2) break;
+  }
   await expect.poll(() => b.evaluate(() => (window as any).MCReplay.buffered), { timeout: 20_000 }).toBeGreaterThan(2);
   const live = await b.evaluate(() => (window as any).__mc.S.mclock);
   const liveState = await b.evaluate(() => { const m = (window as any).__mc; return { ball: [m.ball.p.x, m.ball.p.y], score: m.S.score.slice() }; });
