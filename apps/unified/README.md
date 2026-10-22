@@ -99,3 +99,7 @@ A red card or turning point is a deterministic trigger. The Producer marks that 
 ## Data Scientist page uses the agent api (AGT-14, task 139)
 - `analyst-pages/20_ds_agent.js` wraps the prototype's `d2_agAsk`/`d2_agDraw`. With an api configured (`window.parent.MATCHCAST_API`) the question goes to `POST /v1/ds/ask`; a verified answer shows its table, a bar chart drawn from the rows and the SQL. Any other verdict shows the api's text and no chart ("Could not verify this result."). If the api is silent or errors, the in-page rules answer and the chip says "Data Scientist · rules".
 - Tests: the three `data scientist:` cases in `tests/e2e/analyst.spec.ts`.
+
+## Analyst accessibility (EXP-14)
+- `analyst-pages/00_a11y.js` sets `lang`, darkens the green/amber chip text and club crests that failed WCAG AA contrast, names unlabelled chart SVGs and makes `#main` keyboard-focusable. It exists because `sources/` is read only.
+- `tests/e2e/a11y-analyst.spec.ts` runs axe (WCAG 2 A/AA) on 13 Analyst pages and fails on any serious or critical violation. Uses `@axe-core/playwright` (dev dependency). Watch and Broadcast are still to audit.
