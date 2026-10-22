@@ -141,7 +141,7 @@ test('match centre: the recap card waits for the api, then shows the verified re
   await expect(f.locator('#rc-card')).toContainText('Being written');
   await expect(f.locator('#rc-text')).toContainText('Guanabara won 4-0 <b>x</b>.', { timeout: 15_000 });
   await expect(f.locator('#rc-card b')).toHaveCount(0);
-  await expect(f.locator('#rc-card')).toContainText('Verifier ✓ every sentence');
+  await expect(f.locator('#rc-card')).toContainText('Rules verifier ✓ every sentence');
   await expect(f.locator('#rc-card')).toContainText('Rules fallback');
   expect(errs).toEqual([]);
 });
@@ -149,4 +149,28 @@ test('match centre: the recap card waits for the api, then shows the verified re
 test('match centre: a recorded season match has no recap card', async ({ page }) => {
   const f = await openPage(page, 'match');
   await expect(f.locator('#rc-card')).toHaveCount(0);
+});
+
+async function recapCard(page: Page, status: number, json: object) {
+  await page.route('http://api.test/v1/matches/m1/recap/analyst**', (r) => r.fulfill({ status, headers: { 'Access-Control-Allow-Origin': '*' }, json }));
+  const f = await openPage(page, 'match');
+  await f.evaluate(() => { const m = D.matches[D.matches.length - 1]; m.recap = { api: 'http://api.test', session_id: 's1', match_id: 'm1' }; (window as any).go('match', m.id); });
+  return f;
+}
+
+test('match centre: no Verifier tick unless every recap sentence is verified', async ({ page }) => {
+  const f = await recapCard(page, 200, { text: 'One. Two.', word_count: 2, mode: 'agents', sentences: [{ verdict: 'verified' }, { verdict: 'review' }] });
+  await expect(f.locator('#rc-card')).toContainText('Not every sentence verified');
+  await expect(f.locator('#rc-card')).not.toContainText('✓');
+});
+
+test('match centre: empty recap text and api errors are said plainly, not polled as "being written"', async ({ page }) => {
+  const f = await recapCard(page, 200, { text: ' ', sentences: [] });
+  await expect(f.locator('#rc-card')).toContainText('no recap');
+});
+
+test('match centre: a 500 from the recap api shows Unavailable', async ({ page }) => {
+  const f = await recapCard(page, 500, {});
+  await expect(f.locator('#rc-card')).toContainText('Unavailable');
+  await expect(f.locator('#rc-card')).toContainText('HTTP 500');
 });

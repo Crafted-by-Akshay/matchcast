@@ -15,17 +15,22 @@
   };
 }
 async function rcLoad(card, r, tries) {
-  const url = r.api.replace(/\/+$/, '') + '/v1/matches/' + encodeURIComponent(r.match_id) + '/recap/analyst?session_id=' + encodeURIComponent(r.session_id);
-  let rc = null;
-  try { const res = await fetch(url); if (res.ok) rc = await res.json(); } catch (e) { /* api silent: treated as not ready */ }
   if (!card.isConnected) return;
-  if (!rc || typeof rc.text !== 'string') {
-    if (tries < 12) { card.innerHTML = '<h3>Full-time recap</h3><p class="muted">Being written by the agents…</p>'; setTimeout(() => rcLoad(card, r, tries + 1), 5000); }
-    else card.innerHTML = '<h3>Full-time recap</h3><p class="muted"><span class="chip">Planned</span> The recap is not ready. It is written by the api after full time.</p>';
-    return;
-  }
+  if (r.result) return rcDraw(card, r.result);
+  const url = r.api.replace(/\/+$/, '') + '/v1/matches/' + encodeURIComponent(r.match_id) + '/recap/analyst?session_id=' + encodeURIComponent(r.session_id);
+  let status = 0, rc = null;
+  try { const res = await fetch(url); status = res.status; if (res.ok) rc = await res.json(); } catch (e) { status = -1; }
+  if (!card.isConnected) return;
+  if (rc && typeof rc.text === 'string' && rc.text.trim()) { r.result = rc; return rcDraw(card, rc); }
+  if (rc) { card.innerHTML = '<h3>Full-time recap</h3><p class="muted">The agents wrote no sentence they could verify, so there is no recap.</p>'; return; }
+  if (status !== 404) { card.innerHTML = '<h3>Full-time recap</h3><p class="muted"><span class="chip">Unavailable</span> The api could not return the recap' + (status > 0 ? ' (HTTP ' + status + ')' : '') + '.</p>'; return; }
+  if (tries < 12) { card.innerHTML = '<h3>Full-time recap</h3><p class="muted">Being written by the agents…</p>'; setTimeout(() => rcLoad(card, r, tries + 1), 5000); }
+  else card.innerHTML = '<h3>Full-time recap</h3><p class="muted"><span class="chip">Planned</span> The recap is not ready. It is written by the api after full time.</p>';
+}
+function rcDraw(card, rc) {
   const rows = Array.isArray(rc.sentences) ? rc.sentences : [];
   const ok = rows.length && rows.every((s) => s.verdict === 'verified');
+  const rules = rc.mode === 'rules';
   card.innerHTML = '<h3>Full-time recap</h3><p id="rc-text">' + esc(rc.text) + '</p><div class="d2-meta">' +
-    chip(ok ? 'Verifier ✓ every sentence' : 'Not every sentence verified', ok ? 'acc' : '') + chip(esc(String(rc.word_count || 0)) + ' words') + chip(rc.mode === 'rules' ? 'Rules fallback' : 'Agents') + '</div>';
+    chip(ok ? (rules ? 'Rules verifier ✓ every sentence' : 'Verifier ✓ every sentence') : 'Not every sentence verified', ok ? 'acc' : '') + chip(esc(String(rc.word_count || 0)) + ' words') + chip(rules ? 'Rules fallback' : 'Agents') + '</div>';
 }

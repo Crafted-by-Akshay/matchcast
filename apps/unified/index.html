@@ -506,7 +506,7 @@ window.addEventListener('message', (e) => {
   } else if (d.type === 'fulltime') {
     if (f.sent === 'done') return;
     f.sent = 'done';
-    const msg = { src: 'matchcast-shell', type: 'import', dataset: d.dataset, recap: LV.enabled && LV.key && view === 'watch' ? { api: LV.base, session_id: LV.key.session_id, match_id: LV.key.match_id } : null };
+    const msg = { src: 'matchcast-shell', type: 'import', dataset: d.dataset, recap: LV.enabled && LV.key && view === 'watch' && LV.status !== 'fallback' && LV.status !== 'offline' ? { api: LV.base, session_id: LV.key.session_id, match_id: LV.key.match_id } : null };
     if (FR.analyst && FR.analyst.ready) post('analyst', msg); else pendingImports.push(msg);
     toast('Full time: the live match went to the Analyst as a new library entry');
     paint();

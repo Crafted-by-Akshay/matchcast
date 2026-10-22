@@ -30,7 +30,7 @@
     if (d.type === 'route') go(d.page, d.arg);
     if (d.type === 'import' && d.dataset) {
       const n = D.matches.length;
-      mcImport({ name: 'live-match.json', text: async () => JSON.stringify(d.dataset) }).then(() => { if (d.recap && D.matches.length > n) D.matches[D.matches.length - 1].recap = d.recap; });   // lets the match page fetch the full-time recap
+      mcImport({ name: 'live-match.json', text: async () => JSON.stringify(d.dataset) }).then(() => { const im = D.matches.length > n ? D.matches.filter((x) => x.imported && !x.recap).pop() : null; if (d.recap && im) im.recap = d.recap; });   // lets the match page fetch the full-time recap
     }
   });
 })();
