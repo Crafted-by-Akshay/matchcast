@@ -583,7 +583,7 @@ function offsideLine(ti) { const xs = teamOf(1 - ti).map((o) => w2own(ti, o.pos2
 /*@@TACTICS@@*/
 // ---- owner decisions ----
 // ---- xG: logistic on goal-mouth angle and distance, fitted offline on Wyscout open-play shots (CC BY 4.0) by scripts/fit_xg.py.
-// Constants mirror data/calibration/xg.json; tests/xg_constants.test checks they agree. XG_SCALE is the tuned global scale (docs/simulator.md).
+// Constants mirror data/calibration/xg.json; packages/metrics test_golden.py and services/simulation/tests/checks.cjs check they agree. XG_SCALE is the tuned global scale (docs/simulator.md).
 const XG = { b0: -1.464609, b1: 1.413822, b2: -0.089141, scale: 0.9 };
 // tuned action weights (docs/simulator.md); a `tune` query parameter overrides them for calibration runs only, e.g. ?tune=passBias:0.5,shotThr:0.05
 const TUNE = { passBias: 1.5, shotThr: 0.06, longShot: 0.05, holdScale: 1.5, boxFoul: 0.65, skillCD: 1.25 };
@@ -596,7 +596,7 @@ function xgAt(pos, goal) {
 }
 // the shot's fate is drawn from the play stream, then the strike is aimed to match it: finisher and keeper ratings move the logit by at most +/-0.5
 function shotFate(p, gk, xg, pen) {
-  const lg = Math.log(xg / (1 - xg)) + 0.5 * clamp((p.shotS - 0.6) / 0.4, -1, 1) - 0.5 * clamp(((gk && gk.ctrl) || 0.8 - 0) - 0.8, -0.2, 0.2) / 0.2;
+  const lg = Math.log(xg / (1 - xg)) + 0.5 * clamp((p.shotS - 0.6) / 0.4, -1, 1) - 0.5 * clamp(((gk && gk.ctrl) || 0.8) - 0.8, -0.2, 0.2) / 0.2;
   const pg = pen ? 0.76 : clamp(sig(lg) * XG.scale, 0.005, 0.95), u = rnd();
   return u < pg ? 'goal' : u < pg + (pen ? 0.17 : 0.2) ? 'save' : 'miss';
 }
@@ -1621,8 +1621,8 @@ mkGroup($('play'), playDefs(), () => String(S.speed), playSet);
 // The engine simulates the whole match at full density; this director scores each passage of play from 0 to 1 and
 // frame() plays passages scoring 0.5 or more live at the chosen speed and fast-forwards the rest at FF_X behind a wipe
 // that shows the minute range. Every step still runs, so events, stats, agents and the Verifier see everything.
-//   shot or goal 1.0 (5 s after a shot, through the celebration) · ball in a penalty area 0.4 (cut) · set piece near goal 0.6
-//   · card 0.6 (6 s) · first 15 s of a half 0.5 · otherwise 0.1. Live status is held 2 s after the score drops.
+//   shot or goal 1.0 (5 s after a shot, through the celebration) · set piece near goal (penalty, corner, free kick <30 m) 0.6
+//   · card 0.6 (6 s) · ball in a penalty area 0.4 (cut) · first 15 s of a half 0.5 · otherwise 0.1. Live status is held 2 s after the score drops.
 const FF_X = 40;
 const DIRC = { longest: {}, bySc: {}, ffX: FF_X, on: false, ff: false, liveS: 0, ffS: 0, hold: 0, score: 0.1, cardT: -99, cut: null, ranges: [], wipe: null };
 onMatchEvent((e) => { if (e.type === 'yellow_card' || e.type === 'red_card') DIRC.cardT = S.t; });
@@ -1630,9 +1630,9 @@ function passageScore() {
   const si = S.shotInfo; if (si && S.t - si.t < 5) return 1;
   if (S.celebrate > 0) return 1;
   const near = (S.owner || { pos2: V2(ball.p.x, ball.p.z) }).pos2; const box = Math.min(near.x, 105 - near.x) < 16.5 && Math.abs(near.y - 34) < 20.16;
-  if (box) return 0.4;
   const R = S.restart || S.dead; if (R && (R.type === 'corner' || R.type === 'penalty' || (R.type === 'freekick' && R.spot && Math.min(R.spot.x, 105 - R.spot.x) < 30))) return 0.6;
   if (S.t - DIRC.cardT < 6) return 0.6;
+  if (box) return 0.4;
   const mc = S.mclock % (45 * 60); if (mc < 15) return 0.5;
   return 0.1;
 }
@@ -1714,7 +1714,7 @@ function start() {
   $('kick').onclick = kickOff;
   renderer.setAnimationLoop(loop);
 }
-window.__mc = { DIRC, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY };
+window.__mc = { DIRC, passageScore, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY };
 
 /*@@SETUP@@*/
 // ============ LOAD ============

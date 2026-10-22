@@ -37,4 +37,22 @@ test.describe('Condensed broadcast', () => {
     expect(r.statsPasses, 'stats count every pass, including fast-forwarded ones').toBe(r.passEvents);
     expect(errs).toEqual([]);
   });
+
+  test('a penalty and a card in the box stay live, a quiet box entry is cut', async ({ page }) => {
+    await page.addInitScript(() => { (window as any).__mcHeadless = true; });
+    await page.goto('/watch/index.html?seed=3&half=45', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => (window as any).__mc && (window as any).__mc.S.started, null, { timeout: 240_000 });
+    const r = await page.evaluate(() => {
+      const mc = (window as any).__mc, S = mc.S, D = mc.DIRC;
+      S.owner = null; S.shotInfo = null; S.celebrate = 0; S.dead = null; D.cardT = -99; S.t = 100; S.mclock = 1000;
+      mc.ball.p.set(11, 0, 34); // inside the box
+      S.restart = null; const box = mc.passageScore();
+      S.restart = { type: 'penalty', spot: { x: 11, y: 34 } }; const pen = mc.passageScore();
+      S.restart = null; D.cardT = 98; const card = mc.passageScore();
+      return { box, pen, card };
+    });
+    expect(r.box, 'a box entry on its own is cut').toBe(0.4);
+    expect(r.pen, 'a penalty is shown live').toBe(0.6);
+    expect(r.card, 'a card for a foul in the box is shown live').toBe(0.6);
+  });
 });

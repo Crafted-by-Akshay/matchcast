@@ -119,7 +119,7 @@ $('opt-dyn').onclick = () => { SET.dynamic = !SET.dynamic; renderSetup(); };
 $('opt-water').onclick = () => { SET.water = !SET.water; renderSetup(); };
 $('opt-roof').onclick = () => { SET.roofAuto = !SET.roofAuto; renderSetup(); };
 $('su-rand').onclick = surprise;
-$('fc-roll').onclick = () => { SET.seed = newSeed(); previewEnv(); };
+$('fc-roll').onclick = () => { SET.seed = newSeed(); renderSetup(); previewEnv(); };
 $('su-go').onclick = () => {
   $('setup').hidden = true; $('intro').hidden = false; buildLineups();
   const st = SET.st; $('intro-meta').textContent = 'CUP QUARTER-FINAL · ' + st.name.toUpperCase() + ', ' + st.city.toUpperCase() + ' · ' + MONTHS[SET.month].toUpperCase() + ' · KICK-OFF ' + SET.kickStr + ' · ' + WX[ENV.wx].label.toUpperCase() + ', ' + Math.round(ENV.temp) + '°C · ' + ENV.pitch.toUpperCase();

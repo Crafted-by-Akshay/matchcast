@@ -60,4 +60,26 @@ test.describe('Simulator engine', () => {
     expect(r.done).toBe(true);
     expect(errs).toEqual([]);
   });
+
+  test('re-rolling the forecast refreshes the Auto formation shown in setup to the one kick-off plays', async ({ page }) => {
+    await page.addInitScript(() => { (window as any).__mcHeadless = true; });
+    await page.goto('/watch/index.html?seed=3&half=45', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => (window as any).__mc && (window as any).__mc.S.started, null, { timeout: 240_000 });
+    const r = await page.evaluate(() => {
+      const mc = (window as any).__mc; mc.openSetup();
+      const seen = new Set<string>(); let shown = '', played = '', ok = true;
+      for (let i = 0; i < 6; i++) {
+        (document.getElementById('fc-roll') as HTMLElement).click();
+        shown = JSON.stringify(mc.SET().tactics.map((t: any) => [t.pf, t.ps]));
+        seen.add(shown);
+        const card = document.getElementById('setup')!.textContent!;
+        ok = ok && mc.SET().tactics.every((t: any) => card.includes(t.pf));
+      }
+      mc.kickOff(); played = JSON.stringify(mc.SET().tactics.map((t: any) => [t.pf, t.ps]));
+      return { shown, played, ok, distinct: seen.size };
+    });
+    expect(r.played, 'kick-off plays the Auto choice that setup showed').toBe(r.shown);
+    expect(r.ok, 'the setup card names the rolled formations').toBe(true);
+    expect(r.distinct, 'each re-roll changes the draw').toBeGreaterThan(1);
+  });
 });
