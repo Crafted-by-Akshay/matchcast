@@ -133,6 +133,8 @@ def build_watch():
         + r(EMB + "vision-crops.js")
         + "\n"
         + r(EMB + "vision-events.js")
+        + "\n"
+        + r(EMB + "indices.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
