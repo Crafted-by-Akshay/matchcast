@@ -388,7 +388,7 @@ async function exportLedger() {
 let picked = null;   // the claim the provenance panel shows; the latest one when none is picked
 const PRODUCER = 'Sam Producer (simulated)';
 function renderQueue() {
-  const r = AG.run, q = r ? r.claims.filter((c) => c.approval === 'pending') : [];
+  const r = AG.run, q = r ? r.claims.filter((c) => c.approval === 'pending').sort((a, b) => !!b.alert - !!a.alert) : [];   // priority 1 alerts first
   $('aq-mode').value = AG.mode; $('aq-n').textContent = q.length ? q.length + ' waiting' : '';
   $('aq-list').innerHTML = q.length ? q.map((c) => '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
     : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';

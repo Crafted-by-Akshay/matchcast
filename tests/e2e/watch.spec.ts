@@ -1,8 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-declare const AG: any; // top-level const of the shell
-
 test.describe('Watch view', () => {
   test('loads, shows the season picker and kicks off on the shared fixture', async ({ page }) => {
     const errs = collectErrors(page);
@@ -18,16 +16,7 @@ test.describe('Watch view', () => {
     expect(errs).toEqual([]);
   });
 
-  test('a goal moment is explained by the agents with a verified claim', async ({ page }) => {
-    await openShell(page, 'watch');
-    const f = await viewFrame(page, 'watch');
-    await ready('watch')(page);
-    await expect.poll(async () => {
-      await f.evaluate(() => { for (let i = 0; i < 3000; i++) (window as any).__mc.stepSim(0.05); });
-      return page.evaluate(() => AG?.run?.stat.verified ?? 0);
-    }, { timeout: 120_000, message: 'no verified claim reached the agents' }).toBeGreaterThan(0);
-  });
-
+  // The agents-verify-a-claim check lives in unified.spec.ts, which already has Watch running; Match Pulse cases are in pulse.spec.ts.
   // Match Pulse card, mode switch, mode kept after reload and the trace panel are added here
   // once EXP-3, EXP-4 and EXP-6 merge, so the selectors come from the shipped markup.
 });

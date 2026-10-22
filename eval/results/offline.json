@@ -1,0 +1,101 @@
+{
+  "arms": {
+    "four_agent_rules": {
+      "moments": {
+        "mean": 22,
+        "min": 22,
+        "max": 22
+      },
+      "lines_shown": {
+        "mean": 14,
+        "min": 14,
+        "max": 14
+      },
+      "coverage": {
+        "mean": 0.636,
+        "min": 0.636,
+        "max": 0.636
+      },
+      "clean_rate": {
+        "mean": 0.636,
+        "min": 0.636,
+        "max": 0.636
+      },
+      "wrong_line_rate": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "bad_numbers_per_100_lines": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "bad_names_per_100_lines": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "latency_p50_ms": {
+        "mean": 21.853,
+        "min": 21.54,
+        "max": 22.14
+      },
+      "latency_p95_ms": {
+        "mean": 21.853,
+        "min": 21.54,
+        "max": 22.14
+      }
+    },
+    "single_agent": {
+      "moments": {
+        "mean": 22,
+        "min": 22,
+        "max": 22
+      },
+      "lines_shown": {
+        "mean": 22,
+        "min": 22,
+        "max": 22
+      },
+      "coverage": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "clean_rate": {
+        "mean": 0.864,
+        "min": 0.727,
+        "max": 0.955
+      },
+      "wrong_line_rate": {
+        "mean": 0.136,
+        "min": 0.045,
+        "max": 0.273
+      },
+      "bad_numbers_per_100_lines": {
+        "mean": 3.0,
+        "min": 0.0,
+        "max": 4.5
+      },
+      "bad_names_per_100_lines": {
+        "mean": 10.567,
+        "min": 4.5,
+        "max": 22.7
+      },
+      "latency_p50_ms": {
+        "mean": 0.013,
+        "min": 0.01,
+        "max": 0.02
+      },
+      "latency_p95_ms": {
+        "mean": 0.023,
+        "min": 0.02,
+        "max": 0.03
+      }
+    }
+  },
+  "runs": 3,
+  "single_model": "FakeModel (offline stand-in)",
+  "note": "Offline numbers show the harness works, not model quality. Live run needs gpt-6-luna quota."
+}

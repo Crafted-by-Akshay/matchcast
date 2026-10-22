@@ -7,6 +7,7 @@ export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 180_000,
   retries: process.env.CI ? 1 : 0,
+  // Software-rendered WebGL is CPU bound; CI shards the suite across jobs instead of adding workers.
   workers: 1,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
