@@ -56,30 +56,30 @@ Starting from the prototype values (0.04, 0.09, 0, 1) the engine produced about 
 
 `make realism` (equivalent to `uv run python scripts/check_realism.py --matches 200`, about 1.5 to 2 h on 4 cores, not in CI yet; targets in `data/calibration/targets.json`, sources and licences next to each). Engine "duel" = aerial duel + slide tackle + take-on + possession turnover. Each match is a different pair of season clubs.
 
-Result of one validation run (seeds 1 to 200, half = 45, commit of PR #47; 200 full 90-minute matches). **The run's `summary.json` was not committed, so this table is one unreproduced run until it is re-run with `make realism REALISM_ARGS="--out data/calibration/results/seeds-1-200"` and the summary is committed there** (in progress, the engine is seeded so the same numbers should come back; a difference would be a determinism bug):
+Result of the validation run on main after PR #47 and #169 (seeds 1 to 200, half = 45, 200 full 90-minute matches, median 112 s wall time per match). The run's `summary.json` is committed at `data/calibration/results/seeds-1-200/summary.json`; reproduce it with `make realism REALISM_ARGS="--out data/calibration/results/seeds-1-200"` and `check_realism.py --results` reads it back. An earlier run of the same seeds during the tuning (goals 2.865, draws 0.26, 0-0 0.07, shots 27.9, passes 920, duels 562, late goals 0.215, penalty share 0.112) was made before the last engine fixes and is superseded by this one:
 
 | Measure | Simulated | Target | Band | Result |
 | --- | --- | --- | --- | --- |
-| Goals per match | 2.865 | 2.66 | 2.3 to 3.0 | ok |
-| Share of draws | 0.260 | 0.24 | 0.18 to 0.30 | ok |
-| Share of 0-0 | 0.070 | 0.07 | 0.03 to 0.12 | ok |
-| Shots per match | 27.9 | 25 | 20 to 30 | ok |
-| Goals per shot | 0.103 | 0.11 | 0.08 to 0.13 | ok |
-| Passes per match | 920 | 840 | 700 to 1000 | ok |
-| Duels per match | 562 | 470 | 380 to 580 | ok (band widened) |
-| Share of goals in 76'-90' | 0.215 | 0.215 | 0.17 to 0.26 | ok |
-| Penalty goals as share of goals | 0.112 | 0.068 | 0.03 to 0.13 | ok (band widened) |
-| Watch length at 1x, condensed (minutes) | 9.6 | 10 | 8 to 12 | ok |
+| Goals per match | 2.900 | 2.66 | 2.3 to 3.0 | ok |
+| Share of draws | 0.225 | 0.24 | 0.18 to 0.30 | ok |
+| Share of 0-0 | 0.095 | 0.07 | 0.03 to 0.12 | ok |
+| Shots per match | 27.4 | 25 | 20 to 30 | ok |
+| Goals per shot | 0.106 | 0.11 | 0.08 to 0.13 | ok |
+| Passes per match | 925 | 840 | 700 to 1000 | ok |
+| Duels per match | 564 | 470 | 380 to 580 | ok (band widened) |
+| Share of goals in 76'-90' | 0.200 | 0.215 | 0.17 to 0.26 | ok |
+| Penalty goals as share of goals | 0.100 | 0.068 | 0.03 to 0.13 | ok (band widened) |
+| Watch length at 1x, condensed (minutes) | 9.7 | 10 | 8 to 12 | ok |
 
 The watch length is the director's own accounting (live seconds plus fast-forwarded seconds divided by the 40x factor); `tests/e2e/condensed.spec.ts` checks that `frame()` spends its time budget exactly that way. It has not been timed against a person watching on a real screen. A box entry is cut (fast-forwarded), so the viewer jumps from the build-up to the shot, which plays live with its five-second window.
 
-Eight of ten were inside their first bands. Two read just outside: duels 562 against a top of 560, and the penalty share 0.112 against 0.11. The duels count is within one standard error of its edge (about 3 duels) and the engine's duel count covers more event types than Wyscout's tagged duels, so that band was widened. The penalty share is not a near miss: 0.112 is about 4 standard errors (SE about 1.1 points) above the 7% real-world share, roughly 65% too many penalty goals. Its band was widened to 0.13 only so the check gates regressions, and it is recorded as a known gap under Known debt. This is a judgement call, not a pass of the original bands. Seeds 1 to 32 ran in a first batch with `xgScale` set to 0.9 on the command line and seeds 33 to 200 with that value as the default; the runs are otherwise identical.
+In the tuning run (superseded numbers) eight of ten were inside their first bands; two read just outside: duels 562 against a top of 560, and the penalty share 0.112 against 0.11. The duels count is within one standard error of its edge (about 3 duels) and the engine's duel count covers more event types than Wyscout's tagged duels, so that band was widened. The penalty share is not a near miss: the committed run reads 0.100 (the tuning run 0.112), about 3 standard errors (SE about 1.1 points) above the 7% real-world share, roughly 47% too many penalty goals. Its band was widened to 0.13 only so the check gates regressions, and it is recorded as a known gap under Known debt. This is a judgement call, not a pass of the original bands. Seeds 1 to 32 ran in a first batch with `xgScale` set to 0.9 on the command line and seeds 33 to 200 with that value as the default; the runs are otherwise identical.
 
 Engine faults found by these full-length runs and fixed in this PR: a kick-off crash when a side had no midfielder left, and a free-kick taker who could not reach the ball freezing the match for up to 40 simulated minutes (a watchdog now moves the taker or hands over after 60 s). The runner records `director.longest` (the longest restart in the match) so a repeat shows up in the output.
 
 ## Match clock decision (option A or B)
 
-**Option A (condensed broadcast) stays.** Measured on this build environment (a 4-core cloud container, four matches at once; one run, no result file committed, see the Realism check section): 90 match minutes headless take 94 s alone and 99 to 115 s with four running, over the 60 s target from ADR-0004. The Mac mini measurement is still to do because it is offline. Reason for keeping A: the 60 s limit protects batch generation, not live play. Watching a match needs the engine to step 40 times faster than real time during a fast-forward; the measured 47 to 57 times real time on one core leaves a thin margin over that, so the browser frame budget caps the fast-forward step count. The batch jobs (200-seed check, scenes) run at full density regardless. If DAT-10 cannot hold 30 fps at 40x in the browser, the live view falls back to option B and the dataset stays at full density.
+**Option A (condensed broadcast) stays.** Measured on this build environment (a 4-core cloud container, four matches at once; 200-seed result committed, see the Realism check section): 90 match minutes headless take 94 s alone and 99 to 115 s with four running, over the 60 s target from ADR-0004. The Mac mini measurement is still to do because it is offline. Reason for keeping A: the 60 s limit protects batch generation, not live play. Watching a match needs the engine to step 40 times faster than real time during a fast-forward; the measured 47 to 57 times real time on one core leaves a thin margin over that, so the browser frame budget caps the fast-forward step count. The batch jobs (200-seed check, scenes) run at full density regardless. If DAT-10 cannot hold 30 fps at 40x in the browser, the live view falls back to option B and the dataset stays at full density.
 
 ## Known limits
 
@@ -90,4 +90,4 @@ Engine faults found by these full-length runs and fixed in this PR: a kick-off c
 
 ## Known debt
 
-Penalty goals are 11.2% of goals against a real share of 6.8%, and duels run 562 against 470. Both bands were widened (see `data/calibration/targets.json`) because the simulator's box-foul rate is the cause and lowering `boxFoul` further moves goals and cards out of band. Revisit after the Mac mini runs a wider seed sweep.
+Penalty goals are 10.0% of goals against a real share of 6.8% (the first tuning run read 11.2%), and duels run 564 against 470. Both bands were widened (see `data/calibration/targets.json`) because the simulator's box-foul rate is the cause and lowering `boxFoul` further moves goals and cards out of band. Revisit after the Mac mini runs a wider seed sweep.
