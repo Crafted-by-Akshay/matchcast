@@ -17,6 +17,7 @@ from ..context import MatchContext
 from ..messages import DraftLine
 from ..tools import InProcessTools, ToolError
 from ..verify.checks import extract_numbers, run_checks
+from ..workflow import _stamp
 from .retrieval import Bm25Index, analyse
 
 MAX_QUESTION = 300
@@ -32,7 +33,7 @@ LIVE_METRICS: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("red card", "sent off", "sending off", "red cards"), "red_cards", "Red cards"),
     (("cards", "card", "booked", "booking", "yellow"), "cards", "Cards"),
     (("fouls", "foul"), "fouls", "Fouls"),
-    (("tackles", "tackle", "won"), "tackles_won", "Tackles won"),
+    (("tackles", "tackle"), "tackles_won", "Tackles won"),
     (
         ("score", "winning", "losing", "leading", "ahead", "behind", "result", "goals", "goal"),
         "goals",
@@ -47,9 +48,17 @@ LIVE_CUE = re.compile(
 FUTURE_CUE = re.compile(
     r"\b(will|going to|tomorrow|tonight|next|predict\w*|forecast)\b", re.IGNORECASE
 )
-_CUE_WORDS = {"shown", "scored", "show", "been", "there", "played"} | {
+_CUE_WORDS = {"shown", "scored", "show", "been", "there", "played", "won"} | {
     w for w in analyse(LIVE_CUE.pattern.replace("\\b", "").replace("|", " "))
 }
+CLAUSE = re.compile(r",\s*(?:and\s+)?|\s+and\s+(?=(?:what|how|why|when|which|does|is)\b)", re.I)
+DEFINITIONAL = re.compile(
+    r"^\s*(what|why|when|which|explain|define|how (?:is|are|does|do|can))\b", re.IGNORECASE
+)
+STRONG_LIVE = re.compile(
+    r"\b(so far|right now|currently|at the moment|how many|now)\b", re.IGNORECASE
+)
+PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _CITE = re.compile(r"\[(kb|claim):([^\]]+)\]")
 
@@ -72,36 +81,50 @@ class Route:
     kb_query: str
 
 
+def _metric_in(text: str) -> tuple[str, str] | None:
+    lowered = text.casefold()
+    return next(
+        (
+            (m, label)
+            for phrases, m, label in LIVE_METRICS
+            if any(re.search(rf"\b{re.escape(p)}\b", lowered) for p in phrases)
+        ),
+        None,
+    )
+
+
 def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     """Rules router (the model-free fallback of the one-call router)."""
     lowered = question.casefold()
-    metric = next(
-        ((m, label) for phrases, m, label in LIVE_METRICS if any(p in lowered for p in phrases)),
-        None,
-    )
     teams = tuple(t for t in (ctx.home, ctx.away) if ctx.club_name(t).casefold() in lowered)
-    live_words = {w for phrases, _, _ in LIVE_METRICS for p in phrases for w in analyse(p)}
-    club_words = {w for t in (ctx.home, ctx.away) for w in analyse(ctx.club_name(t))}
-    cue = bool(LIVE_CUE.search(question))
-    live = metric is not None and cue
-    kb_query = " ".join(
-        w
-        for w in analyse(question)
-        if not (live and (w in live_words or w in club_words or w in _CUE_WORDS))
-    )
-    top = max((h.score for h in index.search(kb_query, k=1)), default=0.0) if kb_query else 0.0
-    kb_hit = top >= KB_THRESHOLD
     if FUTURE_CUE.search(question):
-        return Route("abstain", None, teams, kb_query)  # we never predict
-    if live and kb_hit:
-        return Route("both", metric, teams, kb_query)
-    if live:
-        return Route("live", metric, teams, kb_query)
-    if kb_hit:
-        return Route("knowledge", None, teams, kb_query)
-    if cue:  # asks about the match but we have no tool for it
-        return Route("abstain", None, teams, kb_query)
-    return Route("out_of_scope", None, teams, kb_query)
+        return Route("abstain", None, teams, "")  # we never predict
+    clauses = [c for c in CLAUSE.split(question) if c and c.strip()]
+    metric = _metric_in(question)
+    cue = bool(LIVE_CUE.search(question))
+
+    def hit(query: str) -> bool:
+        top = max((h.score for h in index.search(query, k=1)), default=0.0) if query else 0.0
+        return top >= KB_THRESHOLD
+
+    asks_now = bool(STRONG_LIVE.search(clauses[0])) or not DEFINITIONAL.match(clauses[0])
+    if metric is not None and cue and asks_now:
+        if PLAYER_Q.search(question) and metric[0] != "goals":
+            return Route("abstain", None, teams, "")  # per-player rankings have no tool
+        live_at = next(i for i, c in enumerate(clauses) if _metric_in(c))
+        others = " ".join(c for i, c in enumerate(clauses) if i != live_at)
+        query = " ".join([*analyse(others), *analyse(metric[1])]) if others.strip() else ""
+        if query and hit(query):
+            return Route("both", metric, teams, query)
+        return Route("live", metric, teams, "")
+    query = " ".join(analyse(question))
+    if cue and (
+        STRONG_LIVE.search(question) or not DEFINITIONAL.match(question)
+    ):  # about this match, but no tool covers it
+        return Route("abstain", None, teams, query)
+    if hit(query):
+        return Route("knowledge", None, teams, query)
+    return Route("out_of_scope", None, teams, query)
 
 
 def _strip_markup(text: str) -> str:
@@ -123,7 +146,7 @@ def _knowledge_sentences(index: Bm25Index, query: str) -> list[tuple[str, str]]:
 
 def _live_claims(
     ctx: MatchContext, question: str, metric: str, teams: tuple[str, ...]
-) -> tuple[list[dict[str, Any]], dict[str, str]]:
+) -> tuple[list[dict[str, Any]], str]:
     tools = InProcessTools(ctx, ctx.state.max_sequence)
     scope = teams or (ctx.home, ctx.away)
     names = [f"{metric}:{t}" for t in scope]
@@ -154,7 +177,7 @@ def _live_claims(
                 "approval_status": "pending",
             }
         )
-    return claims, {"tool_call_id": call_id}
+    return claims, call_id
 
 
 def _live_sentence(ctx: MatchContext, label: str, claims: list[dict[str, Any]]) -> str:
@@ -206,7 +229,7 @@ class Assistant:
         if plan.intent in ("live", "both") and plan.metric:
             metric, label = plan.metric
             try:
-                claims, _ = _live_claims(ctx, question, metric, plan.teams)
+                claims, call_id = _live_claims(ctx, question, metric, plan.teams)
             except ToolError:
                 return AskResult(ABSTAIN, plan.intent, abstained=True)
             for claim in claims:
@@ -217,8 +240,8 @@ class Assistant:
                     {
                         "moment_id": "ask",
                         "agent": flow.agents.analyst.agent_id,
-                        "created_at": "",
-                        "tool_call_ids": ["tc-1"],
+                        "created_at": _stamp(flow._clock()),
+                        "tool_call_ids": [call_id],
                         "formula_inputs": {"metric": claim["metric"], "tool": "get_metrics"},
                     },
                 )

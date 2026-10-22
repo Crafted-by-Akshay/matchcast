@@ -118,6 +118,8 @@ class Registry:
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
         now = time.monotonic() if now is None else now
+        for key in [k for k, w in self.asked.items() if not w or now - w[-1] >= 60]:
+            del self.asked[key]  # idle sessions leave no entry behind
         window = self.asked.setdefault(session_id, deque())
         while window and now - window[0] >= 60:
             window.popleft()
