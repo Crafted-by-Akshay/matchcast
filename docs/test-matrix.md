@@ -20,7 +20,7 @@ Every Playwright spec runs in Chromium against the built unified app with the ap
 
 | Layer | Where | Runs in |
 | --- | --- | --- |
-| Python unit and contract tests | `tests/`, `packages/*/tests`, `services/*/tests` | `make test` |
+| Python unit and contract tests | `tests/`, `packages/*/tests`, `services/*/tests` | `make test`; the autouse guard in the root `conftest.py` gives every test a credential that cannot get a token and refuses any connection outside this machine (`tests/test_no_azure_guard.py`) |
 | Contract drift, lint | `make lint` | local and CI |
 | Evaluation (single agent vs four agents) | `eval/compare.py`, `tests/test_eval_compare.py` | offline with the fake model; live run waits on model quota |
 | Red team prompts | `eval/redteam.jsonl`, `tests/test_redteam.py` | offline for the shield and safety layers; the `ask` layer is covered by the Ask golden set |
