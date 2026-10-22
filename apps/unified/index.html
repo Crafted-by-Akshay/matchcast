@@ -441,7 +441,7 @@ function cardOf(c) {
   const r = AG.run, i = c.inputs || {}, evs = r.events.filter((e) => c.evidence.includes(e.id)).map((e) => ({ minute: e.minute, type: e.type, player: e.player, team: e.team, xg: e.data && e.data.xg != null ? e.data.xg : null }));
   const m = c.kind === 'moment' ? r.moments.find((q) => q.id === i.momentId) : null;
   if (m) evs.push({ minute: m.minute, type: m.type, player: null, team: m.team, xg: null, why: m.why });
-  const card = { id: c.id, minute: c.minute, kind: c.kind, text: c.text, verdict: c.verdict, source: c.source || 'rules', player: i.player || i.scorer || null, evidence: evs };
+  const card = { id: c.id, minute: c.minute, kind: c.kind, text: c.text, verdict: c.verdict, source: c.source || 'rules', player: i.player || i.scorer || null, evidence: evs, tr: c.tr || null };
   if (c.kind === 'score') Object.assign(card, { plain: 'Goal for ' + i.teamName + '!', chips: ['Score ' + i.score.join('–'), mins(c.minute)] });
   else if (c.kind === 'shot') Object.assign(card, { plain: 'A big chance for ' + i.teamName + '.', chips: ['xG ' + (+i.xg).toFixed(2), i.kind] });
   else Object.assign(card, { plain: i.title || c.text, chips: [mins(c.minute), String(i.type || c.kind).replace('_', ' ')] });
@@ -452,7 +452,7 @@ function pushCards() {
   for (const c of r.claims) {
     if (c.approval === 'pending' || c.approval === 'killed') continue;   // a line waiting for a person, or killed, reaches no view
     if (!c.text || c.route === 'analyst' || c.kind === 'xg_total') continue;
-    const sig = c.verdict + '|' + c.source + '|' + c.text;
+    const sig = c.verdict + '|' + c.source + '|' + c.text + '|' + JSON.stringify(c.tr || null);
     if (sentCards.get(c.id) === sig) continue;
     sentCards.set(c.id, sig);
     post('watch', { src: 'matchcast-shell', type: 'pulse', card: cardOf(c) });
@@ -476,7 +476,7 @@ window.addEventListener('message', (e) => {
     return;
   }
   if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
-  if (d.type === 'persona' && view === 'watch') { LV.persona(d.persona); return; }   // the viewer's watch mode changed (EXP-4)
+  if (d.type === 'persona' && view === 'watch') { LV.persona(d.persona, d.lang); return; }   // the viewer's watch mode changed (EXP-4)
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
