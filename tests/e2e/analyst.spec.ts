@@ -230,3 +230,38 @@ test('vision on in Watch reaches the Tracking lab', async ({ page }) => {
   await expect(f.locator('#vis-panel')).toContainText(/frames at 640x\d+/, { timeout: 20_000 });
   await expect(f.locator('#vis-panel')).toContainText('Identity, glyph reader only');
 });
+
+// Service status: a card from the agent api's GET /v1/status above the console's own checks.
+async function statusPage(page: Page, reply: { status?: number; json?: object; abort?: boolean } | null) {
+  if (reply) {
+    await page.route('**/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://api.test";' }));
+    await page.route('http://api.test/v1/status', (r) => (reply.abort ? r.abort() : r.fulfill({ status: reply.status ?? 200, headers: { 'Access-Control-Allow-Origin': '*' }, json: reply.json ?? {} })));
+  }
+  return openPage(page, 'status');
+}
+const statusBody = { mode: 'local', overall: 'degraded', counts: { live: 1, simulated: 2, planned: 1, unavailable: 0 }, dependencies: [
+  { key: 'api', label: 'Agent api', status: 'live', detail: 'answering' }, { key: 'foundry', label: 'Microsoft Foundry <b>x</b>', status: 'simulated', detail: 'rules fallback' },
+  { key: 'speech', label: 'Azure AI Speech', status: 'simulated', detail: 'browser voices' }, { key: 'fabric', label: 'Fabric', status: 'planned', detail: 'not built' }] };
+
+test('status page: the api card lists each dependency with its own label, escaped', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await statusPage(page, { json: statusBody });
+  const card = f.locator('#st-api');
+  await expect(card.locator('[data-st="table"] tr')).toHaveCount(4);
+  await expect(card.locator('tr', { hasText: 'Agent api' })).toContainText('Live');
+  await expect(card.locator('tr', { hasText: 'Fabric' })).toContainText('Planned');
+  await expect(card.locator('tr', { hasText: 'Foundry' })).toContainText('Simulated');
+  await expect(card.locator('b')).toHaveCount(2);   // only the summary's mode and overall; the label's <b> is escaped
+  await expect(card).toContainText('overall degraded');
+  await expect(f.locator('.pf-banner')).toBeVisible();   // the console's own checks are still there
+  expect(errs.filter((e) => !/api\.test/.test(e))).toEqual([]);
+});
+
+test('status page: no api connected says so, an api error says Unavailable', async ({ page }) => {
+  const f = await statusPage(page, null);
+  await expect(f.locator('#st-api')).toContainText('No agent api is connected');
+  const p2 = await page.context().newPage();
+  const g = await statusPage(p2, { status: 500, json: {} });
+  await expect(g.locator('#st-api')).toContainText('Unavailable');
+  await expect(g.locator('#st-api')).toContainText('HTTP 500');
+});

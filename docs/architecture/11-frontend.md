@@ -99,3 +99,7 @@ Watch's 4 Hz `frame` message carries a sixth element per player, `actOf(p.act)` 
 
 ### Broadcast on-air log (AB#362)
 `apps/unified/embed/onair.js` keeps the lines the shell sent as `air` (approved lines only, from the shell window) and exports them as `matchcast.onair/1` JSON for external graphics tools, with the file's SHA-256 shown. The content is marked `simulated: true` while the agents are the in-page rules.
+
+### Analyst service status card
+
+The Analyst Service status page shows a card from the api's `GET /v1/status` (12-api.md) above the console's in-page checks. Labels and states (live, simulated, planned, unavailable) come from the api and are not derived in the browser; without an api the card says so. Source: `apps/unified/analyst-pages/50_status.js`.
