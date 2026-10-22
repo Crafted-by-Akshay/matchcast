@@ -49,7 +49,9 @@ const AG = (() => {
     return { verdict: 'verified', repaired: true, reason: 'differed from the event log; repaired from it once' };
   };
 
-  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text });
+  // wild moments are deterministic triggers; the Producer makes them priority 1 and the line still goes through the Verifier
+  const ALERTS = { red_card: 'Red card', turning_point: 'Turning point' };
+  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, alert: c.alert || null, verdict: c.verdict });
   const nums = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
   // a person's action on a queued line; every one lands in the audit chain with the person's name
   const act = (id, who, action, detail, fn) => {
@@ -72,6 +74,7 @@ const AG = (() => {
   // one claim through the pipeline: Analyst claims it, Narrator writes it, Verifier checks it, Producer routes or holds it
   const pipeline = (c) => {
     run.claims.push(c); run.stat.claims++;
+    if (c.kind === 'moment' && ALERTS[c.inputs.type]) { c.alert = ALERTS[c.inputs.type]; say('Producer', c.minute, c.id + ' priority 1: ' + c.alert.toLowerCase(), 'warn'); }
     log(c, 'analyst', 'claim', { kind: c.kind, inputs: c.inputs, evidence: c.evidence, basis: c.basis || null });
     c.text = narrate(c); run.stat.lines++;
     say('Analyst', c.minute, c.id + ' · ' + c.text, '');
