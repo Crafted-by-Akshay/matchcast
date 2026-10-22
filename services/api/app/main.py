@@ -9,8 +9,11 @@ from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from matchcast_shared.azure_clients import foundry_token
+from matchcast_shared.telemetry import configure_telemetry
 
 from app.config import SettingsResult, load_settings
+from app.matches import install as install_match_routes
 from app.sessions import (
     InMemorySessionStore,
     SessionCreate,
@@ -23,13 +26,9 @@ from app.sessions import (
 CredentialProbe = Callable[[], None]
 """Raises when no Entra credential can be obtained for Azure AI; never returns a token."""
 
-FOUNDRY_SCOPE = "https://ai.azure.com/.default"
-
 
 def default_credential_probe() -> None:
-    from azure.identity import DefaultAzureCredential
-
-    DefaultAzureCredential().get_token(FOUNDRY_SCOPE)
+    foundry_token()
 
 
 def _record_json(record: SessionRecord) -> dict[str, Any]:
@@ -47,6 +46,8 @@ def create_app(
     credential_probe: CredentialProbe | None = None,
 ) -> FastAPI:
     """Build an app with injectable config and storage for deterministic tests."""
+
+    configure_telemetry("matchcast-api")
 
     resolved_settings = settings_result or load_settings()
     store = InMemorySessionStore() if session_store is None else session_store
@@ -138,15 +139,11 @@ def create_app(
             )
         return _record_json(record)
 
-    @application.get(
-        "/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"]
-    )
+    @application.get("/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"])
     async def inspect_session(tenant_id: str, session_id: str, match_id: str) -> dict[str, Any]:
         return _record_json(_require_session(tenant_id, session_id, match_id, store))
 
-    @application.put(
-        "/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"]
-    )
+    @application.put("/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"])
     async def replace_session(
         tenant_id: str, session_id: str, match_id: str, request: SessionReplace
     ) -> dict[str, Any]:
@@ -156,9 +153,7 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
         return _record_json(record)
 
-    @application.post(
-        "/sessions/{tenant_id}/{session_id}/{match_id}/reset", tags=["sessions"]
-    )
+    @application.post("/sessions/{tenant_id}/{session_id}/{match_id}/reset", tags=["sessions"])
     async def reset_session(tenant_id: str, session_id: str, match_id: str) -> dict[str, Any]:
         stream = _stream(tenant_id, session_id, match_id)
         record = store.reset(stream)
@@ -166,6 +161,7 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
         return _record_json(record)
 
+    install_match_routes(application)
     return application
 
 

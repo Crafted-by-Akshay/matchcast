@@ -15,10 +15,13 @@ from matchcast_contracts import ContractError, validate
 
 from .context import MatchContext
 from .hub import StreamHub
-from .messages import DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
+from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
+from .rules.analyst import ClaimResult
+from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
 from .store import MemoryStore, stream_key
+from .tools import ToolError
 
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
@@ -39,7 +42,7 @@ class Producer(Protocol):
 class Analyst(Protocol):
     async def analyse(
         self, ctx: MatchContext, task: ProducerTask, *, repair: bool = False
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[ClaimResult]: ...
 
 
 class Narrator(Protocol):
@@ -76,11 +79,19 @@ class AgentSet:
 
 
 def rules_agents(
-    personas: tuple[Persona, ...] = ("casual", "analyst"), *, seed_bad_claim: bool = False
+    personas: tuple[Persona, ...] = ("casual", "analyst"),
+    *,
+    seed_bad_claim: bool = False,
+    seed_bad_claim_at_ms: int = 720_000,
+    failing_tools: frozenset[str] = frozenset(),
 ) -> AgentSet:
     return AgentSet(
         ProducerRules(personas),
-        AnalystRules(corrupt_first_claim=seed_bad_claim),
+        AnalystRules(
+            corrupt_first_claim=seed_bad_claim,
+            failing_tools=failing_tools,
+            corrupt_after_ms=seed_bad_claim_at_ms,
+        ),
         NarratorRules(),
         VerifierRules(),
     )
@@ -114,6 +125,7 @@ class MatchWorkflow:
         hub: StreamHub | None = None,
         agents: AgentSet | None = None,
         config: WorkflowConfig | None = None,
+        safety: SafetyScreen | None = None,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         self.stream = stream
@@ -126,6 +138,9 @@ class MatchWorkflow:
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)
         self._clock = clock
+        self.safety = safety or LocalSafetyScreen()
+        self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
+        self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
         self.stats = {
             "events": 0,
@@ -172,6 +187,34 @@ class MatchWorkflow:
         extra = {"mode": getattr(agent, "mode", "live"), **details}
         self._audit("agent", agent.agent_id, action, subject, extra)
 
+    async def _call(self, agent: Any, method: str, subject: str, *args: Any, **kwargs: Any) -> Any:
+        """Call an agent, then audit any rules fallback it made and publish the status change."""
+        try:
+            return await getattr(agent, method)(*args, **kwargs)
+        finally:
+            self._sync_status(agent, subject)
+
+    def _sync_status(self, agent: Any, subject: str) -> None:
+        take = getattr(agent, "take_fallbacks", None)
+        reasons = take() if take else []
+        for reason in reasons:
+            self._agent("fallback_used", agent, subject, fallback_reason=reason)  # every refusal
+            if self.status != "rules_fallback" or self._fallback_reason != reason:
+                self.hub.publish("status", None, {"status": "rules_fallback", "reason": reason})
+            self.status, self._fallback_reason = "rules_fallback", reason
+        if not reasons and self.status == "rules_fallback" and self._all_live():
+            self.status, self._fallback_reason = "live", None
+            self.hub.publish("status", None, {"status": "live"})
+
+    def _all_live(self) -> bool:
+        """Live again only when no wrapped agent is running its rules twin."""
+        wrapped = [a for a in self._agent_list() if hasattr(a, "take_fallbacks")]
+        return bool(wrapped) and all(a.mode == "live" for a in wrapped)
+
+    def _agent_list(self) -> list[Any]:
+        a = self.agents
+        return [a.producer, a.analyst, a.narrator, a.verifier]
+
     def _save_line(self, line: LineRecord) -> None:
         self.store.put_line(self.sk, line)
         self.hub.publish("line", f"line:{line.line_id}:{line.status}", line.model_dump())
@@ -205,7 +248,9 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
-        decision = await self.agents.producer.decide(ctx, event)
+        decision = await self._call(
+            self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
+        )
         if isinstance(decision, Skip):
             self.stats["skipped"] += 1
             if decision.reason in AUDIT_SKIPPED:
@@ -232,8 +277,33 @@ class MatchWorkflow:
 
     async def _run_moment(self, ctx: MatchContext, task: ProducerTask) -> None:
         a = self.agents
-        claims = await a.analyst.analyse(ctx, task)
-        for claim in claims:
+        claims = await self._analyse(ctx, task, repair=False)
+        if not claims:
+            return
+        drafts = await self._call(a.narrator, "write", task.moment_id, ctx, task, claims)
+        for draft in drafts:
+            await self._verify_line(ctx, task, claims, draft, attempt=0)
+
+    async def _analyse(
+        self, ctx: MatchContext, task: ProducerTask, *, repair: bool
+    ) -> list[dict[str, Any]]:
+        """Run the Analyst, store its claims with their tool calls; a failed tool means no claim."""
+        a = self.agents
+        try:
+            results = await self._call(
+                a.analyst, "analyse", task.moment_id, ctx, task, repair=repair
+            )
+        except ToolError as error:
+            self._agent(
+                "fallback_used",
+                a.analyst,
+                task.moment_id,
+                fallback_reason="tool_error",
+                tool=error.tool,
+            )
+            return []
+        for result in results:
+            claim = result.packet
             validate(claim)
             self.store.put_claim(
                 self.sk,
@@ -242,9 +312,12 @@ class MatchWorkflow:
                     "moment_id": task.moment_id,
                     "agent": a.analyst.agent_id,
                     "created_at": _stamp(self._clock()),
+                    "tool_call_ids": list(result.tool_call_ids),
+                    "formula_inputs": result.formula_inputs,
                 },
             )
-            self.stats["claims"] += 1
+            if not repair:
+                self.stats["claims"] += 1
             self.hub.publish("claim", f"claim:{claim['claim_id']}", claim)
             self._agent(
                 "claim_created",
@@ -252,13 +325,10 @@ class MatchWorkflow:
                 claim["claim_id"],
                 metric=claim["metric"],
                 value=claim["value"],
-                priority=task.priority,
+                tool_call_ids=list(result.tool_call_ids),
+                **({"repair": True} if repair else {"priority": task.priority}),
             )
-        if not claims:
-            return
-        drafts = await a.narrator.write(ctx, task, claims)
-        for draft in drafts:
-            await self._verify_line(ctx, task, claims, draft, attempt=0)
+        return [r.packet for r in results]
 
     async def _verify_line(
         self,
@@ -292,7 +362,8 @@ class MatchWorkflow:
             persona=draft.persona,
             claim_ids=list(draft.claim_ids),
         )
-        verdict = await a.verifier.check(ctx, draft, claims)
+        verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
+        verdict = await self._screen(draft, verdict)
         record.checks = list(verdict.checks)
         record.reason_code = verdict.reason_code
         if verdict.verdict == "rejected":
@@ -318,11 +389,40 @@ class MatchWorkflow:
         record.status = "verified" if verdict.verdict == "verified" else "review"
         self._save_line(record)
         action = "line_verified" if record.status == "verified" else "line_review"
-        self._agent(action, a.verifier, draft.line_id, checks=[c.name for c in verdict.checks])
+        self._agent(
+            action,
+            a.verifier,
+            draft.line_id,
+            checks=[{"name": c.name, "passed": c.passed} for c in verdict.checks],
+        )
         if record.status == "verified":
             self.stats["verified"] += 1
             if self.config.approval_mode == "auto":
                 self._approve(record, "agent", a.producer.agent_id)
+
+    async def _screen(self, draft: DraftLine, verdict: Verdict) -> Verdict:
+        """Check 7: Content Safety on every line that survived checks 1 to 6."""
+        if verdict.verdict == "rejected":
+            return verdict
+        result = await self.safety.analyze(draft.text)
+        check = Check(
+            name="safety",
+            passed=result.allowed,
+            detail=f"{result.source}: max severity {max(result.categories.values(), default=0)}",
+        )
+        checks = (*verdict.checks, check)
+        if result.allowed:
+            return verdict.model_copy(update={"checks": checks})
+        self._audit(
+            "system",
+            "content-safety",
+            "safety_blocked",
+            draft.line_id,
+            {"source": result.source, "categories": result.categories},
+        )
+        return verdict.model_copy(
+            update={"verdict": "rejected", "reason_code": "unsafe_content", "checks": checks}
+        )
 
     async def _repair(
         self,
@@ -345,29 +445,13 @@ class MatchWorkflow:
         self.stats["repaired"] += 1
         if target == "analyst":
             fresh = self._ctx()
-            claims = await a.analyst.analyse(fresh, task, repair=True)
-            for claim in claims:
-                validate(claim)
-                self.store.put_claim(
-                    self.sk,
-                    claim,
-                    {
-                        "moment_id": task.moment_id,
-                        "agent": a.analyst.agent_id,
-                        "created_at": _stamp(self._clock()),
-                    },
-                )
-                self.hub.publish("claim", f"claim:{claim['claim_id']}", claim)
-                self._agent(
-                    "claim_created",
-                    a.analyst,
-                    claim["claim_id"],
-                    metric=claim["metric"],
-                    value=claim["value"],
-                    repair=True,
-                )
+            claims = await self._analyse(fresh, task, repair=True)
+            if not claims:
+                return
             ctx = fresh
-        redrafts = await a.narrator.write(ctx, task, claims, attempt=1)
+        redrafts = await self._call(
+            a.narrator, "write", task.moment_id, ctx, task, claims, attempt=1
+        )
         replacement = next((d for d in redrafts if d.persona == draft.persona), None)
         if replacement is None:
             return
@@ -454,6 +538,11 @@ class MatchWorkflow:
             line = self._line(line_id)
             if line.status in ("published", "killed"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
+            shield = await self.safety.shield(text)
+            if shield.attack_detected:
+                self._audit("system", "content-safety", "safety_blocked", line_id,
+                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+                raise WorkflowError("prompt_attack", "the edit text was flagged as a prompt attack")
             ctx = self._ctx()
             claims = [self.store.get_claim(self.sk, c)["packet"] for c in line.claim_ids]  # type: ignore[index]
             draft = DraftLine(
@@ -463,7 +552,8 @@ class MatchWorkflow:
                 text=text,
                 max_chars=280,
             )
-            verdict = await self.agents.verifier.check(ctx, draft, claims)
+            verdict = await self._call(self.agents.verifier, "check", line_id, ctx, draft, claims)
+            verdict = await self._screen(draft, verdict)
             if verdict.verdict == "rejected":
                 return line, verdict
             line.text, line.checks, line.reason_code = text, list(verdict.checks), None

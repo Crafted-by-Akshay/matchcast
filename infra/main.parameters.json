@@ -5,6 +5,8 @@
     "location": { "value": "${AZURE_LOCATION=eastus2}" },
     "environmentName": { "value": "${AZURE_ENV_NAME}" },
     "foundryProjectEndpoint": { "value": "${FOUNDRY_PROJECT_ENDPOINT}" },
-    "foundryAccountName": { "value": "${FOUNDRY_ACCOUNT_NAME=matchcast-foundry}" }
+    "foundryAccountName": { "value": "${FOUNDRY_ACCOUNT_NAME=matchcast-foundry}" },
+    "entraClientId": { "value": "${ENTRA_CLIENT_ID=}" },
+    "alertEmail": { "value": "${ALERT_EMAIL=}" }
   }
 }

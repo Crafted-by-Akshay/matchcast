@@ -34,7 +34,9 @@ def make_workflow(match):
             roster=match["roster"],
             names=match["names"],
             clubs=match["teams"],
-            agents=rules_agents(config.personas, seed_bad_claim=seed_bad_claim),
+            agents=rules_agents(
+                config.personas, seed_bad_claim=seed_bad_claim, seed_bad_claim_at_ms=0
+            ),
             config=config,
             clock=fixed_clock(),
         )

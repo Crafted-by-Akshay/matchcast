@@ -27,3 +27,5 @@ resource appi 'Microsoft.Insights/components@2020-02-02' = {
 output logAnalyticsName string = logs.name
 output logAnalyticsId string = logs.id
 output appInsightsName string = appi.name
+
+output appInsightsId string = appi.id

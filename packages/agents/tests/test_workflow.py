@@ -124,3 +124,13 @@ def test_edit_is_reverified_before_it_can_air(make_workflow, match) -> None:
     ok_text = f"Quick note on {claim['metric'].split(':')[0]}: {int(claim['value'])}."
     line, verdict = run(flow.edit(analyst_line.line_id, ok_text))
     assert verdict.verdict == "verified" and line.status == "published" and line.text == ok_text
+
+
+def test_verified_audit_records_name_the_deterministic_and_meaning_checks(
+    make_workflow, match
+) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"][:40]))
+    verified = next(r for r in flow.store.audit_records(flow.sk) if r["action"] == "line_verified")
+    names = [c["name"] for c in verified["details"]["checks"]]
+    assert names == ["sources", "freshness", "numbers", "names", "persona", "meaning", "safety"]

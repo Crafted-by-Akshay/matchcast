@@ -72,7 +72,11 @@ jobs:
           MATCHCAST_MODE: local
           MATCHCAST_AGENT_MODE: rules
           MATCHCAST_STORE: memory
-        run: make e2e
+        run: |
+          # playwright.config.ts defaults to the cloud sandbox path in CI; use the runner's install.
+          CHROMIUM_PATH=$(node -e "console.log(require('@playwright/test').chromium.executablePath())")
+          export CHROMIUM_PATH
+          make e2e
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

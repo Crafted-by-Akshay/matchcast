@@ -2,6 +2,7 @@ param name string
 param location string
 param tags object
 param logAnalyticsName string
+param appInsightsName string
 param identityId string
 param identityClientId string
 param foundryProjectEndpoint string
@@ -9,12 +10,22 @@ param storageTableUrl string
 param storageBlobUrl string
 param eventHubFqdn string
 param eventHubName string
+param eventHubNamespace string
+param storageAccountName string
 param webImage string
 param apiImage string
 param mcpImage string
 
+@description('Client ID of the Entra app registration matchcast-web (PLT-5). Empty leaves Easy Auth off.')
+param entraClientId string = ''
+param keyVaultUri string = ''
+
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsName
+}
+
+resource appi 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: appInsightsName
 }
 
 resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
@@ -40,9 +51,36 @@ var identity = {
 var commonEnv = [
   { name: 'AZURE_CLIENT_ID', value: identityClientId }
   { name: 'MATCHCAST_MODE', value: 'cloud' }
+  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appinsights-connection' }
 ]
 
-resource web 'Microsoft.App/containerApps@2024-03-01' = {
+// The App Insights connection string is not a credential, but it is stored as an app
+// secret and referenced, so no connection string appears as a plain environment value.
+var authEnabled = !empty(entraClientId)
+
+// The Entra client secret is the one secret Easy Auth needs (documented in docs/infra.md).
+// It lives in Key Vault as 'entra-client-secret' and is referenced, never stored here.
+var appInsightsSecrets = concat(
+  [{ name: 'appinsights-connection', value: appi.properties.ConnectionString }],
+  authEnabled
+    ? [
+        {
+          name: 'entra-client-secret'
+          keyVaultUrl: '${keyVaultUri}secrets/entra-client-secret'
+          identity: identityId
+        }
+      ]
+    : []
+)
+
+var authEnv = authEnabled
+  ? [
+      { name: 'MATCHCAST_EASY_AUTH', value: '1' }
+      { name: 'MATCHCAST_REQUIRE_ROLE', value: '1' }
+    ]
+  : []
+
+resource web 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'ca-web-${name}'
   location: location
   tags: union(tags, { 'azd-service-name': 'web' })
@@ -51,6 +89,7 @@ resource web 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      secrets: appInsightsSecrets
       ingress: { external: true, targetPort: 8080, transport: 'auto' }
     }
     template: {
@@ -71,7 +110,7 @@ resource web 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-resource api 'Microsoft.App/containerApps@2024-03-01' = {
+resource api 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'ca-api-${name}'
   location: location
   tags: union(tags, { 'azd-service-name': 'api' })
@@ -80,6 +119,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      secrets: appInsightsSecrets
       ingress: { external: true, targetPort: 8000, transport: 'auto' }
     }
     template: {
@@ -88,7 +128,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'api'
           image: apiImage
           resources: { cpu: json('0.5'), memory: '1Gi' }
-          env: concat(commonEnv, [
+          env: concat(commonEnv, authEnv, [
             { name: 'MATCHCAST_AGENT_MODE', value: 'rules' }
             { name: 'FOUNDRY_PROJECT_ENDPOINT', value: foundryProjectEndpoint }
             { name: 'FOUNDRY_MODEL_DEPLOYMENT', value: 'gpt-6-luna' }
@@ -108,13 +148,31 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
       scale: {
         minReplicas: 0
         maxReplicas: 1
-        rules: [{ name: 'http', http: { metadata: { concurrentRequests: '20' } } }]
+        rules: [
+          { name: 'http', http: { metadata: { concurrentRequests: '20' } } }
+          {
+            name: 'match-events-backlog'
+            custom: {
+              type: 'azure-eventhub'
+              metadata: {
+                eventHubNamespace: eventHubNamespace
+                eventHubName: eventHubName
+                consumerGroup: '$Default'
+                unprocessedEventThreshold: '50'
+                storageAccountName: storageAccountName
+                blobContainer: 'eh-checkpoints'
+                checkpointStrategy: 'blobMetadata'
+              }
+              identity: identityId
+            }
+          }
+        ]
       }
     }
   }
 }
 
-resource mcp 'Microsoft.App/containerApps@2024-03-01' = {
+resource mcp 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'ca-mcp-${name}'
   location: location
   tags: union(tags, { 'azd-service-name': 'mcp' })
@@ -123,6 +181,7 @@ resource mcp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      secrets: appInsightsSecrets
       ingress: { external: false, targetPort: 8001, transport: 'auto' }
     }
     template: {
@@ -152,3 +211,46 @@ resource mcp 'Microsoft.App/containerApps@2024-03-01' = {
 output webFqdn string = web.properties.configuration.ingress.fqdn
 output apiFqdn string = api.properties.configuration.ingress.fqdn
 output mcpFqdn string = mcp.properties.configuration.ingress.fqdn
+
+var authAudience = 'api://${entraClientId}'
+
+resource webAuth 'Microsoft.App/containerApps/authConfigs@2025-01-01' = if (authEnabled) {
+  parent: web
+  name: 'current'
+  properties: {
+    platform: { enabled: true }
+    globalValidation: { unauthenticatedClientAction: 'AllowAnonymous' }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: entraClientId
+          clientSecretSettingName: 'entra-client-secret'
+          openIdIssuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
+        }
+        validation: { allowedAudiences: [authAudience, entraClientId] }
+      }
+    }
+    login: { preserveUrlFragmentsForLogins: true }
+  }
+}
+
+resource apiAuth 'Microsoft.App/containerApps/authConfigs@2025-01-01' = if (authEnabled) {
+  parent: api
+  name: 'current'
+  properties: {
+    platform: { enabled: true }
+    globalValidation: { unauthenticatedClientAction: 'AllowAnonymous' }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: entraClientId
+          clientSecretSettingName: 'entra-client-secret'
+          openIdIssuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
+        }
+        validation: { allowedAudiences: [authAudience, entraClientId] }
+      }
+    }
+  }
+}
