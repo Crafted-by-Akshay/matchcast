@@ -463,6 +463,44 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VisionIdentify": {
+        "additionalProperties": false,
+        "properties": {
+          "crop": {
+            "maxLength": 60000,
+            "minLength": 1,
+            "title": "Crop",
+            "type": "string"
+          },
+          "session_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "team_hint": {
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Team Hint",
+            "type": "string"
+          },
+          "track_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Track Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "crop",
+          "track_id",
+          "team_hint"
+        ],
+        "title": "VisionIdentify",
+        "type": "object"
       }
     }
   },
@@ -2079,6 +2117,61 @@
           }
         },
         "summary": "Trace",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/vision/identify": {
+      "post": {
+        "description": "Second opinion on a shirt number from a torso crop (DAT-11); budgeted, never stored.",
+        "operationId": "vision_identify_v1_matches__match_id__vision_identify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisionIdentify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Vision Identify V1 Matches  Match Id  Vision Identify Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Vision Identify",
         "tags": [
           "matches"
         ]

@@ -37,6 +37,7 @@ from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
+from app.vision import VISION_MAX_BODY, VisionError, VisionService
 
 TENANT = "demo"
 HEARTBEAT_S = 15
@@ -137,6 +138,14 @@ class ExportBody(BaseModel):
     metric: str | None = None
 
 
+class VisionIdentify(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    crop: str = Field(min_length=1, max_length=60_000)  # base64 PNG, 128x128, at most 40 KB decoded
+    track_id: str = Field(min_length=1, max_length=64)
+    team_hint: Literal["home", "away"]
+
+
 class DsAsk(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str = Field(pattern=ID)
@@ -198,6 +207,7 @@ class Registry:
         self.exports: dict[str, tuple[bytes, str, str]] = {}
         self.season = self.stats_desk.season if self.stats_desk else None
         self.ds_asked: dict[str, deque[float]] = {}
+        self.vision = VisionService()
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -567,6 +577,19 @@ def build_router(registry: Registry) -> APIRouter:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )  # fmt: skip
 
+    @router.post("/matches/{match_id}/vision/identify")
+    async def vision_identify(
+        match_id: str, body: VisionIdentify, request: Request
+    ) -> dict[str, Any]:
+        """Second opinion on a shirt number from a torso crop (DAT-11); budgeted, never stored."""
+        registry.get(body.session_id, match_id)
+        try:
+            return await asyncio.to_thread(registry.vision.identify, body.crop)
+        except VisionError as error:
+            raise Problem(
+                error.status, error.code, error.detail, retry_after=error.retry_after
+            ) from error
+
     @router.post("/ds/ask")
     async def ds_ask(body: DsAsk, request: Request) -> dict[str, Any]:
         """Data Scientist: a season question, answered from one verified SELECT (F10)."""
@@ -673,6 +696,16 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     @app.exception_handler(Problem)
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
         return problem_response(error)
+
+    @app.middleware("http")
+    async def vision_body_limit(request: Request, call_next: Any) -> Any:
+        """The vision route is anonymous: refuse an oversize body before it is buffered."""
+        size = request.headers.get("content-length", "0")
+        if request.url.path.endswith("/vision/identify") and (
+            not size.isdigit() or int(size) > VISION_MAX_BODY
+        ):
+            return problem_response(Problem(413, "crop_too_large", "request body is too large"))
+        return await call_next(request)
 
     @app.exception_handler(404)
     async def unknown_path(_request: Request, _error: Exception) -> JSONResponse:
