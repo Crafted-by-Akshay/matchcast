@@ -64,7 +64,7 @@ function playMatch([seed, half, dt]) {   // the page has already kicked off from
   return {
     seed, half, dt, steps: n, over: mc.S.over, wallMs: Math.round(performance.now() - t0),
     score: mc.S.score.slice(), shots: mc.STATS.shots.slice(), passes: mc.STATS.passes.slice(), xg: mc.STATS.xg.map((x) => +x.toFixed(3)),
-    director: { liveS: +mc.DIRC.liveS.toFixed(1), ffS: +mc.DIRC.ffS.toFixed(1), cuts: mc.DIRC.ranges.length, watchMin: +((mc.DIRC.liveS + mc.DIRC.ffS / mc.DIRC.ffX) / 60).toFixed(2) },
+    director: { longest: mc.DIRC.longest, bySc: mc.DIRC.bySc, liveS: +mc.DIRC.liveS.toFixed(1), ffS: +mc.DIRC.ffS.toFixed(1), cuts: mc.DIRC.ranges.length, watchMin: +((mc.DIRC.liveS + mc.DIRC.ffS / mc.DIRC.ffX) / 60).toFixed(2) },
     counts: c, goalMinutes: goals.map((g) => g.minute), penaltyGoals: pens.length, events: ev,
   };
 }

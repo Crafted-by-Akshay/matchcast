@@ -584,7 +584,7 @@ function offsideLine(ti) { const xs = teamOf(1 - ti).map((o) => w2own(ti, o.pos2
 // ---- owner decisions ----
 // ---- xG: logistic on goal-mouth angle and distance, fitted offline on Wyscout open-play shots (CC BY 4.0) by scripts/fit_xg.py.
 // Constants mirror data/calibration/xg.json; tests/xg_constants.test checks they agree. XG_SCALE is the tuned global scale (docs/simulator.md).
-const XG = { b0: -1.464609, b1: 1.413822, b2: -0.089141, scale: 1.1 };
+const XG = { b0: -1.464609, b1: 1.413822, b2: -0.089141, scale: 0.9 };
 // tuned action weights (docs/simulator.md); a `tune` query parameter overrides them for calibration runs only, e.g. ?tune=passBias:0.5,shotThr:0.05
 const TUNE = { passBias: 1.5, shotThr: 0.06, longShot: 0.05, holdScale: 1.5, boxFoul: 0.65, skillCD: 1.25 };
 try { for (const kv of (new URLSearchParams(location.search).get('tune') || '').split(',')) { const [k, v] = kv.split(':'); if (k in TUNE && v !== undefined) TUNE[k] = +v; if (k === 'xgScale') XG.scale = +v; } } catch (e) { /* no query string */ }
@@ -1410,6 +1410,9 @@ function runRestart(dt) {
   else { ball.p.set(R.spot.x, BR, R.spot.y); ball.v.set(0, 0, 0); }
   if (S.celebrate > 0) return;
   const close = tk.pos2.distanceTo(R.spot) < 1.4;
+  // watchdog: a taker who is sent off, or cannot reach the ball, must not freeze the match
+  if (tk.off) { R.taker = teamOf(R.team).filter((p) => !p.gk && !p.off).sort((a, b) => a.pos2.distanceTo(R.spot) - b.pos2.distanceTo(R.spot))[0] || null; return; }
+  if (!close && R.age > 20 && R.type !== 'throw') { tk.pos2.lerp(R.spot, clamp(dt * 2, 0, 1)); if (R.age > 60) R.wait = 0; }
   if (close) R.wait -= dt;
   if (R.wait > 0) return;
   // Law 8: at kick-off every player is in his own half and opponents are outside the centre circle (we allow 12 s to get there)
@@ -1615,7 +1618,7 @@ mkGroup($('play'), playDefs(), () => String(S.speed), playSet);
 //   shot or goal 1.0 (5 s after a shot, through the celebration) · ball in a penalty area 0.4 (cut) · set piece near goal 0.6
 //   · card 0.6 (6 s) · first 15 s of a half 0.5 · otherwise 0.1. Live status is held 2 s after the score drops.
 const FF_X = 40;
-const DIRC = { ffX: FF_X, on: false, ff: false, liveS: 0, ffS: 0, hold: 0, score: 0.1, cardT: -99, cut: null, ranges: [], wipe: null };
+const DIRC = { longest: {}, bySc: {}, ffX: FF_X, on: false, ff: false, liveS: 0, ffS: 0, hold: 0, score: 0.1, cardT: -99, cut: null, ranges: [], wipe: null };
 onMatchEvent((e) => { if (e.type === 'yellow_card' || e.type === 'red_card') DIRC.cardT = S.t; });
 function passageScore() {
   const si = S.shotInfo; if (si && S.t - si.t < 5) return 1;
@@ -1630,7 +1633,8 @@ function passageScore() {
 const minuteOf = () => Math.floor(S.mclock / 60) + 1;
 function dirUpdate(dt) {
   if (!DIRC.on) { DIRC.liveS += dt; return; }
-  DIRC.score = passageScore();
+  if (S.restart && (S.restart.age || 0) > (DIRC.longest.age || 0)) DIRC.longest = { type: S.restart.type, phase: S.restart.phase, age: +S.restart.age.toFixed(1), min: minuteOf() };
+  DIRC.score = passageScore(); DIRC.bySc[DIRC.score] = (DIRC.bySc[DIRC.score] || 0) + dt;
   if (DIRC.score >= 0.5) DIRC.hold = 2; else DIRC.hold = Math.max(0, DIRC.hold - dt);
   const ff = DIRC.score < 0.5 && DIRC.hold <= 0;
   if (ff && !DIRC.ff) DIRC.cut = { from: minuteOf(), fromClock: S.mclock };
@@ -1639,7 +1643,7 @@ function dirUpdate(dt) {
   if (DIRC.wipe) { DIRC.wipe.style.opacity = ff ? 1 : 0; if (ff && DIRC.cut) DIRC.wipe.textContent = '⏩ ' + DIRC.cut.from + "' → " + minuteOf() + "'"; }
 }
 function dirStart() {   // at kick-off: condense only full-length matches (half = 45), shorter halves are already compressed; the headless runner scores passages too, to report the watch length
-  Object.assign(DIRC, { on: SET.half >= 45 && new URLSearchParams(location.search).get('condense') !== '0', ff: false, liveS: 0, ffS: 0, hold: 0, ranges: [], cut: null });
+  Object.assign(DIRC, { longest: {}, bySc: {}, on: SET.half >= 45 && new URLSearchParams(location.search).get('condense') !== '0', ff: false, liveS: 0, ffS: 0, hold: 0, ranges: [], cut: null });
   if (!DIRC.wipe) { const d = document.createElement('div'); d.id = 'ffwipe'; d.style.cssText = 'position:fixed;top:14%;left:50%;transform:translateX(-50%);padding:6px 18px;background:rgba(10,14,20,.78);color:#fff;font:700 20px system-ui;letter-spacing:.06em;border-radius:6px;opacity:0;transition:opacity .15s;pointer-events:none;z-index:9'; document.body.appendChild(d); DIRC.wipe = d; }
 }
 function stepSim(dt) {
