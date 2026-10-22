@@ -20,7 +20,10 @@ def _shape(flow: MatchWorkflow) -> dict:
             (c["packet"]["claim_id"], c["packet"]["value"]) for c in flow.store.claims(flow.sk)
         ],
         "lines": [(ln.line_id, ln.text, ln.status) for ln in flow.store.lines(flow.sk)],
-        "actions": [r["action"] for r in flow.store.audit_records(flow.sk)],
+        "audit": [
+            (r["actor_kind"], r["actor_id"], r["action"], r["subject_id"], r["details"])
+            for r in flow.store.audit_records(flow.sk)
+        ],
         "stats": dict(flow.stats),
     }
 
@@ -57,3 +60,8 @@ def test_an_executor_error_surfaces_to_the_caller(match, monkeypatch) -> None:
     monkeypatch.setattr(flow, "_narrate", boom)
     with pytest.raises(RuntimeError, match="narrator exploded"):
         run(flow.ingest(match["events"]))
+
+
+def test_a_wrong_orchestrator_is_refused_at_construction() -> None:
+    with pytest.raises(ValueError, match="MATCHCAST_ORCHESTRATOR"):
+        WorkflowConfig(orchestrator="AF")

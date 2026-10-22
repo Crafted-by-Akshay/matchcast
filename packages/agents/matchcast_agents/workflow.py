@@ -123,6 +123,12 @@ class WorkflowConfig:
     )
     extra: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if self.orchestrator not in ("af", "native"):
+            raise ValueError(
+                f"MATCHCAST_ORCHESTRATOR must be af or native, not {self.orchestrator!r}"
+            )
+
 
 _TRACER = trace.get_tracer("matchcast.agents")
 
@@ -357,10 +363,6 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
-        if self.config.orchestrator not in ("af", "native"):
-            raise ValueError(
-                f"MATCHCAST_ORCHESTRATOR must be af or native, not {self.config.orchestrator!r}"
-            )
         if self.config.orchestrator == "af":
             from .af_graph import run_event  # Agent Framework is imported only when selected
 
