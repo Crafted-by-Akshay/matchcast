@@ -142,6 +142,14 @@ def build_broadcast():
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "broadcast half chips")
     main = sub(main, LANG_OLD, LANG_NEW, "broadcast language labels")
     main = sub(main, "bcNewMatch(q.get('seed'));", "bcEmbedStart(q);", "broadcast start")
+    # EXP-2: consumer mode. The desk does not simulate in the unified app;
+    # consumerStep (embed/broadcast.js) follows Watch.
+    main = sub(
+        main,
+        "function stepSim(dt) {\n",
+        "function stepSim(dt) {\n  if (window.MC_CONSUMER) { consumerStep(dt); return; }\n",
+        "broadcast consumer mode",
+    )
     head = sub(
         r(BE + "head.html"),
         "<title>MatchCast 3D</title>",
