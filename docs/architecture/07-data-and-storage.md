@@ -66,7 +66,7 @@ A **claim** is one measured fact (Analyst). A **line** is the Narrator's text fo
 
 ## 4. Tables
 
-All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A string column is at most 60 KB; anything larger goes to Blob `overflow/{prefix}/{table}/{RowKey}.json` and the column holds `blob:<path>`.
+All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A string property holds at most 64 KB of UTF-16 (32,768 units; the code uses 32,000); anything larger goes to Blob `overflow/{prefix}/{table}/{RowKey}.<sha256 prefix>.json` and the column holds `blob:<path>`.
 
 | Table | PartitionKey | RowKey | Columns | Written by | Read by |
 | --- | --- | --- | --- | --- | --- |
@@ -80,7 +80,7 @@ All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A
 | `checkpoints` | `sk` | `<moment_id>:<executor>` | checkpoint (JSON), created_at | workflow | workflow on resume |
 | `conversations` | `sk|browser_session_id` | `turn` (4 digits) | question, persona, answer, citations (JSON), verdict, created_at | `api /ask` | `api /ask` |
 
-Built today (`packages/agents/matchcast_agents/tables.py`, AGT-3 and AGT-13): `TableStore` implements the repositories for `matches`, `events`, `matchstate`, `claims`, `lines`, `publications`, `recaps`, `checkpoints` and `audit` with the keys above. Each row stores the whole record as JSON in a `doc` column beside its key columns (`event_id` and `revision` on events, `revision` and `last_sequence` on matchstate, `processed_sequence` on checkpoints), and a value over 60 KB goes to the `overflow` container as described. Claims, lines and publications also carry `ord` (a zero-padded nanosecond clock) so lists keep insertion order. The checkpoint is one row per match (`current`) holding the processed sequence, the state and the Producer memory, which is what the workflow resumes from. `conversations` has no repository yet.
+Built today (`packages/agents/matchcast_agents/tables.py`, AGT-3 and AGT-13): `TableStore` implements the repositories for `matches`, `events`, `matchstate`, `claims`, `lines`, `publications`, `recaps`, `checkpoints` and `audit` with the keys above. Each row stores the whole record as JSON in a `doc` column beside its key columns (`event_id` and `revision` on events, `revision` and `last_sequence` on matchstate, `processed_sequence` on checkpoints), and a value over 32,000 UTF-16 units goes to the `overflow` container as described (`build_store` creates the container if it is missing). Claims, lines and publications also carry `ord` (a zero-padded nanosecond clock) so lists keep insertion order. The checkpoint is one row per match (`current`) holding the processed sequence, the state and the Producer memory, which is what the workflow resumes from. Events are keyed by `stream_sequence`, unique per stream, so a retry is the same row. `conversations` has no repository yet.
 
 Write rules:
 1. Idempotent keys: `claim_id = sha256(sk, moment_id, agent, derivation_version)[:24]`; `line_id = sha256(claim_ids, persona, attempt)[:24]`; `publication_id = sha256(line_id)[:24]`. Upserts with the same key are safe on replay.

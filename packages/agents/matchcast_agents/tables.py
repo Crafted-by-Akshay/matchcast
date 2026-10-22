@@ -3,14 +3,16 @@
 The service client is passed in (``matchcast_shared.azure_clients.table_service_client()`` in
 Azure, a fake in unit tests), so no key or connection string is handled here. One table per
 repository; PartitionKey is the stream key ``sk`` (``matches`` uses the tenant id). Each row keeps
-the whole record as JSON in ``doc`` beside its key columns. A value over 60 KB goes to the Blob
-``overflow`` container and ``doc`` holds ``blob:<path>``. Rows that must keep insertion order
-(claims, lines, publications) carry ``ord``, a zero-padded nanosecond clock kept on re-writes.
+the whole record as JSON in ``doc`` beside its key columns. A value over 32,000 UTF-16 units
+goes to the Blob ``overflow`` container and ``doc`` holds ``blob:<path>``. Rows that must keep
+insertion order (claims, lines, publications) carry ``ord``, a zero-padded nanosecond clock kept
+on re-writes.
 
 Known gap: ``put_state`` is a plain upsert; the ``If-Match`` check of 07 §4 rule 3 needs an ETag
 in the ``StateRepo`` signature and comes with the second writer.
 """
 
+import hashlib
 import json
 import os
 import time
@@ -22,7 +24,8 @@ from matchcast_contracts import audit
 from .messages import LineRecord
 from .state import MatchState
 
-MAX_COLUMN_BYTES = 60 * 1024
+# A Table Storage string property holds 64 KB of UTF-16, 32,768 units; stay a little under.
+MAX_COLUMN_UNITS = 32_000
 BLOB_PREFIX = "blob:"
 TABLES = (
     "matches", "events", "matchstate", "claims", "lines", "publications", "recaps",
@@ -42,6 +45,7 @@ class TableStore:
         self._service = service
         self._overflow = overflow
         self._tables: dict[str, Any] = {}
+        self._audit_tail: dict[str, dict[str, Any]] = {}
 
     # ---- plumbing ----------------------------------------------------------------------------
 
@@ -57,12 +61,17 @@ class TableStore:
 
     def _pack(self, table: str, pk: str, rk: str, value: Any) -> str:
         text = json.dumps(value, separators=(",", ":"), ensure_ascii=False)
-        if len(text.encode("utf-8")) <= MAX_COLUMN_BYTES:
+        if len(text.encode("utf-16-le")) // 2 <= MAX_COLUMN_UNITS:
             return text
         if self._overflow is None:
-            raise ValueError(f"{table} row {rk} is over 60 KB and no overflow container is set")
-        path = f"{pk}/{table}/{rk}.json".replace("|", "_")
-        self._overflow.upload_blob(path, text.encode("utf-8"), overwrite=True)
+            raise ValueError(
+                f"{table} row {rk} is over 32,000 UTF-16 units and no overflow container is set"
+            )
+        data = text.encode("utf-8")
+        # content-addressed, so a writer that loses an audit race cannot overwrite the winner's blob
+        digest = hashlib.sha256(data).hexdigest()[:16]
+        path = f"{pk}/{table}/{rk}.{digest}.json".replace("|", "_")
+        self._overflow.upload_blob(path, data, overwrite=True)
         return BLOB_PREFIX + path
 
     def _unpack(self, text: str) -> Any:
@@ -122,14 +131,15 @@ class TableStore:
     # ---- events ------------------------------------------------------------------------------
 
     def add_event(self, sk: str, event: dict[str, Any]) -> bool:
-        """Store a semantic event once per (event_id, revision); False for a retry."""
-        seen = self._rows(
-            "events", sk, f"event_id eq '{_quote(event['event_id'])}' and revision eq "
-            f"{int(event['revision'])}"
-        )  # fmt: skip
-        if seen:
-            return False
+        """Store a semantic event once; False for a retry.
+
+        Rows are keyed by ``stream_sequence``, which is unique per stream, so a retry is the row
+        already there with the same (event_id, revision); no partition scan is needed.
+        """
         rk = f"{int(event['stream_sequence']):010d}"
+        have = self._get("events", sk, rk)
+        if have and (have["event_id"], have["revision"]) == (event["event_id"], event["revision"]):
+            return False
         self._put("events", sk, rk, event, event_id=event["event_id"], revision=event["revision"])
         return True
 
@@ -144,7 +154,8 @@ class TableStore:
         return MatchState.model_validate(self._unpack(row["doc"])) if row else MatchState()
 
     def put_state(self, sk: str, state: MatchState) -> None:
-        self._put("matchstate", sk, "current", state.model_dump(), revision=state.revision,
+        doc = state.model_dump(mode="json")
+        self._put("matchstate", sk, "current", doc, revision=state.revision,
                   last_sequence=state.max_sequence)  # fmt: skip
 
     # ---- claims, lines, publications, recaps -------------------------------------------------
@@ -197,6 +208,9 @@ class TableStore:
     # ---- audit -------------------------------------------------------------------------------
 
     def _tail(self, sk: str) -> dict[str, Any] | None:
+        """Last record: from memory after our own append, else one scan (cold start, lost race)."""
+        if sk in self._audit_tail:
+            return self._audit_tail[sk]
         rows = self._rows("audit", sk)
         return self._unpack(rows[-1]["doc"]) if rows else None
 
@@ -213,19 +227,17 @@ class TableStore:
             try:
                 self._table("audit").create_entity(entity)
             except ResourceExistsError:
+                self._audit_tail.pop(sk, None)  # another writer won: re-read the tail
                 if attempt == 2:
                     raise
                 continue
+            self._audit_tail[sk] = record
             return record
         raise AssertionError("unreachable")
 
     def audit_records(self, sk: str, from_sequence: int = 1, limit: int = 1000) -> list[dict]:
         rows = self._rows("audit", sk, f"RowKey ge '{from_sequence:010d}'")
         return [self._unpack(r["doc"]) for r in rows[:limit]]
-
-
-def _quote(value: str) -> str:
-    return value.replace("'", "''")
 
 
 def build_store(kind: str | None = None) -> Any:
@@ -239,9 +251,11 @@ def build_store(kind: str | None = None) -> Any:
         raise ValueError(f"MATCHCAST_STORE must be table or memory, not {kind!r}")
     from matchcast_shared import azure_clients
 
-    store = TableStore(
-        azure_clients.table_service_client(),
-        azure_clients.blob_service_client().get_container_client("overflow"),
-    )
+    container = azure_clients.blob_service_client().get_container_client("overflow")
+    try:
+        container.create_container()
+    except ResourceExistsError:
+        pass
+    store = TableStore(azure_clients.table_service_client(), container)
     store.ensure_tables()
     return store

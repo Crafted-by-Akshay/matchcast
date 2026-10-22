@@ -40,10 +40,21 @@ class FakeTable:
     def __init__(self) -> None:
         self.rows: dict[tuple[str, str], dict[str, Any]] = {}
 
+    @staticmethod
+    def _check(entity: dict[str, Any]) -> None:
+        for (
+            name,
+            value,
+        ) in entity.items():  # Table Storage: a string property is 32,768 UTF-16 units
+            if isinstance(value, str) and len(value.encode("utf-16-le")) // 2 > 32_768:
+                raise ValueError(f"PropertyValueTooLarge: {name}")
+
     def upsert_entity(self, entity: dict[str, Any], **_: Any) -> None:
+        self._check(entity)
         self.rows[(entity["PartitionKey"], entity["RowKey"])] = copy.deepcopy(entity)
 
     def create_entity(self, entity: dict[str, Any], **_: Any) -> None:
+        self._check(entity)
         key = (entity["PartitionKey"], entity["RowKey"])
         if key in self.rows:
             raise ResourceExistsError("entity already exists")

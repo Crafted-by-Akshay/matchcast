@@ -12,7 +12,7 @@ from fake_tables import FakeContainer, FakeTableService
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.state import MatchState
 from matchcast_agents.store import MemoryStore, stream_key
-from matchcast_agents.tables import MAX_COLUMN_BYTES, TableStore, build_store
+from matchcast_agents.tables import MAX_COLUMN_UNITS, TableStore, build_store
 from matchcast_contracts import audit
 
 # a fresh match id per run, so a reused Azurite store never sees rows of an earlier run
@@ -161,7 +161,7 @@ def test_audit_chain_and_paging(store) -> None:
 def test_large_values_go_to_blob_overflow_and_come_back() -> None:
     service, container = FakeTableService(), FakeContainer()
     store = TableStore(service, container)
-    big = {"claim_id": "c1", "blob": "x" * (MAX_COLUMN_BYTES + 10)}
+    big = {"claim_id": "c1", "blob": "x" * (MAX_COLUMN_UNITS + 10)}
     store.put_claim(SK, big, {})
     row = service.tables["claims"].rows[(SK, "c1")]
     assert row["doc"].startswith("blob:")
@@ -171,8 +171,8 @@ def test_large_values_go_to_blob_overflow_and_come_back() -> None:
 
 def test_large_value_without_overflow_container_is_refused() -> None:
     store = TableStore(FakeTableService())
-    with pytest.raises(ValueError, match="60 KB"):
-        store.put_claim(SK, {"claim_id": "c1", "blob": "x" * (MAX_COLUMN_BYTES + 10)}, {})
+    with pytest.raises(ValueError, match="UTF-16"):
+        store.put_claim(SK, {"claim_id": "c1", "blob": "x" * (MAX_COLUMN_UNITS + 10)}, {})
 
 
 def test_audit_conflict_retries_once_then_fails() -> None:
