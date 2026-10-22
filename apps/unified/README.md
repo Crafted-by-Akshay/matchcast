@@ -72,7 +72,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - The views are separate engines inside frames. Their own headers stay under the shell bar, and the Analyst keeps its own design. A single merged code base would be a larger job.
 - Each view runs its own simulation. Watch is the only live source for the score, the events and the agents. Broadcast shows Watch's score, but its pitch and goals come from its own engine, and the Analyst's season runs are headless recordings. The live full-time handoff is the way to get the played match into the Analyst. Making Broadcast and the Analyst consume Watch's events directly is the next refactor (option A in the orchestration design).
 - The agents and the Verifier are rules, not models. They are labelled as simulated, and the Azure parts are not connected.
-- The shell is in English only. Broadcast has its own EN and Tamil script.
+- The shell is in English only. Broadcast has its own EN, ES and HI desk script (Tamil is out until a native speaker reviews it).
 - Azure parts, Entra roles and the Foundry agents are simulated and labelled as such in each view.
 - Tested in local headless Chromium. Not yet tested inside the claude.ai artifact host.
 
@@ -145,6 +145,9 @@ Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.j
 - Only Watch is loaded at first (one iframe); Broadcast and Analyst are created on first switch.
 - The shell now says what is happening: with no WebGL, Watch and Broadcast show "This view needs WebGL" at once (Analyst and Agents still work); a view still loading after 25 s shows a note and a "Reload this view" button. Test: `tests/e2e/loading-states.spec.ts`.
 - Ideas not done (visual risk, in the prototype source): fewer grass-noise specks in `paintPitch`, decode the player model off the main thread.
+## Broadcast desk script: English, Spanish, Hindi
+- `embed/bclang.js` wraps the desk's line builder: each event gets a Spanish and a Hindi line from rules templates that copy the names and numbers. Every translation goes through the same Verifier re-check as the shell (same numbers, same facts in the same order, no new capitalised names); a line that fails stays in English and the script list says why ("English shown: ..."). Tamil is removed from the desk. Translations are rules templates (**Planned**: Azure AI Translator, ADR in docs/architecture). Test: `tests/e2e/broadcast-lang.spec.ts`.
+
 
 ## Server translations (EXP-17, api PR 118)
 When the api sends `variants: {es|hi: text}` on a publication (only after its own number, name and citation re-check), `agents.js` ingest stores it as that language's translation (`api: true`, shown as "Translated by Azure AI Translator") and Watch renders it as text. A language the api did not send keeps the rules-template line, so nothing changes until Platform sets `TRANSLATOR_ENDPOINT`. Test: the `api variants` case in `tests/e2e/language.spec.ts`.

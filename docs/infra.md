@@ -107,3 +107,7 @@ Not verified: no live provision yet (`az bicep build` passes with no warnings on
 - The one plain connection string is `APPLICATIONINSIGHTS_CONNECTION_STRING` (an ingestion id, not a credential), as on the container apps before they reference it as a secret.
 - Sign-in: when `ENTRA_CLIENT_ID` is set, the function asks for a token for `api://<client id>/.default` and the api route needs the Producer role, so the identity `id-matchcast` must be assigned the `Producer` app role of `matchcast-web` (Entra step, with the judge account; one command, `az rest` on `appRoleAssignedTo`). With sign-in off no token is sent.
 - Not verified: no live provision or deploy yet; the function logic is tested with a mock api (`services/recap/tests`).
+
+## Judge path on one machine
+
+`make judge-path` (or `scripts/judge_path.py`, add `--e2e` for the Playwright unified spec) boots the api with rules agents, the in-memory store and the in-process event stream, builds the unified app, and checks `/health`, `/ready`, the three built views, a match from the fixture through to verified claims (`scripts/smoke_pipeline.py`) and the routes in the openapi document. It calls no Azure or Foundry service. Passes locally in about 15 s without `--e2e`; the browser-level flow is covered by the e2e suite.

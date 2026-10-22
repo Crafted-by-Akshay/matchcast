@@ -55,7 +55,10 @@ class LiveNarrator:
             "limits": {p: max_chars(p) for p in task.personas},
         }
         if attempt:
-            facts["note"] = "A previous draft failed verification; stay closer to the claims."
+            facts["note"] = (
+                "A previous draft failed verification; stay closer to the claims "
+                "and use each claim value at most once."
+            )
         answer = await self._client.complete(
             prompt("narrator"),
             json.dumps(facts),
