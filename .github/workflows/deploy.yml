@@ -24,7 +24,14 @@ env:
 jobs:
   deploy:
     # Skipped until the OIDC repo variables exist (docs/infra.md, one-time setup).
-    if: vars.AZURE_CLIENT_ID != '' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    # workflow_run from a fork PR can carry a branch named main, so only same-repo pushes qualify.
+    if: >-
+      vars.AZURE_CLIENT_ID != '' && (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
+    # The OIDC federated credential is bound to this environment, not to a branch ref.
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -51,7 +58,9 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Build and push api
         run: |
@@ -62,7 +71,7 @@ jobs:
         run: |
           API_FQDN=$(az containerapp show -g rg-matchcast -n "ca-api-matchcast-${AZURE_ENV_NAME}" --query properties.configuration.ingress.fqdn -o tsv 2>/dev/null || true)
           API_URL=""
-          if [ -n "$API_FQDN" ]; then API_URL="https://$API_FQDN"; fi
+          if [ -n "$API_FQDN" ]; then API_URL="https://$API_FQDN"; else echo "::warning::api FQDN not found (first deploy?); web is built without API_URL and needs a second run"; fi
           docker build --build-arg API_URL="$API_URL" -t "$REGISTRY/matchcast-web:${{ steps.tag.outputs.sha }}" -t "$REGISTRY/matchcast-web:latest" apps/unified
           docker push --all-tags "$REGISTRY/matchcast-web"
 
@@ -78,14 +87,27 @@ jobs:
 
       - uses: Azure/setup-azd@v2
 
+      - name: Check GHCR packages are public
+        run: |
+          # Container Apps pull without a registry secret (ADR-0008), so private packages would fail provision.
+          for n in api web; do
+            T=$(curl -fsS "https://ghcr.io/token?scope=repository:crafted-by-akshay/matchcast-$n:pull" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+            if curl -fsSI -H "Authorization: Bearer $T" -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json" "https://ghcr.io/v2/crafted-by-akshay/matchcast-$n/manifests/latest" >/dev/null; then
+              echo "$n image public"
+            else
+              echo "::warning::ghcr.io/crafted-by-akshay/matchcast-$n is not public yet; provisioning with the placeholder image. Make the package public and re-run."
+              echo "SKIP_${n^^}_IMAGE=1" >> "$GITHUB_ENV"
+            fi
+          done
+
       - name: Provision with the new images
         run: |
           azd auth login --client-id "$AZURE_CLIENT_ID" --federated-credential-provider github --tenant-id "$AZURE_TENANT_ID"
           azd env new "$AZURE_ENV_NAME" --subscription "$AZURE_SUBSCRIPTION_ID" --location "$AZURE_LOCATION" --no-prompt
           azd env set AZURE_RESOURCE_GROUP rg-matchcast
           azd env set FOUNDRY_PROJECT_ENDPOINT "$FOUNDRY_PROJECT_ENDPOINT"
-          azd env set API_IMAGE "$REGISTRY/matchcast-api:${{ steps.tag.outputs.sha }}"
-          azd env set WEB_IMAGE "$REGISTRY/matchcast-web:${{ steps.tag.outputs.sha }}"
+          if [ -z "${SKIP_API_IMAGE:-}" ]; then azd env set API_IMAGE "$REGISTRY/matchcast-api:${{ steps.tag.outputs.sha }}"; fi
+          if [ -z "${SKIP_WEB_IMAGE:-}" ]; then azd env set WEB_IMAGE "$REGISTRY/matchcast-web:${{ steps.tag.outputs.sha }}"; fi
           if [ -n "${MCP_IMAGE:-}" ]; then azd env set MCP_IMAGE "$MCP_IMAGE"; fi
           azd provision --no-prompt
 
