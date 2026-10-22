@@ -1,0 +1,13 @@
+---
+title: S. Vidal
+entities: mon-s-vidal, MON
+generated: scripts/build_profiles.py
+---
+## Profile
+
+S. Vidal wears number 8 for Montaña CF (MON) and plays as CM.
+Rating 88. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 201 passes (89% completed), 38 tackles, 5 shots, 0.34 xG, 4.9 km on average per match.
