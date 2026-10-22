@@ -308,6 +308,17 @@ def test_recap_trigger_needs_a_producer_role_when_roles_are_required() -> None:
     assert client.post("/internal/v1/recaps", json=trigger).status_code == 403
 
 
+def test_a_club_outside_the_season_is_an_audited_stats_desk_failure(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    failed = [r for r in audit if r["action"] == "a2a_failed"]
+    assert failed and "no team rows" in failed[0]["details"]["error"]
+    assert failed[0]["details"]["transport"] == "in_process"
+    assert client.get("/v1/matches/match-short/lines", params=Q).json()["items"]
+    assert verify_chain(audit)["valid"] is True
+
+
 def ask(client: TestClient, question: str, **extra):
     body = {"session_id": "short", "question": question, **extra}
     return client.post("/v1/matches/match-short/ask", json=body)

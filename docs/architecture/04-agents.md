@@ -25,7 +25,7 @@ On-demand agents (never on the live loop):
 | Agent | Where | Job | Tools | Verified by |
 | --- | --- | --- | --- | --- |
 | Data Scientist | Analyst view, `POST /v1/ds/ask` | Answers season questions with SQL, a table and a chart | `query_season`, `describe_views` | Verifier re-runs the SQL |
-| Stats Desk (A2A partner) | `mcp` container, path `/a2a`, Agent Card at `/.well-known/agent-card.json` | `compare_to_season(metric, team or player)`: value, season average, rank of 28 | DuckDB over `season/v1` | Deterministic, no model |
+| Stats Desk (A2A partner) | `mcp` container, path `/a2a`, Agent Card at `/.well-known/agent-card.json` | `compare_to_season(metric, scope, value, team_id?)`: value, season average, rank among the season's team or player match performances (`of` counts those rows, 56 for teams, not matches). The api calls the same skill in process today and audits `transport: in_process`; `a2a` once the `mcp` container serves it | DuckDB over `season/v1` | Deterministic, no model |
 | Player persona (talk) | `POST /v1/matches/{id}/talk` | In-character reply ≤ 60 words using only that player's stats | `get_metrics(player_id)` | Verifier |
 | Recap mode | `POST /internal/v1/recaps` | Full-time recap per persona | Same as the core four | Verifier per sentence; a failing sentence is dropped |
 | Ask pipeline | `POST /v1/matches/{id}/ask` | Chatbot answers | Router + AI Search + core tools | Verifier, see [05-assistant-rag.md](05-assistant-rag.md) |
@@ -76,7 +76,7 @@ RepairRequest  line_id, target analyst|narrator, verdict, attempt 1
 
 `fallback_reason` values (written with audit action `fallback_used`, ADR-0014): `timeout` (20 s), `rate_limited` (429 after one retry), `model_error` (5xx or invalid structured output), `circuit_open`, `tool_error` (an MCP tool call failed; the Analyst uses the in-process tool twin).
 
-Audit `action` values (closed list; add new ones here first): `event_rejected`, `moment_skipped`, `claim_created`, `line_drafted`, `line_verified`, `line_review`, `line_rejected`, `line_repair_requested`, `line_abstained`, `line_approved`, `line_edited`, `line_killed`, `publication_created`, `translation_rejected`, `fallback_used`, `recap_created`, `ask_answered`, `talk_answered`, `export_created`, `safety_blocked`.
+Audit `action` values (closed list; add new ones here first): `event_rejected`, `moment_skipped`, `claim_created`, `line_drafted`, `line_verified`, `line_review`, `line_rejected`, `line_repair_requested`, `line_abstained`, `line_approved`, `line_edited`, `line_killed`, `publication_created`, `translation_rejected`, `fallback_used`, `recap_created`, `ask_answered`, `talk_answered`, `export_created`, `safety_blocked`, `a2a_call`, `a2a_failed`.
 
 ## 5. Verifier checks (in order)
 

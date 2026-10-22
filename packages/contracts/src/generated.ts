@@ -299,7 +299,9 @@ export interface AuditRecord {
     | "ask_answered"
     | "talk_answered"
     | "export_created"
-    | "safety_blocked";
+    | "safety_blocked"
+    | "a2a_call"
+    | "a2a_failed";
   subject_id: Identifier;
   details: {
     [k: string]: unknown;
