@@ -75,3 +75,16 @@ def test_a_malformed_reply_is_a_tool_error_not_a_guess() -> None:
     flow = _flow(MemoryStore(), odd)
     asyncio.run(flow.ingest(FIXTURE["events"]))
     assert flow.store.claims(flow.sk) == []
+
+
+def test_an_injected_tool_fault_applies_on_the_mcp_path_too() -> None:
+    async def never(tool, arguments):
+        raise AssertionError("must not be reached")
+
+    flow = MatchWorkflow(
+        stream=FIXTURE["roster"]["stream"], roster=FIXTURE["roster"], names=FIXTURE["names"],
+        clubs=FIXTURE["teams"], agents=rules_agents(failing_tools=frozenset({"get_metrics"}),
+        tool_call=never), config=WorkflowConfig(), store=MemoryStore(),
+    )  # fmt: skip
+    asyncio.run(flow.ingest(FIXTURE["events"]))
+    assert flow.store.claims(flow.sk) == []

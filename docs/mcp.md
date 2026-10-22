@@ -21,9 +21,9 @@ Results are capped at 20 KB. The season and knowledge tools are not match-scoped
 yet: `predict_danger` (needs the danger model) and the
 `window_s`, `team_id`, `player_id` arguments of `get_metrics` (DAT-3 metrics). By default the agents call
 the in-process twins in `matchcast_agents.tools`. `MATCHCAST_TOOLS=mcp` makes the Analyst's
-`get_metrics` lookup go through an MCP client instead: in memory against the api's own store, or
-over Streamable HTTP to the `mcp` container when `MCP_URL` is set, the full `/mcp` endpoint URL (that needs the shared
-store from DAT-2). The claims are identical either way (a test compares them), and a failed or
+`get_metrics` lookup go through an in-memory MCP client over the api's own store (the matches live in
+that process, ADR-0005); calling the `mcp` container over HTTP waits for the shared store from DAT-2.
+The claims are identical either way (a test compares them), and a failed or
 malformed MCP reply is a tool error: no claim and a `fallback_used` audit record. The Narrator,
 Verifier, Ask and `/talk` still read the stores directly; the Verifier always recounts from the
 events, never from a tool.

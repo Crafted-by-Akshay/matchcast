@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from app import matches
 from app.main import create_app
 from fastapi.testclient import TestClient
 from matchcast_contracts import validate
@@ -61,12 +62,21 @@ def test_tools_over_mcp_give_the_same_claims(client: TestClient, monkeypatch) ->
     post_all(client)
     plain = client.get("/v1/matches/match-short/claims", params=Q).json()["items"]
     monkeypatch.setenv("MATCHCAST_TOOLS", "mcp")
+    called: list[str] = []
+
+    class Spy(matches.Client):
+        async def call_tool(self, name, *args, **kwargs):
+            called.append(name)
+            return await super().call_tool(name, *args, **kwargs)
+
+    monkeypatch.setattr(matches, "Client", Spy)
     over_mcp = TestClient(create_app())
     create(over_mcp)
     post_all(over_mcp)
     claims = over_mcp.get("/v1/matches/match-short/claims", params=Q).json()["items"]
     key = lambda c: (c["claim_id"], c["metric"], c["value"])  # noqa: E731
     assert [key(c) for c in claims] == [key(c) for c in plain] and claims
+    assert called and set(called) == {"get_metrics"}
     audit = over_mcp.get("/v1/matches/match-short/audit", params=Q).json()["items"]
     assert not [r for r in audit if r["action"] == "fallback_used"]
 

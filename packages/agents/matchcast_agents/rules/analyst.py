@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from ..context import MatchContext
 from ..messages import ProducerTask
-from ..tools import InProcessTools, McpMetrics, ToolCall
+from ..tools import InProcessTools, McpMetrics, ToolCall, ToolError
 
 DERIVATION_VERSION = "1.0.0"
 # {h} and {a} are the roster's first and second team, {t} the team of the picked event
@@ -69,6 +69,8 @@ class AnalystRules:
         ]
         snapshot = ctx.state.snapshot()
         if self._tool_call is not None:  # MATCHCAST_TOOLS=mcp: the same lookup over an MCP client
+            if "get_metrics" in self._failing:
+                raise ToolError("get_metrics", "unavailable")
             mcp = McpMetrics(self._tool_call, ctx, task.up_to_sequence)
             call_id, result = await mcp.get_metrics(metrics[:3])
         else:

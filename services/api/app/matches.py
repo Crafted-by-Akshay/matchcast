@@ -218,15 +218,14 @@ class Registry:
         return live_agents(client, personas, tool_call=tool_call, **seed)
 
     def tool_call(self) -> ToolCall | None:
-        """With MATCHCAST_TOOLS=mcp the Analyst calls the MCP tools: over HTTP when
-        MCP_URL names the `mcp` container, else in memory against this store."""
+        """With MATCHCAST_TOOLS=mcp the Analyst calls the MCP tools in memory, against this
+        process's store. A separate `mcp` container needs the shared store first (DAT-2)."""
         if os.environ.get("MATCHCAST_TOOLS") != "mcp":
             return None
-        url = os.environ.get("MCP_URL")
-        server = None if url else create_server(self.store)
+        server = create_server(self.store)
 
         async def call(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
-            async with Client(url or server) as client:
+            async with Client(server) as client:
                 result = await client.call_tool(tool, arguments)
             if result.is_error or result.structured_content is None:
                 raise RuntimeError(f"{tool} returned an error")
