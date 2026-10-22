@@ -20,6 +20,8 @@ param mcpImage string
 param entraClientId string = ''
 param keyVaultUri string = ''
 param contentSafetyEndpoint string = ''
+param speechEndpoint string = ''
+param speechRegion string = ''
 param searchEndpoint string = ''
 
 @description('True when Key Vault already holds srch-query-key; a Key Vault secret reference to a missing secret fails the revision.')
@@ -149,6 +151,8 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'EVENTHUB_NAME', value: eventHubName }
             { name: 'MATCHCAST_STORE', value: 'table' }
             { name: 'CONTENT_SAFETY_ENDPOINT', value: contentSafetyEndpoint }
+            { name: 'SPEECH_ENDPOINT', value: speechEndpoint }
+            { name: 'SPEECH_REGION', value: speechRegion }
             { name: 'SEARCH_ENDPOINT', value: searchEndpoint }
             { name: 'SEARCH_INDEX', value: 'kb-matchcast-v1' }
             // Easy Auth and the ingress already restrict Host; the FQDN is not known inside its own app

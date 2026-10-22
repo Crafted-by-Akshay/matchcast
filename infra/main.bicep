@@ -85,6 +85,8 @@ module containerapps 'modules/containerapps.bicep' = {
     entraClientId: entraClientId
     keyVaultUri: keyvault.outputs.uri
     contentSafetyEndpoint: ai.outputs.contentSafetyEndpoint
+    speechEndpoint: ai.outputs.speechEndpoint
+    speechRegion: ai.outputs.speechRegion
     searchEndpoint: ai.outputs.searchEndpoint
     searchKeysInVault: searchKeysInVault == 'true'
   }
@@ -145,3 +147,5 @@ output RECAP_FUNCTION string = recapFunction.outputs.name
 output SEARCH_SERVICE string = ai.outputs.searchName
 output SEARCH_ENDPOINT string = ai.outputs.searchEndpoint
 output CONTENT_SAFETY_ENDPOINT string = ai.outputs.contentSafetyEndpoint
+output SPEECH_ENDPOINT string = ai.outputs.speechEndpoint
+output SPEECH_REGION string = ai.outputs.speechRegion
