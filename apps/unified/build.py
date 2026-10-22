@@ -167,6 +167,8 @@ def build_broadcast():
         + r(EMB + "hook.js")
         + "\n"
         + r(EMB + "broadcast.js")
+        + "\n"
+        + r(EMB + "replay.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
