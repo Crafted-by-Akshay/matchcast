@@ -14,7 +14,7 @@ const ORDERS = {
   rest: { icon: '🔋', label: 'Save your legs', says: ['Thanks, I\'ll pick my moments.', 'Managing it. I\'ll be ready when it matters.', 'Good call, the legs are heavy.'] },
 };
 const TK = { ti: 0, p: null, voice: true, busy: false, rec: null, log: new Map() };
-const tkPick = (a) => a[Math.floor(Math.random() * a.length)];
+const tkPick = (a) => a[Math.floor(wordsRnd() * a.length)];
 function dangerMan(ti) { return teamOf(1 - ti).filter((q) => !q.gk).sort((a, b) => (b.rating + (['ST', 'AM', 'LW', 'RW'].includes(b.pos) ? 4 : 0)) - (a.rating + (['ST', 'AM', 'LW', 'RW'].includes(a.pos) ? 4 : 0)))[0]; }
 function pStats(p) { const E = ENV.events.filter((e) => e.player === p.name); const c = (t) => E.filter((e) => e.type === t).length; return { passes: c('pass'), shots: c('shot'), takeOns: E.filter((e) => e.type === 'take_on' && e.success).length, fouls: c('foul'), goals: c('goal') }; }
 function setOrder(p, k, text, by) {

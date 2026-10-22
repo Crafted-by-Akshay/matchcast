@@ -43,10 +43,10 @@ MCS.progress('Loading the stadium and players');
     return c.text;
   };
   const html = (c) => {
-    const ok = c.verdict === 'verified';
+    const ok = c.verdict === 'verified', api = c.api || c.source === 'model';   // the agent api wrote it (and its Verifier checked it), or the in-page rules did
     const chips = mode() === 'casual' ? [] : c.chips;
-    return '<p>' + esc(line(c)) + '</p><div class="mcx-r"><span class="mcx-t' + (ok ? '' : ' wait') + '" title="' + (ok ? 'Verified: recounted from the event log' : 'Awaiting review') + '">' + (ok ? '✓ Verified' : '● Awaiting review') + '</span>'
-      + chips.map((x) => '<span class="mcx-ch">' + esc(x) + '</span>').join('') + (c.source === 'rules' ? '<span class="mcx-ch fb" title="Written by the in-page rules, not the model">Rules fallback</span>' : '')
+    return '<p>' + esc(line(c)) + '</p><div class="mcx-r"><span class="mcx-t' + (ok ? '' : ' wait') + '" title="' + (ok ? (api ? 'Recounted from the stored events by the server Verifier (agent api)' : 'Recounted by the in-page rules Verifier in this browser, not the server (Simulated)') : 'Awaiting review') + '">' + (ok ? (api ? '✓ API-Verified' : '✓ Verified in page') : '● Awaiting review') + '</span>'
+      + chips.map((x) => '<span class="mcx-ch">' + esc(x) + '</span>').join('') + (api ? '' : '<span class="mcx-ch fb" title="Written and checked by the in-page rules in this browser, not the model or the server Verifier (Simulated)">In-page (Simulated)</span>')
       + (tr(c) ? (tr(c).ok ? '<span class="mcx-ch" title="' + (tr(c).api ? 'Translated by Azure AI Translator; ' : 'Translated by rules; ') + 'the Verifier re-checked numbers and names">' + lang() + ' · translated ✓</span>' : '<span class="mcx-ch fb" title="' + esc(tr(c).reason) + '">Translation unavailable</span>') : '') + '<button class="mcx-b" data-why>Why?</button><button class="mcx-b" data-how>How was this made?</button></div><div class="mcx-w" hidden></div>';
   };
   const why = (el, c) => {

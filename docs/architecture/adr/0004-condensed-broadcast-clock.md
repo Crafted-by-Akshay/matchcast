@@ -15,7 +15,7 @@ Five-minute halves gave 0.7 to 1.3 goals and 3 to 5 shots a match and about 50% 
 
 ## Decision
 
-Option A. The director plays passages scoring ≥ 0.5 live and fast-forwards the rest at 20x. If the headless timing test exceeds 60 s per 90 minutes, the live view falls back to B and the dataset keeps full density.
+Option A. The director plays passages scoring ≥ 0.5 live and fast-forwards the rest at 40x (tuned on 22 Oct from 20x with box entries cut, to reach 8 to 12 minutes). If the headless timing test exceeds 60 s per 90 minutes, the live view falls back to B and the dataset keeps full density.
 
 ## Consequences
 
