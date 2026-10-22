@@ -53,7 +53,7 @@ test('vision events: with no roster or no api nothing is posted', async ({ page 
   expect(posts).toEqual([]);
 });
 
-test('vision events: passes between tracked players take the tracker's positions and reach the .vision stream in the pitch', async ({ page }) => {
+test('vision events: passes between tracked players take the tracker positions and reach the .vision stream in the pitch', async ({ page }) => {
   test.setTimeout(420_000);
   const errs = collectErrors(page), creates: any[] = [], posts: any[] = [];
   await liveShell(page, creates, posts, undefined);
