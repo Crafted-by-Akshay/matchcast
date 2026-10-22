@@ -76,3 +76,8 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 
 ## Wild-moment alerts (EXP-9)
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
+
+## Analyst Data platform page (EXP-13)
+- `analyst-pages/*.js` holds Analyst pages we own; `build.py` appends them after the prototype pages. `10_data_platform.js` adds Platform > Data platform.
+- It shows the Fabric dashboard clip or screenshot (`shared/fabric-dashboard.mp4` / `.png`) and the Databricks model card (`shared/model-card.json`). Each block says **Planned** and names its ticket (DAT-8, DAT-6) until the file exists. Fabric is labelled paused after filming.
+- Test: `tests/e2e/analyst.spec.ts`.

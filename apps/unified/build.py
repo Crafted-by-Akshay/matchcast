@@ -174,7 +174,7 @@ def build_broadcast():
 # ---------- Analyst: the enterprise console (same build as enterprise-console/build.py)
 # plus the shell hook
 def build_analyst():
-    pages = sorted(glob.glob(AS + "pages/*.js"))
+    pages = sorted(glob.glob(AS + "pages/*.js")) + sorted(glob.glob(U + "analyst-pages/*.js"))
     js = (
         r(AS + "core.js")
         + "\n"
