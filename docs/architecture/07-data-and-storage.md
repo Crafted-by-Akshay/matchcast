@@ -106,12 +106,14 @@ The `mcp` container opens an in-memory DuckDB at start, reads the season Parquet
 
 | View | Grain | Key columns |
 | --- | --- | --- |
-| `matches` | one row per match | match_id, date, home_team_id, away_team_id, score_home, score_away, venue_id, weather |
+| `matches` | one row per match | match_id, date, home_team_id, away_team_id, score_home, score_away, venue (stadium name) |
 | `events` | one row per event | match_id, stream_sequence, kind, team_id, player_id, x, y, event_time_ms, outcome, xg |
 | `players` | one row per player | player_id, team_id, name, shirt, position, rating |
-| `team_match_stats` | team × match | goals, shots, xg, passes, pass_pct, duels, possession_pct, ppda |
-| `player_match_stats` | player × match | minutes, goals, shots, xg, passes, key_passes, tackles, distance_km |
+| `team_match_stats` | team × match | match_id, team_id, side, goals, shots, xg, passes, passes_completed, possession_pct, fouls, yellow_cards, red_cards, offsides |
+| `player_match_stats` | player × match | match_id, player (name), team_id, passes, passes_completed, tackles, shots, xg, distance_km |
 | `player_vectors` | one row per player | per-90 vector of 12 metrics, used for similarity |
+
+Built today (`scripts/export_season.py`, 28 matches, `data/season/v1/*.parquet`): `matches`, `team_match_stats` and `player_match_stats`, with exactly the columns shown for them above. `events`, `players` and `player_vectors` are planned. The tests in `services/mcp/tests/test_export_season.py` keep the exported columns and the queryable metrics in step.
 
 ## 7. Event Hubs
 
@@ -120,7 +122,7 @@ The `mcp` container opens an in-memory DuckDB at start, reads the season Parquet
 
 ## 8. Fabric Eventhouse
 
-Table `events` (KQL): `tenant_id: string, session_id: string, match_id: string, stream_sequence: long, event_id: string, kind: string, team_id: string, player_id: string, x: real, y: real, event_time_ms: long, period: int, payload: dynamic, ingested_at: datetime`. Queries for the four dashboard tiles are in `data/fabric/queries.kql`.
+Table `events` (KQL): `tenant_id: string, session_id: string, match_id: string, stream_sequence: long, event_id: string, revision: int, kind: string, team_id: string, player_id: string, x: real, y: real, event_time_ms: long, period: int, payload: dynamic, ingested_at: datetime`. Queries for the four dashboard tiles are in `data/fabric/queries.kql`.
 
 ## 9. Databricks Unity Catalog
 

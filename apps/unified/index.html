@@ -10,7 +10,7 @@
 <style>
 :root{
   --bg:#0A1320; --bg2:#101D30; --bg3:#17283F; --line:#22375A; --text:#E8EEF7; --muted:#8CA0BC;
-  --accent:#3D86F0; --accent-ink:#FFFFFF; --hot:#FF7A2E; --ok:#35C48A; --warn:#F5B942; --bad:#F26B6B;
+  --accent:#3D86F0; --accent-strong:#2862C9; --accent-ink:#FFFFFF; --hot:#FF7A2E; --ok:#35C48A; --warn:#F5B942; --bad:#F26B6B;
   --r:12px; --gut:16px; --bar:52px; --mbar:64px;
   --font:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:dark;
@@ -35,12 +35,13 @@ button,select{font:inherit;color:inherit}
 .switch{display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;overflow-x:auto;scrollbar-width:none;max-width:100%}
 .switch::-webkit-scrollbar{display:none}
 .switch button{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:8px;font-weight:600}
-.switch button small{font-weight:500;font-size:11px;opacity:.75}
-.switch button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.switch button small{font-weight:500;font-size:11px}
+.switch button[aria-selected="true"]{background:#2A62C9;color:var(--accent-ink)}
 .switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .status{display:flex;gap:6px;flex:none}
 .pill{font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .pill.warn{color:var(--warn);border-color:rgba(245,185,66,.35)}
+button.pill{background:none;cursor:pointer;font-family:inherit}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
@@ -104,6 +105,10 @@ button,select{font:inherit;color:inherit}
 .ag-prov code{font-size:12px;overflow-wrap:anywhere}
 .ag-table{overflow-x:auto}
 .ag-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 8px;font-size:12px;color:var(--muted)}
+.ag-filters button{background:var(--bg3);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:3px 8px;cursor:pointer}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skip{position:absolute;left:8px;top:-48px;z-index:100;background:var(--accent-strong);color:#fff;padding:8px 12px;border-radius:6px}.skip:focus{top:8px}
+button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .ag-filters select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
 .ag-panel table{width:100%;border-collapse:collapse;font-size:13px}
 .ag-panel th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
@@ -141,6 +146,8 @@ button,select{font:inherit;color:inherit}
 </style>
 </head>
 <body>
+<a class="skip" href="#stage">Skip to the match view</a>
+<div class="sr-only" id="sr-lines" aria-live="polite" aria-atomic="true"></div>
 
 <header class="top">
   <div class="brand">
@@ -154,6 +161,7 @@ button,select{font:inherit;color:inherit}
     <button role="tab" id="tab-agents" data-view="agents" aria-controls="v-agents" aria-selected="false" title="Agents (4)">Agents <small>pipeline</small></button>
   </nav>
   <div class="status" aria-label="Environment">
+    <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span>
     <span class="pill" id="api-pill" role="status" title="">Offline (simulated)</span>
     <span class="pill">Browser prototype</span>
     <span class="pill warn">Azure parts simulated</span>
@@ -177,7 +185,7 @@ button,select{font:inherit;color:inherit}
   </div>
 </section>
 
-<main class="stage" id="stage">
+<main class="stage" id="stage" tabindex="-1">
   <section class="view" id="v-watch" data-view="watch" aria-label="Watch: fan 3D match">
     <div class="wait" role="status"><div><b>Starting Watch</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div></div>
   </section>
@@ -216,7 +224,7 @@ button,select{font:inherit;color:inherit}
         <div class="ag-table"><table><thead><tr><th>Time</th><th>Metric</th><th>Value</th><th>Units</th><th>Agent</th><th>Source</th><th>Verdict</th><th>Reason</th><th>Approval</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
       </section>
       <section class="ag-panel"><h3>Audit chain</h3>
-        <div class="ag-audit"><button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
+        <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
         <ol class="ag-recs" id="ag-recs"></ol>
       </section>
       <p class="ag-note">Simulated: the agents run rules in the page; the Azure parts are not connected. Watch is the live source. Its events and moments reach this pipeline each second, and its score goes to Broadcast's scoreboard and the Analyst's live pill. Broadcast's pitch still runs its own engine, and the Analyst keeps its season runs, until the single-engine refactor (see README).</p>
@@ -234,6 +242,8 @@ button,select{font:inherit;color:inherit}
 <script src="config.js"></script>
 <script src="agents.js"></script>
 <script src="live.js"></script>
+<script src="trace-panel.js"></script>
+<script src="voice.js"></script>
 <script>
 "use strict";
 // ---------------------------------------------------------------- the shell
@@ -390,8 +400,9 @@ const PRODUCER = 'Sam Producer (simulated)';
 function renderQueue() {
   const r = AG.run, q = r ? r.claims.filter((c) => c.approval === 'pending').sort((a, b) => !!b.alert - !!a.alert) : [];   // priority 1 alerts first
   $('aq-mode').value = AG.mode; $('aq-n').textContent = q.length ? q.length + ' waiting' : '';
-  $('aq-list').innerHTML = q.length ? q.map((c) => '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
+  const qhtml = q.length ? q.map((c) => '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
     : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';
+  if ($('aq-list').dataset.html !== qhtml) { $('aq-list').innerHTML = qhtml; $('aq-list').dataset.html = qhtml; }   // redrawing an unchanged list detaches the buttons mid-click
 }
 function renderAgents() {
   renderQueue();
@@ -426,7 +437,8 @@ function renderAgents() {
     ['Route', esc(c.route || 'held, not aired')],
     ['Contract', esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
     ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules fallback · Foundry not connected'],
-    ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending']
+    ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending'],
+    ['Trace', '<button type="button" class="ag-how" data-id="' + esc(c.id) + '">How was this made?</button>']
   ].map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>' : '<p class="empty">Pick a claim to see its provenance.</p>';
   $('ag-recs').innerHTML = MCC.records().slice(-6).reverse().map((x) => '<li>#' + x.seq + ' ' + esc(x.agent) + ' ' + esc(x.action) + ' ' + esc(x.ref) + ' · ' + x.hash.slice(0, 16) + '</li>').join('') || '<li class="empty">No records yet</li>';
 }
@@ -438,7 +450,7 @@ function cardOf(c) {
   const r = AG.run, i = c.inputs || {}, evs = r.events.filter((e) => c.evidence.includes(e.id)).map((e) => ({ minute: e.minute, type: e.type, player: e.player, team: e.team, xg: e.data && e.data.xg != null ? e.data.xg : null }));
   const m = c.kind === 'moment' ? r.moments.find((q) => q.id === i.momentId) : null;
   if (m) evs.push({ minute: m.minute, type: m.type, player: null, team: m.team, xg: null, why: m.why });
-  const card = { id: c.id, minute: c.minute, kind: c.kind, text: c.text, verdict: c.verdict, source: c.source || 'rules', player: i.player || i.scorer || null, evidence: evs };
+  const card = { id: c.id, minute: c.minute, kind: c.kind, text: c.text, verdict: c.verdict, source: c.source || 'rules', player: i.player || i.scorer || null, evidence: evs, tr: c.tr || null };
   if (c.kind === 'score') Object.assign(card, { plain: 'Goal for ' + i.teamName + '!', chips: ['Score ' + i.score.join('–'), mins(c.minute)] });
   else if (c.kind === 'shot') Object.assign(card, { plain: 'A big chance for ' + i.teamName + '.', chips: ['xG ' + (+i.xg).toFixed(2), i.kind] });
   else Object.assign(card, { plain: i.title || c.text, chips: [mins(c.minute), String(i.type || c.kind).replace('_', ' ')] });
@@ -462,10 +474,12 @@ function pushCards() {
   for (const c of r.claims) {
     if (c.approval === 'pending' || c.approval === 'killed') continue;   // a line waiting for a person, or killed, reaches no view
     if (!c.text || c.route === 'analyst' || c.kind === 'xg_total') continue;
-    const sig = c.verdict + '|' + c.source + '|' + c.text;
+    const sig = c.verdict + '|' + c.source + '|' + c.text + '|' + JSON.stringify(c.tr || null);
     if (sentCards.get(c.id) === sig) continue;
     sentCards.set(c.id, sig);
     post('watch', { src: 'matchcast-shell', type: 'pulse', card: cardOf(c) });
+    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); VC.say(c.text, { id: c.id, lang: 'en', at: c.airedAt, audio: c.audioUrl || null }); }
+    $('sr-lines').textContent = (c.verdict === 'verified' ? 'Verified line: ' : 'Line awaiting review: ') + c.text;   // screen readers hear each published line
   }
 }
 
@@ -486,7 +500,8 @@ window.addEventListener('message', (e) => {
     }
     return;
   }
-  if (d.type === 'persona' && view === 'watch') { LV.persona(d.persona); return; }   // the viewer's watch mode changed (EXP-4)
+  if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
+  if (d.type === 'persona' && view === 'watch') { LV.persona(d.persona, d.lang); return; }   // the viewer's watch mode changed (EXP-4)
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
@@ -551,19 +566,44 @@ function init(list) {
   const best = FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
   M.setup = setupOf(best); M.fixture = best.id;
   for (const b of document.querySelectorAll('.switch [data-view]')) b.onclick = () => { if (location.hash.slice(1) !== b.dataset.view) location.hash = b.dataset.view; else show(b.dataset.view); };
+  // arrow keys, Home and End move between the dashboard tabs (WAI-ARIA tabs pattern)
+  document.querySelector('.switch').addEventListener('keydown', (e) => {
+    const tabs = [...document.querySelectorAll('.switch [data-view]')], i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const to = e.key === 'ArrowRight' ? (i + 1) % tabs.length : e.key === 'ArrowLeft' ? (i + tabs.length - 1) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+    if (to < 0) return;
+    e.preventDefault(); location.hash = tabs[to].dataset.view; tabs[to].focus();
+  });
   document.addEventListener('keydown', (e) => {
     if (e.target.closest && e.target.closest('input,select,textarea')) return;
     const map = { '1': 'watch', '2': 'analyst', '3': 'broadcast', '4': 'agents' };
     if (map[e.key]) location.hash = map[e.key];
   });
   window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'watch'));
+  $('ag-prov').onclick = (e) => { const b = e.target.closest('.ag-how'); if (b) TP.open(b.dataset.id); };
   for (const id of ['lg-verdict', 'lg-agent', 'lg-metric']) $(id).onchange = renderAgents;
   $('lg-export').onclick = exportLedger;
   $('ag-claims').onclick = (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) { picked = tr.dataset.id; renderAgents(); } };
   $('ag-verify').onclick = async () => {
+    let pre = '';
+    if (LV.enabled) {   // with an api, check the server's records; if it cannot answer, say so and fall back to the in-page chain
+      try {
+        const recs = await LV.audit(), v = await LV.verifyChain(recs);
+        $('ag-verify-out').textContent = v.valid ? 'Chain intact · ' + v.count + ' records · server' : 'Chain broken at sequence ' + v.first_broken_sequence + ' (' + v.reason + ') · server';
+        $('ag-recs').innerHTML = recs.slice(-6).reverse().map((x) => '<li>#' + x.sequence + ' ' + esc(x.actor_id) + ' ' + esc(x.action) + ' ' + esc(x.subject_id) + ' · ' + esc(String(x.hash).slice(0, 16)) + '</li>').join('') || '<li class="empty">No records yet</li>';
+        return;
+      } catch (err) { pre = 'Server records not available (' + err.message + '); '; }
+    }
     const v = await MCC.verify();
-    $('ag-verify-out').textContent = v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '…' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count;
+    $('ag-verify-out').textContent = pre + (v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '… · in-page (simulated)' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count + ' · in-page (simulated)');
   };
+  $('ag-bad').onchange = (e) => AG.seedBad(e.target.checked);
+  const vb = $('voice-btn'), vshow = () => {
+    vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
+    $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') : '';
+    vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
+  };
+  VC.onChange(vshow); VC.load().then(vshow); vshow(); vb.onclick = () => { VC.set(!VC.on); vshow(); };
   AG.onAir((l) => post('broadcast', { src: 'matchcast-shell', type: 'air', line: l }));
   $('aq-mode').onchange = (e) => AG.setMode(e.target.value);
   $('aq-list').onclick = (e) => {
@@ -575,7 +615,7 @@ function init(list) {
     else { const t = prompt('Edit the line (numbers must already be in it)', c.text); if (t == null) return; res = AG.edit(id, PRODUCER, t); }
     $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
   };
-  AG.onChange(() => { renderAgents(); pushCards(); });
+  AG.onChange(() => { $('ag-bad').checked = AG.seeding; renderAgents(); pushCards(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
   const paintPill = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; };

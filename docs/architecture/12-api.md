@@ -21,7 +21,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/matches` | anyone | `session_id, match_id, seed, engine_version, home_team_id, away_team_id, venue_id, kickoff_local, approval_mode, roster` | 201 match | 409 exists, 422 |
 | `GET /v1/matches/{match_id}` | anyone | `session_id` | 200 match + current state | 404 |
 | `POST /v1/matches/{match_id}/events` | anyone | `session_id`; `{events: [...]}` 1 to 50 contract events | 202 `{accepted, last_sequence}` | 422 invalid event (first bad index and validator message), 409 sequence gap over 50, 503 publish failed |
-| `GET /v1/matches/{match_id}/stream` | anyone | `session_id, persona, lang`; `Last-Event-ID` header | 200 `text/event-stream` | 404 |
+| `GET /v1/matches/{match_id}/stream` | anyone | `session_id, persona, lang`; `Last-Event-ID` header | 200 `text/event-stream` | 404, 422 unknown persona, 429 watch-mode cap |
 | `GET /v1/matches/{match_id}/claims` | anyone | `session_id, verdict?, agent?, metric?, limit ≤ 500, cursor?` | 200 page | 404 |
 | `GET /v1/matches/{match_id}/lines` | Producer | `session_id, status?` | 200 page (the approval queue) | 403 |
 | `POST /v1/lines/{line_id}/approve` | Producer | `session_id, match_id` | 200 line (+ publication) | 403, 404, 409 not approvable |
@@ -30,8 +30,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `GET /v1/matches/{match_id}/audit` | anyone | `session_id, from_seq?, limit ≤ 1000` | 200 records | 404 |
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
 | `POST /v1/matches/{match_id}/ask` | anyone | `session_id, browser_session_id, question ≤ 300, persona, lang` | 200 `{answer, citations[], claim_ids[], verdict, trace_id}` | 400 shield, 429 |
-| `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300, lang` | 200 `{reply, audio_url, verdict}` | 400, 429 |
-| `POST /v1/ds/ask` | anyone | `question ≤ 300` | 200 `{answer, sql, rows[], chart_spec, verdict}` | 400, 429 |
+| `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300` | 200 `{target, reply, verdict, facts}` (rules-mode template replies; `audio_url` and `lang` are **Planned** with Speech) | 400 `prompt_attack`, 404 unknown target, 422, 429 |
+| `POST /v1/ds/ask` | anyone | `session_id, question ≤ 300` | 200 `{answer, verdict, sql, columns[], rows[], chart_spec}` | 400 `invalid_query`, 429, 503 |
 | `POST /v1/matches/{match_id}/vision/identify` | anyone | `session_id, crop, track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}` | 413, 429 |
 | `GET /v1/speech/token` | anyone | none | 200 `{token, region, expires_at}` | 429 (10 a minute per IP) |
 | `GET /v1/audio/{publication_id}.{lang}.mp3` | anyone | `session_id, match_id` | 200 `audio/mpeg` | 404 |
@@ -56,12 +56,14 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `status` | `{status, reason?}`: `live`, `rules_fallback` (with `reason` from the `fallback_reason` list in 04-agents.md §4) or `warming_up`. Sent only when the status or reason changes; every refusal is still audited as `fallback_used` | none |
 | `heartbeat` | server time | none, every 15 s |
 
+`persona` is `casual`, `analyst`, `broadcast` (aliases `fan`, `producer`) or a watch mode: `club:<id or name>`, `player:<id or name>`, `metric:<name>` (server forms `my-club:`, `player-focus:`, `one-metric:`). A watch mode must name a real club, player or metric of the match; opening the stream registers it for the match from the next moment on (no back-fill), at most 8 extra modes per match, kept until the match ends.
+
 On reconnect with `Last-Event-ID`, the server replays publications and audit records after that point (at most 500), then continues live.
 
 ## 4. MCP and A2A
 
 - MCP server: `services/mcp`, Streamable HTTP at `/mcp`. Tools and limits are listed in [04-agents.md](04-agents.md) §6. Internal callers (`api`) use the internal FQDN; Copilot uses the external route behind Easy Auth.
-- A2A: Stats Desk at `/a2a`, Agent Card at `/.well-known/agent-card.json` with name `matchcast-stats-desk`, one skill `compare_to_season`, input `{metric, team_id | player_id}`, output `{value, season_avg, rank, of: 28}`.
+- A2A: Stats Desk at `/a2a` on the `mcp` container only (not mounted on the public api; internal ingress), Agent Card at `/.well-known/agent-card.json` with name `MatchCast Stats Desk`, one skill `compare_to_season`, input `{skill, metric, scope (team|player), value, team_id?}`, output `{metric, scope, team_id, value, season_average, rank, of, matches}`. `of` counts the season's team (or player) match performances: 56 for teams, not matches. Bad input gets a JSON-RPC `-32602` error.
 
 ## 5. Event Hubs messages
 
@@ -80,6 +82,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `match_exists` | 409 | `POST /v1/matches` for an existing stream key |
 | `not_found` | 404 | Unknown match, line, publication or recap |
 | `forbidden_role` | 403 | Producer route without the Producer or Admin role |
+| `invalid_query` | 400 | `/ds/ask` produced SQL the season guard refused |
 | `prompt_attack` | 400 | Prompt Shields flagged the input |
 | `rate_limited` | 429 | Over a limit in §7; `Retry-After` set |
 | `publish_failed` | 503 | Event Hubs publish failed; retry the same batch |

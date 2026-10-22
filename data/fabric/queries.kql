@@ -1,0 +1,78 @@
+// Real-Time Dashboard tiles (DAT-8), exactly four, refresh 10 s (docs/architecture/08 section 5).
+// In the dashboard, add a string parameter `MatchId` (single selection, default = latest match) and
+// delete the `let MatchId` line from each query. Run standalone by setting it below.
+// All tiles read EventsLatest() (events.kql): the newest revision of each event, no retractions.
+// Pitch is 105 x 68 m; goals at x = 0 and x = 105. Not run against a live Eventhouse yet.
+//
+// The tiles are KQL approximations of the metrics in packages/metrics (docs/metrics.md): the event
+// stream carries positions, not the computed xG or pass quality, so the same formulas are rebuilt
+// here from the event positions. The app and Databricks use the packages/metrics values.
+
+// ---- Tile 1: control vs chaos timeline (line chart, one point per minute) -------------------------
+// control = home share of passes and carries in the minute (50 = even).
+// chaos   = share of all events in the minute that are contests: tackles, fouls, pressure,
+//           possession changes (0 to 100).
+let MatchId = "match-demo";
+EventsLatest()
+| where match_id == MatchId
+| extend minute = event_time_ms / 60000
+| summarize
+    home_ball = countif(kind in ("pass", "carry") and team_id == "home"),
+    all_ball = countif(kind in ("pass", "carry")),
+    contests = countif(kind in ("tackle", "foul", "pressure", "possession_change")),
+    total = count()
+    by minute
+| project minute,
+    control = iff(all_ball == 0, 50.0, round(100.0 * home_ball / all_ball, 1)),
+    chaos = round(100.0 * contests / total, 1)
+| order by minute asc
+
+// ---- Tile 2: pass quality leaders (bar chart, top 10 players) -------------------------------------
+// Forward gain towards the goal the team attacks, over 30 m and clamped to 0..1 (the progression
+// term of pass_quality). A team attacks x = 105 if its goals and shots are mostly at x > 52.5, and
+// the home team defaults to x = 105 before it has any.
+let MatchId = "match-demo";
+let attack = EventsLatest()
+    | where match_id == MatchId and kind in ("shot", "goal")
+    | summarize avg_x = avg(x) by team_id
+    | project team_id, attack_x = iff(avg_x > 52.5, 105.0, 0.0);
+EventsLatest()
+| where match_id == MatchId and kind == "pass"
+| extend x0 = todouble(payload.start_position.x), x1 = todouble(payload.end_position.x)
+| join kind=leftouter attack on team_id
+| extend attack_x = coalesce(attack_x, iff(team_id == "home", 105.0, 0.0))
+| extend gain = (x1 - x0) * iff(attack_x > 52.5, 1.0, -1.0)
+| extend progression = max_of(0.0, min_of(1.0, gain / 30.0))
+| summarize passes = count(), quality = round(avg(progression), 3) by player_id, team_id
+| where passes >= 5
+| top 10 by quality desc
+
+// ---- Tile 3: shots and xG by team (stacked columns) -----------------------------------------------
+// Same rule as packages/agents/matchcast_agents/xg.py: only `shot` events carry xG, the attacked goal
+// is the one in the half of the pitch the shot is in. xG = 1 / (1 + exp(-(b0 + b1 * angle + b2 * dist)))
+// with the constants of data/calibration/xg.json; angle = angle the 7.32 m goal mouth subtends at the
+// shot, dist = distance to the goal centre. Header x0.8 and the nearby-defender x0.7 need data the
+// stream does not carry, so they are left out. Checked against packages/metrics `xg` (equal to 1e-15).
+let MatchId = "match-demo";
+let b0 = -1.464609; let b1 = 1.413822; let b2 = -0.089141;
+let shots = EventsLatest()
+    | where match_id == MatchId and kind == "shot"
+    | extend goal_x = iff(x > 52.5, 105.0, 0.0)
+    | extend dx = abs(goal_x - x)
+    | extend dist = sqrt(dx * dx + pow(y - 34.0, 2))
+    | extend angle = abs(atan2(y - 30.34, dx) - atan2(y - 37.66, dx))
+    | extend xg = max_of(0.005, min_of(0.95, 1.0 / (1.0 + exp(-(b0 + b1 * angle + b2 * dist)))))
+    | summarize shots = count(), xg = round(sum(xg), 2) by team_id;
+let goals = EventsLatest()
+    | where match_id == MatchId and kind == "goal"
+    | summarize goals = count() by team_id;
+shots
+| join kind=fullouter goals on team_id
+| project team_id = coalesce(team_id, team_id1), shots = coalesce(shots, 0), goals = coalesce(goals, 0), xg = coalesce(xg, 0.0)
+
+// ---- Tile 4: events per minute (area chart) -------------------------------------------------------
+let MatchId = "match-demo";
+EventsLatest()
+| where match_id == MatchId
+| summarize events_per_minute = count() by minute = event_time_ms / 60000
+| order by minute asc

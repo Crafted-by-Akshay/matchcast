@@ -1,0 +1,73 @@
+# Databricks Asset Bundle for MatchCast (DAT-6). One job, one single-node jobs cluster that ends with
+# the run. No all-purpose cluster and no Model Serving endpoint (cost cap, docs/architecture/08 §4).
+#
+# Validate and run from a machine with `az login` (Entra auth, no token in this file):
+#   cd data/databricks
+#   databricks bundle validate -t dev
+#   databricks bundle deploy   -t dev
+#   databricks bundle run train_danger -t dev
+# Status: written, not validated against a workspace yet (the workspace is created by PLT-3).
+# Open point for the first run: train_danger.py starts with the "# Databricks notebook source" header, which
+# the workspace imports as a notebook; spark_python_task wants a plain file. If `bundle run` rejects it,
+# either drop that header line or switch the task to notebook_task with widgets for the arguments.
+bundle:
+  name: matchcast
+
+variables:
+  scenes_path:
+    description: Scene Parquet written by scripts/generate_scenes.py (DAT-5), on a Unity Catalog volume over the `scenes` container
+    default: /Volumes/matchcast/raw/scenes/v1/scenes.parquet
+  models_path:
+    description: Output folder, a volume over the `models` container; the version is appended
+    default: /Volumes/matchcast/ml/models/danger
+  model_version:
+    default: "1"
+  node_type:
+    description: Standard_D4ds_v5; if quota blocks it use Standard_DS3_v2 and note it in docs/data.md
+    default: Standard_D4ds_v5
+
+resources:
+  jobs:
+    train_danger:
+      name: train-danger
+      max_concurrent_runs: 1
+      timeout_seconds: 3600
+      tasks:
+        - task_key: train
+          spark_python_task:
+            python_file: ./train_danger.py
+            parameters:
+              - --scenes
+              - ${var.scenes_path}
+              - --out
+              - ${var.models_path}/${var.model_version}
+              - --version
+              - ${var.model_version}
+          job_cluster_key: single_node
+          libraries:
+            # skl2onnx writes model.onnx; the ML runtime already has scikit-learn and MLflow
+            - pypi:
+                package: skl2onnx==1.17.0
+      job_clusters:
+        - job_cluster_key: single_node
+          new_cluster:
+            spark_version: 15.4.x-cpu-ml-scala2.12
+            node_type_id: ${var.node_type}
+            num_workers: 0
+            data_security_mode: SINGLE_USER
+            spark_conf:
+              spark.databricks.cluster.profile: singleNode
+              spark.master: local[*, 4]
+            custom_tags:
+              ResourceClass: SingleNode
+              project: matchcast
+            azure_attributes:
+              availability: ON_DEMAND_AZURE
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      # set once: `databricks bundle deploy -t dev --var ...` or export DATABRICKS_HOST (dbw-matchcast-dev URL)
+      root_path: ~/.bundle/${bundle.name}/${bundle.target}
