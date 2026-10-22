@@ -28,7 +28,7 @@ resource cog 'Microsoft.CognitiveServices/accounts@2024-10-01' = [for a in accou
 
 // AI Search Free (ADR-0009). Free has no managed identity, so access is by key; the keys are
 // copied into Key Vault by the post-provision hook (scripts/set_search_secrets.sh), never output here.
-resource search 'Microsoft.Search/searchServices@2024-06-01-preview' = {
+resource search 'Microsoft.Search/searchServices@2023-11-01' = {
   name: 'srch-${name}-${suffix}'
   location: location
   tags: tags
@@ -38,12 +38,10 @@ resource search 'Microsoft.Search/searchServices@2024-06-01-preview' = {
     partitionCount: 1
     hostingMode: 'default'
     publicNetworkAccess: 'enabled'
-    authOptions: { apiKeyOnly: {} }
-    disableLocalAuth: false
   }
 }
 
 output cognitiveNames array = [for (a, i) in accounts: cog[i].name]
-output contentSafetyEndpoint string = cog[0].properties.endpoint
+output contentSafetyEndpoint string = cog[indexOf(map(accounts, a => a.key), 'contentSafety')].properties.endpoint
 output searchName string = search.name
 output searchEndpoint string = 'https://${search.name}.search.windows.net'

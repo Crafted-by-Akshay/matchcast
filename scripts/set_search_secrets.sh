@@ -11,15 +11,20 @@ RG=${AZURE_RESOURCE_GROUP:-rg-matchcast}
 SEARCH=${SEARCH_SERVICE:?SEARCH_SERVICE is not set (azd output of the ai module)}
 VAULT=${KEY_VAULT:?KEY_VAULT is not set (azd output)}
 
+# needs Contributor or Search Service Contributor on the resource group
 admin=$(az search admin-key show -g "$RG" --service-name "$SEARCH" --query primaryKey -o tsv)
 query=$(az search query-key list -g "$RG" --service-name "$SEARCH" --query '[0].key' -o tsv)
 if [ -z "$query" ]; then
   query=$(az search query-key create -g "$RG" --service-name "$SEARCH" --name matchcast-query --query key -o tsv)
 fi
 
-set_secret() {
-  if ! az keyvault secret set --vault-name "$VAULT" --name "$1" --value "$2" --output none 2>/tmp/kv_err; then
-    echo "could not write $1 to $VAULT: $(head -c 300 /tmp/kv_err)" >&2
+err=$(mktemp)
+trap 'rm -f "$err"' EXIT
+
+set_secret() { # the value goes through stdin, not the command line (visible in the process list)
+  if ! printf '%s' "$2" | az keyvault secret set --vault-name "$VAULT" --name "$1" --file /dev/stdin \
+    --encoding utf-8 --output none 2>"$err"; then
+    echo "could not write $1 to $VAULT: $(head -c 300 "$err")" >&2
     echo "grant yourself 'Key Vault Secrets Officer' on $VAULT and run this script again" >&2
     exit 1
   fi
