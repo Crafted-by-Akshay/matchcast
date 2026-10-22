@@ -23,7 +23,7 @@ smoke = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages/agents/tests", "packages/shared/tests", "packages/metrics/tests"]
+testpaths = ["tests", "packages/agents/tests", "packages/shared/tests", "packages/metrics/tests", "services/worker/tests"]
 python_files = ["test_*.py"]
 pythonpath = ["services/api"]
 

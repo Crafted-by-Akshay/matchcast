@@ -562,6 +562,16 @@ requires-dist = [
 name = "matchcast-worker"
 version = "0.1.0"
 source = { editable = "services/worker" }
+dependencies = [
+    { name = "matchcast-agents" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "matchcast-agents", editable = "packages/agents" },
+    { name = "pydantic", specifier = ">=2.9,<3" },
+]
 
 [[package]]
 name = "matchcast-workspace"
