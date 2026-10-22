@@ -15,12 +15,14 @@ const LV = (() => {
   const num = (v) => v != null && v !== '' && Number.isFinite(+v);
   const clampX = (v, d) => Math.max(0, Math.min(105, num(v) ? +v : d)), clampY = (v, d) => Math.max(0, Math.min(68, num(v) ? +v : d));
   let lastShot = null;   // Watch's goal events carry no position, so a goal takes the position of the shot before it
+  // the shot's drawn fate (goal, save or miss) says whether it was on target; without a fate (an older source) the xG guess stays
+  const onTarget = (ev) => ev.fate === 'goal' || ev.fate === 'save' ? true : ev.fate === 'miss' ? false : ev.kind === 'penalty' || (+ev.xg || 0) > 0.1;
   const pos = (x, y) => ({ x: clampX(x, 52.5), y: clampY(y, 34), z: 0 });
   const payloadOf = (ev, t, p) => {
     const other = teamIds.find((id) => id !== t);
     switch (ev.type) {
       case 'goal': { const g = num(ev.x) ? ev : lastShot || ev; return { v: '1.0.0', o: { type: 'goal', player_id: p, team_id: t, own_goal: !!ev.ownGoal, position_unit: 'm', position: pos(g.x, g.y) } }; }
-      case 'shot': lastShot = ev; return { v: '1.0.0', o: { type: 'shot', player_id: p, team_id: t, position_unit: 'm', position: pos(ev.x, ev.y), on_target: ev.kind === 'penalty' || (+ev.xg || 0) > 0.1 } };
+      case 'shot': lastShot = ev; return { v: '1.0.0', o: { type: 'shot', player_id: p, team_id: t, position_unit: 'm', position: pos(ev.x, ev.y), on_target: onTarget(ev) } };
       case 'pass': return ev.to && num(ev.x0) ? { v: '1.0.0', o: { type: 'pass', player_id: p, recipient_player_id: slug(ev.to), team_id: t, position_unit: 'm', start_position: pos(ev.x0, ev.y0), end_position: pos(ev.x1, ev.y1) } } : null;
       case 'foul': return ev.on ? { v: '1.1.0', o: { type: 'foul', player_id: p, team_id: t, victim_player_id: slug(ev.on), advantage: false, position_unit: 'm', position: pos(ev.x, ev.y) } } : null;
       case 'yellow_card': case 'red_card': {
@@ -145,11 +147,47 @@ const LV = (() => {
     for (const ev of batch || []) { const p = toPacket(ev, run.key, run.seq + 1, new Date().toISOString()); if (p) { run.seq++; run.queue.push(p); } }
     flush();
   };
+  // Vision derived events (DAT-11 task 277): the tracker's passes, on their own stream `<session>.vision` so they never mix with engine truth.
+  // Its own match is created on first use from the same roster; packets are plain contract `pass` events.
+  const vstream = (r) => Object.assign({}, r.key, { session_id: r.key.session_id + '.vision' });
+  const visionEvents = (batch) => {
+    const r = run; if (!r || !r.roster || !batch || !batch.length) return;
+    const v = r.vision || (r.vision = { key: vstream(r), seq: 0, queue: [], created: false, sending: false });
+    for (const b of batch) {
+      if (b.type !== 'pass' || !b.team || !b.from || !b.to) continue;
+      const ms = Math.max(0, Math.round(b.minute * 60000)), second = b.minute >= 45;
+      v.queue.push({ kind: 'event', schema_version: '1.0.0', stream: v.key, event_id: 'v' + (++v.seq), stream_sequence: v.seq, revision: 0, event_time_ms: ms, emitted_at: new Date().toISOString(),
+        clock: { period: second ? 2 : 1, period_elapsed_ms: second ? ms - 45 * 60000 : ms },
+        payload: { type: 'pass', player_id: slug(b.from), recipient_player_id: slug(b.to), team_id: slug(b.team), position_unit: 'm',
+          start_position: { x: b.start.x, y: b.start.y, z: 0 }, end_position: { x: b.end.x, y: b.end.y, z: 0 } } });
+    }
+    if (v.queue.length > 2000) v.queue.splice(0, v.queue.length - 2000);   // an api that never accepts the stream does not grow the queue without bound
+    sendVision(r, v);
+  };
+  const sendVision = async (r, v) => {
+    if (v.sending || !v.queue.length) return;
+    v.sending = true;
+    const at = (path) => api() + path + '?' + new URLSearchParams({ session_id: v.key.session_id }), json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    try {
+      if (!v.created) {
+        const res = await fetch(api() + '/v1/matches', json({ session_id: v.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1-vision', home_team_id: r.roster.team_ids[0], away_team_id: r.roster.team_ids[1], venue_id: 'v1',
+          kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: Object.assign({}, r.roster, { stream: v.key }) }));
+        if (res.ok || res.status === 409) v.created = true; else throw new Error('create ' + res.status);
+      }
+      const batch = v.queue.slice(0, BATCH);
+      const res = await fetch(at('/v1/matches/' + r.id + '/events'), json({ events: batch }));
+      if (!res.ok) throw new Error('events ' + res.status);
+      v.queue.splice(0, batch.length);
+    } catch (e) { /* kept; the next batch retries */ }
+    v.sending = false;
+    if (v.queue.length && run === r && v.created) sendVision(r, v);
+  };
+
   // the viewer's watch mode (casual, analyst, club:<key>, player:<name>, metric:<name>): the stream is reopened for it
   const setPersona = (p, l) => { l = l || 'en'; if (p === persona && l === lang) return; persona = p; lang = l; if (run) { if (run.es) run.es.close(); open(); } };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, stop, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, visionEvents, stop, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();
