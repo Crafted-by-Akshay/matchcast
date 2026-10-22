@@ -491,10 +491,14 @@ window.addEventListener('message', (e) => {
   if (!view) return;
   if (d.type === 'ask' && view === 'watch') { answerAsk(d.id, d.q); return; }
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
+  if (d.type === 'vision' && view === 'watch') {   // Watch's pixel-only tracker, scored against engine truth (DAT-11); the Analyst's Tracking lab shows it
+    M.vision = d.report; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'vision', report: d.report }); return;
+  }
   if (view === 'analyst') {
     if (d.type === 'progress') { waitText('analyst', d.text); return; }
     if (d.type === 'ready') {
       FR.analyst.ready = true; FR.analyst.route = null; $('v-analyst').classList.add('ready');
+      if (M.vision) post('analyst', { src: 'matchcast-shell', type: 'vision', report: M.vision });
       routeAnalyst();
       for (const m of pendingImports.splice(0)) post('analyst', m);
     }
@@ -516,6 +520,7 @@ window.addEventListener('message', (e) => {
     const s = d.setup, fxId = fixtureOf(s);
     f.key = keyOf(s); f.sent = null;
     M.setup = s; M.fixture = fxId;
+    if (view === 'watch' && M.vision) { M.vision = null; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'vision', report: null }); }   // a new Watch match: the old match's scores no longer apply
     $('v-' + view).classList.add('ready');
     if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); }   // a new match from Watch starts a new agent run
     prefetchOthers();

@@ -117,3 +117,9 @@ A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chi
 - `embed/replay.js` (appended after `broadcast.js` by `build.py`) keeps the last 60 s of Watch's frames in Broadcast. The "Instant replay" bar on the live view plays back the last 10, 20 or 30 s at normal or half speed, with a red REPLAY tag and a Back to live button; it returns to live by itself at the end.
 - Only player and ball positions are replayed. Clock, score and stats stay live, events and agent lines are not replayed, and Watch keeps running underneath. The buttons stay disabled until two frames are buffered. The buffer is in the page, so it is empty after a reload. Test: `tests/e2e/replay.spec.ts`.
 - The desk's CSS hides every direct child of `body` except `#bc`, `#stage` and `#load`, so overlays for Broadcast must be appended inside `#bc-view`.
+
+## Vision accuracy in the Tracking lab (DAT-11, tasks 274 and 278)
+- The prototype tracker (`autoevent.js`, the 👁 Vision button) already runs inside the Watch build: it reads the 640-wide broadcast render (the canvas is 640x316 in practice, not 640x360 as doc 09 says) at about 5 Hz, and its scorer compares the result with engine truth.
+- While Vision is on, `embed/watch.js` posts `visReport()` to the shell every 5 s. The shell keeps the latest report (`M.vision`) and forwards it to the Analyst, which shows it at the top of Data science > Tracking lab (`analyst-pages/40_vision.js`): recall, precision, position error, glyph-reader identity, passes, ball, speed.
+- Identity with Azure AI Vision Read OCR as a second opinion, the crop queue and the `/vision/identify` api are **Planned** (tasks 275 and 277); the panel says so.
+- Tests: `tracking lab:` and `vision on in Watch reaches the Tracking lab` in `tests/e2e/analyst.spec.ts`.

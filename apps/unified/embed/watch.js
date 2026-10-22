@@ -111,3 +111,15 @@ MCS.progress('Loading the stadium and players');
       ball: [r2(ball.p.x), r2(ball.p.y), r2(ball.p.z)], players: players.map((p) => [r2(p.pos2.x), r2(p.pos2.y), r2(p.vel.x), r2(p.vel.y), r2(p.yaw)]) } });
   }, 250);
 })();
+
+// ---- DAT-11: the Vision tracker's accuracy report goes to the shell every 5 s while Vision is on (and once when it is turned off),
+// and the Analyst's Tracking lab shows it. The tracker reads pixels only; the report is the scorer's comparison with engine truth.
+(() => {
+  let wasOn = false;
+  setInterval(() => {
+    if (typeof visReport !== 'function' || typeof VIS === 'undefined') return;
+    if (!VIS.on && !wasOn) return;
+    wasOn = VIS.on;
+    MCS.send({ type: 'vision', report: visReport() });
+  }, 5000);
+})();
