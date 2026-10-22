@@ -3,6 +3,9 @@
 @minLength(3)
 param name string
 param location string
+
+@description('Region of the AI Search service; separate because eastus2 had no capacity for the free tier on 22 Oct.')
+param searchLocation string = location
 param tags object
 
 // Makes the global custom domain and search names unique; stable per resource group.
@@ -32,7 +35,7 @@ resource cog 'Microsoft.CognitiveServices/accounts@2024-10-01' = [for a in accou
 // copied into Key Vault by the post-provision hook (scripts/set_search_secrets.sh), never output here.
 resource search 'Microsoft.Search/searchServices@2023-11-01' = {
   name: 'srch-${name}-${suffix}'
-  location: location
+  location: searchLocation
   tags: tags
   sku: { name: 'free' }
   properties: {
