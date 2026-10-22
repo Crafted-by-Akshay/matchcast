@@ -198,6 +198,12 @@ button,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="ag-cards" id="ag-cards"></div>
+      <section class="ag-panel" id="aq"><h3>Approval queue <span class="muted" id="aq-n"></span></h3>
+        <div class="ag-filters"><label>Mode <select id="aq-mode"><option value="demo">Demo: verified lines air at once</option><option value="producer">Producer: a person approves each line</option></select></label>
+          <span class="muted" id="aq-who">Signed in as Sam Producer (simulated account, Planned: Entra ID)</span></div>
+        <ul class="ag-queue" id="aq-list" aria-live="polite"></ul>
+        <p class="muted" id="aq-msg" role="status"></p>
+      </section>
       <div class="ag-grid">
         <section class="ag-panel"><h3>Live flow</h3><ol class="ag-feed" id="ag-feed"></ol></section>
         <section class="ag-panel"><h3>Provenance</h3><div class="ag-prov" id="ag-prov"></div></section>
@@ -366,7 +372,7 @@ const valueOf = (c) => c.kind === 'score' ? c.inputs.score.join('–') : c.kind 
 function ledgerRows(claims) {
   const f = { verdict: $('lg-verdict').value, agent: $('lg-agent').value, metric: $('lg-metric').value };
   return claims.slice().reverse().map((c) => ({ id: c.id, time: mins(c.minute), metric: (METRIC[c.kind] || [c.inputs && c.inputs.metric ? c.inputs.metric : c.kind])[0], value: valueOf(c), units: (METRIC[c.kind] || [null, c.inputs && c.inputs.units || ''])[1],
-    agent: c.agent, source: c.source === 'model' ? 'model' : 'rules', verdict: c.verdict, repaired: c.repaired, reason: c.reason || '', approval: c.verdict === 'verified' ? 'approved' : c.verdict === 'pending' ? 'pending' : 'held' }))
+    agent: c.agent, source: c.source === 'model' ? 'model' : 'rules', verdict: c.verdict, repaired: c.repaired, reason: c.reason || '', approval: c.approval || (c.verdict === 'verified' ? 'approved' : c.verdict === 'pending' ? 'pending' : 'held') }))
     .filter((x) => (!f.verdict || x.verdict === f.verdict) && (!f.agent || x.agent === f.agent) && (!f.metric || x.metric === f.metric));
 }
 const csvCell = (s) => /[",\n]/.test(String(s)) ? '"' + String(s).replace(/"/g, '""') + '"' : String(s);
@@ -380,7 +386,15 @@ async function exportLedger() {
   $('lg-hash').textContent = rows.length + ' rows · SHA-256 ' + hash;
 }
 let picked = null;   // the claim the provenance panel shows; the latest one when none is picked
+const PRODUCER = 'Sam Producer (simulated)';
+function renderQueue() {
+  const r = AG.run, q = r ? r.claims.filter((c) => c.approval === 'pending') : [];
+  $('aq-mode').value = AG.mode; $('aq-n').textContent = q.length ? q.length + ' waiting' : '';
+  $('aq-list').innerHTML = q.length ? q.map((c) => '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
+    : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';
+}
 function renderAgents() {
+  renderQueue();
   if (current !== 'agents') return;
   const r = AG.run, st = r ? r.stat : { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 };
   const sel = picked || (r && r.claims.length ? r.claims[r.claims.length - 1].id : null);
@@ -434,6 +448,7 @@ function cardOf(c) {
 function pushCards() {
   const r = AG.run; if (!r) return;
   for (const c of r.claims) {
+    if (c.approval === 'pending' || c.approval === 'killed') continue;   // a line waiting for a person, or killed, reaches no view
     if (!c.text || c.route === 'analyst' || c.kind === 'xg_total') continue;
     const sig = c.verdict + '|' + c.source + '|' + c.text;
     if (sentCards.get(c.id) === sig) continue;
@@ -534,6 +549,17 @@ function init(list) {
     $('ag-verify-out').textContent = v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '…' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count;
   };
   $('ag-bad').onchange = (e) => AG.seedBad(e.target.checked);
+  AG.onAir((l) => post('broadcast', { src: 'matchcast-shell', type: 'air', line: l }));
+  $('aq-mode').onchange = (e) => AG.setMode(e.target.value);
+  $('aq-list').onclick = (e) => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const id = b.closest('li').dataset.id, c = AG.run.claims.find((x) => x.id === id);
+    let res;
+    if (b.dataset.act === 'approve') res = AG.approve(id, PRODUCER);
+    else if (b.dataset.act === 'kill') res = AG.kill(id, PRODUCER, 'killed by producer');
+    else { const t = prompt('Edit the line (numbers must already be in it)', c.text); if (t == null) return; res = AG.edit(id, PRODUCER, t); }
+    $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
+  };
   AG.onChange(() => { renderAgents(); pushCards(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };

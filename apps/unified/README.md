@@ -67,3 +67,8 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - The shell is in English only. Broadcast has its own EN and Tamil script.
 - Azure parts, Entra roles and the Foundry agents are simulated and labelled as such in each view.
 - Tested in local headless Chromium. Not yet tested inside the claude.ai artifact host.
+
+## Lower-thirds, teleprompter and the approval queue (EXP-7, EXP-11)
+- Agents tab, Approval queue: **Demo** mode airs verified Broadcast lines at once. **Producer** mode holds each one until a person approves, edits or kills it. The signed-in producer is a simulated account (Planned: Entra ID).
+- Broadcast shows an approved line as a lower-third for 8 seconds and keeps the last five in the teleprompter list. A pending or killed line reaches no view, including Watch's Match Pulse.
+- Edit is re-verified: every number in the new text must already be in the verified line (or its minute), otherwise it is rejected and not aired. Approve, edit and kill each write `line_approved`, `line_edited` or `line_killed` to the audit chain with the person's name.
