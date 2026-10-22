@@ -2,11 +2,11 @@ import { test, expect, type Page } from '@playwright/test';
 import { collectErrors, openShell, viewFrame } from './helpers';
 
 // EXP-13: Data platform page in the Analyst view. Fabric and Databricks are not connected, so the page must say Planned.
-async function openPage(page: Page) {
+async function openPage(page: Page, route = 'data-platform') {
   await openShell(page, 'analyst');
   const f = await viewFrame(page, 'analyst');
   await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
-  await f.evaluate(() => (window as any).go('data-platform'));
+  await f.evaluate((r) => (window as any).go(r), route);
   return f;
 }
 
@@ -37,26 +37,25 @@ test('data platform: model card renders escaped, and the Fabric clip notes it is
 // QUA-3: audit chain and report generation. Ledger, approval and server audit join when EXP-11/12 land in this view.
 test('audit: Verify chain reports the session chain intact', async ({ page }) => {
   const errs = collectErrors(page);
-  await openShell(page, 'analyst');
-  const f = await viewFrame(page, 'analyst');
-  await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
-  await f.evaluate(() => (window as any).go('audit'));
+  const f = await openPage(page, 'audit');
   await expect(f.locator('.pg')).toContainText('Unverified');
   await f.click('#gv-ver');
   await expect(f.locator('.pg')).toContainText('Intact');
   expect(errs).toEqual([]);
 });
 
-test('reports: a sample report is drafted from the match numbers and can be submitted', async ({ page }) => {
+test('reports: a sample report is drafted from the latest match and moves to approval', async ({ page }) => {
   const errs = collectErrors(page);
-  await openShell(page, 'analyst');
-  const f = await viewFrame(page, 'analyst');
-  await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
-  await f.evaluate(() => (window as any).go('reports'));
+  const f = await openPage(page, 'reports');
+  // a fresh browser context has an empty library, so the empty-state button is there
   await f.click('#gv-sample');
   await expect(f.locator('.pg')).toContainText('Key numbers');
-  await expect(f.locator('.pg')).toContainText('Expected goals');
-  await expect(f.getByRole('button', { name: 'Submit for approval' })).toBeVisible();
+  // the score in the title equals the Goals row of the key-numbers table
+  const text = (await f.locator('.pg').innerText()).replace(/\s+/g, ' ');
+  const [, h, a] = text.match(/Post-match: .+? (\d+)–(\d+) /)!;
+  expect(text).toMatch(new RegExp('Goals ' + h + ' ' + a + ' '));
   await expect(f.getByRole('button', { name: 'Export .md' })).toBeVisible();
+  await f.getByRole('button', { name: 'Submit for approval' }).click();
+  await expect(f.locator('.pg')).toContainText(/pending approval/i);
   expect(errs).toEqual([]);
 });
