@@ -1,0 +1,13 @@
+---
+title: D. Belruda
+entities: lom-d-belruda, LOM
+generated: scripts/build_profiles.py
+---
+## Profile
+
+D. Belruda wears number 4 for Lombardia Nord (LOM) and plays as CB.
+Rating 85. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 65 passes (82% completed), 26 tackles, 1 shots, 0.10 xG, 3.9 km on average per match.

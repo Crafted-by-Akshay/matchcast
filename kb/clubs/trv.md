@@ -17,17 +17,17 @@ Played 7: won 1, drawn 5, lost 1. Goals for 8, against
 
 | Shirt | Player | Position | Rating |
 | --- | --- | --- | --- |
-| 1 | S. Brandão | GK | 85 |
-| 2 | M. Sandoval | RB | 83 |
-| 3 | A. Ferreira | LB | 82 |
-| 4 | O. Jensen | CB | 82 |
-| 5 | S. Duarte | CB | 86 |
-| 6 | T. Ekström | DM | 83 |
-| 7 | G. Petit | RW | 81 |
-| 8 | M. Moreno | CM | 82 |
-| 9 | N. Xhaka | ST | 84 |
-| 10 | P. Coman | CM | 83 |
-| 11 | M. Varela | LW | 81 |
+| 1 | S. Okodele | GK | 85 |
+| 2 | M. Bororin | RB | 83 |
+| 3 | A. Zarvena | LB | 82 |
+| 4 | O. Pellaine | CB | 82 |
+| 5 | S. Raslund | CB | 86 |
+| 6 | T. Talnila | DM | 83 |
+| 7 | G. Zorlav | RW | 81 |
+| 8 | M. Dorlano | CM | 82 |
+| 9 | N. Engoberg | ST | 84 |
+| 10 | P. Dralav | CM | 83 |
+| 11 | M. Mbadimi | LW | 81 |
 
 ## Results
 

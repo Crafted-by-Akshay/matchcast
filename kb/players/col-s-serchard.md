@@ -1,0 +1,13 @@
+---
+title: S. Serchard
+entities: col-s-serchard, COL
+generated: scripts/build_profiles.py
+---
+## Profile
+
+S. Serchard wears number 5 for Coloso Ciudad (COL) and plays as CB.
+Rating 82. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 51 passes (78% completed), 18 tackles, 0 shots, 0.00 xG, 4.0 km on average per match.

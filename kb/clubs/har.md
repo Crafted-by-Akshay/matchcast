@@ -17,17 +17,17 @@ Played 7: won 2, drawn 4, lost 1. Goals for 8, against
 
 | Shirt | Player | Position | Rating |
 | --- | --- | --- | --- |
-| 1 | N. Brennan | GK | 91 |
-| 2 | Z. Fofana | RB | 90 |
-| 3 | Z. Keane | LB | 91 |
-| 4 | V. Iniesta | CB | 88 |
-| 5 | Z. Sandoval | CB | 89 |
-| 6 | Y. Yeboah | DM | 92 |
-| 7 | P. Reyes | RW | 93 |
-| 8 | A. Garrido | CM | 92 |
-| 9 | S. Nakamura | ST | 89 |
-| 10 | B. Fuentes | CM | 91 |
-| 11 | E. Guerreiro | LW | 88 |
+| 1 | N. Navlano | GK | 91 |
+| 2 | Z. Chacourt | RB | 90 |
+| 3 | Z. Morinari | LB | 91 |
+| 4 | V. Namtembo | CB | 88 |
+| 5 | Z. Bororin | CB | 89 |
+| 6 | Y. Marimero | DM | 92 |
+| 7 | P. Hirahara | RW | 93 |
+| 8 | A. Tamahara | CM | 92 |
+| 9 | S. Zarnila | ST | 89 |
+| 10 | B. Minanari | CM | 91 |
+| 11 | E. Belruda | LW | 88 |
 
 ## Results
 

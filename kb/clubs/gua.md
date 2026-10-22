@@ -17,17 +17,17 @@ Played 7: won 1, drawn 4, lost 2. Goals for 9, against
 
 | Shirt | Player | Position | Rating |
 | --- | --- | --- | --- |
-| 1 | S. Varela | GK | 88 |
-| 2 | T. Ferreira | RB | 87 |
-| 3 | G. Quinn | LB | 88 |
-| 4 | O. Iniesta | CB | 90 |
-| 5 | F. Lozano | CB | 86 |
-| 6 | H. Zielinski | DM | 88 |
-| 7 | N. Uribe | RW | 88 |
-| 8 | P. Jovanović | CM | 90 |
-| 9 | M. Ilić | ST | 87 |
-| 10 | K. Achterberg | CM | 90 |
-| 11 | J. Olmo | LW | 85 |
+| 1 | S. Mbadimi | GK | 88 |
+| 2 | T. Zarvena | RB | 87 |
+| 3 | G. Lunholm | LB | 88 |
+| 4 | O. Namtembo | CB | 90 |
+| 5 | F. Koflagu | CB | 86 |
+| 6 | H. Satonari | DM | 88 |
+| 7 | N. Chalaine | RW | 88 |
+| 8 | P. Djedele | CM | 90 |
+| 9 | M. Nduwana | ST | 87 |
+| 10 | K. Hartvik | CM | 90 |
+| 11 | J. Serchard | LW | 85 |
 
 ## Results
 
