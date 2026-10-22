@@ -308,6 +308,31 @@ def test_recap_trigger_needs_a_producer_role_when_roles_are_required() -> None:
     assert client.post("/internal/v1/recaps", json=trigger).status_code == 403
 
 
+def test_live_mode_uses_the_model_client_and_audits_its_lines(client: TestClient) -> None:
+    import json as _json
+
+    from matchcast_agents.live import ScriptedModelClient
+
+    def answer(_system: str, user: str) -> dict:
+        facts = _json.loads(user)
+        if "personas" in facts:
+            claim = facts["claims"][0]
+            club = next(iter(facts["clubs"].values()))
+            text = f"{club} {claim['metric'].split(':')[0].replace('_', ' ')} {claim['value']}."
+            return {"lines": [{"persona": p, "text": text} for p in facts["personas"]]}
+        if "metrics_available" in facts:
+            return {"metrics": facts["metrics_available"][:1]}
+        return {"judgement": "supported", "detail": "ok"}
+
+    registry = client.app.state.matches
+    registry._model_client = ScriptedModelClient(answer)
+    create(client)
+    post_all(client)
+    lines = client.get("/v1/matches/match-short/lines", params=Q).json()["items"]
+    assert lines and {ln["origin"] for ln in lines} == {"model"}
+    assert client.get("/v1/matches/match-short", params=Q).json()["mode"] in ("live", "mixed")
+
+
 def test_easy_auth_approval_records_the_signed_in_name_in_the_audit(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
