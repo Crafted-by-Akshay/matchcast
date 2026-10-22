@@ -76,6 +76,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - Tested in local headless Chromium. Not yet tested inside the claude.ai artifact host.
 
 ## Lower-thirds, teleprompter and the approval queue (EXP-7, EXP-11)
+- The lower-third and teleprompter sit inside the live view (`#bc-view`), because the desk's CSS hides every other direct child of `body`. `tests/e2e/broadcast.spec.ts` (QUA-2) checks they are visible on screen, not only un-hidden.
 - Agents tab, Approval queue: **Demo** mode airs verified Broadcast lines at once. **Producer** mode holds each one until a person approves, edits or kills it. The signed-in producer is a simulated account (Planned: Entra ID).
 - Broadcast shows an approved line as a lower-third for 8 seconds and keeps the last five in the teleprompter list. A pending or killed line reaches no view, including Watch's Match Pulse.
 - Edit is re-verified: every number in the new text must already be in the verified line (or its minute), otherwise it is rejected and not aired. Approve, edit and kill each write `line_approved`, `line_edited` or `line_killed` to the audit chain with the person's name.
@@ -107,6 +108,10 @@ The shell: arrow keys, Home and End move between the dashboard tabs (tab 1 to 4 
 - `tests/e2e/a11y-analyst.spec.ts` runs axe (WCAG 2 A/AA) on 13 Analyst pages in both the light and dark scheme and fails on any serious or critical violation (minor and moderate are not checked). Uses `@axe-core/playwright` (dev dependency). Watch and Broadcast are still to audit.
 ## Copilot Ask answered by the agents (EXP-5)
 A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chips still use Watch's own live-data answers). With the api live, the shell posts it to `POST /v1/matches/{id}/ask` and shows the answer with its verdict. Otherwise the in-page rules answer from the event log: who has the most shots or goals, the score, xG, each counted from the log with the events cited and a "Verified" tick; anything else gets "I can't confirm that from the match data yet." Questions are cut at 300 characters and limited to 5 a minute per browser. Planned: Prompt Shields on input and the knowledge-base route (AGT-12, AGT-16), which live in the api.
+
+## Full-time recap in the Analyst library (AGT-15, task 105)
+- At full time the shell adds `recap: { api, session_id, match_id }` to the import message it sends the Analyst (only when Watch is the source and an api is configured; `LV.key` exposes the run's key). `embed/analyst.js` stores it on the imported match.
+- `analyst-pages/30_recap.js` wraps the Match centre page: for such a match it shows a Full-time recap card from `GET /v1/matches/{id}/recap/analyst`, polling every 5 s for a minute ("Being written by the agents…"), then "Planned: not ready". It shows the Verifier tick only when every sentence has verdict `verified`, and "Rules fallback" when the api's mode is `rules`. Recorded season matches have no recap card. Watch and Broadcast recap cards belong to their lanes.
 
 ## Instant replay (Broadcast)
 - `embed/replay.js` (appended after `broadcast.js` by `build.py`) keeps the last 60 s of Watch's frames in Broadcast. The "Instant replay" bar on the live view plays back the last 10, 20 or 30 s at normal or half speed, with a red REPLAY tag and a Back to live button; it returns to live by itself at the end.
