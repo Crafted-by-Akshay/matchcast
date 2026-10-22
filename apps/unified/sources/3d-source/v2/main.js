@@ -582,16 +582,40 @@ function offsideLine(ti) { const xs = teamOf(1 - ti).map((o) => w2own(ti, o.pos2
 
 /*@@TACTICS@@*/
 // ---- owner decisions ----
+// ---- xG: logistic on goal-mouth angle and distance, fitted offline on Wyscout open-play shots (CC BY 4.0) by scripts/fit_xg.py.
+// Constants mirror data/calibration/xg.json; tests/xg_constants.test checks they agree. XG_SCALE is the tuned global scale (docs/simulator.md).
+const XG = { b0: -1.464609, b1: 1.413822, b2: -0.089141, scale: 1.0 };
+// tuned action weights (docs/simulator.md); a `tune` query parameter overrides them for calibration runs only, e.g. ?tune=passBias:0.5,shotThr:0.05
+const TUNE = { passBias: 1.5, shotThr: 0.06, longShot: 0.05, holdScale: 1.5 };
+try { for (const kv of (new URLSearchParams(location.search).get('tune') || '').split(',')) { const [k, v] = kv.split(':'); if (k in TUNE && v !== undefined) TUNE[k] = +v; if (k === 'xgScale') XG.scale = +v; } } catch (e) { /* no query string */ }
+const sig = (z) => 1 / (1 + Math.exp(-z));
+function xgAt(pos, goal) {
+  const dx = Math.abs(goal.x - pos.x), dy = pos.y - 34; const dist = Math.hypot(dx, dy);
+  let ang = Math.atan2(7.32 * dx, dx * dx + dy * dy - 3.66 * 3.66); if (ang < 0) ang += Math.PI;
+  return sig(XG.b0 + XG.b1 * ang + XG.b2 * dist);
+}
+// the shot's fate is drawn from the play stream, then the strike is aimed to match it: finisher and keeper ratings move the logit by at most +/-0.5
+function shotFate(p, gk, xg, pen) {
+  const lg = Math.log(xg / (1 - xg)) + 0.5 * clamp((p.shotS - 0.6) / 0.4, -1, 1) - 0.5 * clamp(((gk && gk.ctrl) || 0.8 - 0) - 0.8, -0.2, 0.2) / 0.2;
+  const pg = pen ? 0.76 : clamp(sig(lg) * XG.scale, 0.005, 0.95), u = rnd();
+  return u < pg ? 'goal' : u < pg + (pen ? 0.17 : 0.2) ? 'save' : 'miss';
+}
+// aim point (z across the goal, y height) for a fate; the keeper cannot reach a 'goal' (beat), always reaches a 'save'
+function fateAim(fate, gk) {
+  if (fate === 'goal') { const far = gk.pos2.y < 34 ? 1 : -1; return { tz: 34 + far * (2.2 + rnd() * 1.2), ty: rnd() < 0.55 ? 0.3 + rnd() * 0.5 : 1.3 + rnd() * 0.9 }; }
+  if (fate === 'save') return { tz: clamp(gk.pos2.y + gauss() * 0.7, 31.2, 36.8), ty: 0.3 + rnd() * 1.1 };
+  return rnd() < 0.55 ? { tz: 34 + (rnd() < 0.5 ? -1 : 1) * (4.3 + rnd() * 5), ty: 0.3 + rnd() * 1.5 } : { tz: 34 + (rnd() - 0.5) * 6, ty: 2.9 + rnd() * 3 };
+}
 function decide(p) {
   const me = p.pos2, goal = goalOf(p.ti), own = w2own(p.ti, me); const dGoal = me.distanceTo(goal);
   const tc = p.T.tac ? p.T.tac.cur : STYLES.balanced; const phase = p.T.tac ? phaseOf(p.ti) : 'progression'; const wide = Math.abs(me.y - 34) > 17 && own.x > 74;
   let press = 99; for (const o of teamOf(1 - p.ti)) press = Math.min(press, o.pos2.distanceTo(me));
   // shooting
   const angle = Math.abs(Math.atan2(me.y - 34, Math.abs(goal.x - me.x)));
-  const xg = clamp(0.62 * Math.exp(-dGoal / 9.5) * Math.cos(angle) * (press < 2 ? 0.7 : 1), 0.01, 0.75);
+  const xg = clamp(xgAt(me, goal) * (press < 2 ? 0.7 : 1), 0.005, 0.75);
   const od = p.orders && p.orders.k;
   if (!p.gk && od === 'shoot' && dGoal < 32 && press > 1.5 && rnd() < 0.3) return { type: 'shot', xg };
-  if (!p.gk && dGoal < 30 && (xg > 0.04 + p.risk * 0.03 || (dGoal < 16 && rnd() < 0.6) || (dGoal < 27 && press > 2.5 && rnd() < 0.09 * p.shotS))) return { type: 'shot', xg };
+  if (!p.gk && dGoal < 30 && (xg > TUNE.shotThr + p.risk * 0.03 || (dGoal < 16 && rnd() < 0.6) || (dGoal < 27 && press > 2.5 && rnd() < TUNE.longShot * p.shotS))) return { type: 'shot', xg };
   // pass options
   let best = null, bs = -1e9;
   for (const q of teamOf(p.ti)) {
@@ -619,7 +643,7 @@ function decide(p) {
   const dribble = space * 0.28 + (p.pos.endsWith('W') || p.pos === 'ST' || p.pos === 'AM' ? 0.8 : 0) + (own.x > 70 ? 0.8 : 0) - (own.x < 25 ? 1.5 : 0) + (phase === 'counter' ? 0.8 : 0) - (phase === 'build-up' ? 0.7 * tc.short : 0) - (press < 2 ? 1.2 * (1 - p.ctrl * 0.5) : 0) - (od === 'simple' ? 1.5 : 0) + gauss() * 0.4;
   if (p.gk) return best && rnd() < 0.25 + 0.75 * tc.short && bs > 1.5 ? { type: 'pass', ...best, lofted: best.d > 25 || best.lofted } : { type: 'clear' };
   if (press < 2.5 && own.x < 22 && (!best || bs < 1)) return { type: 'clear' };
-  if (best && (bs > dribble || p.ownT > lerp(3.2, 1.4, tc.tempo) || (press < 1.8 && bs > 1.2))) return { type: 'pass', ...best, press };
+  if (best && (bs > dribble + TUNE.passBias || p.ownT > lerp(3.2, 1.4, tc.tempo) * TUNE.holdScale || (press < 1.8 && bs > 1.2))) return { type: 'pass', ...best, press };
   return { type: 'dribble', dir: ahead, space };
 }
 function startKick(p, plan) {
@@ -647,14 +671,15 @@ function strike(p) {
   if (plan.type === 'shot') {
     const gk = teamOf(1 - p.ti).find((q) => q.gk); const gx = goalOf(p.ti).x;
     let farSide = gk.pos2.y < 34 ? 1 : -1; let placed = plan.placed ?? rnd() < 0.45;
-    let tz = 34 + farSide * (2.1 + rnd() * 1.3) + gauss() * 0.4; let ty = rnd() < 0.55 ? 0.3 + rnd() * 0.4 : 1.2 + rnd() * 1.0;
+    const fate = shotFate(p, gk, plan.xg, !!plan.pen); const aim = fateAim(fate, gk); ball.beatUntil = fate === 'goal' ? S.t + 3 : 0; plan.fate = fate;
+    let tz = aim.tz; let ty = aim.ty;
     let speed = placed ? 20 + rnd() * 4 : 25 + rnd() * 6; let curl = placed ? -farSide * dirOf(p.ti) * 9 : (rnd() - 0.5) * 4;
-    if (plan.pen) { farSide = rnd() < 0.5 ? 1 : -1; tz = 34 + farSide * (1.6 + rnd() * 1.8); ty = rnd() < 0.7 ? 0.25 + rnd() * 0.6 : 1.3 + rnd() * 0.9; speed = 21 + rnd() * 7; curl = 0; placed = true; gk.act = { type: 'dive', t: 0, dur: 1.5, side: rnd() < 0.5 ? 1 : -1, high: false }; gk.vel.copy(right(gk).multiplyScalar(gk.act.side * 3.2)); }
-    if (plan.fk) { tz = 34 + farSide * (2.3 + rnd() * 1.2); ty = 1.85 + rnd() * 0.45; speed = 23 + rnd() * 4; curl = -farSide * dirOf(p.ti) * 13; placed = true; }
+    if (plan.pen) { farSide = rnd() < 0.5 ? 1 : -1; if (fate === 'goal') { tz = 34 + farSide * (1.6 + rnd() * 1.8); ty = rnd() < 0.7 ? 0.25 + rnd() * 0.6 : 1.3 + rnd() * 0.9; } speed = 21 + rnd() * 7; curl = 0; placed = true; gk.act = { type: 'dive', t: 0, dur: 1.5, side: rnd() < 0.5 ? 1 : -1, high: false }; gk.vel.copy(right(gk).multiplyScalar(gk.act.side * 3.2)); }
+    if (plan.fk) { if (fate === 'goal') { tz = 34 + farSide * (2.3 + rnd() * 1.2); ty = 1.85 + rnd() * 0.45; } speed = 23 + rnd() * 4; curl = -farSide * dirOf(p.ti) * 13; placed = true; }
     const sol = solveShot(from, new THREE.Vector3(gx, ty, tz), speed, curl);
     v = sol.v; w = sol.w; STATS.shots[p.ti]++; STATS.xg[p.ti] += plan.xg;
-    S.shotInfo = { p, kmh: Math.round(speed * 3.6), xg: plan.xg, t: S.t }; S.intended = null;
-    dataEvent('shot', { team: p.T.key, player: p.name, kind: plan.pen ? 'penalty' : plan.fk ? 'free kick' : 'open play', phase: phaseOf(p.ti), xg: +plan.xg.toFixed(3), kmh: Math.round(speed * 3.6), x: +p.pos2.x.toFixed(1), y: +p.pos2.y.toFixed(1), stamina: +p.stamina.toFixed(2), slick: +ENV.slick.toFixed(2) });
+    S.shotInfo = { p, kmh: Math.round(speed * 3.6), xg: plan.xg, t: S.t, fate }; S.intended = null;
+    dataEvent('shot', { team: p.T.key, player: p.name, kind: plan.pen ? 'penalty' : plan.fk ? 'free kick' : 'open play', phase: phaseOf(p.ti), xg: +plan.xg.toFixed(3), fate, kmh: Math.round(speed * 3.6), x: +p.pos2.x.toFixed(1), y: +p.pos2.y.toFixed(1), stamina: +p.stamina.toFixed(2), slick: +ENV.slick.toFixed(2) });
     say(p.name + (placed ? ' curls one towards the far corner' : ' lets fly') + ', ' + Math.round(speed * 3.6) + ' km/h.');
   } else if (plan.type === 'clear') {
     const tgt = own2w(p.ti, Math.min(w2own(p.ti, p.pos2).x + 45, 90), rnd() < 0.5 ? 6 : 62);
@@ -716,7 +741,7 @@ function header(p) {
   if (rival) { rival.act = { type: 'header', t: 0.05, dur: 0.75, h: 0.35 }; dataEvent('aerial_duel', { won: p.name, team: p.T.key, lost: rival.name }); }
   const goal = goalOf(p.ti); const dGoal = p.pos2.distanceTo(goal); const v = new THREE.Vector3(); const own = w2own(p.ti, p.pos2);
   if (own.x < 30) { const tgt = own2w(p.ti, own.x + 28 + rnd() * 10, own.y < 34 ? 8 + rnd() * 10 : 50 + rnd() * 10); v.set(tgt.x - ball.p.x, 0, tgt.y - ball.p.z).normalize().multiplyScalar(12 + rnd() * 4); v.y = 6 + rnd() * 2; S.intended = null; say(surname(p.name) + ' heads it clear.'); }
-  else if (dGoal < 16) { const tz = 34 + (rnd() - 0.5) * 6; v.set(goal.x - ball.p.x, 0, tz - ball.p.z).normalize().multiplyScalar(13 + rnd() * 5); v.y = -1 + rnd() * 3; STATS.shots[p.ti]++; STATS.xg[p.ti] += 0.12; say('Header from ' + p.name + '!'); S.shotInfo = { p, kmh: Math.round(v.length() * 3.6), xg: 0.12, t: S.t }; }
+  else if (dGoal < 16) { const hxg = clamp(xgAt(p.pos2, goal) * 0.8, 0.01, 0.6), gk = teamOf(1 - p.ti).find((q) => q.gk), fate = shotFate(p, gk, hxg, false), aim = fateAim(fate, gk); ball.beatUntil = fate === 'goal' ? S.t + 3 : 0; v.set(goal.x - ball.p.x, 0, aim.tz - ball.p.z).normalize().multiplyScalar(13 + rnd() * 5); v.y = (aim.ty - ball.p.y) * 2.2; STATS.shots[p.ti]++; STATS.xg[p.ti] += hxg; say('Header from ' + p.name + '!'); S.shotInfo = { p, kmh: Math.round(v.length() * 3.6), xg: hxg, t: S.t, fate }; }
   else { const mates = teamOf(p.ti).filter((q) => q !== p && !q.gk).sort((a, b) => a.pos2.distanceTo(p.pos2) - b.pos2.distanceTo(p.pos2)); const q = mates[0]; v.set(q.pos2.x - ball.p.x, 0, q.pos2.y - ball.p.z).normalize().multiplyScalar(8 + rnd() * 4); v.y = 2 + rnd() * 2; S.intended = q; }
   ball.v.copy(v); ball.w.set(0, 0, 0); S.owner = null; ball.last = p; S.lastTouch = p; p.touchCD = 0.4; S.traj = null;
 }
@@ -732,7 +757,7 @@ function contacts(dt) {
     if (p.gk && S.owner !== p) {
       const hand = handPoint(p); const dh = hand.distanceTo(ball.p);
       const inBox = Math.abs(p.pos2.x - ownGoal(p.ti).x) < 16.5 && Math.abs(p.pos2.y - 34) < 20.16;
-      if (inBox && dh < (p.act?.type === 'dive' ? 0.55 : 0.7)) { gkSave(p); continue; }
+      if (inBox && dh < (p.act?.type === 'dive' ? 0.55 : 0.7) && !(ball.beatUntil > S.t && S.shotInfo && S.shotInfo.p.ti !== p.ti)) { gkSave(p); continue; }
     }
     // owner dribble touches handled elsewhere
     if (S.owner === p) continue;
@@ -1333,7 +1358,8 @@ function refereeBall() {
   for (const gx of [0, 105]) {
     const crossed = gx === 0 ? b.x < -BR : b.x > 105 + BR;
     if (!crossed || ball.inNet) continue;
-    if (b.z > 30.34 + BR * 0.2 && b.z < 37.66 - BR * 0.2 && b.y < 2.44) { goal(goalOf(0).x === gx ? 0 : 1); ball.inNet = gx + 1; return; }
+    const vetoed = S.shotInfo && S.t - S.shotInfo.t < 5 && S.shotInfo.fate && S.shotInfo.fate !== 'goal'; // the shot's drawn fate stands: no goal from a deflected miss or save
+    if (!vetoed && b.z > 30.34 + BR * 0.2 && b.z < 37.66 - BR * 0.2 && b.y < 2.44) { goal(goalOf(0).x === gx ? 0 : 1); ball.inNet = gx + 1; return; }
     const defTeam = ownGoal(0).x === gx ? 0 : 1; const last = S.lastTouch ? S.lastTouch.ti : 1 - defTeam;
     if (last === defTeam) { say('Corner to ' + TEAMS[1 - defTeam].club + '.'); deadBall('corner', 1 - defTeam, V2(gx === 0 ? 0.3 : 104.7, b.z < 34 ? 0.3 : 67.7)); }
     else { say('Goal kick.'); deadBall('goalkick', defTeam, V2(gx === 0 ? 5.5 : 99.5, b.z < 34 ? 28 : 40)); }
@@ -1615,7 +1641,7 @@ const clk = new THREE.Clock();
 let ledAcc = 0;
 function loop() { frame(Math.min(clk.getDelta(), 0.05), true); }
 function frame(dt, draw) {
-  const sim = S.paused ? 0 : dt * S.speed;
+  const sim = S.paused || window.__mcHeadless ? 0 : dt * S.speed; // the headless runner steps the engine itself, on a fixed step
   if (!S.started && sim > 0) S.t += sim;
   applyWorldVisuals(sim);
   if (S.started && !S.over && players.length && sim > 0) { const n = Math.ceil(sim / 0.02); for (let i = 0; i < n; i++) stepSim(sim / n); }

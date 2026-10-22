@@ -1,7 +1,10 @@
 // ============ MATCH SETUP, MATCH FLOW, CONDITIONS HUD, DATA EXPORT ============
-const pickForm = () => wPickR(FORM_W), pickStyle = () => wPickR(STYLE_W);
-function wPickR(w) { let s = 0; for (const k in w) s += w[k]; let r = Math.random() * s; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return Object.keys(w)[0]; }
-const SET = { tactics: [0, 1].map(() => ({ form: 'auto', style: 'auto', pf: pickForm(), ps: pickStyle() })), st: STADIUMS[0], month: new Date().getMonth(), kickStr: '20:00', kick: 20, weather: 'auto', dynamic: true, water: true, roofAuto: true, half: 5, seed: (Math.random() * 1e9) | 0 };
+const SETR = subStream(1, 'setup'); // default picks before a seed is rolled
+const pickForm = (r) => wPickR(FORM_W, r), pickStyle = (r) => wPickR(STYLE_W, r);
+// the only unseeded draw for a new match: a brand-new seed. Everything else (picks, stadium, month, weather) comes from that seed
+const newSeed = () => (Math.random() * 1e9) | 0;
+function wPickR(w, r01) { let s = 0; for (const k in w) s += w[k]; let r = ((r01 || SETR)()) * s; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return Object.keys(w)[0]; }
+const SET = { tactics: [0, 1].map(() => ({ form: 'auto', style: 'auto', pf: pickForm(), ps: pickStyle() })), st: STADIUMS[0], month: new Date().getMonth(), kickStr: '20:00', kick: 20, weather: 'auto', dynamic: true, water: true, roofAuto: true, half: 5, seed: newSeed() };
 const parseHM = (s) => { const [h, m] = s.split(':').map(Number); return h + m / 60; };
 const FAMILY = [['auto', 'Auto', '🎲'], ['sunny', 'Sunny', '☀️'], ['cloudy', 'Cloudy', '☁️'], ['rain', 'Rain', '🌧️'], ['storm', 'Thunderstorm', '⛈️'], ['fog', 'Fog', '🌫️'], ['snow', 'Snow', '❄️']];
 const FAM_KEY = { sunny: 'sun', cloudy: 'cloud', rain: 'rain', storm: 'storm', fog: 'fog', snow: 'snow' };
@@ -103,16 +106,17 @@ function buildLineups() {
   $('xiA').dataset.form = TEAMS[0].tac.form + ' · ' + STYLES[TEAMS[0].tac.style].label; $('xiB').dataset.form = TEAMS[1].tac.form + ' · ' + STYLES[TEAMS[1].tac.style].label;
 }
 function surprise() {
-  SET.tactics.forEach((t) => { t.form = 'auto'; t.style = 'auto'; t.pf = pickForm(); t.ps = pickStyle(); });
-  SET.st = STADIUMS[Math.floor(Math.random() * STADIUMS.length)]; SET.month = Math.floor(Math.random() * 12);
-  SET.kickStr = SET.st.kickoffs[Math.floor(Math.random() * SET.st.kickoffs.length)]; SET.kick = parseHM(SET.kickStr); SET.weather = 'auto'; SET.dynamic = true; SET.seed = (Math.random() * 1e9) | 0; renderSetup();
+  SET.seed = newSeed(); const R = subStream(SET.seed, 'setup');
+  SET.tactics.forEach((t) => { t.form = 'auto'; t.style = 'auto'; t.pf = pickForm(R); t.ps = pickStyle(R); });
+  SET.st = STADIUMS[Math.floor(R() * STADIUMS.length)]; SET.month = Math.floor(R() * 12);
+  SET.kickStr = SET.st.kickoffs[Math.floor(R() * SET.st.kickoffs.length)]; SET.kick = parseHM(SET.kickStr); SET.weather = 'auto'; SET.dynamic = true; renderSetup();
 }
 function openSetup() { $('setup').hidden = false; $('intro').hidden = true; $('endp').hidden = true; for (const id of ['bug', 'ctrl', 'third', 'cap', 'wxchip', 'cpbtn', 'copilot']) $(id).hidden = true; renderSetup(); }
 $('opt-dyn').onclick = () => { SET.dynamic = !SET.dynamic; renderSetup(); };
 $('opt-water').onclick = () => { SET.water = !SET.water; renderSetup(); };
 $('opt-roof').onclick = () => { SET.roofAuto = !SET.roofAuto; renderSetup(); };
 $('su-rand').onclick = surprise;
-$('fc-roll').onclick = () => { SET.seed = (Math.random() * 1e9) | 0; previewEnv(); };
+$('fc-roll').onclick = () => { SET.seed = newSeed(); previewEnv(); };
 $('su-go').onclick = () => {
   $('setup').hidden = true; $('intro').hidden = false; buildLineups();
   const st = SET.st; $('intro-meta').textContent = 'CUP QUARTER-FINAL · ' + st.name.toUpperCase() + ', ' + st.city.toUpperCase() + ' · ' + MONTHS[SET.month].toUpperCase() + ' · KICK-OFF ' + SET.kickStr + ' · ' + WX[ENV.wx].label.toUpperCase() + ', ' + Math.round(ENV.temp) + '°C · ' + ENV.pitch.toUpperCase();
@@ -130,8 +134,9 @@ function lineUp(team) {
   ball.p.set(52.5, BR, 34); ball.v.set(0, 0, 0); ball.w.set(0, 0, 0); S.owner = null; S.intended = null; S.traj = null;
 }
 function kickOff() {
-  seed = SET.seed; initEnv(Object.assign({}, SET)); paintStadium(SET.st, SET.month); S.flip = 0;
+  seed = hash32(SET.seed + ':play'); wordsRnd = subStream(SET.seed, 'words'); initEnv(Object.assign({}, SET)); paintStadium(SET.st, SET.month); S.flip = 0;
   for (const p of players) { p.off = false; p.model.visible = true; p.yellows = 0; p.act = null; }
+  { const R = subStream(SET.seed, 'tactics'); SET.tactics.forEach((tc) => { tc.pf = pickForm(R); tc.ps = pickStyle(R); }); } // 'Auto' picks follow the match seed
   setupTactics({ tactics: [resolvedTac(0), resolvedTac(1)] });
   Object.assign(S, { clock: 0, mclock: 0, half: 1, mscale: 45 / SET.half, stop: [0, 0], hold: null, over: false, ht: false, envAcc: 0, lastLogMin: 0, score: [0, 0], celebrate: 0, inspT: -99, cool: 0, insp: 0, goalsHalf: [0, 0] });
   Object.assign(STATS, { kinds: {}, xg: [0, 0], shots: [0, 0], poss: [0, 0], passes: [0, 0], done: [0, 0], goals: [], fouls: [0, 0], yellows: [0, 0], reds: [0, 0], offsides: [0, 0], onTarget: [0, 0] });
@@ -241,7 +246,7 @@ const fileBase = () => 'matchcast_' + SET.st.id + '_' + MONTHS[SET.month].toLowe
 for (const b of document.querySelectorAll('.dl-json')) b.onclick = () => saveFile(fileBase() + '.json', JSON.stringify(dataset(), null, 1), 'application/json');
 for (const b of document.querySelectorAll('.dl-csv')) b.onclick = () => saveFile(fileBase() + '_events.csv', toCSV(ENV.events.map((e) => { const o = { minute: e.minute, local: e.local, type: e.type, weather: e.weather, tempC: e.tempC, pitch: e.pitch, pitchWaterMm: e.pitchWaterMm }; const extra = Object.assign({}, e); for (const k in o) delete extra[k]; o.details = JSON.stringify(extra); return o; })), 'text/csv');
 for (const b of document.querySelectorAll('.dl-tl')) b.onclick = () => saveFile(fileBase() + '_conditions.csv', toCSV(ENV.log), 'text/csv');
-$('end-new').onclick = () => { S.started = false; S.over = false; $('endp').hidden = true; SET.seed = (Math.random() * 1e9) | 0; openSetup(); };
+$('end-new').onclick = () => { S.started = false; S.over = false; $('endp').hidden = true; SET.seed = newSeed(); openSetup(); };
 $('end-close').onclick = () => { $('endp').hidden = true; };
 $('datab').onclick = () => { const p = $('datap'); p.hidden = !p.hidden; if (!p.hidden) renderData(); };
 function renderData() {

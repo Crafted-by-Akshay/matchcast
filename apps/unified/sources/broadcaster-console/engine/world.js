@@ -39,7 +39,11 @@ const WX_NEXT = { clear: ['partly', 'fog'], partly: ['clear', 'overcast', 'storm
   rain: ['drizzle', 'heavy', 'overcast'], heavy: ['rain', 'storm'], storm: ['heavy', 'rain', 'overcast'], fog: ['overcast', 'partly', 'clear'], snow: ['overcast', 'rain'] };
 const ENV = { set: null, wx: 'clear', minute: 0, local: 15, temp: 15, td: 8, rh: 60, wind: 3, windDir: 0, gust: 1, wbgt: 15, rho: 1.225, rhoRatio: 1, water: 0, leaf: 0, wet: 0, dew: 0, snow: 0, frozen: false,
   sunEl: 30, sunAz: 180, light: 'day', vis: 20000, slick: 0, puddle: 0, log: [], events: [], coolingDue: [], strikes: 0, susp: null, seed: 0 };
-let wrnd = Math.random; // reseeded per match so a setup + seed reproduces the same weather story
+let wordsRnd = mulberry(1); // reseeded per match in kickOff
+let wrnd = mulberry(1); // reseeded per match so a setup + seed reproduces the same weather story
+const hash32 = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+// one match seed, four named sub-streams (play, weather, words, visuals); no stream's draws change another's
+const subStream = (seed, name) => mulberry(hash32(seed + ':' + name));
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const wgauss = () => { let u = 0, v = 0; while (!u) u = wrnd(); while (!v) v = wrnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 const climateOf = (st, m) => { const c = CLIMATE[st.id]; const g = (k) => c[k] ? c[k][m] : 0; return { hi: g('hi'), lo: g('lo'), rh: g('rh'), rainDays: g('rainDays'), rainMm: g('rainMm'), thunder: g('thunderDays'), fog: g('fogDays'), snowD: g('snowDays'), sun: g('sunHours'), wind: g('windKmh'), cloud: g('cloudPct') / 100, conv: c.convective || 0 }; };
@@ -164,7 +168,7 @@ function logEnv(force) {
 const EVT_SUBS = []; function onMatchEvent(f) { EVT_SUBS.push(f); }
 function dataEvent(type, extra) {
   const ev = Object.assign({ minute: +(ENV.minute).toFixed(1), local: hhmm(ENV.local), type, weather: ENV.wx, tempC: +ENV.temp.toFixed(1), pitch: ENV.pitch, pitchWaterMm: +ENV.water.toFixed(2) }, extra || {});
-  ENV.events.push(ev); if (ENV.events.length > 4000) ENV.events.shift();
+  ENV.events.push(ev); if (ENV.events.length > 20000) ENV.events.shift();
   ev.simT = +S.t.toFixed(2); for (const f of EVT_SUBS) { try { f(ev); } catch (e) { console.error(e); } }
 }
 // lightning: strikes land at random distances while a storm sits overhead; inside 13 km (8 miles, FIFA) the referee suspends play until 30 minutes pass without a strike

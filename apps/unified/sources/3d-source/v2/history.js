@@ -78,7 +78,7 @@ function hxSetup() {
   const cr = $('hx-comp'); [['friendly', 'International friendly'], ['cup', 'International cup']].forEach(([k, l]) => cr.appendChild(chip(l, k === 'cup' ? 'Knockout tie' : 'No trophy at stake', HX.comp === k, false, () => { HX.comp = k; renderSetup(); })));
 }
 const _hxRender = renderSetup; renderSetup = function () { HX.prior = null; hxLabels(); _hxRender(); hxSetup(); if (hxOn()) $('su-sum').textContent = TEAMS[0].club + ' v ' + TEAMS[1].club + ' · ' + $('su-sum').textContent; };
-const _hxSurprise = surprise; surprise = function () { if (hxOn()) { const n = HX.data.nations.length; HX.a = Math.floor(Math.random() * n); do HX.b = Math.floor(Math.random() * n); while (HX.b === HX.a); } _hxSurprise(); };
+const _hxSurprise = surprise; surprise = function () { if (hxOn()) { const n = HX.data.nations.length, R = subStream(newSeed(), 'nations'); HX.a = Math.floor(R() * n); do HX.b = Math.floor(R() * n); while (HX.b === HX.a); } _hxSurprise(); };
 $('su-rand').onclick = surprise;
 // ---- intro screen: names, the competition wording and the pre-match card ----
 const _hxGo = $('su-go').onclick;
