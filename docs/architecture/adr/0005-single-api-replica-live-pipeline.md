@@ -22,6 +22,8 @@ api runs the consumer as a background task, the reducer (from services/worker) a
 - Fewer moving parts and no extra service cost; the kill-and-resume clip shows the recovery.
 - A single point of failure and a ceiling of about 50 concurrent viewers (accepted debt).
 
+- The MCP tool server is mounted inside the api at `/mcp` for the same reason (matches live in this process's memory). The separate `mcp` container takes over once a shared store exists.
+
 ## Affects
 
 - 02-context-and-containers.md
