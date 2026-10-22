@@ -44,7 +44,7 @@ The engine code is shared, not copied. The headless runner imports the engine mo
 
 ## 5. Realism targets
 
-Both teams together, per match, over 200 seeds. Stored in `data/calibration/targets.json` with value, band, source and licence. Checked by `scripts/check_realism.py`; any miss fails CI.
+Both teams together, per match, over 200 seeds. Stored in `data/calibration/targets.json` with value, band, source and licence. Checked by `scripts/check_realism.py`; any miss fails the check. Run by hand with `make realism` today; the CI job is **Planned** (nightly).
 
 | Measure | Target | Pass band | Source |
 | --- | --- | --- | --- |

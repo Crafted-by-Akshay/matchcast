@@ -54,9 +54,9 @@ Starting from the prototype values (0.04, 0.09, 0, 1) the engine produced about 
 
 ## Realism check
 
-`make realism` (same as `uv run python scripts/check_realism.py --matches 200`, about 2 h on 4 cores, not in CI yet; targets in `data/calibration/targets.json`, sources and licences next to each). Engine "duel" = aerial duel + slide tackle + take-on + possession turnover. Each match is a different pair of season clubs.
+`make realism` (equivalent to `uv run python scripts/check_realism.py --matches 200`, about 1.5 to 2 h on 4 cores, not in CI yet; targets in `data/calibration/targets.json`, sources and licences next to each). Engine "duel" = aerial duel + slide tackle + take-on + possession turnover. Each match is a different pair of season clubs.
 
-Result of one validation run (seeds 1 to 200, half = 45, commit of PR #47; 200 full 90-minute matches). **The run's `summary.json` was not committed, so this table is one unreproduced run until `make realism` is re-run and its summary is committed under `data/calibration/results/` (in progress, the engine is seeded so the same numbers should come back; a difference would be a determinism bug):
+Result of one validation run (seeds 1 to 200, half = 45, commit of PR #47; 200 full 90-minute matches). **The run's `summary.json` was not committed, so this table is one unreproduced run until it is re-run with `make realism REALISM_ARGS="--out data/calibration/results/seeds-1-200"` and the summary is committed there** (in progress, the engine is seeded so the same numbers should come back; a difference would be a determinism bug):
 
 | Measure | Simulated | Target | Band | Result |
 | --- | --- | --- | --- | --- |

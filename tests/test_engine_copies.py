@@ -1,4 +1,7 @@
-"""The Broadcast engine copies the Watch engine; shared files stay byte-identical (DAT-9)."""
+"""The Broadcast engine copies the Watch engine; shared files stay byte-identical (DAT-9).
+
+services/simulation/tests/checks.cjs checks the same in the e2e job; this one runs under make test.
+"""
 
 from pathlib import Path
 
@@ -12,9 +15,9 @@ def test_copies_exist():
 
 
 def test_broadcast_engine_equals_watch_engine():
-    drifted = [
-        f.name
-        for f in sorted(BROADCAST.iterdir())
-        if f.read_bytes() != (WATCH / f.name).read_bytes()
-    ]
+    drifted = []
+    for f in sorted(BROADCAST.iterdir()):
+        twin = WATCH / f.name
+        if f.is_file() and (not twin.is_file() or f.read_bytes() != twin.read_bytes()):
+            drifted.append(f.name)
     assert drifted == [], f"edit both copies of the engine identically: {drifted}"
