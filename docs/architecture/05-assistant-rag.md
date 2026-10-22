@@ -2,6 +2,10 @@
 
 Status: **Agreed design** (ADR-0009 accepted by Akshay, 22 Oct 2026). Last reviewed 22 Oct 2026. Backlog: EXP-5 (Ask), AGT-16 (knowledge base and retrieval, new).
 
+## 0. What is built (22 Oct)
+
+Built: the markdown knowledge base and chunker, in-memory BM25 retrieval (the "Search fallback" path), the rules router, Prompt Shields on the question (local screen, Azure client ready), answers with `[kb:…]`/`[claim:…]` citations checked by the Verifier, word limits per persona, the out-of-scope and abstain texts, and 5 questions a minute per match session. **Planned (needs Azure or later work):** the model router, embeddings and the AI Search index with hybrid search, Prompt Shields on retrieved documents, conversation memory (`conversations` table), the "Search fallback" and "Rules fallback" chips, and the CI quality gate described in §8.
+
 ## 1. What it is
 
 One chatbot, three entry points:
@@ -41,7 +45,7 @@ flowchart LR
   em --> js[(Blob kb/v1/chunks.jsonl<br/>text + vectors, fallback copy)]
 ```
 
-- Script: `scripts/build_kb.py --version v1`. It runs in CI on every merge that changes `kb/`, and by hand on the Mac mini.
+- Script: `scripts/build_kb.py --version v1` writes the chunk file (`kb/build/v1/chunks.jsonl`); it works offline. Embedding and the AI Search upload are **Planned** (they need the Azure resources) and will run in CI on every merge that changes `kb/`, and by hand on the Mac mini. The club, player and match pages are regenerated first with `scripts/build_profiles.py`.
 - Chunk ID: `<corpus>:<doc_slug>:<chunk_no>`, for example `metrics:xg:2`. This is stable, so re-ingestion updates in place.
 - Deleted files are removed from the index by comparing IDs.
 - Size check: about 700 chunks × (6 KB vector + 2 KB text) ≈ 6 MB, inside the Free tier's 50 MB.
@@ -79,12 +83,12 @@ flowchart TB
 ```
 
 Rules:
-1. Router: one `gpt-6-luna` call, temperature 0, at most 150 output tokens, JSON output. Rules fallback: keyword lists per intent.
-2. Retrieved chunk text is placed in a `<documents>` block. The prompt tells the model that this text is reference data and never instructions. Prompt Shields also checks the documents.
+1. Router: one `gpt-6-luna` call, temperature 0, at most 150 output tokens, JSON output (**Planned**). Today only the rules router runs: keyword lists per intent.
+2. Retrieved chunk text is placed in a `<documents>` block. The prompt tells the model that this text is reference data and never instructions. Prompt Shields also checks the documents (**Planned**; the answer is currently assembled from the chunks without a model).
 3. Answer length: casual ≤ 80 words, broadcast ≤ 60 words, analyst ≤ 200 words.
 4. Every sentence ends with at least one citation. A number in the answer must come from a claim (live) or from a chunk (knowledge). Live numbers taken from chunks are rejected with reason `stale_state`.
-5. Conversation memory: the last 3 turns (question and verified answer) from Table `conversations`; at most 10 turns per browser session.
-6. Rate limit: 5 questions a minute per browser session; 429 with `Retry-After`.
+5. Conversation memory: the last 3 turns (question and verified answer) from Table `conversations`; at most 10 turns per browser session (**Planned**; each question is answered on its own today).
+6. Rate limit: 5 questions a minute per match `session_id` (a per-browser key is **Planned**), shared with `/talk`; 429 with `Retry-After: 60`.
 
 ## 6. Access and keys
 
@@ -104,7 +108,7 @@ AI Search Free does not support managed identity (Microsoft Learn, "Try Azure AI
 
 ## 8. Quality gate
 
-`eval/ask_eval.py` runs `eval/ask_golden.jsonl`: 40 questions (15 knowledge, 15 live on a fixed seed, 5 both, 5 unanswerable), each with expected chunk IDs or claim metrics.
+`eval/ask_golden.jsonl` holds 40 questions (15 knowledge, 15 live on a fixed seed, 5 both, 5 unanswerable), each with expected chunk IDs or claim metrics.
 
 | Metric | Target |
 | --- | --- |
@@ -113,4 +117,4 @@ AI Search Free does not support managed identity (Microsoft Learn, "Try Azure AI
 | Unanswerable questions abstained | 5 of 5 |
 | p95 latency | ≤ 8 s |
 
-The gate runs in CI when `kb/`, `packages/agents/ask/` or a prompt changes. A miss fails the job.
+Today `packages/agents/tests/test_ask.py` and `test_kb.py` run the golden questions and a retrieval hit@5 check on every `make test`; the dedicated `eval/ask_eval.py` gate with the latency and Verifier pass-rate targets is **Planned**.
