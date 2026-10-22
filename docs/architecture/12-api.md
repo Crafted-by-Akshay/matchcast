@@ -34,7 +34,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/matches/{id}/vision/identify` | anyone | `session_id, crop (base64 PNG 128x128, ≤ 40 KB), track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}`. Plain base64 only (no `data:` prefix); a complete PNG, exactly 128x128. | 404, 413 (body over 64 KB or crop over 40 KB decoded), 422 (bad crop, or `crop` over 60,000 characters), 429 `rate_limited`/`vision_budget_used`, 502 `vision_unavailable` |
 | `GET /v1/exports/{export_id}` | anyone | none | 200 the file as an attachment | 404 |
 | `POST /v1/ds/ask` | anyone | `session_id, question ≤ 300` | 200 `{answer, verdict, sql, columns[], rows[], chart_spec}` | 400 `invalid_query`, 429, 503 |
-| `GET /v1/speech/token` | anyone | none | 200 `{token, region, expires_at}` | 429 (10 a minute per IP), 503 `not_ready` without a Speech resource. **Planned**: not built yet |
+| `GET /v1/speech/token` | anyone | none | 200 `{token, region, expires_at}` | 429 (10 a minute per IP), 503 `not_ready` without a Speech resource (a managed-identity Entra token in the SDK shape `aad#<resource id>#<token>`, cached until a minute before expiry; set by `SPEECH_RESOURCE_ID` and `SPEECH_REGION`) |
 | `GET /v1/audio/{publication_id}.{lang}.mp3` | anyone | `session_id, match_id` | 200 `audio/mpeg` | 404. **Planned** (server-side voice) |
 | `GET /v1/matches/{match_id}/recap/{persona}` | anyone | `session_id` | 200 recap | 404 not ready |
 | `POST /v1/matches/{match_id}/exports` | Viewer | `session_id, kind (claims_csv, events_json), verdict?, agent?, metric?` | 201 `{export_id, url, sha256, rows}` | 403 |
@@ -103,7 +103,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `/ask`, `/talk` | 5 a minute | `browser_session_id` (or IP) |
 | `/ds/ask` | 5 a minute | client address |
 | `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | one api process (a cost cap, shared by all callers) |
-| `/speech/token` | 10 a minute (**Planned**) | IP |
+| `/speech/token` | 10 a minute | IP |
 
 Limits are kept in memory in the single `api` replica (ADR-0005).
 

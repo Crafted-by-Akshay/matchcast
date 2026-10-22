@@ -37,6 +37,7 @@ from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
+from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
 
 TENANT = "demo"
@@ -210,6 +211,7 @@ class Registry:
         self.season = self.stats_desk.season if self.stats_desk else None
         self.ds_asked: dict[str, deque[float]] = {}
         self.vision = VisionService()
+        self.speech = SpeechTokenService()
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -605,6 +607,21 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(
                 error.status, error.code, error.detail, retry_after=error.retry_after
             ) from error
+
+    @router.get("/speech/token")
+    async def speech_token(request: Request) -> dict[str, Any]:
+        """A short-lived Entra token for the browser's Speech SDK; never a key (EXP-16)."""
+        speech = registry.speech
+        if not speech.ready:
+            raise Problem(503, "not_ready", "no Speech resource is configured")
+        if not speech.allow(request.client.host if request.client else "local"):
+            raise Problem(
+                429, "rate_limited", f"at most {SPEECH_PER_MINUTE} tokens a minute", retry_after=60
+            )
+        try:
+            return await asyncio.to_thread(speech.issue)
+        except SpeechError as error:
+            raise Problem(503, "not_ready", str(error)) from error
 
     @router.post("/ds/ask")
     async def ds_ask(body: DsAsk, request: Request) -> dict[str, Any]:
