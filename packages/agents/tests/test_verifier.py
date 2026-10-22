@@ -132,3 +132,18 @@ def test_extractors() -> None:
         "Northgate FC",
         "Hugo Kerr",
     ]
+
+
+def test_xg_claim_is_recomputed_from_shot_positions(match) -> None:
+    from matchcast_agents.xg import team_xg
+
+    ctx = context(match)
+    top = ctx.state.max_sequence
+    value = team_xg(ctx.events, "home", top, ctx.home)
+    assert 0 < value < ctx.state.count("shots", "home")  # xG per shot is well under 1
+    good = claim(ctx, "xg:home", value) | {"units": "ratio"}
+    ok = verdict(ctx, line(f"Northgate FC xG: {value:.2f}."), [good])
+    assert ok.verdict == "verified"
+    bad = claim(ctx, "xg:home", value + 0.5) | {"units": "ratio"}
+    wrong = verdict(ctx, line(f"Northgate FC xG: {value + 0.5:.2f}."), [bad])
+    assert (wrong.verdict, wrong.reason_code) == ("rejected", "number_mismatch")

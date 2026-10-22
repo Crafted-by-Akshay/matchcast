@@ -9,8 +9,8 @@ MAX_CHARS = {"casual": 140, "analyst": 240, "broadcast": 180}
 MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 
 
-def values(claims: list[dict[str, Any]]) -> dict[str, int]:
-    return {c["metric"]: int(c["value"]) for c in claims}
+def values(claims: list[dict[str, Any]]) -> dict[str, Any]:
+    return {c["metric"]: c["value"] if c["units"] == "ratio" else int(c["value"]) for c in claims}
 
 
 class NarratorRules:
@@ -50,7 +50,7 @@ class NarratorRules:
             texts = {
                 "casual": f"{who} tests the keeper for {club}.",
                 "analyst": f"{who} ({club}) shot on target. {club} shots: {v[f'shots:{team}']}, "
-                f"on target: {v[f'shots_on_target:{team}']}.",
+                f"on target: {v[f'shots_on_target:{team}']}, xG: {v[f'xg:{team}']:.2f}.",
                 "broadcast": f"{who} forces a save for {club}.",
             }
         elif kind == "yellow_card":

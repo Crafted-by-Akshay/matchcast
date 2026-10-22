@@ -62,6 +62,6 @@ def test_tools_cannot_read_past_their_sequence(match) -> None:
 def test_unknown_metric_is_a_tool_error(match) -> None:
     tools = InProcessTools(context(match, 30), up_to_sequence=30)
     with pytest.raises(ToolError):
-        tools.get_metrics(["xg:home"])
+        tools.get_metrics(["pass_quality:home"])
     call_id, state = tools.get_state()
     assert call_id == "tc-1" and state["up_to_sequence"] == 30

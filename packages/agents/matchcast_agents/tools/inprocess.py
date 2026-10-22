@@ -3,6 +3,8 @@
 from typing import Any
 
 from ..context import MatchContext
+from ..xg import VERSION as XG_VERSION
+from ..xg import team_xg
 
 MAX_EVENTS = 200
 MAX_RESULT_BYTES = 20_000
@@ -14,6 +16,7 @@ METRIC_UNITS = {
     "fouls": "count",
     "cards": "count",
     "red_cards": "count",
+    "xg": "ratio",
 }
 DERIVATION_VERSION = "1.0.0"
 
@@ -97,9 +100,13 @@ class InProcessTools:
             metric, _, team = name.partition(":")
             if metric not in METRIC_UNITS or not team:
                 raise ToolError("get_metrics", f"unknown metric {name}")
+            if metric == "xg":
+                value: float = team_xg(self._ctx.events, team, self._up_to, self._ctx.home)
+            else:
+                value = self._ctx.state.count(metric, team)
             values[name] = {
-                "value": self._ctx.state.count(metric, team),
+                "value": value,
                 "units": METRIC_UNITS[metric],
-                "derivation_version": DERIVATION_VERSION,
+                "derivation_version": XG_VERSION if metric == "xg" else DERIVATION_VERSION,
             }
         return self._call("get_metrics", {"names": names}, {"values": values})

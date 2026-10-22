@@ -6,6 +6,7 @@ from typing import Any
 from ..context import MatchContext
 from ..messages import Check, DraftLine, ReasonCode
 from ..state import counted
+from ..xg import team_xg
 
 FRESH_REVISIONS = 5
 FRESH_MS = 30_000
@@ -25,10 +26,15 @@ def extract_names(text: str) -> list[str]:
 
 
 def recompute(
-    events: tuple[dict[str, Any], ...] | list[dict[str, Any]], metric: str, upto: int
-) -> int:
+    events: tuple[dict[str, Any], ...] | list[dict[str, Any]],
+    metric: str,
+    upto: int,
+    home: str = "",
+) -> float:
     """Count a metric straight from the stored events up to a sequence; never from agent state."""
     name, team = metric.split(":", 1)
+    if name == "xg":
+        return team_xg(events, team, upto, home)
     total = 0
     for event in events:
         if event["stream_sequence"] > upto or event["payload"]["type"] in (
@@ -74,7 +80,7 @@ def check_freshness(ctx: MatchContext, claims: list[dict[str, Any]]) -> Check:
 
 def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]) -> Check:
     for claim in claims:
-        expected = recompute(ctx.events, claim["metric"], claim["max_evidence_sequence"])
+        expected = recompute(ctx.events, claim["metric"], claim["max_evidence_sequence"], ctx.home)
         if abs(expected - claim["value"]) > TOLERANCE[claim["units"]]:
             return Check(
                 name="numbers",
