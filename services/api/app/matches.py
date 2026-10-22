@@ -164,6 +164,7 @@ class RecapTrigger(BaseModel):
     tenant_id: str = Field(default=TENANT, pattern=ID)
     session_id: str = Field(pattern=ID)
     match_id: str = Field(pattern=ID)
+    final: bool = False  # full time after extra time: write the recaps again over the first ones
 
 
 class _LocalStatsDesk:
@@ -197,6 +198,7 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
+        self.create_lock = asyncio.Lock()  # the stored-match check awaits, so creates take turns
         self.store = (
             build_store()
         )  # MATCHCAST_STORE=table|memory; one store for every match, so the MCP tools see them all
@@ -274,6 +276,13 @@ class Registry:
         return flow
 
 
+def _is_stored(store: Any, sk: str) -> bool:
+    hydrate = getattr(store, "hydrate", None)
+    if hydrate is not None:
+        hydrate(sk)
+    return store.get_match(sk) is not None
+
+
 def _line_json(line: LineRecord) -> dict[str, Any]:
     return line.model_dump()
 
@@ -342,39 +351,46 @@ def build_router(registry: Registry) -> APIRouter:
         body: MatchCreate,
         x_matchcast_seed_bad_claim: str | None = Header(default=None),
     ) -> dict[str, Any]:
-        key = (body.session_id, body.match_id)
-        if key in registry.flows:
-            raise Problem(409, "match_exists", "match already exists")
-        stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": body.match_id}
-        if body.roster.get("stream") != stream:
-            raise Problem(
-                422, "contract_invalid", "roster stream must match this match", "/roster/stream"
-            )
-        config = WorkflowConfig(approval_mode=body.approval_mode)
-        players = body.roster.get("players")
-        teams = body.roster.get("team_ids")
-        try:
-            names = {p["player_id"]: pretty(p["player_id"]) for p in players or []} | body.names
-            clubs = {team: pretty(team) for team in teams or []} | body.clubs
-            flow = MatchWorkflow(
-                stream=stream,
-                roster=body.roster,
-                names=names,
-                clubs=clubs,
-                agents=registry.agents_for(
-                    config.personas,
-                    seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
-                    seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
-                ),
-                config=config,
-                store=registry.store,
-                stats_desk=registry.stats_desk,
-            )
-        except (ContractError, TypeError, KeyError) as error:
-            raise Problem(
-                422, "contract_invalid", str(error), getattr(error, "path", "/roster")
-            ) from error
-        registry.flows[key] = flow
+        async with registry.create_lock:
+            key = (body.session_id, body.match_id)
+            if key in registry.flows:
+                raise Problem(409, "match_exists", "match already exists")
+            stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": body.match_id}
+            # A match an earlier process stored is not started again over its rows (07 §11).
+            # The store reads Table Storage, so it runs off the event loop.
+            if await asyncio.to_thread(_is_stored, registry.store, stream_key(stream)):
+                raise Problem(
+                    409, "match_exists", "match already exists in the store; use a new id"
+                )
+            if body.roster.get("stream") != stream:
+                raise Problem(
+                    422, "contract_invalid", "roster stream must match this match", "/roster/stream"
+                )
+            config = WorkflowConfig(approval_mode=body.approval_mode)
+            players = body.roster.get("players")
+            teams = body.roster.get("team_ids")
+            try:
+                names = {p["player_id"]: pretty(p["player_id"]) for p in players or []} | body.names
+                clubs = {team: pretty(team) for team in teams or []} | body.clubs
+                flow = MatchWorkflow(
+                    stream=stream,
+                    roster=body.roster,
+                    names=names,
+                    clubs=clubs,
+                    agents=registry.agents_for(
+                        config.personas,
+                        seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
+                        seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
+                    ),
+                    config=config,
+                    store=registry.store,
+                    stats_desk=registry.stats_desk,
+                )
+            except (ContractError, TypeError, KeyError) as error:
+                raise Problem(
+                    422, "contract_invalid", str(error), getattr(error, "path", "/roster")
+                ) from error
+            registry.flows[key] = flow
         return {"stream": stream, "approval_mode": body.approval_mode, "mode": flow.agents.mode}
 
     @router.get("/matches/{match_id}")
@@ -674,7 +690,7 @@ def build_internal_router(registry: Registry) -> APIRouter:
             raise Problem(403, "forbidden_role", "this route needs the recap function identity")
         flow = registry.get(body.session_id, body.match_id)
         try:
-            recaps = await flow.recap()
+            recaps = await flow.recap(force=body.final)
         except WorkflowError as error:
             raise Problem(503, error.code, str(error)) from error
         return {"match_id": body.match_id, "personas": sorted(recaps)}

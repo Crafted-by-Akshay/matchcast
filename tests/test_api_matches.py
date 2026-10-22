@@ -326,6 +326,76 @@ def test_recap_is_404_until_full_time_then_served_per_persona(client: TestClient
     assert verify_chain(audit)["valid"] is True
 
 
+def test_a_stored_match_is_not_started_again_after_a_restart() -> None:
+    """A new process on the same store sees the match; creating it again is a 409, not a reset."""
+    first = TestClient(create_app())
+    create(first)
+    post_all(first)
+    restarted = TestClient(create_app())  # no flows in memory, same rows in the store
+    restarted.app.state.matches.store = first.app.state.matches.store
+    body = {
+        "session_id": "short",
+        "match_id": "match-short",
+        "roster": FIXTURE["roster"],
+        "names": FIXTURE["names"],
+        "clubs": FIXTURE["teams"],
+    }
+    again = restarted.post("/v1/matches", json=body)
+    assert again.status_code == 409 and again.json()["code"] == "match_exists"
+
+
+def test_two_concurrent_creates_of_one_match_make_one_match(monkeypatch) -> None:
+    import asyncio
+    import time
+
+    import httpx
+    from app import matches
+
+    real = matches._is_stored
+
+    def slow(store, sk):  # the store lookup is where the second request would slip past
+        found = real(store, sk)
+        time.sleep(0.2)
+        return found
+
+    monkeypatch.setattr(matches, "_is_stored", slow)
+    app = create_app()
+    body = {
+        "session_id": "short",
+        "match_id": "match-short",
+        "roster": FIXTURE["roster"],
+        "names": FIXTURE["names"],
+        "clubs": FIXTURE["teams"],
+    }
+
+    async def both() -> list[int]:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as http:
+            replies = await asyncio.gather(*(http.post("/v1/matches", json=body) for _ in range(2)))
+        return sorted(r.status_code for r in replies)
+
+    assert asyncio.run(both()) == [201, 409]
+
+
+def test_final_trigger_writes_the_recaps_again(client: TestClient) -> None:
+    """After extra time the last period's end replaces the recap written at the end of period 2."""
+    create(client)
+    post_all(client)
+    trigger = {"session_id": "short", "match_id": "match-short"}
+
+    def recap_claims() -> int:
+        items = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+        return sum(1 for r in items if r["action"] == "claim_created" and r["details"].get("recap"))
+
+    assert client.post("/internal/v1/recaps", json=trigger).status_code == 202
+    first = recap_claims()
+    assert first > 0
+    client.post("/internal/v1/recaps", json=trigger)
+    assert recap_claims() == first  # a repeat of the same trigger is a no-op
+    assert client.post("/internal/v1/recaps", json={**trigger, "final": True}).status_code == 202
+    assert recap_claims() == 2 * first
+
+
 def test_recap_trigger_needs_a_producer_role_when_roles_are_required() -> None:
     client = TestClient(create_app())
     client.app.state.matches.require_role = True
