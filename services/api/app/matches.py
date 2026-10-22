@@ -89,6 +89,13 @@ class LineAction(BaseModel):
     reason: str | None = Field(default=None, max_length=200)
 
 
+class RecapTrigger(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: str = Field(default=TENANT, pattern=ID)
+    session_id: str = Field(pattern=ID)
+    match_id: str = Field(pattern=ID)
+
+
 class Registry:
     """Matches held by this single api replica (ADR-0005), keyed by session and match."""
 
@@ -328,6 +335,34 @@ def build_router(registry: Registry) -> APIRouter:
         ]  # fmt: skip
         return {"line": _line_json(line), "steps": steps}
 
+    @router.get("/matches/{match_id}/recap/{persona}")
+    async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:
+        flow = registry.get(session_id, match_id)
+        recap = flow.store.get_recap(flow.sk, PERSONA_ALIASES.get(persona, persona))
+        if recap is None:
+            raise Problem(404, "not_found", f"the {persona} recap is not ready")
+        return recap
+
+    return router
+
+
+def build_internal_router(registry: Registry) -> APIRouter:
+    router = APIRouter(prefix="/internal/v1", tags=["internal"])
+
+    @router.post("/recaps", status_code=202)
+    async def create_recaps(
+        body: RecapTrigger, role: str | None = Depends(caller_role)
+    ) -> dict[str, Any]:
+        """Called by fn-recap at full time; the api runs the recap workflow (F8)."""
+        if registry.require_role and role not in PRODUCER_ROLES:
+            raise Problem(403, "forbidden_role", "this route needs the recap function identity")
+        flow = registry.get(body.session_id, body.match_id)
+        try:
+            recaps = await flow.recap()
+        except WorkflowError as error:
+            raise Problem(503, error.code, str(error)) from error
+        return {"match_id": body.match_id, "personas": sorted(recaps)}
+
     return router
 
 
@@ -347,4 +382,5 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
         return problem_response(error)
 
     app.include_router(build_router(registry))
+    app.include_router(build_internal_router(registry))
     return registry

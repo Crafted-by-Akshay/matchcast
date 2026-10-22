@@ -283,3 +283,26 @@ def test_seed_bad_claim_defaults_to_minute_twelve(client: TestClient) -> None:
     _create_with_header(client)
     post_all(client)
     assert not _rejections(client)
+
+
+def test_recap_is_404_until_full_time_then_served_per_persona(client: TestClient) -> None:
+    create(client)
+    url = "/v1/matches/match-short/recap/casual"
+    assert client.get(url, params=Q).status_code == 404
+    post_all(client)
+    trigger = {"session_id": "short", "match_id": "match-short"}
+    response = client.post("/internal/v1/recaps", json=trigger)
+    assert response.status_code == 202
+    assert response.json()["personas"] == ["analyst", "broadcast", "casual"]
+    recap = client.get(url, params=Q).json()
+    assert 0 < recap["word_count"] <= 120
+    assert client.get("/v1/matches/match-short/recap/fan", params=Q).json() == recap
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    assert verify_chain(audit)["valid"] is True
+
+
+def test_recap_trigger_needs_a_producer_role_when_roles_are_required() -> None:
+    client = TestClient(create_app())
+    client.app.state.matches.require_role = True
+    trigger = {"session_id": "short", "match_id": "match-short"}
+    assert client.post("/internal/v1/recaps", json=trigger).status_code == 403

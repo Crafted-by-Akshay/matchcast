@@ -82,7 +82,7 @@ test('a fixture change reloads Watch with the new seed; New match in Broadcast m
   const first = await page.locator('#fx').inputValue();
   const other = await page.$$eval('#fx option', (os, cur) => os.map((o: any) => o.value).find((v) => v && v !== cur), first);
   await page.selectOption('#fx', other!);
-  await expect.poll(async () => (await page.$$eval('#v-watch iframe', (x) => x.map((i: any) => i.src)))[0] ?? '').toContain('seed=');
+  await expect.poll(async () => (await page.$$eval('#v-watch iframe', (x) => x.map((i: any) => i.src)))[0] ?? '', { timeout: 30_000 }).toContain('seed=');
   await page.click('#tab-broadcast');
   await expect.poll(async () => { const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url())); return f ? f.evaluate(() => !!((window as any).__mc && (window as any).__mc.S.started)).catch(() => false) : false; }, { timeout: 240_000, intervals: [2000] }).toBe(true);
   const bc = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;

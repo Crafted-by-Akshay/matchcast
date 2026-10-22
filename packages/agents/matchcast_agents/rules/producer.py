@@ -38,6 +38,18 @@ class ProducerRules:
         self._next_summary_ms = SUMMARY_EVERY_MS
         self._seen: set[str] = set()
 
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "last_task_ms": self._last_task_ms,
+            "next_summary_ms": self._next_summary_ms,
+            "seen": sorted(self._seen),
+        }
+
+    def restore(self, data: dict[str, Any]) -> None:
+        self._last_task_ms = data["last_task_ms"]
+        self._next_summary_ms = data["next_summary_ms"]
+        self._seen = set(data["seen"])
+
     async def decide(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | Skip:
         moment_id = f"m-{event['event_id']}"
         if moment_id in self._seen:
