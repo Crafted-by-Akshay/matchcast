@@ -1,4 +1,4 @@
-# Data lane (packages/metrics, services/simulation, services/worker, data/, scripts/ for fit, build and replay)
+# Data lane (packages/metrics, services/simulation, services/worker, data/, scripts/ for fit, build and replay; packages/shared is not in the doc 19 §1 table yet, shared by all lanes, change it with care)
 
 Read first: root `CLAUDE.md`, then `docs/architecture/06-simulation.md`, `07-data-and-storage.md`, `08-analytics-and-ml.md`, `09-vision-identification.md`, ADR-0004, 0006, 0007, 0010, 0012, 0015, 0016, `docs/metrics.md`.
 Skills: `databricks-mlflow`, `fabric-realtime`, `matchcast-contracts`, `tdd-workflow`, `verification-loop`, `handoff`. Agents: `tester`, `explorer`.

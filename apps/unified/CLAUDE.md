@@ -1,4 +1,4 @@
-# Experience lane (apps/unified, apps/broadcast-web)
+# Experience lane (apps/unified, apps/broadcast-web; the latter is not in the doc 19 §1 table yet, treat it as Experience)
 
 Read first: root `CLAUDE.md`, then `docs/architecture/11-frontend.md`, `10-voice-and-translation.md`, `12-api.md` §2-3, `03-runtime-flows.md` (F1, F3-F6), `apps/unified/README.md`.
 Skills: `unified-build`, `demo-ready`, `tdd-workflow`, `verification-loop`, `handoff`. Agents: `tester`, `explorer`.

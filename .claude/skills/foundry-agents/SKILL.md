@@ -22,4 +22,4 @@ Design: `docs/architecture/04-agents.md`. Code: `packages/agents/matchcast_agent
 A model may state a number only if a tool returned it this turn and the claim cites it. The Verifier recounts from stored events, never from agent state. Lines, not claims, carry verdicts and approval (ADR-0013). Add an agent only with an ADR (ADR-0002).
 
 ## Tests
-`uv run --locked --all-packages pytest packages/agents/tests` (fixture `tests/fixtures/match-short.json`, regenerate with `make_match_short.py`). New logic needs a test for the live path with `ScriptedModelClient` and one for its rules twin.
+`uv run --locked --all-packages pytest packages/agents/tests` (fixture `packages/agents/tests/fixtures/match-short.json`, regenerate with `uv run python packages/agents/tests/make_match_short.py`). New logic needs a test for the live path with `ScriptedModelClient` and one for its rules twin.

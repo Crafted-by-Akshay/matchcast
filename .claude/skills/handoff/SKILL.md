@@ -8,7 +8,7 @@ description: Use when finishing a story or ending a session to write the handoff
 Definition of done item 7 (`docs/architecture/16-testing-and-quality.md` §3): a short note per story.
 
 ## Where
-- A PR comment (the permanent record) and, for stories with proof to keep, `docs/evidence/<STORY>.md`. Update the lane's README or the matching `docs/architecture/` file if behaviour changed.
+- The lane's task file (doc 16 §3 item 7) gets the note; also post it as a PR comment (the permanent record) and, for stories with proof to keep, `docs/evidence/<STORY>.md`. Update the lane's README or the matching `docs/architecture/` file if behaviour changed.
 - Save lasting facts the next session would otherwise ask Akshay again (decisions, IDs, quotas, gaps) to project memory, one file per subject.
 
 ## Note format (under 25 lines)

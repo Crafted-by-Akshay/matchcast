@@ -17,4 +17,4 @@ Design: `docs/architecture/08-analytics-and-ml.md` §4, `docs/architecture/06-si
 - Training data is the synthetic scenes only (seeded). No real player or club data.
 - The Python `xg` in `packages/metrics` must agree with the fitted constants; update the golden cases when `xg.json` changes (`docs/metrics.md`).
 - `predict_danger` serves the ONNX model from Blob; the UI shows the model version and says Simulated if no model is loaded.
-- After the runs: stop all compute, record run URLs and metrics in `docs/data.md`. Auth by Entra (`az login`); no token in the bundle or repo.
+- After the runs: stop all compute, create `docs/data.md` and record run URLs and metrics there. Auth by Entra (`az login`); no token in the bundle or repo.

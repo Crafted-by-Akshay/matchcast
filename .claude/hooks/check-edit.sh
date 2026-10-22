@@ -4,6 +4,7 @@ in=$(cat)
 f=$(printf '%s' "$in" | python3 -c 'import sys,json; d=json.load(sys.stdin).get("tool_input",{}); print(d.get("file_path",""))' 2>/dev/null)
 [ -n "$f" ] && [ -f "$f" ] || exit 0
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
+command -v uv >/dev/null || [ "${f##*.}" != py ] || exit 0
 case $f in
   *.py)
     out=$(uv run --locked --all-packages ruff check "$f" 2>&1) || { echo "ruff failed on $f:" >&2; echo "$out" | tail -25 >&2; exit 2; } ;;
