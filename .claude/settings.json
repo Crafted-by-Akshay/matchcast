@@ -1,0 +1,57 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make *)",
+      "Bash(npm run *)",
+      "Bash(npm ci)",
+      "Bash(npx playwright *)",
+      "Bash(uv run *)",
+      "Bash(uv sync *)",
+      "Bash(python3 apps/unified/build.py*)",
+      "Bash(scripts/local_ci.sh*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git fetch*)",
+      "Bash(git switch*)",
+      "Bash(git checkout -b *)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh pr list*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(./**/players.json)",
+      "Read(./**/intl.json)",
+      "Read(./apps/unified/watch/**)",
+      "Read(./apps/unified/broadcast/**)",
+      "Read(./apps/unified/analyst/**)",
+      "Read(./apps/unified/sources/**)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(az group delete*)",
+      "Bash(az resource delete*)",
+      "Bash(azd down*)",
+      "Bash(printenv*ADO_PAT*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh", "timeout": 20 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-secrets.sh", "timeout": 30 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/check-edit.sh", "timeout": 60 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/check-stop.sh", "timeout": 240 } ] }
+    ]
+  }
+}
