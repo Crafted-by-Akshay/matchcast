@@ -57,8 +57,16 @@ def pretty(identifier: str) -> str:
 class Problem(Exception):
     """Rendered as RFC 9457 application/problem+json."""
 
-    def __init__(self, status: int, code: str, detail: str, path: str | None = None):
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        detail: str,
+        path: str | None = None,
+        retry_after: int | None = None,
+    ):
         self.status, self.code, self.detail, self.path = status, code, detail, path
+        self.retry_after = retry_after
 
 
 def problem_response(error: Problem) -> JSONResponse:
@@ -71,7 +79,10 @@ def problem_response(error: Problem) -> JSONResponse:
         "path": error.path,
         "trace_id": uuid.uuid4().hex,
     }
-    return JSONResponse(body, status_code=error.status, media_type="application/problem+json")
+    headers = {"Retry-After": str(error.retry_after)} if error.retry_after else None
+    return JSONResponse(
+        body, status_code=error.status, media_type="application/problem+json", headers=headers
+    )
 
 
 class MatchCreate(BaseModel):
@@ -538,7 +549,9 @@ def build_router(registry: Registry) -> APIRouter:
         if registry.season is None:
             raise Problem(503, "not_ready", "the season data is not loaded")
         if not registry.allow_ds(request.client.host if request.client else "local"):
-            raise Problem(429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute")
+            raise Problem(
+                429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute", retry_after=60
+            )
         try:
             result = await asyncio.to_thread(ds_ask_season, body.question, registry.season)
         except SeasonError as error:
@@ -564,7 +577,9 @@ def build_router(registry: Registry) -> APIRouter:
     async def talk(match_id: str, body: TalkBody) -> dict[str, Any]:
         flow = registry.get(body.session_id, match_id)
         if not registry.allow_ask(body.session_id):  # /ask and /talk share one budget
-            raise Problem(429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute")
+            raise Problem(
+                429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
+            )
         try:
             return await flow.talk(body.target, body.utterance)
         except WorkflowError as error:
@@ -582,7 +597,9 @@ def build_router(registry: Registry) -> APIRouter:
     async def ask(match_id: str, body: AskBody) -> dict[str, Any]:
         flow = registry.get(body.session_id, match_id)
         if not registry.allow_ask(body.session_id):
-            raise Problem(429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute")
+            raise Problem(
+                429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
+            )
         try:
             result = await flow.ask(body.question, body.persona)
         except WorkflowError as error:

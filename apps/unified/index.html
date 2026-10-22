@@ -456,6 +456,19 @@ function cardOf(c) {
   else Object.assign(card, { plain: i.title || c.text, chips: [mins(c.minute), String(i.type || c.kind).replace('_', ' ')] });
   return card;
 }
+// ---------------------------------------------------------------- Ask (EXP-5)
+// 300 characters, 5 questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
+const askTimes = [];
+async function answerAsk(id, q) {
+  const reply = (answer) => post('watch', { src: 'matchcast-shell', type: 'answer', id, answer });
+  q = String(q || '').trim().slice(0, 300);
+  const now = Date.now(); while (askTimes.length && now - askTimes[0] > 60000) askTimes.shift();
+  if (askTimes.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
+  askTimes.push(now);
+  if (LV.enabled && LV.status === 'live') { try { reply(await LV.ask(q)); return; } catch (e) { /* the api could not answer: the rules below do */ } }
+  const a = AG.ask(q);
+  reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
+}
 function pushCards() {
   const r = AG.run; if (!r) return;
   for (const c of r.claims) {
@@ -476,6 +489,7 @@ window.addEventListener('message', (e) => {
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
+  if (d.type === 'ask' && view === 'watch') { answerAsk(d.id, d.q); return; }
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
   if (d.type === 'vision' && view === 'watch') {   // Watch's pixel-only tracker, scored against engine truth (DAT-11); the Analyst's Tracking lab shows it
     M.vision = d.report; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'vision', report: d.report }); return;

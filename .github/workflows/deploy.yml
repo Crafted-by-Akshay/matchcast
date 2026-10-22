@@ -118,6 +118,11 @@ jobs:
           if [ -n "${MCP_IMAGE:-}" ]; then azd env set MCP_IMAGE "$MCP_IMAGE"; fi
           azd provision --no-prompt
 
+      - name: Deploy the recap function code
+        # fn-recap is a Functions app, not a container: its code goes up with `azd deploy recap`.
+        # It must not block the container deploy, so a failure is a warning and the smoke test still runs.
+        run: azd deploy recap --no-prompt || echo "::warning::azd deploy recap failed; the recap function runs its previous code"
+
       - name: Smoke test
         run: |
           API_URI=$(azd env get-value API_URI)

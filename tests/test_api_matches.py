@@ -349,6 +349,7 @@ def test_ask_refuses_attacks_long_questions_and_the_sixth_question_a_minute(
         assert ask(client, "What is offside?").status_code == 200
     limited = ask(client, "What is offside?")
     assert limited.status_code == 429 and limited.json()["code"] == "rate_limited"
+    assert limited.headers["retry-after"] == "60"
 
 
 def test_live_mode_uses_the_model_client_and_audits_its_lines(client: TestClient) -> None:
@@ -446,7 +447,8 @@ def test_ds_ask_answers_refuses_and_limits(client: TestClient) -> None:
     assert [r["action"] for r in audit] == ["ds_answered"] and verify_chain(audit)["valid"] is True
     for _ in range(4):
         assert client.post("/v1/ds/ask", json=body).status_code == 200
-    assert client.post("/v1/ds/ask", json=body).status_code == 429
+    limited_ds = client.post("/v1/ds/ask", json=body)
+    assert limited_ds.status_code == 429 and limited_ds.headers["retry-after"] == "60"
 
 
 def test_ds_ask_abstains_and_reports_a_missing_season(client: TestClient) -> None:
@@ -513,4 +515,5 @@ def test_talk_is_rate_limited_with_ask_and_refuses_attacks_and_unknown_targets(
         assert talk("producer", "score?").status_code == 200
     limited = talk("producer", "score?")
     assert limited.status_code == 429 and limited.json()["code"] == "rate_limited"
-    assert ask(client, "What is offside?").status_code == 429
+    again = ask(client, "What is offside?")
+    assert again.status_code == 429 and again.headers["retry-after"] == "60"

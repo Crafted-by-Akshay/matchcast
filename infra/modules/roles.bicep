@@ -14,6 +14,8 @@ var roleIds = {
   eventHubsDataSender: '2b629674-e913-4c01-ae53-ef4638d8f975'
   eventHubsDataReceiver: 'a638d3c7-ab3a-418d-83e6-5f17a39d4fde'
   keyVaultSecretsUser: '4633458b-17de-406a-b5cd-9c4a5b5cd8ee'
+  storageBlobDataOwner: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
+  storageQueueDataContributor: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
   cognitiveServicesUser: 'a97b65f3-24c7-4388-baec-2e87135dc908'
 }
 
@@ -49,6 +51,27 @@ resource blobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
     principalId: principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.storageBlobDataContributor)
+  }
+}
+
+// The Functions host (fn-recap) keeps its checkpoints and deployment package in Blob and uses Queue.
+resource blobOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: st
+  name: guid(st.id, principalId, roleIds.storageBlobDataOwner)
+  properties: {
+    principalId: principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.storageBlobDataOwner)
+  }
+}
+
+resource queueContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: st
+  name: guid(st.id, principalId, roleIds.storageQueueDataContributor)
+  properties: {
+    principalId: principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.storageQueueDataContributor)
   }
 }
 

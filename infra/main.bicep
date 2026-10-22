@@ -90,6 +90,23 @@ module containerapps 'modules/containerapps.bicep' = {
   }
 }
 
+module recapFunction 'modules/function.bicep' = {
+  name: 'recapFunction'
+  params: {
+    name: name
+    location: location
+    tags: tags
+    identityId: identity.outputs.id
+    identityClientId: identity.outputs.clientId
+    storageAccountName: storage.outputs.name
+    storageBlobUrl: storage.outputs.blobUrl
+    eventHubFqdn: eventhubs.outputs.fqdn
+    apiUrl: 'https://${containerapps.outputs.apiFqdn}'
+    appInsightsName: monitoring.outputs.appInsightsName
+    recapApiScope: empty(entraClientId) ? '' : 'api://${entraClientId}/.default'
+  }
+}
+
 module alerts 'modules/alerts.bicep' = if (!empty(alertEmail)) {
   name: 'alerts'
   params: {
@@ -124,6 +141,7 @@ output API_URI string = 'https://${containerapps.outputs.apiFqdn}'
 output STORAGE_ACCOUNT string = storage.outputs.name
 output EVENTHUB_NAMESPACE string = eventhubs.outputs.name
 output KEY_VAULT string = keyvault.outputs.name
+output RECAP_FUNCTION string = recapFunction.outputs.name
 output SEARCH_SERVICE string = ai.outputs.searchName
 output SEARCH_ENDPOINT string = ai.outputs.searchEndpoint
 output CONTENT_SAFETY_ENDPOINT string = ai.outputs.contentSafetyEndpoint
