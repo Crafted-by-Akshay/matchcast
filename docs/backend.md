@@ -82,3 +82,18 @@ This S03 store exists only in process memory: restart loses sessions, separate A
 replicas do not share them, and no authorization boundary is implemented. A
 durable store, authenticated tenant enforcement, replay/history, and production
 readiness probes are later work.
+
+## Match routes (AGT-3)
+
+`services/api/app/matches.py` mounts the `/v1` routes from `docs/architecture/12-api.md` on the
+rules-mode workflow in `packages/agents`: create a match with its roster, post contract event
+batches, read `claims`, `lines`, `audit` and `trace/{line_id}`, follow the SSE `stream`, and
+approve, edit or kill lines. Errors are RFC 9457 problems with a `code`.
+
+- The tenant is `demo`; the roster's `stream` must equal `(demo, session_id, match_id)`.
+- Everything is in memory in one process (ADR-0005). No model is called.
+- `GET .../stream?follow=false` sends status, state and the replay, then closes (useful for curl and tests).
+- Producer routes check the `X-MatchCast-Role` header (`Producer` or `Admin`) only when
+  `MATCHCAST_REQUIRE_ROLE=1`; real Entra roles replace it in PLT-5.
+- Not built yet: `/ask`, `/talk`, `/ds/ask`, vision, speech, audio, recap and exports routes;
+  rate limits; `docs/api/openapi.json` snapshot.

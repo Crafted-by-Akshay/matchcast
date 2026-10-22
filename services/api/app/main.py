@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import SettingsResult, load_settings
+from app.matches import install as install_match_routes
 from app.sessions import (
     InMemorySessionStore,
     SessionCreate,
@@ -138,15 +139,11 @@ def create_app(
             )
         return _record_json(record)
 
-    @application.get(
-        "/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"]
-    )
+    @application.get("/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"])
     async def inspect_session(tenant_id: str, session_id: str, match_id: str) -> dict[str, Any]:
         return _record_json(_require_session(tenant_id, session_id, match_id, store))
 
-    @application.put(
-        "/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"]
-    )
+    @application.put("/sessions/{tenant_id}/{session_id}/{match_id}", tags=["sessions"])
     async def replace_session(
         tenant_id: str, session_id: str, match_id: str, request: SessionReplace
     ) -> dict[str, Any]:
@@ -156,9 +153,7 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
         return _record_json(record)
 
-    @application.post(
-        "/sessions/{tenant_id}/{session_id}/{match_id}/reset", tags=["sessions"]
-    )
+    @application.post("/sessions/{tenant_id}/{session_id}/{match_id}/reset", tags=["sessions"])
     async def reset_session(tenant_id: str, session_id: str, match_id: str) -> dict[str, Any]:
         stream = _stream(tenant_id, session_id, match_id)
         record = store.reset(stream)
@@ -166,6 +161,7 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
         return _record_json(record)
 
+    install_match_routes(application)
     return application
 
 

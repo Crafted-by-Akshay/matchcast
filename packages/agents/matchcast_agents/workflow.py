@@ -17,8 +17,10 @@ from .context import MatchContext
 from .hub import StreamHub
 from .messages import DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
+from .rules.analyst import ClaimResult
 from .state import MatchState, apply
 from .store import MemoryStore, stream_key
+from .tools import ToolError
 
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
@@ -39,7 +41,7 @@ class Producer(Protocol):
 class Analyst(Protocol):
     async def analyse(
         self, ctx: MatchContext, task: ProducerTask, *, repair: bool = False
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[ClaimResult]: ...
 
 
 class Narrator(Protocol):
@@ -76,11 +78,14 @@ class AgentSet:
 
 
 def rules_agents(
-    personas: tuple[Persona, ...] = ("casual", "analyst"), *, seed_bad_claim: bool = False
+    personas: tuple[Persona, ...] = ("casual", "analyst"),
+    *,
+    seed_bad_claim: bool = False,
+    failing_tools: frozenset[str] = frozenset(),
 ) -> AgentSet:
     return AgentSet(
         ProducerRules(personas),
-        AnalystRules(corrupt_first_claim=seed_bad_claim),
+        AnalystRules(corrupt_first_claim=seed_bad_claim, failing_tools=failing_tools),
         NarratorRules(),
         VerifierRules(),
     )
@@ -232,8 +237,31 @@ class MatchWorkflow:
 
     async def _run_moment(self, ctx: MatchContext, task: ProducerTask) -> None:
         a = self.agents
-        claims = await a.analyst.analyse(ctx, task)
-        for claim in claims:
+        claims = await self._analyse(ctx, task, repair=False)
+        if not claims:
+            return
+        drafts = await a.narrator.write(ctx, task, claims)
+        for draft in drafts:
+            await self._verify_line(ctx, task, claims, draft, attempt=0)
+
+    async def _analyse(
+        self, ctx: MatchContext, task: ProducerTask, *, repair: bool
+    ) -> list[dict[str, Any]]:
+        """Run the Analyst, store its claims with their tool calls; a failed tool means no claim."""
+        a = self.agents
+        try:
+            results = await a.analyst.analyse(ctx, task, repair=repair)
+        except ToolError as error:
+            self._agent(
+                "fallback_used",
+                a.analyst,
+                task.moment_id,
+                fallback_reason="tool_error",
+                tool=error.tool,
+            )
+            return []
+        for result in results:
+            claim = result.packet
             validate(claim)
             self.store.put_claim(
                 self.sk,
@@ -242,9 +270,12 @@ class MatchWorkflow:
                     "moment_id": task.moment_id,
                     "agent": a.analyst.agent_id,
                     "created_at": _stamp(self._clock()),
+                    "tool_call_ids": list(result.tool_call_ids),
+                    "formula_inputs": result.formula_inputs,
                 },
             )
-            self.stats["claims"] += 1
+            if not repair:
+                self.stats["claims"] += 1
             self.hub.publish("claim", f"claim:{claim['claim_id']}", claim)
             self._agent(
                 "claim_created",
@@ -252,13 +283,10 @@ class MatchWorkflow:
                 claim["claim_id"],
                 metric=claim["metric"],
                 value=claim["value"],
-                priority=task.priority,
+                tool_call_ids=list(result.tool_call_ids),
+                **({"repair": True} if repair else {"priority": task.priority}),
             )
-        if not claims:
-            return
-        drafts = await a.narrator.write(ctx, task, claims)
-        for draft in drafts:
-            await self._verify_line(ctx, task, claims, draft, attempt=0)
+        return [r.packet for r in results]
 
     async def _verify_line(
         self,
@@ -318,7 +346,12 @@ class MatchWorkflow:
         record.status = "verified" if verdict.verdict == "verified" else "review"
         self._save_line(record)
         action = "line_verified" if record.status == "verified" else "line_review"
-        self._agent(action, a.verifier, draft.line_id, checks=[c.name for c in verdict.checks])
+        self._agent(
+            action,
+            a.verifier,
+            draft.line_id,
+            checks=[{"name": c.name, "passed": c.passed} for c in verdict.checks],
+        )
         if record.status == "verified":
             self.stats["verified"] += 1
             if self.config.approval_mode == "auto":
@@ -345,27 +378,9 @@ class MatchWorkflow:
         self.stats["repaired"] += 1
         if target == "analyst":
             fresh = self._ctx()
-            claims = await a.analyst.analyse(fresh, task, repair=True)
-            for claim in claims:
-                validate(claim)
-                self.store.put_claim(
-                    self.sk,
-                    claim,
-                    {
-                        "moment_id": task.moment_id,
-                        "agent": a.analyst.agent_id,
-                        "created_at": _stamp(self._clock()),
-                    },
-                )
-                self.hub.publish("claim", f"claim:{claim['claim_id']}", claim)
-                self._agent(
-                    "claim_created",
-                    a.analyst,
-                    claim["claim_id"],
-                    metric=claim["metric"],
-                    value=claim["value"],
-                    repair=True,
-                )
+            claims = await self._analyse(fresh, task, repair=True)
+            if not claims:
+                return
             ctx = fresh
         redrafts = await a.narrator.write(ctx, task, claims, attempt=1)
         replacement = next((d for d in redrafts if d.persona == draft.persona), None)

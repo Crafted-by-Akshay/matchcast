@@ -30,9 +30,10 @@ class NarratorRules:
         payload = event["payload"]
         v = values(claims)
         who = ctx.player_name(payload["player_id"]) if "player_id" in payload else ""
-        team = payload.get("team_id", "home")
+        team = payload.get("team_id", ctx.home)
         club = ctx.club_name(team)
-        home, away = ctx.club_name("home"), ctx.club_name("away")
+        hid, aid = ctx.home, ctx.away
+        home, away = ctx.club_name(hid), ctx.club_name(aid)
         ids = tuple(c["claim_id"] for c in claims)
         texts: dict[str, str] = {}
         kind = task.reason
@@ -40,10 +41,10 @@ class NarratorRules:
             n = v[f"goals:{team}"]
             texts = {
                 "casual": f"Goal for {club}! {who} scores, goal number {n} for them.",
-                "analyst": f"Goal: {who} ({club}). Score: {home} {v['goals:home']}, "
-                f"{away} {v['goals:away']}.",
-                "broadcast": f"{club} score through {who}. {home} {v['goals:home']}, "
-                f"{away} {v['goals:away']}.",
+                "analyst": f"Goal: {who} ({club}). Score: {home} {v[f'goals:{hid}']}, "
+                f"{away} {v[f'goals:{aid}']}.",
+                "broadcast": f"{club} score through {who}. {home} {v[f'goals:{hid}']}, "
+                f"{away} {v[f'goals:{aid}']}.",
             }
         elif kind == "shot_on_target":
             texts = {
@@ -65,7 +66,7 @@ class NarratorRules:
                 "broadcast": f"{who} is sent off. {club} are down to ten.",
             }
         elif kind == "summary":
-            h, a = v["shots:home"], v["shots:away"]
+            h, a = v[f"shots:{hid}"], v[f"shots:{aid}"]
             lead = home if h > a else away if a > h else None
             casual = f"{lead} have had more of the shots." if lead else "The shot count is level."
             texts = {
@@ -75,7 +76,7 @@ class NarratorRules:
             }
         elif kind == "period_end":
             texts = {
-                p: f"The half ends: {home} {v['goals:home']}, {away} {v['goals:away']}."
+                p: f"The half ends: {home} {v[f'goals:{hid}']}, {away} {v[f'goals:{aid}']}."
                 for p in ("analyst", "broadcast")
             }
             texts["casual"] = f"That is the end of the half for {home} and {away}."

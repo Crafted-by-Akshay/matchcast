@@ -405,6 +405,7 @@ source = { editable = "services/api" }
 dependencies = [
     { name = "azure-identity" },
     { name = "fastapi" },
+    { name = "matchcast-agents" },
     { name = "matchcast-contracts" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -413,6 +414,7 @@ dependencies = [
 requires-dist = [
     { name = "azure-identity", specifier = ">=1.19,<2" },
     { name = "fastapi", specifier = ">=0.115,<0.120" },
+    { name = "matchcast-agents", editable = "packages/agents" },
     { name = "matchcast-contracts", editable = "packages/contracts" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1" },
 ]

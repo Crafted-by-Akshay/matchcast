@@ -1,0 +1,67 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "dependencies | where name startswith \"invoke_agent\" | summarize p50=percentile(duration,50), p95=percentile(duration,95) by bin(timestamp, 5m), agent=tostring(customDimensions[\"gen_ai.agent.name\"])",
+        "size": 1,
+        "title": "p50 and p95 latency per agent (ms)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "dependencies | where name startswith \"chat \" | summarize input=sum(todouble(customDimensions[\"gen_ai.usage.input_tokens\"])), output=sum(todouble(customDimensions[\"gen_ai.usage.output_tokens\"])) by bin(timestamp, 1m), agent=tostring(customDimensions[\"gen_ai.agent.name\"])",
+        "size": 1,
+        "title": "Tokens per minute by agent",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "dependencies | where name == \"verify\" | summarize count() by tostring(customDimensions[\"matchcast.verdict\"]), tostring(customDimensions[\"matchcast.reason_code\"])",
+        "size": 1,
+        "title": "Verdicts by reason code",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests | where name has \"/ask\" | summarize calls=count(), abstained=countif(tostring(customDimensions[\"matchcast.abstained\"])==\"true\") by bin(timestamp, 5m)",
+        "size": 1,
+        "title": "Ask: calls and abstentions",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "dependencies | where name in (\"ocr\",\"translate\",\"synthesize\") | summarize calls=count(), characters=sum(todouble(customDimensions[\"matchcast.characters\"])) by bin(timestamp, 5m), name",
+        "size": 1,
+        "title": "OCR calls, translation and speech characters",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      }
+    }
+  ],
+  "fallbackResourceIds": [],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
