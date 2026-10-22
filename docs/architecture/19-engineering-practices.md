@@ -15,7 +15,6 @@ packages/contracts/      Agents       JSON Schema, generated TS, validators (cha
 packages/agents/         Agents       workflow, executors, prompts, rules, ask
 packages/metrics/        Data         metric functions + golden tests
 packages/shared/         Platform     Azure client factories (shared credential) and telemetry setup used by api and agents
-apps/broadcast-web/      (obsolete)   early Next.js scaffold, replaced by apps/unified; do not build here. Delete it in the PR that adds the `web` container (doc 02 §4), together with its root `build` script entry
 kb/                      Agents       knowledge base markdown
 data/                    Data         calibration targets, Databricks bundle, Fabric KQL
 scripts/                 Data/Platform batch tools (fit_xg, check_realism, build_kb, cost_today, smoke_cloud)
