@@ -114,7 +114,8 @@ MCS.progress('Loading the stadium and players');
   setInterval(() => {
     if (!MCS.framed || !S.started || !players.length) return;
     MCS.send({ type: 'frame', setup: MCS.setup(), frame: { mclock: S.mclock, half: S.half, ht: !!S.ht, over: !!S.over, paused: !!S.paused, speed: S.speed, mscale: S.mscale, score: S.score.slice(), stats: JSON.parse(JSON.stringify(STATS)),
-      ball: [r2(ball.p.x), r2(ball.p.y), r2(ball.p.z)], players: players.map((p) => [r2(p.pos2.x), r2(p.pos2.y), r2(p.vel.x), r2(p.vel.y), r2(p.yaw), actOf(p.act)]) } });
+      ball: [r2(ball.p.x), r2(ball.p.y), r2(ball.p.z)], players: players.map((p) => [r2(p.pos2.x), r2(p.pos2.y), r2(p.vel.x), r2(p.vel.y), r2(p.yaw), actOf(p.act)]),
+      officials: officials.map((o) => [r2(o.pos2.x), r2(o.pos2.y), r2(o.vel.x), r2(o.vel.y), r2(o.yaw), o.act ? { type: o.act.type, t: r2(o.act.t), dur: o.act.dur, dir: o.act.dir ? { x: r2(o.act.dir.x), y: r2(o.act.dir.y) } : null, up: o.act.up || 0 } : 0]) } });   // referee and assistants: position and their current signal or flag
   }, 250);
 })();
 

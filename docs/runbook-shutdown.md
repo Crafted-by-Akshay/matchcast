@@ -21,6 +21,9 @@ Prints month-to-date spend per service beside its target and flags anything abov
 
 Do not delete `matchcast-foundry` or `rg-matchcast` without Akshay's say-so; `azd down` only removes what the template created.
 
+## Scripts (dry run by default)
+`scripts/shutdown.sh <scale-down|pause-fabric|cost-final|stop-eventhubs|teardown>` prints the command for that step; add `--execute` to run it. `stop-eventhubs` and `teardown` also refuse to run without `CONFIRM_DESTROY=rg-matchcast` in the environment, which is Akshay's call. `pause-fabric` needs `FABRIC_CAPACITY`. After any step, or at any time, `scripts/health_check.sh <api-url> [web-url]` checks `/health`, `/ready`, that `/v1/status` lists no unavailable dependency, and the web page (`DRY_RUN=1` prints the requests only). The destructive steps have not been run.
+
 ## Budget alerts
 Budget `matchcast-budget` should have alerts at $40 and $50 (acceptance criterion of PLT-10).
 
