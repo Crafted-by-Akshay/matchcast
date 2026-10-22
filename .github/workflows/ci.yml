@@ -6,9 +6,10 @@ on:
   push:
     branches: [main]
 
+# Pull request runs cancel superseded pushes; every run on main finishes so each merge has a verdict.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

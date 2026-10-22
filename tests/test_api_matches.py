@@ -340,3 +340,28 @@ def test_easy_auth_approval_records_the_signed_in_name_in_the_audit(
     assert approved[0]["actor_id"] == "oid-judge-1"
     assert approved[0]["details"]["actor_name"] == "Judge One"
     assert verify_chain(audit)["valid"] is True
+
+
+def test_exports_are_hash_stamped_downloadable_and_audited(client: TestClient) -> None:
+    import hashlib
+
+    create(client)
+    post_all(client)
+    made = client.post(
+        "/v1/matches/match-short/exports",
+        json={"session_id": "short", "kind": "claims_csv", "verdict": "verified"},
+    )
+    assert made.status_code == 201
+    info = made.json()
+    download = client.get(info["url"])
+    assert hashlib.sha256(download.content).hexdigest() == info["sha256"]
+    lines = download.text.splitlines()
+    assert lines[0].startswith("claim_id,metric,value") and len(lines) == info["rows"] + 1
+    events = client.post(
+        "/v1/matches/match-short/exports", json={"session_id": "short", "kind": "events_json"}
+    ).json()
+    assert events["rows"] == len(FIXTURE["events"])
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    assert [r["action"] for r in audit].count("export_created") == 2
+    assert verify_chain(audit)["valid"] is True
+    assert client.get("/v1/exports/nope").status_code == 404

@@ -134,3 +134,15 @@ def test_verified_audit_records_name_the_deterministic_and_meaning_checks(
     verified = next(r for r in flow.store.audit_records(flow.sk) if r["action"] == "line_verified")
     names = [c["name"] for c in verified["details"]["checks"]]
     assert names == ["sources", "freshness", "numbers", "names", "persona", "meaning", "safety"]
+
+
+def test_shot_moments_carry_an_xg_claim_and_the_analyst_line_reads_it(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    claims = (
+        [c["packet"] for c in flow.store.claims(flow.sk)] if hasattr(flow.store, "claims") else []
+    )
+    xg = [c for c in claims if c["metric"].startswith("xg:")]
+    assert xg and all(c["units"] == "ratio" for c in xg)
+    texts = [ln.text for ln in flow.store.lines(flow.sk) if ln.persona == "analyst"]
+    assert any("xG: " in t for t in texts)
