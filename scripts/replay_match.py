@@ -16,6 +16,7 @@ login).
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import sys
 import time
@@ -91,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         from replay_sinks.eventhub import from_env
 
         hub = from_env()
+        atexit.register(hub.close)
 
     def flush() -> None:
         if batch and a.sink == "http":
@@ -132,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         sent += 1
     flush()
     if hub is not None:
-        hub.close()
+        hub.close()  # idempotent; atexit covers an error before this point
     if out is not sys.stdout:
         out.close()
     print(f"replayed {sent} events of {match_id} at {a.speed}x", file=sys.stderr)

@@ -15,16 +15,24 @@ from typing import Any
 
 
 class EventHubSink:
-    """``publisher``: ``async publish(sk, events)`` and ``async close()`` (EventHubsPublisher)."""
+    """``publisher``: ``async publish(sk, events)`` and ``async close()`` (EventHubsPublisher).
 
-    def __init__(self, publisher: Any) -> None:
+    The sink owns one event loop and the publisher must have been created on it, because the
+    Event Hubs transport binds to the loop it starts on.
+    """
+
+    def __init__(self, publisher: Any, loop: asyncio.AbstractEventLoop | None = None) -> None:
         self._publisher = publisher
-        self._loop = asyncio.new_event_loop()
+        self._loop = loop or asyncio.new_event_loop()
+        self._closed = False
 
     def send(self, sk: str, events: list[dict[str, Any]]) -> None:
         self._loop.run_until_complete(self._publisher.publish(sk, events))
 
     def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         try:
             self._loop.run_until_complete(self._publisher.close())
         finally:
@@ -36,12 +44,8 @@ def from_env() -> EventHubSink:
     from matchcast_worker.eventhubs import EventHubsPublisher
 
     loop = asyncio.new_event_loop()
-    try:
-        producer = loop.run_until_complete(_make_producer(azure_clients))
-    finally:
-        loop.close()
-    return EventHubSink(EventHubsPublisher(producer))
 
+    async def make() -> Any:
+        return azure_clients.eventhub_producer_aio()
 
-async def _make_producer(azure_clients: Any) -> Any:
-    return azure_clients.eventhub_producer_aio()
+    return EventHubSink(EventHubsPublisher(loop.run_until_complete(make())), loop)

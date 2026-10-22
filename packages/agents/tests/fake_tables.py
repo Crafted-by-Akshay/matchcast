@@ -66,6 +66,23 @@ class FakeTable:
         except KeyError:
             raise ResourceNotFoundError("no such entity") from None
 
+    def submit_transaction(self, operations: list[tuple[str, dict[str, Any]]], **_: Any) -> None:
+        """All operations apply or none do, in one partition, at most 100 (as Table Storage)."""
+        if len(operations) > 100 or len({op[1]["PartitionKey"] for op in operations}) > 1:
+            raise ValueError("a transaction is one partition and at most 100 operations")
+        saved = copy.deepcopy(self.rows)
+        try:
+            for kind, entity in operations:
+                if kind == "upsert":
+                    self.upsert_entity(entity)
+                elif kind == "delete":
+                    self.delete_entity(entity["PartitionKey"], entity["RowKey"])
+                else:
+                    raise ValueError(kind)
+        except Exception:
+            self.rows = saved
+            raise
+
     def delete_entity(self, partition_key: str, row_key: str, **_: Any) -> None:
         if self.rows.pop((partition_key, row_key), None) is None:
             raise ResourceNotFoundError("no such entity")
