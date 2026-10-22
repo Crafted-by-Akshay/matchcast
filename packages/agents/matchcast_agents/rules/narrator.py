@@ -6,7 +6,6 @@ from ..context import MatchContext
 from ..messages import DraftLine, ProducerTask
 from ..personas import BASE, max_chars, slug, split
 
-MAX_CHARS = {"casual": 140, "analyst": 280, "broadcast": 180}
 LABELS = {
     "goals": "Goals",
     "shots": "Shots",
