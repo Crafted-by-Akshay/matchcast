@@ -101,5 +101,5 @@ A red card or turning point is a deterministic trigger. The Producer marks that 
 - Tests: the three `data scientist:` cases in `tests/e2e/analyst.spec.ts`.
 
 ## Analyst accessibility (EXP-14)
-- `analyst-pages/00_a11y.js` sets `lang`, darkens the green/amber chip text and club crests that failed WCAG AA contrast, names unlabelled chart SVGs and makes `#main` keyboard-focusable. It exists because `sources/` is read only.
-- `tests/e2e/a11y-analyst.spec.ts` runs axe (WCAG 2 A/AA) on 13 Analyst pages and fails on any serious or critical violation. Uses `@axe-core/playwright` (dev dependency). Watch and Broadcast are still to audit.
+- `analyst-pages/00_a11y.js` sets `lang`, redefines the light-theme `--good`/`--warn` tokens (the dark theme keeps its own) and darkens club crests that failed WCAG AA contrast, names unlabelled chart SVGs and makes `#main` keyboard-focusable. It exists because `sources/` is read only.
+- `tests/e2e/a11y-analyst.spec.ts` runs axe (WCAG 2 A/AA) on 13 Analyst pages in both the light and dark scheme and fails on any serious or critical violation (minor and moderate are not checked). Uses `@axe-core/playwright` (dev dependency). Watch and Broadcast are still to audit.
