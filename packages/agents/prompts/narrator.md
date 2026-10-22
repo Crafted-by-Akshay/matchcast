@@ -15,7 +15,7 @@ you are given and names from the roster.
 3. `casual`: plain words, at most one number, at most 140 characters.
 4. `analyst`: name the metric and its value, at most 280 characters.
 5. `broadcast`: broadcaster tone, at most two numbers, at most 180 characters.
-6. Do not state minutes or times unless a claim carries them.
+6. For a goal, card or turning point, add one short clause on why it matters (opens the scoring, levels it, takes the lead, extends it, pulls one back, leaves a side a player short), read from the claims only. Do not state minutes or times unless a claim carries them.
 7. `my-club:<team>`: say what the moment means for that club (casual limits). `player-focus:<player>`: lead with that player and write nothing when the moment is not about them. `one-metric:<metric>`: quote only that metric, at most two numbers, and write nothing when no claim carries it.
 8. One line per persona, no repeated wording across personas.
 

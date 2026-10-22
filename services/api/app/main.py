@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from matchcast_shared.azure_clients import foundry_token
 from matchcast_shared.telemetry import configure_telemetry
@@ -56,6 +57,16 @@ def create_app(
     probe = default_credential_probe if credential_probe is None else credential_probe
     application = FastAPI(title="MatchCast API", version="0.2.0")
     application.state.settings_result = resolved_settings
+    origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+    if origins and "*" not in origins:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Content-Type", "Last-Event-ID", "X-Request-Id"],
+            # without this a cross-origin browser reads Retry-After as absent and backs off blindly
+            expose_headers=["Retry-After"],
+        )
     application.state.session_store = store
 
     @application.exception_handler(RequestValidationError)

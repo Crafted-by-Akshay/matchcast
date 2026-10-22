@@ -43,7 +43,7 @@
     if (!MCS.framed || typeof VIS === 'undefined' || !VIS.on || VIS.job || inflight || now < stats.backoff_until || now - lastSend < 4100) return;
     while (sentAt.length && now - sentAt[0] > 60000) sentAt.shift();
     if (sentAt.length >= PER_MIN) return;
-    if (VIS.nextId < lastNextId) { results.clear(); tooSmall.clear(); tries.clear(); }   // the tracker restarted: its track ids start again
+    if (VIS.nextId < lastNextId) { results.clear(); tooSmall.clear(); tries.clear(); accepted.clear(); }   // the tracker restarted: its track ids start again
     lastNextId = VIS.nextId;
     for (const t of VIS.tracks) if (t.hits >= CFG.minHits && t.missT === 0 && t.inView && t.pid >= 0 && t.cls >= 1 && t.cls <= 4 && !results.has(t.id)) { if (t.det && t.det.hp >= CFG.minPx) tooSmall.delete(t.id); else tooSmall.add(t.id); }
     stats.skipped_small = tooSmall.size;
@@ -52,19 +52,45 @@
     if (!b64) { results.set(k.id, { skipped: true }); return; }
     if (b64.length * 0.75 > MAX_BYTES) { stats.skipped_big++; results.set(k.id, { skipped: true }); return; }
     const id = ++askN, team = k.cls === 1 || k.cls === 3 ? 'home' : 'away';
-    tries.set(k.id, (tries.get(k.id) || 0) + 1); inflight = { id, track: k.id, t: now }; lastSend = now; sentAt.push(now); stats.sent++;
+    tries.set(k.id, (tries.get(k.id) || 0) + 1); inflight = { id, track: k.id, snap: snapshot(k), t: now }; lastSend = now; sentAt.push(now); stats.sent++;
     MCS.send({ type: 'vision-crop', id, track_id: 't' + k.id, team_hint: team, crop: b64 });
+  };
+  // Combining (docs/architecture/09 rule 3): OCR text counts only if it is 1 or 2 digits, confidence is 0.7 or more, and that shirt number
+  // exists on the team whose kit colour the track has. Otherwise the glyph reading (the tracker's own identity) stands.
+  // The tracker's state is never changed: its identity score compares track.pid with truth, so writing to it would contaminate the
+  // "glyph reader only" figure. Accepted readings live in `accepted` (track id -> player). Scoring uses a snapshot taken when the crop
+  // was sent (the answer arrives seconds later): the glyph pid then, and the player of that team nearest the track within 1.5 m, from engine truth.
+  Object.assign(stats, { accepted: 0, rejected_format: 0, rejected_confidence: 0, rejected_unknown_number: 0, agreed: 0, changed: 0, scored: 0, glyph_right: 0, ocr_right: 0 });
+  const accepted = new Map();
+  const snapshot = (k) => {
+    const ti = k.cls === 1 || k.cls === 3 ? 0 : 1; let truth = -1, best = 1.5;
+    players.forEach((p, i) => { if (p.ti !== ti || p.off) return; const d = Math.hypot(p.pos2.x - k.x, p.pos2.y - k.y); if (d < best) { best = d; truth = i; } });
+    return { track: k.id, ti, pid: k.pid, truth };
+  };
+  const combine = (snap, r) => {
+    const shirt = String(r.shirt == null ? '' : r.shirt), conf = +r.confidence || 0;
+    if (!/^\d{1,2}$/.test(shirt)) { stats.rejected_format++; return null; }
+    if (!(conf >= 0.7)) { stats.rejected_confidence++; return null; }
+    const pid = players.findIndex((p) => p.ti === snap.ti && String(p.num) === shirt && !p.off);
+    if (pid < 0) { stats.rejected_unknown_number++; return null; }
+    stats.accepted++;
+    if (snap.pid === pid) stats.agreed++; else stats.changed++;
+    if (snap.truth >= 0) { stats.scored++; if (snap.pid === snap.truth) stats.glyph_right++; if (pid === snap.truth) stats.ocr_right++; }
+    accepted.set(snap.track, { pid, t: Date.now() });
+    return pid;
   };
   window.addEventListener('message', (e) => {
     const d = e.data || {};
     if (d.src !== 'matchcast-shell' || d.type !== 'vision-ocr' || !inflight || d.id !== inflight.id) return;
-    const track = inflight.track; inflight = null; stats.answered++;
+    const track = inflight.track, snap = inflight.snap; inflight = null; stats.answered++;
     if (d.error === 'unavailable') { stats.unavailable++; stats.backoff_until = Date.now() + 30000; return; }   // no live api: try again later
     if (d.error) { stats.errors++; stats.backoff_until = Date.now() + (d.retry_after ? d.retry_after * 1000 : 10000); return; }
     const r = d.result || {};
-    if (r.shirt) { stats.read++; results.set(track, { shirt: String(r.shirt), confidence: +r.confidence || 0, t: Date.now() }); } else { stats.no_digits++; results.set(track, { shirt: null, confidence: 0, t: Date.now() }); }
+    if (r.shirt) { stats.read++; results.set(track, { shirt: String(r.shirt), confidence: +r.confidence || 0, t: Date.now() }); combine(snap, r); } else { stats.no_digits++; results.set(track, { shirt: null, confidence: 0, t: Date.now() }); }
   });
   setInterval(() => { if (inflight && Date.now() - inflight.t > 8000) { inflight = null; stats.errors++; stats.backoff_until = Date.now() + 10000; } tick(); }, 250);   // sends are 4.1 s apart = 14 a minute at most; the 250 ms poll waits for a gap between tracker jobs
   window.mcOcrStats = () => ({ ...stats, per_minute_cap: PER_MIN, tracks_with_result: results.size, tracks_too_small: tooSmall.size });
-  window.mcOcr = { results, conf, cropPng, pick };
+  window.mcOcr = { results, accepted, conf, cropPng, pick, combine, snapshot };
 })();
+// the tracker's accuracy report for the measurement run (tests/e2e/vision-measure.spec.ts, DAT-11 task 279)
+window.mcVisReport = () => (typeof visReport === 'function' ? visReport() : null);
