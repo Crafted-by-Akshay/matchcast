@@ -1,5 +1,6 @@
 """ASGI app for the MCP server: Streamable HTTP at /mcp and a health route."""
 
+import logging
 import os
 
 from matchcast_agents.store import MemoryStore
@@ -8,6 +9,8 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from . import a2a
+from .season import Season
 from .server import create_server
 
 LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
@@ -29,4 +32,9 @@ def build_app(store: MemoryStore) -> Starlette:
     async def health(_request: Request) -> JSONResponse:
         return JSONResponse({"status": "healthy", "service": "matchcast-mcp"})
 
-    return server.streamable_http_app(transport_security=transport_security())
+    app = server.streamable_http_app(transport_security=transport_security())
+    try:
+        app.router.routes.extend(a2a.routes(Season()))  # Stats Desk (AGT-11)
+    except Exception:  # noqa: BLE001 - no season Parquet in this image: serve MCP without A2A
+        logging.getLogger(__name__).warning("season data missing; Stats Desk disabled")
+    return app

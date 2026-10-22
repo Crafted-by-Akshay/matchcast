@@ -3,7 +3,13 @@ name = "matchcast-mcp"
 version = "0.1.0"
 description = "MatchCast MCP tool server: time-scoped match data tools for agents and Copilot"
 requires-python = ">=3.12,<3.13"
-dependencies = ["matchcast-agents", "matchcast-contracts", "mcp>=2,<3", "starlette"]
+dependencies = [
+    "duckdb>=2.0.0",
+    "matchcast-agents",
+    "matchcast-contracts",
+    "mcp>=2,<3",
+    "starlette",
+]
 
 [tool.uv.sources]
 matchcast-agents = { workspace = true }
