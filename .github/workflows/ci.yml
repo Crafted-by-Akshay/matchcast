@@ -6,9 +6,10 @@ on:
   push:
     branches: [main]
 
+# Pull request runs cancel superseded pushes; every run on main finishes so each merge has a verdict.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -46,13 +47,13 @@ jobs:
       - run: make build
 
   e2e:
-    name: e2e (${{ matrix.shard }}/2)
+    name: e2e (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -81,7 +82,7 @@ jobs:
           # playwright.config.ts defaults to the cloud sandbox path in CI; use the runner's install.
           CHROMIUM_PATH=$(node -e "console.log(require('@playwright/test').chromium.executablePath())")
           export CHROMIUM_PATH
-          make e2e E2E_ARGS="--shard=${{ matrix.shard }}/2"
+          make e2e E2E_ARGS="--shard=${{ matrix.shard }}/3"
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

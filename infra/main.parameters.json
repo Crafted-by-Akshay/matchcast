@@ -7,6 +7,9 @@
     "foundryProjectEndpoint": { "value": "${FOUNDRY_PROJECT_ENDPOINT}" },
     "foundryAccountName": { "value": "${FOUNDRY_ACCOUNT_NAME=matchcast-foundry}" },
     "entraClientId": { "value": "${ENTRA_CLIENT_ID=}" },
-    "alertEmail": { "value": "${ALERT_EMAIL=}" }
+    "alertEmail": { "value": "${ALERT_EMAIL=}" },
+    "apiImage": { "value": "${API_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}" },
+    "webImage": { "value": "${WEB_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}" },
+    "mcpImage": { "value": "${MCP_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}" }
   }
 }

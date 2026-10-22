@@ -3,24 +3,36 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import hashlib
+import io
+import json
+import logging
 import os
+import time
 import uuid
+from collections import deque
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.hub import StreamEvent
+from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
+from matchcast_agents.store import MemoryStore
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
+from matchcast_mcp.app import build_app
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.auth import PRODUCER_ROLES, caller_role
+from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 
 TENANT = "demo"
 HEARTBEAT_S = 15
+ASK_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {
@@ -29,6 +41,7 @@ STATUS = {
     "forbidden_role": 403,
     "not_approvable": 409,
     "prompt_attack": 400,
+    "rate_limited": 429,
 }
 
 
@@ -89,6 +102,22 @@ class LineAction(BaseModel):
     reason: str | None = Field(default=None, max_length=200)
 
 
+class AskBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    question: str = Field(min_length=1, max_length=300)
+    persona: Literal["casual", "analyst", "broadcast"] = "casual"
+
+
+class ExportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    kind: Literal["claims_csv", "events_json"]
+    verdict: Literal["verified", "rejected", "pending"] | None = None
+    agent: str | None = None
+    metric: str | None = None
+
+
 class RecapTrigger(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tenant_id: str = Field(default=TENANT, pattern=ID)
@@ -101,7 +130,39 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
+        self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
         self.require_role = require_role
+        self._model_client: ModelClient | None = None
+        self.asked: dict[str, deque[float]] = {}
+        self.exports: dict[str, tuple[bytes, str, str]] = {}
+
+    def allow_ask(self, session_id: str, now: float | None = None) -> bool:
+        """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
+        now = time.monotonic() if now is None else now
+        for key in [k for k, w in self.asked.items() if not w or now - w[-1] >= 60]:
+            del self.asked[key]  # idle sessions leave no entry behind
+        window = self.asked.setdefault(session_id, deque())
+        while window and now - window[0] >= 60:
+            window.popleft()
+        if len(window) >= ASK_PER_MINUTE:
+            return False
+        window.append(now)
+        return True
+
+    def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
+        """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
+        client = self.model_client()
+        if client is None:
+            return rules_agents(personas, **seed)
+        return live_agents(client, personas, **seed)
+
+    def model_client(self) -> ModelClient | None:
+        if self._model_client is None and os.environ.get("MATCHCAST_AGENT_MODE") == "live":
+            try:
+                self._model_client = FoundryModelClient()
+            except Exception:  # noqa: BLE001 - no endpoint, SDK or credential: stay on rules
+                logging.getLogger(__name__).warning("live mode requested; using rules agents")
+        return self._model_client
 
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))
@@ -121,6 +182,37 @@ def _claim_verdict(flow: MatchWorkflow, claim_id: str) -> str:
     if any(s in ("rejected", "abstained", "killed") for s in states):
         return "rejected"
     return "pending"
+
+
+def _claim_rows(
+    flow: MatchWorkflow, verdict: str | None, agent: str | None, metric: str | None
+) -> list[dict[str, Any]]:
+    rows = []
+    for row in flow.store.claims(flow.sk):
+        packet = row["packet"]
+        item = {**packet, "agent": row["agent"], "moment_id": row["moment_id"],
+                "verdict": _claim_verdict(flow, packet["claim_id"])}  # fmt: skip
+        if (verdict and item["verdict"] != verdict) or (agent and item["agent"] != agent):
+            continue
+        if metric and item["metric"] != metric:
+            continue
+        rows.append(item)
+    return rows
+
+
+CSV_COLUMNS = (
+    "claim_id", "metric", "value", "units", "derivation_version", "verdict", "agent",
+    "moment_id", "max_evidence_sequence",
+)  # fmt: skip
+
+
+def _claims_csv(rows: list[dict[str, Any]]) -> bytes:
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(CSV_COLUMNS)
+    for row in rows:
+        writer.writerow([row[c] for c in CSV_COLUMNS])
+    return out.getvalue().encode()
 
 
 def _state_json(flow: MatchWorkflow) -> dict[str, Any]:
@@ -165,12 +257,13 @@ def build_router(registry: Registry) -> APIRouter:
                 roster=body.roster,
                 names=names,
                 clubs=clubs,
-                agents=rules_agents(
+                agents=registry.agents_for(
                     config.personas,
                     seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
                     seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
                 ),
                 config=config,
+                store=registry.store,
             )
         except (ContractError, TypeError, KeyError) as error:
             raise Problem(
@@ -247,16 +340,7 @@ def build_router(registry: Registry) -> APIRouter:
         cursor: int = Query(0, ge=0),
     ) -> dict[str, Any]:
         flow = registry.get(session_id, match_id)
-        rows = []
-        for row in flow.store.claims(flow.sk):
-            packet = row["packet"]
-            item = {**packet, "agent": row["agent"], "moment_id": row["moment_id"],
-                    "verdict": _claim_verdict(flow, packet["claim_id"])}  # fmt: skip
-            if (verdict and item["verdict"] != verdict) or (agent and item["agent"] != agent):
-                continue
-            if metric and item["metric"] != metric:
-                continue
-            rows.append(item)
+        rows = _claim_rows(flow, verdict, agent, metric)
         page = rows[cursor : cursor + limit]
         more = cursor + limit < len(rows)
         return {"items": page, "next_cursor": cursor + limit if more else None}
@@ -273,19 +357,28 @@ def build_router(registry: Registry) -> APIRouter:
         rows = [ln for ln in flow.store.lines(flow.sk) if status in (None, ln.status)]
         return {"items": [_line_json(ln) for ln in rows]}
 
-    async def act(line_id: str, body: LineAction, role: str | None, action: str) -> dict[str, Any]:
+    async def act(
+        line_id: str,
+        body: LineAction,
+        role: str | None,
+        action: str,
+        actor: tuple[str, str | None] = ("producer", None),
+    ) -> dict[str, Any]:
         need_producer(role)
+        actor_id, actor_name = actor
         flow = registry.get(body.session_id, body.match_id)
         try:
             if action == "approve":
-                line = await flow.approve(line_id)
+                line = await flow.approve(line_id, actor_id, actor_name)
                 return {"line": _line_json(line)}
             if action == "kill":
-                line = await flow.kill(line_id, body.reason or "killed by producer")
+                line = await flow.kill(
+                    line_id, body.reason or "killed by producer", actor_id, actor_name
+                )
                 return {"line": _line_json(line)}
             if body.text is None:
                 raise Problem(422, "contract_invalid", "text is required", "/text")
-            line, verdict = await flow.edit(line_id, body.text)
+            line, verdict = await flow.edit(line_id, body.text, actor_id, actor_name)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         if verdict.verdict == "rejected":
@@ -294,21 +387,30 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/lines/{line_id}/approve")
     async def approve(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "approve")
+        return await act(line_id, body, x_matchcast_role, "approve", actor)
 
     @router.post("/lines/{line_id}/edit")
     async def edit(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "edit")
+        return await act(line_id, body, x_matchcast_role, "edit", actor)
 
     @router.post("/lines/{line_id}/kill")
     async def kill(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "kill")
+        return await act(line_id, body, x_matchcast_role, "kill", actor)
 
     @router.get("/matches/{match_id}/audit")
     async def audit(
@@ -335,6 +437,36 @@ def build_router(registry: Registry) -> APIRouter:
         ]  # fmt: skip
         return {"line": _line_json(line), "steps": steps}
 
+    @router.post("/matches/{match_id}/exports", status_code=201)
+    async def create_export(
+        match_id: str, body: ExportBody, _role: str | None = Depends(caller_role)
+    ) -> dict[str, Any]:
+        """A hash-stamped export of the claims ledger or the event log (7 days in Blob later)."""
+        flow = registry.get(body.session_id, match_id)
+        if body.kind == "claims_csv":
+            rows = _claim_rows(flow, body.verdict, body.agent, body.metric)
+            payload, media, ext = _claims_csv(rows), "text/csv", "csv"
+        else:
+            rows = flow.store.events(flow.sk)
+            payload, media, ext = json.dumps(rows, indent=1).encode(), "application/json", "json"
+        sha = hashlib.sha256(payload).hexdigest()
+        export_id = f"{body.kind}-{sha[:12]}"
+        registry.exports[export_id] = (payload, media, f"{match_id}.{ext}")
+        flow.record_export(export_id, body.kind, sha, len(rows))
+        return {"export_id": export_id, "url": f"/v1/exports/{export_id}", "sha256": sha,
+                "rows": len(rows)}  # fmt: skip
+
+    @router.get("/exports/{export_id}")
+    async def get_export(export_id: str) -> Response:
+        found = registry.exports.get(export_id)
+        if found is None:
+            raise Problem(404, "not_found", f"unknown export {export_id}")
+        payload, media, filename = found
+        return Response(
+            payload, media_type=media,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )  # fmt: skip
+
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:
         flow = registry.get(session_id, match_id)
@@ -342,6 +474,23 @@ def build_router(registry: Registry) -> APIRouter:
         if recap is None:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
         return recap
+
+    @router.post("/matches/{match_id}/ask")
+    async def ask(match_id: str, body: AskBody) -> dict[str, Any]:
+        flow = registry.get(body.session_id, match_id)
+        if not registry.allow_ask(body.session_id):
+            raise Problem(429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute")
+        try:
+            result = await flow.ask(body.question, body.persona)
+        except WorkflowError as error:
+            raise Problem(STATUS[error.code], error.code, str(error)) from error
+        return {
+            "answer": result.answer,
+            "intent": result.intent,
+            "abstained": result.abstained,
+            "citations": result.citations,
+            "mode": result.mode,
+        }
 
     return router
 
@@ -381,6 +530,33 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
         return problem_response(error)
 
+    @app.exception_handler(404)
+    async def unknown_path(_request: Request, _error: Exception) -> JSONResponse:
+        return problem_response(Problem(404, "not_found", "no such path"))
+
     app.include_router(build_router(registry))
     app.include_router(build_internal_router(registry))
+    if os.environ.get("MATCHCAST_MCP_MOUNT") != "0":
+        _mount_mcp(app, registry)
     return registry
+
+
+def _mount_mcp(app: FastAPI, registry: Registry) -> None:
+    """Serve the MCP tools at /mcp from this process: the matches live in its memory (ADR-0005).
+
+    The separate `mcp` container takes over when a shared store exists (DAT-2).
+    """
+    mcp_app = build_app(registry.store)
+    outer = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        async with outer(application), mcp_app.router.lifespan_context(mcp_app):
+            yield
+
+    app.router.lifespan_context = lifespan
+    taken = {getattr(r, "path", None) for r in app.router.routes}
+    # only the MCP (and A2A) paths join the api, so unknown paths still return Problem JSON
+    app.router.routes.extend(
+        r for r in mcp_app.router.routes if getattr(r, "path", None) not in taken
+    )

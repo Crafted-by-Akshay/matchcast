@@ -43,3 +43,6 @@ apps/unified/shared/
 .e2e-dist/
 playwright-report/
 test-results/
+
+# Generated knowledge-base chunks
+kb/build/
