@@ -6,6 +6,7 @@ a hash-chained audit record (ADR-0013: lines carry verdicts and approvals).
 """
 
 import asyncio
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -25,8 +26,8 @@ from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
-from .store import MemoryStore, stream_key
-from .tools import InProcessTools, ToolError
+from .store import MemoryStore, Store, stream_key
+from .tools import InProcessTools, ToolCall, ToolError
 
 STATS_DESK_BUDGET_S = 2.0
 
@@ -96,6 +97,7 @@ def rules_agents(
     seed_bad_claim: bool = False,
     seed_bad_claim_at_ms: int = 720_000,
     failing_tools: frozenset[str] = frozenset(),
+    tool_call: ToolCall | None = None,
 ) -> AgentSet:
     return AgentSet(
         ProducerRules(personas),
@@ -103,6 +105,7 @@ def rules_agents(
             corrupt_first_claim=seed_bad_claim,
             failing_tools=failing_tools,
             corrupt_after_ms=seed_bad_claim_at_ms,
+            tool_call=tool_call,
         ),
         NarratorRules(),
         VerifierRules(),
@@ -114,7 +117,17 @@ class WorkflowConfig:
     approval_mode: str = "auto"  # auto | producer
     publication_ttl_s: int = 30
     personas: tuple[Persona, ...] = ("casual", "analyst")
+    # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
+    orchestrator: str = field(
+        default_factory=lambda: os.environ.get("MATCHCAST_ORCHESTRATOR", "af")
+    )
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.orchestrator not in ("af", "native"):
+            raise ValueError(
+                f"MATCHCAST_ORCHESTRATOR must be af or native, not {self.orchestrator!r}"
+            )
 
 
 _TRACER = trace.get_tracer("matchcast.agents")
@@ -151,7 +164,7 @@ class MatchWorkflow:
         roster: dict[str, Any],
         names: dict[str, str] | None = None,
         clubs: dict[str, str] | None = None,
-        store: MemoryStore | None = None,
+        store: Store | None = None,
         hub: StreamHub | None = None,
         agents: AgentSet | None = None,
         config: WorkflowConfig | None = None,
@@ -350,6 +363,17 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
+        if self.config.orchestrator == "af":
+            from .af_graph import run_event  # Agent Framework is imported only when selected
+
+            await run_event(self, ctx, event)
+            return
+        decision = await self._decide(ctx, event)
+        if isinstance(decision, ProducerTask):
+            await self._run_moment(ctx, decision)
+
+    async def _decide(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
+        """The Producer: one task for a moment worth a line, or None after auditing a skip."""
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
@@ -365,9 +389,9 @@ class MatchWorkflow:
                     decision.moment_id,
                     reason=decision.reason,
                 )
-            return
+            return None
         self.stats["moments"] += 1
-        await self._run_moment(ctx, decision)
+        return decision
 
     def _state_json(self, state: MatchState) -> dict[str, Any]:
         return {
@@ -613,23 +637,42 @@ class MatchWorkflow:
     # ---- one moment through the graph --------------------------------------------------
 
     async def _run_moment(self, ctx: MatchContext, task: ProducerTask) -> None:
-        a = self.agents
         claims = await self._analyse(ctx, task, repair=False)
         if not claims:
             return
-        drafts = await self._call(a.narrator, "write", task.moment_id, ctx, task, claims)
+        drafts = await self._narrate(ctx, task, claims)
+        await self._verify_drafts(ctx, task, claims, drafts)
+        await self._desk_after_verify(task)
+
+    async def _narrate(
+        self, ctx: MatchContext, task: ProducerTask, claims: list[dict[str, Any]]
+    ) -> list[DraftLine]:
+        return await self._call(self.agents.narrator, "write", task.moment_id, ctx, task, claims)
+
+    async def _verify_drafts(
+        self,
+        ctx: MatchContext,
+        task: ProducerTask,
+        claims: list[dict[str, Any]],
+        drafts: list[DraftLine],
+    ) -> None:
+        """Verifier, repair router and approval for every draft of the moment."""
         self._verified_claims = {}
         for draft in drafts:
             await self._verify_line(ctx, task, claims, draft, attempt=0)
-        if task.priority == 1 and self.stats_desk is not None:
-            # After verification: only a claim that backs a verified line is ever sent to the desk.
-            checked = list(self._verified_claims.values())
-            try:
-                await asyncio.wait_for(self._ask_stats_desk(task, checked), STATS_DESK_BUDGET_S)
-            except TimeoutError:
-                self._audit(
-                    "agent", "producer", "a2a_failed", task.moment_id, {"error": "time budget"}
-                )
+
+    def _wants_desk(self, task: ProducerTask) -> bool:
+        return task.priority == 1 and self.stats_desk is not None
+
+    async def _desk_after_verify(self, task: ProducerTask) -> None:
+        if not self._wants_desk(task):
+            return
+        # After verification: only a claim that backs a verified line is ever sent to the desk.
+        checked = list(self._verified_claims.values())
+        try:
+            await asyncio.wait_for(self._ask_stats_desk(task, checked), STATS_DESK_BUDGET_S)
+        except TimeoutError:
+            self._audit("agent", "producer", "a2a_failed", task.moment_id, {"error": "time budget"})
 
     async def _ask_stats_desk(self, task: ProducerTask, claims: list[dict[str, Any]]) -> None:
         """Priority 1 moments: compare the first team stat with the season over A2A (audited)."""

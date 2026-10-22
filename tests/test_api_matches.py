@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from app import matches
 from app.main import create_app
 from fastapi.testclient import TestClient
 from matchcast_contracts import validate
@@ -54,6 +55,30 @@ def test_events_yield_claims_lines_and_a_valid_audit_chain(client: TestClient) -
     assert verify_chain(audit)["valid"] is True
     match = client.get("/v1/matches/match-short", params=Q).json()
     assert match["state"]["revision"] == 137 and match["mode"] == "rules"
+
+
+def test_tools_over_mcp_give_the_same_claims(client: TestClient, monkeypatch) -> None:
+    create(client)
+    post_all(client)
+    plain = client.get("/v1/matches/match-short/claims", params=Q).json()["items"]
+    monkeypatch.setenv("MATCHCAST_TOOLS", "mcp")
+    called: list[str] = []
+
+    class Spy(matches.Client):
+        async def call_tool(self, name, *args, **kwargs):
+            called.append(name)
+            return await super().call_tool(name, *args, **kwargs)
+
+    monkeypatch.setattr(matches, "Client", Spy)
+    over_mcp = TestClient(create_app())
+    create(over_mcp)
+    post_all(over_mcp)
+    claims = over_mcp.get("/v1/matches/match-short/claims", params=Q).json()["items"]
+    key = lambda c: (c["claim_id"], c["metric"], c["value"])  # noqa: E731
+    assert [key(c) for c in claims] == [key(c) for c in plain] and claims
+    assert called and set(called) == {"get_metrics"}
+    audit = over_mcp.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    assert not [r for r in audit if r["action"] == "fallback_used"]
 
 
 def test_claim_filters_and_paging(client: TestClient) -> None:
@@ -301,6 +326,76 @@ def test_recap_is_404_until_full_time_then_served_per_persona(client: TestClient
     assert verify_chain(audit)["valid"] is True
 
 
+def test_a_stored_match_is_not_started_again_after_a_restart() -> None:
+    """A new process on the same store sees the match; creating it again is a 409, not a reset."""
+    first = TestClient(create_app())
+    create(first)
+    post_all(first)
+    restarted = TestClient(create_app())  # no flows in memory, same rows in the store
+    restarted.app.state.matches.store = first.app.state.matches.store
+    body = {
+        "session_id": "short",
+        "match_id": "match-short",
+        "roster": FIXTURE["roster"],
+        "names": FIXTURE["names"],
+        "clubs": FIXTURE["teams"],
+    }
+    again = restarted.post("/v1/matches", json=body)
+    assert again.status_code == 409 and again.json()["code"] == "match_exists"
+
+
+def test_two_concurrent_creates_of_one_match_make_one_match(monkeypatch) -> None:
+    import asyncio
+    import time
+
+    import httpx
+    from app import matches
+
+    real = matches._is_stored
+
+    def slow(store, sk):  # the store lookup is where the second request would slip past
+        found = real(store, sk)
+        time.sleep(0.2)
+        return found
+
+    monkeypatch.setattr(matches, "_is_stored", slow)
+    app = create_app()
+    body = {
+        "session_id": "short",
+        "match_id": "match-short",
+        "roster": FIXTURE["roster"],
+        "names": FIXTURE["names"],
+        "clubs": FIXTURE["teams"],
+    }
+
+    async def both() -> list[int]:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as http:
+            replies = await asyncio.gather(*(http.post("/v1/matches", json=body) for _ in range(2)))
+        return sorted(r.status_code for r in replies)
+
+    assert asyncio.run(both()) == [201, 409]
+
+
+def test_final_trigger_writes_the_recaps_again(client: TestClient) -> None:
+    """After extra time the last period's end replaces the recap written at the end of period 2."""
+    create(client)
+    post_all(client)
+    trigger = {"session_id": "short", "match_id": "match-short"}
+
+    def recap_claims() -> int:
+        items = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+        return sum(1 for r in items if r["action"] == "claim_created" and r["details"].get("recap"))
+
+    assert client.post("/internal/v1/recaps", json=trigger).status_code == 202
+    first = recap_claims()
+    assert first > 0
+    client.post("/internal/v1/recaps", json=trigger)
+    assert recap_claims() == first  # a repeat of the same trigger is a no-op
+    assert client.post("/internal/v1/recaps", json={**trigger, "final": True}).status_code == 202
+    assert recap_claims() == 2 * first
+
+
 def test_recap_trigger_needs_a_producer_role_when_roles_are_required() -> None:
     client = TestClient(create_app())
     client.app.state.matches.require_role = True
@@ -349,6 +444,7 @@ def test_ask_refuses_attacks_long_questions_and_the_sixth_question_a_minute(
         assert ask(client, "What is offside?").status_code == 200
     limited = ask(client, "What is offside?")
     assert limited.status_code == 429 and limited.json()["code"] == "rate_limited"
+    assert limited.headers["retry-after"] == "60"
 
 
 def test_live_mode_uses_the_model_client_and_audits_its_lines(client: TestClient) -> None:
@@ -446,7 +542,8 @@ def test_ds_ask_answers_refuses_and_limits(client: TestClient) -> None:
     assert [r["action"] for r in audit] == ["ds_answered"] and verify_chain(audit)["valid"] is True
     for _ in range(4):
         assert client.post("/v1/ds/ask", json=body).status_code == 200
-    assert client.post("/v1/ds/ask", json=body).status_code == 429
+    limited_ds = client.post("/v1/ds/ask", json=body)
+    assert limited_ds.status_code == 429 and limited_ds.headers["retry-after"] == "60"
 
 
 def test_ds_ask_abstains_and_reports_a_missing_season(client: TestClient) -> None:
@@ -513,4 +610,11 @@ def test_talk_is_rate_limited_with_ask_and_refuses_attacks_and_unknown_targets(
         assert talk("producer", "score?").status_code == 200
     limited = talk("producer", "score?")
     assert limited.status_code == 429 and limited.json()["code"] == "rate_limited"
-    assert ask(client, "What is offside?").status_code == 429
+    again = ask(client, "What is offside?")
+    assert again.status_code == 429 and again.headers["retry-after"] == "60"
+
+
+def test_the_registry_store_comes_from_matchcast_store(monkeypatch) -> None:
+    monkeypatch.setenv("MATCHCAST_STORE", "bogus")
+    with pytest.raises(ValueError, match="MATCHCAST_STORE"):
+        create_app()

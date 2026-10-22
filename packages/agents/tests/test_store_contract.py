@@ -12,7 +12,7 @@ from fake_tables import FakeContainer, FakeTableService
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.state import MatchState
 from matchcast_agents.store import MemoryStore, stream_key
-from matchcast_agents.tables import MAX_COLUMN_UNITS, TableStore, build_store
+from matchcast_agents.tables import MAX_COLUMN_UNITS, BufferedTableStore, TableStore, build_store
 from matchcast_contracts import audit
 
 # a fresh match id per run, so a reused Azurite store never sees rows of an earlier run
@@ -33,14 +33,25 @@ def _azurite() -> TableStore:  # pragma: no cover - needs the emulator
 STORES = {
     "memory": MemoryStore,
     "table-fake": lambda: TableStore(FakeTableService(), FakeContainer()),
+    "table-buffered": lambda: BufferedTableStore(TableStore(FakeTableService(), FakeContainer())),
 }
 if os.environ.get("MATCHCAST_AZURITE_CONNECTION"):  # pragma: no cover
     STORES["azurite"] = _azurite
+    STORES["azurite-buffered"] = lambda: BufferedTableStore(_azurite())
 
 
 @pytest.fixture(params=sorted(STORES))
-def store(request):
-    return STORES[request.param]()
+def store(request, monkeypatch):
+    # a fresh match per test, so a persistent store (Azurite) never hands one test another's rows
+    stream = {**STREAM, "match_id": f"m-{uuid.uuid4().hex[:8]}"}
+    monkeypatch.setitem(globals(), "STREAM", stream)
+    monkeypatch.setitem(globals(), "SK", stream_key(stream))
+    monkeypatch.setitem(globals(), "OTHER", stream_key({**stream, "match_id": "m2"}))
+    made = STORES[request.param]()
+    yield made
+    if isinstance(made, BufferedTableStore):
+        made.flush()  # a background write that failed fails the test that made it
+        made.close()
 
 
 def event(seq: int, event_id: str | None = None, revision: int = 0) -> dict:
@@ -83,6 +94,29 @@ def test_events_idempotent_ordered_and_scoped(store) -> None:
     assert [e["stream_sequence"] for e in store.events(SK, up_to_sequence=2)] == [1, 2]
     assert store.events(SK, up_to_sequence=0) == []
     assert store.events(OTHER) == []
+
+
+def test_correction_keeping_its_sequence_is_kept_beside_the_original(store) -> None:
+    assert store.add_event(SK, event(5)) is True
+    assert store.add_event(SK, event(5, event_id="e5", revision=1)) is True
+    assert store.add_event(SK, event(5, event_id="e5", revision=1)) is False  # its own retry
+    assert store.add_event(SK, event(6)) is True
+    assert [(e["stream_sequence"], e["revision"]) for e in store.events(SK)] == [
+        (5, 0),
+        (5, 1),
+        (6, 0),
+    ]
+    assert [(e["stream_sequence"], e["revision"]) for e in store.events(SK, up_to_sequence=5)] == [
+        (5, 0),
+        (5, 1),
+    ]
+
+
+def test_a_resent_event_under_another_sequence_is_not_stored_twice(store) -> None:
+    """The Verifier recounts from the stored events, so a duplicate would be counted twice."""
+    assert store.add_event(SK, event(1)) is True
+    assert store.add_event(SK, event(9, event_id="e1")) is False
+    assert [e["stream_sequence"] for e in store.events(SK)] == [1]
 
 
 def test_state_defaults_and_copies(store) -> None:
@@ -210,7 +244,7 @@ def test_row_keys_are_the_documented_ones() -> None:
     store.put_state(SK, MatchState())
     store.append_audit(SK, **audit_fields("claim_created"))
     assert ("demo", f"s1|{MATCH}") in service.tables["matches"].rows
-    assert (SK, "0000000012") in service.tables["events"].rows
+    assert (SK, "0000000012.0000") in service.tables["events"].rows
     assert (SK, "current") in service.tables["matchstate"].rows
     assert (SK, "0000000001") in service.tables["audit"].rows
 
@@ -221,3 +255,114 @@ def test_build_store_picks_by_name(monkeypatch) -> None:
     assert isinstance(build_store(), MemoryStore)
     with pytest.raises(ValueError, match="table or memory"):
         build_store("redis")
+
+
+def _buffered(service: FakeTableService, container: FakeContainer) -> BufferedTableStore:
+    return BufferedTableStore(TableStore(service, container))
+
+
+def test_buffered_store_survives_a_restart() -> None:
+    service, container = FakeTableService(), FakeContainer()
+    first = _buffered(service, container)
+    first.put_match(SK, {"roster": {}})
+    first.add_event(SK, event(1))
+    first.add_event(SK, event(1, event_id="e1", revision=1))
+    first.put_state(SK, MatchState(revision=2, max_sequence=1))
+    first.put_claim(SK, {"claim_id": "c1", "value": 1}, {"agent": "analyst"})
+    first.put_line(SK, line("l1"))
+    first.put_publication(SK, {"publication_id": "p1"})
+    first.append_audit(SK, **audit_fields("claim_created"))
+    first.append_audit(SK, **audit_fields("line_drafted"))
+    first.put_checkpoint(SK, {"processed_sequence": 1, "state": {}, "producer": None})
+    first.flush()
+    first.close()
+
+    second = _buffered(service, container)  # a new process on the same tables
+    assert second.get_match(SK) == {"roster": {}}
+    assert [(e["stream_sequence"], e["revision"]) for e in second.events(SK)] == [(1, 0), (1, 1)]
+    assert second.get_state(SK).max_sequence == 1
+    assert second.get_claim(SK, "c1")["agent"] == "analyst"
+    assert [x.line_id for x in second.lines(SK)] == ["l1"]
+    assert [p["publication_id"] for p in second.publications(SK)] == ["p1"]
+    assert second.get_checkpoint(SK)["processed_sequence"] == 1
+    assert second.add_event(SK, event(1)) is False  # already stored
+    chain = second.audit_records(SK)
+    assert [r["action"] for r in chain] == ["claim_created", "line_drafted"]
+    third = second.append_audit(SK, **audit_fields("line_edited"))  # the chain continues
+    assert third["sequence"] == 3 and third["prev_hash"] == chain[-1]["hash"]
+    second.flush()
+    assert len(TableStore(service, container).audit_records(SK)) == 3
+    second.close()
+
+
+def test_buffered_store_does_not_block_the_caller_on_slow_storage() -> None:
+    import time
+
+    service = FakeTableService()
+    store = _buffered(service, FakeContainer())
+    store.hydrate(SK)
+    real = TableStore.add_event
+
+    def slow(self, sk, ev):
+        time.sleep(0.05)
+        return real(self, sk, ev)
+
+    TableStore.add_event = slow
+    try:
+        started = time.perf_counter()
+        for seq in range(1, 21):
+            store.add_event(SK, event(seq))
+        assert time.perf_counter() - started < 0.5  # 20 writes at 50 ms each would take 1 s
+        store.flush()
+        assert len(store._t.events(SK)) == 20
+    finally:
+        TableStore.add_event = real
+        store.close()
+
+
+def test_buffered_store_raises_a_failed_background_write_and_keeps_order() -> None:
+    service = FakeTableService()
+    store = _buffered(service, FakeContainer())
+    real = TableStore.put_state
+
+    def broken(self, sk, state):
+        raise RuntimeError("storage down")
+
+    TableStore.put_state = broken
+    try:
+        store.add_event(SK, event(1))
+        store.put_state(SK, MatchState())
+        store.put_checkpoint(SK, {"processed_sequence": 1, "state": {}, "producer": None})
+        with pytest.raises(RuntimeError, match="storage down"):
+            store.flush()
+        with pytest.raises(RuntimeError, match="storage down"):
+            store.add_event(SK, event(2))  # the next call raises it too
+    finally:
+        TableStore.put_state = real
+        store.close()
+    assert TableStore(service).get_checkpoint(SK) is None  # nothing landed after the failure
+
+
+def test_buffered_store_changes_nothing_once_a_background_write_failed() -> None:
+    """A retry after the error must not find the event already in memory and skip the table."""
+    service = FakeTableService()
+    store = _buffered(service, FakeContainer())
+    real = TableStore.add_event
+
+    def broken(self, sk, ev):
+        raise RuntimeError("storage down")
+
+    TableStore.add_event = broken
+    try:
+        store.add_event(SK, event(1))
+        with pytest.raises(RuntimeError, match="storage down"):
+            store.flush()
+        with pytest.raises(RuntimeError, match="storage down"):
+            store.add_event(SK, event(2))
+        assert [e["stream_sequence"] for e in store.events(SK)] == [1]  # event 2 left no trace
+        with pytest.raises(RuntimeError, match="storage down"):
+            store.put_state(SK, MatchState(max_sequence=2))
+        assert store.get_state(SK) == MatchState()
+    finally:
+        TableStore.add_event = real
+        store.close()

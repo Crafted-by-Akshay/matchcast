@@ -9,7 +9,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 - JSON in and out, UTF-8, `snake_case`. Times are RFC 3339 UTC with `Z`. Match times are integer milliseconds.
 - Errors use RFC 9457 `application/problem+json`: `{type, title, status, detail, code, path, trace_id}`. `code` values are listed in §6.
 - `X-Request-Id` is accepted or generated and returned. `trace_id` is the OpenTelemetry trace ID.
-- FastAPI publishes `/openapi.json`. A snapshot lives at `docs/api/openapi.json`, and CI fails if the live schema differs from it.
+- FastAPI publishes `/openapi.json`. A snapshot lives at `docs/api/openapi.json`, and CI fails if the live schema differs from it. Refresh it with `make openapi-generate` in any PR that changes a route (committed 22 Oct, 23 paths).
 - The S03 local `/sessions` routes stay for local tests only and are not deployed in cloud mode.
 
 ## 2. REST endpoints
@@ -31,8 +31,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
 | `POST /v1/matches/{match_id}/ask` | anyone | `session_id, browser_session_id, question ≤ 300, persona, lang` | 200 `{answer, citations[], claim_ids[], verdict, trace_id}` | 400 shield, 429 |
 | `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300` | 200 `{target, reply, verdict, facts}` (rules-mode template replies; `audio_url` and `lang` are **Planned** with Speech) | 400 `prompt_attack`, 404 unknown target, 422, 429 |
+| `POST /v1/matches/{id}/vision/identify` | anyone | `session_id, crop (base64 PNG 128x128, ≤ 40 KB), track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}`. Plain base64 only (no `data:` prefix); a complete PNG, exactly 128x128. | 404, 413 (body over 64 KB or crop over 40 KB decoded), 422 (bad crop, or `crop` over 60,000 characters), 429 `rate_limited`/`vision_budget_used`, 502 `vision_unavailable` |
 | `POST /v1/ds/ask` | anyone | `session_id, question ≤ 300` | 200 `{answer, verdict, sql, columns[], rows[], chart_spec}` | 400 `invalid_query`, 429, 503 |
-| `POST /v1/matches/{match_id}/vision/identify` | anyone | `session_id, crop, track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}` | 413, 429 |
 | `GET /v1/speech/token` | anyone | none | 200 `{token, region, expires_at}` | 429 (10 a minute per IP) |
 | `GET /v1/audio/{publication_id}.{lang}.mp3` | anyone | `session_id, match_id` | 200 `audio/mpeg` | 404 |
 | `GET /v1/matches/{match_id}/recap/{persona}` | anyone | `session_id` | 200 recap | 404 not ready |
@@ -84,7 +84,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `forbidden_role` | 403 | Producer route without the Producer or Admin role |
 | `invalid_query` | 400 | `/ds/ask` produced SQL the season guard refused |
 | `prompt_attack` | 400 | Prompt Shields flagged the input |
-| `rate_limited` | 429 | Over a limit in §7; `Retry-After` set |
+| `rate_limited` | 429 | Over a limit in §7; `Retry-After: 60` set on per-minute limits (not on the watch-mode cap, which time does not clear) |
 | `publish_failed` | 503 | Event Hubs publish failed; retry the same batch |
 | `not_ready` | 503 | Dependency not ready; see `/ready` |
 
@@ -95,7 +95,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `/events` | 20 batches a second | stream key |
 | `/ask`, `/talk` | 5 a minute | `browser_session_id` (or IP) |
 | `/ds/ask` | 5 a minute | IP |
-| `/vision/identify` | 15 a minute | stream key |
+| `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | one api process (a cost cap, shared by all callers) |
 | `/speech/token` | 10 a minute | IP |
 
 Limits are kept in memory in the single `api` replica (ADR-0005).

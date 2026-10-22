@@ -41,7 +41,9 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
     const t0 = performance.now(); let i = 0;
     timer = setInterval(() => {
       const el = (performance.now() - t0) * rate + clip[0].at;
+      const was = i;
       while (i < clip.length - 1 && clip[i + 1].at <= el) i++;
+      if (i !== was) CONS.n++;   // a new frame for the action poses
       // positions come from the replayed frame; clock, half, score and stats stay live so events that arrive meanwhile are stamped correctly
       const lf = BUF[BUF.length - 1].frame;
       CONS.frame = Object.assign({}, clip[i].frame, { mclock: lf.mclock, half: lf.half, ht: lf.ht, over: lf.over, score: lf.score, stats: lf.stats, paused: lf.paused, speed: lf.speed }); CONS.at = performance.now();

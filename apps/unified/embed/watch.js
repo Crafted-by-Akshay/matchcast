@@ -64,6 +64,14 @@ MCS.progress('Loading the stadium and players');
     if (fade) { clearTimeout(el.t1); el.classList.remove('out'); el.t1 = setTimeout(() => el.classList.add('out'), 11400); clearTimeout(el.t2); el.t2 = setTimeout(() => { el.remove(); cards.delete(c.id + host.id); }, 12000); }
     return el;
   };
+  // EXP-5: a typed question goes to the shell, which asks the agents (api when live, else the in-page rules) and sends back a checked answer
+  const asks = new Map(); let askN = 0;
+  window.mcAsk = (q) => new Promise((res) => { const id = ++askN; asks.set(id, res); MCS.send({ type: 'ask', id, q }); setTimeout(() => { if (asks.delete(id)) res({ text: "I can't confirm that from the match data yet.", verdict: 'abstained', note: 'no answer in time' }); }, 9000); });
+  window.addEventListener('message', (e) => { const d = e.data || {}; if (d.src === 'matchcast-shell' && d.type === 'answer' && asks.has(d.id)) { asks.get(d.id)(d.answer); asks.delete(d.id); } });
+  // EXP-16: a label for what orders do (Watch's own mic button already does speech recognition)
+  const gm = document.createElement('div'); gm.className = 'mcx-gm'; gm.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px';
+  gm.textContent = 'Game mode: orders change how the simulated match is played. They never change the event record behind the claims.';
+  if ($('tk-form')) $('tk-form').after(gm);
   const kept = [];
   window.addEventListener('message', (e) => {
     const d = e.data || {};
@@ -101,9 +109,23 @@ MCS.progress('Loading the stadium and players');
 // ---- EXP-2: Watch is the only engine. Four times a second it sends the pitch state (22 players, the ball, score, clock, stats) for the shell to hand to Broadcast.
 (() => {
   const r2 = (x) => Math.round(x * 100) / 100;
+  // the part of a player's current action (kick, slide, header, dive, ...) that Broadcast needs to draw the same pose
+  const actOf = (a) => a ? { type: a.type, kind: a.kind, P: a.P, t: r2(a.t), dur: a.dur, strikeAt: a.strikeAt, struck: !!a.struck, foot: a.foot, curl: a.curl, side: a.side, high: !!a.high, h: a.h, style: a.style, move: a.move, lofted: !!(a.plan && a.plan.lofted) } : 0;
   setInterval(() => {
     if (!MCS.framed || !S.started || !players.length) return;
     MCS.send({ type: 'frame', setup: MCS.setup(), frame: { mclock: S.mclock, half: S.half, ht: !!S.ht, over: !!S.over, paused: !!S.paused, speed: S.speed, mscale: S.mscale, score: S.score.slice(), stats: JSON.parse(JSON.stringify(STATS)),
-      ball: [r2(ball.p.x), r2(ball.p.y), r2(ball.p.z)], players: players.map((p) => [r2(p.pos2.x), r2(p.pos2.y), r2(p.vel.x), r2(p.vel.y), r2(p.yaw)]) } });
+      ball: [r2(ball.p.x), r2(ball.p.y), r2(ball.p.z)], players: players.map((p) => [r2(p.pos2.x), r2(p.pos2.y), r2(p.vel.x), r2(p.vel.y), r2(p.yaw), actOf(p.act)]) } });
   }, 250);
+})();
+
+// ---- DAT-11: the Vision tracker's accuracy report goes to the shell every 5 s while Vision is on (and once when it is turned off),
+// and the Analyst's Tracking lab shows it. The tracker reads pixels only; the report is the scorer's comparison with engine truth.
+(() => {
+  let wasOn = false;
+  setInterval(() => {
+    if (typeof visReport !== 'function' || typeof VIS === 'undefined') return;
+    if (!VIS.on && !wasOn) return;
+    wasOn = VIS.on;
+    MCS.send({ type: 'vision', report: visReport() });
+  }, 5000);
 })();

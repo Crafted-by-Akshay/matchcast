@@ -54,8 +54,8 @@ flowchart LR
   TR --> SSE([SSE publication])
 ```
 
-- Built with Agent Framework `WorkflowBuilder`: one executor per box. Edges carry Pydantic models generated from the contracts.
-- Checkpointing: after every executor, state is saved to Table `checkpoints` (PartitionKey `match_id`, RowKey `<moment_id>:<executor>`), see AGT-13.
+- Built with Agent Framework `WorkflowBuilder` (`packages/agents/matchcast_agents/af_graph.py`, package `agent-framework-core`): executors Producer, Analyst, Narrator, Verifier and Stats Desk, edges carrying small dataclasses, the Stats Desk edge conditional on priority 1. The repair router and the approval step run inside the Verifier executor, where the one-repair rule lives. It is the default (`MATCHCAST_ORCHESTRATOR=af`); `native` runs the same steps as plain calls, and a test checks the two give identical claims, lines and audit records (actor, action, subject and details). A new workflow is built per event because Agent Framework refuses concurrent runs on one instance. Checkpointing is our own Table store (AGT-13), not the framework's. The publisher and translate steps are not executors yet.
+- Checkpointing: once per event (after the graph run, not after every executor), state is saved to Table `checkpoints` (PartitionKey `match_id`, RowKey `<moment_id>:<executor>`), see AGT-13.
 - Concurrency: one workflow run per moment; at most 2 runs per match at once; priority 1 moments pre-empt by starting immediately (the older run continues).
 - Rate rule: at most one Producer task per 8 s of match time, except priority 1 (goal, red card, penalty, own goal).
 

@@ -41,6 +41,19 @@ LANG_NEW = (
 LANG_NEW += """ + '</button>').join('')"""
 
 
+ASK_OLD = "  if (!typed || !SAMPLE) { chatAdd('ana', ruleAnswer(q)); return; }\n"
+ASK_NEW = """  if (!typed) { chatAdd('ana', ruleAnswer(q)); return; }
+  if (window.mcAsk) {
+    CP.busy = true; const out = chatAdd('ai', 'Checking with the agents…');
+    const a = await window.mcAsk(q); CP.busy = false;
+    const tick = a.verdict === 'verified' ? ' ✓ Verified' : '';
+    out.textContent = a.text + tick + (a.note ? ' (' + a.note + ')' : '');
+    return;
+  }
+  if (!SAMPLE) { chatAdd('ana', ruleAnswer(q)); return; }
+"""
+
+
 def sub(text, old, new, label):
     n = text.count(old)
     assert n == 1, label + ": expected 1 match, found " + str(n)
@@ -89,6 +102,8 @@ def build_watch():
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
     main = sub(main, LANG_OLD, LANG_NEW, "watch language labels")
+    # EXP-5: a typed question goes to the shell (the agents), not to a stand-in model
+    main = sub(main, ASK_OLD, ASK_NEW, "watch ask")
     head = sub(
         r(W + "head.html"),
         "<title>MatchCast 3D</title>",
@@ -169,6 +184,8 @@ def build_broadcast():
         + r(EMB + "broadcast.js")
         + "\n"
         + r(EMB + "replay.js")
+        + "\n"
+        + r(EMB + "onair.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 

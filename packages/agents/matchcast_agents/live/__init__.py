@@ -3,6 +3,7 @@
 from ..messages import Persona
 from ..resilience import ResilientAgent
 from ..rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
+from ..tools import ToolCall
 from ..workflow import AgentSet
 from .analyst import LiveAnalyst
 from .client import FoundryModelClient, ModelClient, ScriptedModelClient
@@ -27,12 +28,14 @@ def live_agents(
     seed_bad_claim: bool = False,
     seed_bad_claim_at_ms: int = 720_000,
     failing_tools: frozenset[str] = frozenset(),
+    tool_call: ToolCall | None = None,
 ) -> AgentSet:
     """The Producer stays rules (its rate rule is code); the other three run on the model."""
     analyst_rules = AnalystRules(
         corrupt_first_claim=seed_bad_claim,
         failing_tools=failing_tools,
         corrupt_after_ms=seed_bad_claim_at_ms,
+        tool_call=tool_call,
     )
     return AgentSet(
         ProducerRules(personas),
