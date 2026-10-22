@@ -5,8 +5,9 @@ Reads the scene Parquet written by scripts/generate_scenes.py (DAT-5), trains a 
 classifier for `danger` (the event's team shoots within 10 s), logs to MLflow when it is installed
 (always, on Databricks), and exports `model.onnx` plus `model-card.json`.
 
-    Databricks job : set SCENES to an abfss:// or /Volumes path, and UC_MODEL to the Unity Catalog name.
-    Local          : python data/databricks/train_danger.py --scenes data/scenes/v1/scenes.parquet --out out/danger
+    Databricks job : pass --scenes as an abfss:// or /Volumes path; UC_MODEL names the UC model.
+    Local          : python data/databricks/train_danger.py \
+                     --scenes data/scenes/v1/scenes.parquet --out out/danger
 
 Validation is by match, never by event: every event of a match seed lands on the same side of the
 split, so the score is not inflated by near-duplicate neighbours.
@@ -25,7 +26,8 @@ import pyarrow.parquet as pq
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
-TYPES = ("pass", "turnover", "shot", "take_on", "slide_tackle", "aerial_duel", "foul", "corner", "goal")
+TYPES = ("pass", "turnover", "shot", "take_on", "slide_tackle", "aerial_duel", "foul", "corner",
+         "goal")  # fmt: skip
 NUMERIC = ("t_rel_s", "dist_m", "quality", "difficulty", "xg", "x", "y", "own_x", "stamina",
            "passes_prev_10s", "turnovers_prev_10s", "shots_prev_10s")  # fmt: skip
 SEED = 2026
@@ -103,7 +105,8 @@ def main() -> int:
     metrics = {
         "auc": round(float(roc_auc_score(y[held], p)), 4),
         "brier": round(float(brier_score_loss(y[held], p)), 4),
-        "base_rate_brier": round(float(brier_score_loss(y[held], np.full(held.sum(), y[~held].mean()))), 4),
+        "base_rate_brier": round(
+            float(brier_score_loss(y[held], np.full(held.sum(), y[~held].mean()))), 4),
         "train_rows": int((~held).sum()),
         "heldout_rows": int(held.sum()),
         "heldout_matches": len(set(seeds[held].tolist())),
@@ -113,7 +116,7 @@ def main() -> int:
         "name": UC_MODEL, "version": a.version, "label": "danger = same-team shot within 10 s",
         "features": names, "metrics": metrics, "calibration": calibration_bins(y[held], p),
         "training_data": "synthetic scenes from scripts/generate_scenes.py; no real match data",
-        "limits": "learned from simulator events; probabilities describe the simulator, not real football",
+        "limits": "learned from simulator events; describes the simulator, not real football",
     }  # fmt: skip
 
     out = Path(a.out)
@@ -134,7 +137,8 @@ def main() -> int:
         mlflow = None
     if mlflow:
         with mlflow.start_run(run_name="train-danger"):
-            mlflow.log_params({"model": "HistGradientBoosting", "max_iter": 200, "max_depth": 4, "seed": SEED})
+            mlflow.log_params({"model": "HistGradientBoosting", "max_iter": 200, "max_depth": 4,
+                               "seed": SEED})
             mlflow.log_metrics({k: v for k, v in metrics.items() if isinstance(v, float)})
             mlflow.log_artifacts(str(out))
             mlflow.sklearn.log_model(model, "model", registered_model_name=UC_MODEL)  # type: ignore[attr-defined]
