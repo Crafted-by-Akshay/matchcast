@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MatchCast MCP tool server: time-scoped match data tools for agents and Copilot"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "duckdb>=2.0.0",
+    "duckdb>=2.0.0,<3",
     "matchcast-agents",
     "matchcast-contracts",
     "mcp>=2,<3",

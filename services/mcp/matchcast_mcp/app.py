@@ -3,6 +3,7 @@
 import logging
 import os
 
+import duckdb
 from matchcast_agents.store import MemoryStore
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
@@ -10,7 +11,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from . import a2a
-from .season import Season
+from .season import Season, SeasonError
 from .server import create_server
 
 LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
@@ -35,6 +36,6 @@ def build_app(store: MemoryStore) -> Starlette:
     app = server.streamable_http_app(transport_security=transport_security())
     try:
         app.router.routes.extend(a2a.routes(Season()))  # Stats Desk (AGT-11)
-    except Exception:  # noqa: BLE001 - no season Parquet in this image: serve MCP without A2A
+    except (SeasonError, duckdb.Error):  # no season Parquet in this image: serve MCP without A2A
         logging.getLogger(__name__).warning("season data missing; Stats Desk disabled")
     return app

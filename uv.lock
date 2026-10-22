@@ -644,7 +644,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "duckdb", specifier = ">=2.0.0" },
+    { name = "duckdb", specifier = ">=2.0.0,<3" },
     { name = "matchcast-agents", editable = "packages/agents" },
     { name = "matchcast-contracts", editable = "packages/contracts" },
     { name = "mcp", specifier = ">=2,<3" },
