@@ -26,7 +26,7 @@ from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, stream_key
-from .tools import InProcessTools, ToolError
+from .tools import InProcessTools, ToolCall, ToolError
 
 STATS_DESK_BUDGET_S = 2.0
 
@@ -96,6 +96,7 @@ def rules_agents(
     seed_bad_claim: bool = False,
     seed_bad_claim_at_ms: int = 720_000,
     failing_tools: frozenset[str] = frozenset(),
+    tool_call: ToolCall | None = None,
 ) -> AgentSet:
     return AgentSet(
         ProducerRules(personas),
@@ -103,6 +104,7 @@ def rules_agents(
             corrupt_first_claim=seed_bad_claim,
             failing_tools=failing_tools,
             corrupt_after_ms=seed_bad_claim_at_ms,
+            tool_call=tool_call,
         ),
         NarratorRules(),
         VerifierRules(),

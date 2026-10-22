@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from ..context import MatchContext
 from ..messages import ProducerTask
-from ..tools import InProcessTools
+from ..tools import InProcessTools, McpMetrics, ToolCall, ToolError
 
 DERIVATION_VERSION = "1.0.0"
 # {h} and {a} are the roster's first and second team, {t} the team of the picked event
@@ -37,7 +37,9 @@ class AnalystRules:
         corrupt_first_claim: bool = False,
         failing_tools: frozenset[str] = frozenset(),
         corrupt_after_ms: int = 0,
+        tool_call: ToolCall | None = None,
     ) -> None:
+        self._tool_call = tool_call
         self._corrupt = corrupt_first_claim
         self._corrupt_after_ms = corrupt_after_ms
         self._failing = failing_tools
@@ -66,8 +68,14 @@ class AnalystRules:
             m.format(t=team, h=ctx.home, a=ctx.away) for m in COUNT_METRICS.get(task.reason, ())
         ]
         snapshot = ctx.state.snapshot()
-        tools = InProcessTools(ctx, task.up_to_sequence, fail=self._failing)
-        call_id, result = tools.get_metrics(metrics[:3])  # ToolError: no claim, never a guess
+        if self._tool_call is not None:  # MATCHCAST_TOOLS=mcp: the same lookup over an MCP client
+            if "get_metrics" in self._failing:
+                raise ToolError("get_metrics", "unavailable")
+            mcp = McpMetrics(self._tool_call, ctx, task.up_to_sequence)
+            call_id, result = await mcp.get_metrics(metrics[:3])
+        else:
+            tools = InProcessTools(ctx, task.up_to_sequence, fail=self._failing)
+            call_id, result = tools.get_metrics(metrics[:3])  # ToolError: no claim, never a guess
         claims = []
         for index, metric in enumerate(metrics[:3], start=1):
             value = result["values"][metric]["value"]
