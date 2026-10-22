@@ -6,7 +6,7 @@ package's ``InProcessTools``: the in-process and MCP paths cannot drift apart.
 """
 
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from matchcast_agents.context import MatchContext
 from matchcast_agents.state import MatchState, apply
@@ -14,6 +14,7 @@ from matchcast_agents.store import MemoryStore, stream_key
 from matchcast_agents.tools import InProcessTools
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from pydantic import Field
 
 TENANT = "demo"
 MAX_RESULT_BYTES = 20_000
@@ -81,7 +82,7 @@ def create_server(store: MemoryStore) -> MCPServer:
         up_to_sequence: int,
         from_seq: int,
         to_seq: int,
-        kinds: list[str] | None = None,
+        kinds: Annotated[list[str], Field(max_length=50)] | None = None,
     ) -> dict[str, Any]:
         """Contract events in a sequence range (max 200), optionally only some payload types."""
         _sk, ctx, limit = scope(session_id, match_id, up_to_sequence)
@@ -90,7 +91,10 @@ def create_server(store: MemoryStore) -> MCPServer:
 
     @server.tool()
     def get_metrics(
-        session_id: str, match_id: str, up_to_sequence: int, names: list[str]
+        session_id: str,
+        match_id: str,
+        up_to_sequence: int,
+        names: Annotated[list[str], Field(max_length=50)],
     ) -> dict[str, Any]:
         """Metric values named '<metric>:<team_id>' (goals, shots, shots_on_target, ...)."""
         _sk, ctx, limit = scope(session_id, match_id, up_to_sequence)
@@ -101,25 +105,26 @@ def create_server(store: MemoryStore) -> MCPServer:
         return _cap(result)
 
     @server.tool()
-    def get_evidence(session_id: str, match_id: str, claim_id: str) -> dict[str, Any]:
-        """The source, tool calls and formula inputs behind one claim."""
-        sk, _ctx, _limit = scope(session_id, match_id, None)
+    def get_evidence(
+        session_id: str, match_id: str, up_to_sequence: int, claim_id: str
+    ) -> dict[str, Any]:
+        """The source, tool calls and formula inputs behind one claim, as of up_to_sequence."""
+        sk, ctx, limit = scope(session_id, match_id, up_to_sequence)
         row = store.get_claim(sk, claim_id)
-        if row is None:
-            raise ToolRefusal(f"unknown claim {claim_id}")
+        if row is None or row["packet"]["max_evidence_sequence"] > limit:
+            raise ToolRefusal(f"unknown claim {claim_id} at this sequence")
         packet = row["packet"]
-        events = [
-            e
-            for e in store.events(sk)
+        wanted = (
+            {r["event_id"] for r in packet["source"]["events"]}
             if packet["source"]["type"] == "events"
-            and e["event_id"] in {r["event_id"] for r in packet["source"]["events"]}
-        ]
+            else set()
+        )
         return _cap(
             {
                 "claim": packet,
                 "tool_call_ids": row.get("tool_call_ids", []),
                 "formula_inputs": row.get("formula_inputs", {}),
-                "source_events": events,
+                "source_events": [e for e in ctx.events if e["event_id"] in wanted],
             }
         )
 

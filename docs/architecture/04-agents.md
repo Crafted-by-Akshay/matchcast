@@ -93,7 +93,7 @@ Checks 1 to 7 are deterministic and run first. Check 8 runs only if 1 to 7 pass.
 
 ## 6. Tools (MCP server)
 
-All tools are served by `services/mcp` over Streamable HTTP. Every call carries `match_id` and `up_to_sequence`, so an agent can never read the future. Each result is at most 20 KB.
+All tools are served by `services/mcp` over Streamable HTTP; until a shared store exists (DAT-2) the api mounts the same app at `/mcp` (ADR-0005). Every call carries `match_id` and `up_to_sequence`, so an agent can never read the future. Each result is at most 20 KB.
 
 | Tool | Parameters | Returns | Source |
 | --- | --- | --- | --- |
