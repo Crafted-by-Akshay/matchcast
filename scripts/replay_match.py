@@ -7,8 +7,9 @@
 `--match` reads a season match from apps/unified/sources/enterprise-console/data; `--events` takes a
 JSON file holding `{"events": [...]}` or a list. Events are converted to contract v1.1,
 validated, and sent in order, each at its match time divided by the speed (a 90-minute match at
-4x takes 22.5 minutes). Sinks: `jsonl` (a file or stdout), `http` (the api's POST /v1/matches/{id}/events, batches
-of up to 50). An Event Hubs sink goes behind the same function once the namespace exists.
+4x takes 22.5 minutes). Sinks: `jsonl` (a file or stdout), `http` (the api's
+POST /v1/matches/{id}/events, batches of up to 50). An Event Hubs sink goes behind the same
+function once the namespace exists.
 """
 
 from __future__ import annotations
