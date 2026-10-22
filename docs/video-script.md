@@ -26,7 +26,7 @@ Film from the deployed unified app with a fixed seed so every take is the same: 
 5. "Nothing reaches air without a human. The producer approves the line, and the lower-third appears."
 6. "The same verified facts are available to developers through an MCP server, here inside GitHub Copilot."
 7. "Four agents on Microsoft Agent Framework and Foundry, with Event Hubs, Databricks and Fabric behind them."
-8. "On thirty fixed moments, four agents beat a single agent on verified lines and made fewer mistakes."
+8. "On thirty fixed moments, we measured one agent against four: verified lines and mistakes per hundred lines (numbers added once QUA-4 has run)."
 9. "MatchCast. Explainable football, verified."
 
 ## Open points for Akshay
