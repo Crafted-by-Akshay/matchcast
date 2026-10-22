@@ -12,8 +12,9 @@ test('analyst view at 390px: no page scrolls sideways', async ({ page }) => {
   for (const p of PAGES) {
     await page.evaluate((p) => (window as any).go(p), p);
     await expect(page.locator('#main h1').first()).toBeVisible();
-    const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    if (over > 1) wide.push(`${p}: ${over}px`);
+    // Tables and charts may draw after the heading, so wait for the width to stop being too wide, up to 3 s.
+    const over = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    await expect.poll(over, { timeout: 3000 }).toBeLessThanOrEqual(1).catch(async () => wide.push(`${p}: ${await over()}px`));
   }
   expect(wide).toEqual([]);
 });
