@@ -143,6 +143,7 @@ class MatchWorkflow:
         self.status = "rules_fallback" if self.agents.mode == "rules" else "live"
         self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
+        self._restore()
         self.stats = {
             "events": 0,
             "moments": 0,
@@ -235,6 +236,7 @@ class MatchWorkflow:
                 error.index = index  # type: ignore[attr-defined]
                 raise
         async with self._lock:
+            await self._catch_up()
             for event in events:
                 if self.store.add_event(self.sk, event):
                     await self._process(event)
@@ -243,7 +245,46 @@ class MatchWorkflow:
             "last_sequence": self.store.get_state(self.sk).max_sequence,
         }
 
+    # ---- checkpoint and resume (AGT-13) --------------------------------------------------
+
+    def _restore(self) -> None:
+        """Start from the last checkpoint: state and Producer memory before any partial event."""
+        row = self.store.get_checkpoint(self.sk)
+        if row is None:
+            return
+        self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
+        restore = getattr(self.agents.producer, "restore", None)
+        if restore and row.get("producer") is not None:
+            restore(row["producer"])
+
+    def _checkpoint(self, sequence: int) -> None:
+        snapshot = getattr(self.agents.producer, "snapshot", None)
+        self.store.put_checkpoint(
+            self.sk,
+            {
+                "processed_sequence": sequence,
+                "state": self.store.get_state(self.sk).model_dump(),
+                "producer": snapshot() if snapshot else None,
+            },
+        )
+
+    async def _catch_up(self) -> None:
+        """Process events that were stored but not finished before a crash, in order."""
+        row = self.store.get_checkpoint(self.sk)
+        done = row["processed_sequence"] if row else 0
+        pending = [e for e in self.store.events(self.sk) if e["stream_sequence"] > done]
+        if pending and row is None:
+            self.store.put_state(self.sk, MatchState())
+        if pending:
+            self._restore()  # drop the half-applied state of the interrupted event
+        for event in pending:
+            await self._process(event)
+
     async def _process(self, event: dict[str, Any]) -> None:
+        await self._process_event(event)
+        self._checkpoint(event["stream_sequence"])
+
+    async def _process_event(self, event: dict[str, Any]) -> None:
         self.stats["events"] += 1
         state = apply(self.store.get_state(self.sk), event)
         self.store.put_state(self.sk, state)

@@ -48,6 +48,11 @@ class RecapRepo(Protocol):
     def get_recap(self, sk: str, persona: str) -> dict[str, Any] | None: ...
 
 
+class CheckpointRepo(Protocol):
+    def put_checkpoint(self, sk: str, row: dict[str, Any]) -> None: ...
+    def get_checkpoint(self, sk: str) -> dict[str, Any] | None: ...
+
+
 class AuditRepo(Protocol):
     def append_audit(self, sk: str, **fields: Any) -> dict[str, Any]: ...
     def audit_records(self, sk: str, from_sequence: int = 1, limit: int = 1000) -> list[dict]: ...
@@ -65,6 +70,7 @@ class MemoryStore:
         self._publications: dict[str, list[dict[str, Any]]] = {}
         self._audit: dict[str, list[dict[str, Any]]] = {}
         self._recaps: dict[str, dict[str, dict[str, Any]]] = {}
+        self._checkpoints: dict[str, dict[str, Any]] = {}
 
     def add_event(self, sk: str, event: dict[str, Any]) -> bool:
         """Store a semantic event once per (event_id, revision); False for a retry."""
@@ -107,7 +113,16 @@ class MemoryStore:
         return list(self._lines.get(sk, {}).values())
 
     def put_publication(self, sk: str, publication: dict[str, Any]) -> None:
-        self._publications.setdefault(sk, []).append(publication)
+        """Idempotent by publication_id, so a replayed step does not publish twice."""
+        rows = self._publications.setdefault(sk, [])
+        rows[:] = [p for p in rows if p["publication_id"] != publication["publication_id"]]
+        rows.append(publication)
+
+    def put_checkpoint(self, sk: str, row: dict[str, Any]) -> None:
+        self._checkpoints[sk] = row
+
+    def get_checkpoint(self, sk: str) -> dict[str, Any] | None:
+        return self._checkpoints.get(sk)
 
     def publications(self, sk: str) -> list[dict[str, Any]]:
         return list(self._publications.get(sk, []))

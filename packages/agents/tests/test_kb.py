@@ -80,3 +80,11 @@ def test_corpus_and_entity_filters_apply() -> None:
     assert [h.chunk.corpus for h in index.search("shots", corpora={"metrics"})] == ["metrics"]
     assert [h.chunk.id for h in index.search("shots", entity_ids={"p1"})] == ["players:a:1"]
     assert index.search("zebra") == []
+
+
+def test_overlap_never_pushes_a_chunk_past_the_maximum() -> None:
+    words = lambda n, w: " ".join(f"{w}{i}" for i in range(n))  # noqa: E731
+    raw = f"## Section\n\n{words(300, 'a')}\n\n{words(480, 'b')}\n"
+    chunks = chunk_document(raw, corpus="metrics", slug="long")
+    assert len(chunks) >= 2
+    assert all(tokens(c.text) <= MAX_TOKENS for c in chunks)
