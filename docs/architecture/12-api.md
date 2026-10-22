@@ -21,7 +21,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `GET /ready` | anyone | none | 200 or 503 with dependency states | 503 |
 | `POST /v1/matches` | anyone | `session_id, match_id, roster, names, clubs, approval_mode`, optional `seed_bad_claim`, `seed_bad_claim_at_ms`, and the descriptive `seed, engine_version, home_team_id, away_team_id, venue_id, kickoff_local` (accepted, not used by the api yet) | 201 `{stream, approval_mode, mode}` | 409 `match_exists`, 422 |
 | `GET /v1/matches/{match_id}` | anyone | `session_id` | 200 match + current state | 404 |
-| `POST /v1/matches/{match_id}/events` | anyone | `session_id`; `{events: [...]}` 1 to 50 contract events | 202 `{accepted, last_sequence}` | 422 invalid event (first bad index and validator message); 409 `sequence_gap` and 503 `publish_failed` are **Planned** with Event Hubs |
+| `POST /v1/matches/{match_id}/events` | anyone | `session_id`; `{events: [...]}` 1 to 50 contract events | 202 `{accepted, last_sequence}`. Direct mode (no event stream): the events are applied before the reply and `last_sequence` is the match's highest applied sequence. Event Hubs mode: the batch is published before the reply and `last_sequence` is the highest sequence in this batch; the consumer applies it afterwards, so state may lag | 422 invalid event (first bad index and validator message); 503 `publish_failed` in Event Hubs mode (nothing was accepted; send the same batch again); 409 `sequence_gap` is **Planned** |
 | `GET /v1/matches/{match_id}/stream` | anyone | `session_id, persona, lang (en, es, hi)`; `Last-Event-ID` header | 200 `text/event-stream`; with `lang` a publication also carries `variants[lang]` when the checked translation passed (10 §4) | 404, 422 `contract_invalid` for an unknown persona or language, 429 watch-mode cap |
 | `GET /v1/matches/{match_id}/claims` | anyone | `session_id, verdict?, agent?, metric?, limit ≤ 500, cursor?` | 200 page | 404 |
 | `GET /v1/matches/{match_id}/lines` | Producer | `session_id, status?` | 200 page (the approval queue) | 403 |
@@ -93,7 +93,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `invalid_query` | 400 | `/ds/ask` produced SQL the season guard refused |
 | `prompt_attack` | 400 | Prompt Shields flagged the input |
 | `rate_limited` | 429 | Over a limit in §7; `Retry-After: 60` set on per-minute limits (not on the watch-mode cap, which time does not clear) |
-| `publish_failed` | 503 | **Planned**: Event Hubs publish failed; retry the same batch |
+| `publish_failed` | 503 | Event Hubs mode only: the publish failed and nothing was accepted; retry the same batch |
 | `not_ready` | 503 | Dependency not ready; see `/ready` |
 
 ## 7. Rate limits
@@ -106,7 +106,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | one api process (a cost cap, shared by all callers) |
 | `/speech/token` | 10 a minute | IP |
 
-Limits are kept in memory in the single `api` replica (ADR-0005).
+Limits are kept in memory in the single `api` replica (ADR-0005). When `CORS_ORIGINS` (a comma list of origins) is set the api answers those origins and exposes `Retry-After`, so a cross-origin browser can read it on a 429; with it unset no CORS headers are sent.
 
 ## Seeded bad claim (demo cue)
 

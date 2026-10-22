@@ -61,7 +61,8 @@ def _derive(state: StreamState) -> None:
 
 def _count(state: StreamState, payload: dict[str, Any]) -> None:
     for metric, team in counted(payload):
-        state.counts[metric][team] = state.counts[metric].get(team, 0) + 1
+        bucket = state.counts.setdefault(metric, {})
+        bucket[team] = bucket.get(team, 0) + 1
     if payload["type"] == "goal":
         team = payload["team_id"]
         state.score[team] = state.score.get(team, 0) + 1
