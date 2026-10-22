@@ -24,7 +24,7 @@ The `current` row is compatible (both are `MatchState` fields in `doc`), so a re
 Option 2. A single writer per mode:
 
 - `direct` mode: the workflow writes `matchstate/current` via `TableStore` (as today).
-- `memory` and `eventhubs` modes: `Pipeline.handle` calls `matchcast_worker.repo.process(TableStateRepo or MemoryStateRepo, batch)`; it passes to `flow.ingest` the events in `StreamState` order that became applied (a held event is passed when its gap closes, a skipped gap is not). `flow.ingest` sets a flag so `_process` does not call `store.put_state`. The checkpoint (`checkpoints/current`) is unchanged and still holds the workflow's own state and Producer memory.
+- `memory` and `eventhubs` modes: `Pipeline.handle` calls `matchcast_worker.repo.process(TableStateRepo or MemoryStateRepo, batch)`; it passes to `flow.ingest` every event of the batch except those the reducer still holds behind a gap (a held event is passed when its gap closes). Duplicates are passed too: the workflow drops them in `store.add_event`, and if the process died between the reducer and the workflow, the Event Hubs replay must still reach the workflow. The workflow stops writing the table through `MATCHCAST_STATE_WRITER=reducer` (default `workflow`), read by `build_store`: `BufferedTableStore(write_state=False)` keeps the working state in memory and restores it from the checkpoint, never from the reducer's row, which may be ahead. The checkpoint (`checkpoints/current`) is unchanged and still holds the workflow's own state and Producer memory.
 - A consistency test feeds the same shuffled-with-duplicates batch through both paths and asserts the reducer's counters equal the workflow's `MatchState`.
 - A correction or retraction updates `matchstate` and the ledger. Lines already published from the old event are **not** retracted yet (Planned); the audit log records a `correction_seen` note.
 - Adding the ETag check is out of scope: there is still one writer per mode (ADR-0005).
@@ -35,7 +35,7 @@ Option 2. A single writer per mode:
 - Out-of-order batches stop reaching the workflow early, which fixes the late-event ordering gap noted in review.
 - State storage stops growing with the square of the event count (ledger rows are separate), which is the debt recorded in 07 §13.
 - More moving parts in `Pipeline.handle`: a bug in the reducer now blocks narration. The `direct` mode and the consistency test are the guard.
-- Platform owns the wiring in `pipeline.py` and the Bicep table; Agents own the `flow.ingest` flag and the consistency test.
+- Platform owns the wiring in `pipeline.py` and the Bicep table; Agents built the `MATCHCAST_STATE_WRITER` switch and the consistency test (`services/worker/tests/test_state_writer.py`); Platform sets the variable in Bicep for the pipeline modes.
 
 ## Affects
 
