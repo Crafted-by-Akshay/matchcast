@@ -265,8 +265,6 @@ class Cred:
 READ_BODY = {
     "readResult": {"blocks": [{"lines": [{"words": [{"text": "9", "confidence": 0.88}]}]}]}
 }
-    "readResult": {"blocks": [{"lines": [{"words": [{"text": "9", "confidence": 0.88}]}]}]}
-}
 
 
 def test_azure_reader_calls_image_analysis_with_a_bearer_token():
