@@ -3,6 +3,7 @@
 // With an api, the rules agents keep running beside it, so if the api never answers the viewer still gets lines: status 'fallback'.
 const LV = (() => {
   const WARM_MS = window.MATCHCAST_WARM_MS || 45000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
+  const BROWSER = 'b-' + Math.random().toString(36).slice(2, 10);
   let base = '', st = 'offline', persona = 'fan', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
@@ -66,6 +67,15 @@ const LV = (() => {
     r.sending = false;
   };
 
+  // a question to the agents (EXP-5): the api's Ask router answers with citations and a verdict; throws when it cannot
+  const ask = async (question) => {
+    if (!run) throw new Error('no match yet');
+    const res = await post('/v1/matches/' + run.id + '/ask', { question, persona, browser_session_id: BROWSER, lang });
+    if (!res.ok) throw new Error('ask ' + res.status);
+    const j = await res.json();
+    return { text: j.answer, verdict: j.verdict === 'verified' || j.verdict === 'approved' ? 'verified' : 'abstained', source: 'model', citations: j.claim_ids || [] };
+  };
+
   // Watch's batch, as the shell receives it
   const events = (batch) => {
     if (!run) return;
@@ -76,5 +86,5 @@ const LV = (() => {
   const setPersona = (p) => { if (p === persona) return; persona = p; if (run) { if (run.es) run.es.close(); open(); } };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, stop, persona: setPersona, toPacket, get status() { return st; }, get enabled() { return !!api(); } };
+    begin, events, stop, persona: setPersona, toPacket, ask, get status() { return st; }, get enabled() { return !!api(); } };
 })();

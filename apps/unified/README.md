@@ -76,3 +76,6 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 
 ## Wild-moment alerts (EXP-9)
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
+
+## Copilot Ask answered by the agents (EXP-5)
+A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chips still use Watch's own live-data answers). With the api live, the shell posts it to `POST /v1/matches/{id}/ask` and shows the answer with its verdict. Otherwise the in-page rules answer from the event log: who has the most shots or goals, the score, xG, each counted from the log with the events cited and a "Verified" tick; anything else gets "I can't confirm that from the match data yet." Questions are cut at 300 characters and limited to 5 a minute per browser. Planned: Prompt Shields on input and the knowledge-base route (AGT-12, AGT-16), which live in the api.
