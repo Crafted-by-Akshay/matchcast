@@ -97,10 +97,10 @@ test('vision combine: only a well-formed, confident, existing shirt number is ac
     return out;
   });
   expect(r.snap).toMatchObject({ ti: 0, pid: -1, truth: r.idx });
-  expect(r.format).toEqual([null, null, null, null]);
+  expect(r.format).toEqual([null, null, null, null]);   // 'A1', '123' and null fail the format; '07' is 2 digits but no team has a shirt '07'
   expect(r.low).toBeNull(); expect(r.unknown).toBeNull(); expect(r.otherTeam).toBeNull();
   expect(r.ok).toBe(r.idx); expect(r.agree).toBe(r.i0); expect(r.far).toBe(r.idx);
   const d = (k: string) => r.after[k] - r.before[k];
   expect({ f: d('rejected_format'), c: d('rejected_confidence'), u: d('rejected_unknown_number'), a: d('accepted'), ag: d('agreed'), ch: d('changed'), sc: d('scored'), g: d('glyph_right'), o: d('ocr_right') })
-    .toEqual({ f: 4, c: 1, u: r.hasOnlyAway ? 2 : 1, a: 3, ag: 1, ch: 2, sc: 2, g: 1, o: 2 });
+    .toEqual({ f: 3, c: 1, u: r.hasOnlyAway ? 3 : 2, a: 3, ag: 1, ch: 2, sc: 2, g: 1, o: 2 });
 });
