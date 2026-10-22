@@ -27,10 +27,10 @@ const TP = (() => {
     const body = rows.length ? '<ol>' + rows.map((s) => {
       const bad = s.step === 'repair' || s.step === 'hold' || (s.step === 'verdict' && !/^verified/.test(s.detail || ''));
       return '<li class="' + (bad ? 'bad' : s.step === 'verdict' || s.step === 'approval' ? 'ok' : '') + '" data-agent="' + s.agent + '" data-step="' + s.step + '"><b>' + esc(s.agent) + '</b> · ' + esc(s.step)
-        + '<span class="tag">' + (s.mode === 'model' ? 'model' : 'rules') + '</span><span class="m"> ' + fmt(s.ms) + (s.tokens != null ? ' · ' + s.tokens + ' tokens' : ' · no tokens (rules)') + '</span>'
+        + '<span class="tag">' + (s.mode === 'model' ? 'model' : 'rules') + '</span><span class="m"> ' + fmt(s.ms) + (s.tokens != null ? ' · ' + s.tokens + ' tokens' : s.mode === 'model' ? ' · tokens: not reported' : ' · no tokens (rules)') + '</span>'
         + (s.tools && s.tools.length ? '<div class="m">tools: ' + s.tools.map(esc).join(', ') + '</div>' : '') + '<div>' + esc(s.detail || '') + '</div>'
         + (s.was ? '<div class="m">was ' + esc(MCC.canon(s.was)) + ' → now ' + esc(MCC.canon(s.now)) + '</div>' : '') + '</li>';
-    }).join('') + '</ol>' : '<p class="note">This line came from the agent api. Its step-by-step trace comes with the api stream; the claim and verdict below are what the stream carried.</p>';
+    }).join('') + '</ol>' : '<p class="note">This line came from the agent api. Planned (AGT-3): the server trace is not connected yet; the claim and verdict below are what the stream carried.</p>';
     const aud = (c.audit || []).map((a) => '#' + a.seq + ' ' + a.hash).join(' · ');
     return '<p class="tp-line"><b>' + esc(c.id) + '</b> · ' + esc(c.text || '') + '</p>' + body
       + '<p class="note">Verdict: ' + esc(c.verdict) + (c.repaired ? ' (repaired once)' : '') + ' · Source: ' + (c.source === 'model' ? 'model' : 'rules') + (aud ? ' · Audit ' + esc(aud) : '') + '</p>';

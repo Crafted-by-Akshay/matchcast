@@ -24,6 +24,13 @@ test('trace panel: four agents in order with durations, tools, and the seeded ba
   await expect(page.locator('#tp li[data-agent="analyst"]')).toContainText('event_log.goals');
   for (const t of await rows.locator('span.m').allTextContents()) expect(t).toMatch(/ms/);
   await page.keyboard.press('Escape');
+  // the Provenance button opens it too (not only TP.open)
+  await page.click('#ag-claims tr[data-id]');
+  await page.click('#ag-prov .ag-how');
+  await expect(page.locator('#tp')).toBeVisible();
+  await page.keyboard.press('Escape');
+  // the seed switch clears once the seeded claim has been used
+  await expect(page.locator('#ag-bad')).not.toBeChecked();
 
   // the seeded bad claim: rejection reason and the repair step
   await page.evaluate(() => { const c = AG.run.claims.find((x: any) => x.seeded); TP.open(c.id); });

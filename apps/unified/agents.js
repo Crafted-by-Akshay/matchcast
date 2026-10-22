@@ -63,6 +63,9 @@ const AG = (() => {
     if (!c || c.approval !== 'pending') return { ok: false, reason: 'not waiting for approval' };
     const r = fn(c); if (!r.ok) return r;
     log(c, 'producer', action, Object.assign({ by: who }, detail)); changed();
+    const t = clock();
+    trace(c, 'producer', 'approval', t, { detail: action === 'line_killed' ? 'killed by ' + who : (action === 'line_edited' ? 'edited and approved by ' : 'approved by ') + who });
+    if (c.approval === 'approved') trace(c, 'producer', 'publication', t, { detail: 'line published to the ' + c.route + ' view' });
     return r;
   };
   const approve = (id, who) => act(id, who, 'line_approved', {}, (c) => { c.approval = 'approved'; c.approvedBy = who; onAir(air(c)); return { ok: true }; });
@@ -163,5 +166,5 @@ const AG = (() => {
     c.source = src; changed();
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  return { approve, kill, edit, get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { approve, kill, edit, get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();

@@ -27,6 +27,7 @@ test('approval queue: approve, wrong-number edit rejected, kill never airs, audi
   await expect(page.locator('#aq-list li[data-id]')).toHaveCount(0);
   const acts = await page.evaluate(() => MCC.records().map((r: any) => r.action + ':' + ((r.detail || {}).by || '')));
   expect(acts.some((a: string) => a.startsWith('line_approved:Sam Producer'))).toBe(true);
+  expect(await page.evaluate(() => AG.run.claims[0].trace.some((t: any) => /approved by Sam/.test(t.detail || '')))).toBe(true);
   // a second line, killed
   await page.evaluate(() => AG.onWatch('k1', [{ minute: 20.2, type: 'goal', team: 'che', player: 'C One', score: '1-1', data: {} }], []));
   await expect.poll(() => item.count()).toBe(1);
