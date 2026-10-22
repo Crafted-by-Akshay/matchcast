@@ -20,8 +20,29 @@ MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1}
 
 
+# the metrics a one-metric watch mode can follow (the Narrator's LABELS has the same keys)
+WATCH_METRICS = frozenset(
+    {"goals", "shots", "shots_on_target", "cards", "red_cards", "tackles_won", "fouls", "xg"}
+)
+MAX_WATCH_MODES = 8  # extra personas one match writes lines for
+
+
 def valid(persona: str) -> bool:
     return bool(_VALID.match(persona))
+
+
+def known(persona: str, clubs: dict[str, str], names: dict[str, str]) -> bool:
+    """A valid persona that points at something real in this match."""
+    if not valid(persona):
+        return False
+    kind, arg = split(persona)
+    if kind == "my-club":
+        return arg in clubs
+    if kind == "player-focus":
+        return arg in names
+    if kind == "one-metric":
+        return arg in WATCH_METRICS
+    return True
 
 
 def split(persona: str) -> tuple[str, str]:
@@ -74,4 +95,4 @@ def normalise(raw: str | None, clubs: dict[str, str], names: dict[str, str]) -> 
         raw = f"player-focus:{player}" if player else ""
     elif kind == "metric":
         raw = f"one-metric:{arg.replace('-', '_')}"
-    return raw if valid(raw) else None
+    return raw if known(raw, clubs, names) else None

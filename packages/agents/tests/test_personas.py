@@ -82,8 +82,35 @@ def test_watch_client_names_map_to_server_personas(match) -> None:
 
 
 def test_a_watch_mode_added_mid_match_gets_lines_from_then_on(match) -> None:
+    config = WorkflowConfig(personas=("casual",), approval_mode="auto")
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], agents=rules_agents(config.personas), config=config,
+    )  # fmt: skip
+    half = len(match["events"]) // 2
+    run(flow.ingest(match["events"][:half]))
+    first_half = {ln.moment_id for ln in flow.store.lines(flow.sk)}
+    assert flow.add_persona("one-metric:shots") and flow.add_persona("one-metric:shots")
+    assert flow.extra_personas == ["one-metric:shots"]
+    run(flow.ingest(match["events"][half:]))
+    metric = [ln for ln in flow.store.lines(flow.sk) if ln.persona == "one-metric:shots"]
+    assert metric and not {ln.moment_id for ln in metric} & first_half
+
+
+def test_a_watch_mode_must_point_at_something_real_and_is_capped(match) -> None:
+    from matchcast_agents.personas import MAX_WATCH_MODES, WATCH_METRICS, normalise
+    from matchcast_agents.rules.narrator import LABELS
+
+    assert WATCH_METRICS == set(LABELS)
+    clubs, names = match["teams"], match["names"]
     flow = flow_with(match, ["casual"])
-    before = {ln.persona for ln in flow.store.lines(flow.sk)}
-    assert flow.add_persona("one-metric:fouls") and not flow.add_persona("poet")
-    run(flow.ingest([]))
-    assert before == {"casual"} and flow.extra_personas == ["one-metric:fouls"]
+    for bogus in ("poet", "my-club:nobody", "player-focus:nobody", "one-metric:bogus"):
+        assert not flow.add_persona(bogus) and normalise(bogus, clubs, names) is None
+    assert normalise(None, clubs, names) is None and normalise("", clubs, names) is None
+    assert normalise("producer", clubs, names) == "broadcast"
+    assert normalise("player:nobody", clubs, names) is None
+    assert normalise("metric:Shots!", clubs, names) is None
+    modes = [f"one-metric:{m}" for m in sorted(WATCH_METRICS)] + [f"my-club:{t}" for t in clubs]
+    added = [flow.add_persona(m) for m in modes]
+    assert added.count(True) == MAX_WATCH_MODES and len(flow.extra_personas) == MAX_WATCH_MODES
+    assert flow.add_persona("casual")  # a base persona is always fine
