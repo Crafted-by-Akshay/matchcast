@@ -542,3 +542,9 @@ def test_talk_is_rate_limited_with_ask_and_refuses_attacks_and_unknown_targets(
     assert limited.status_code == 429 and limited.json()["code"] == "rate_limited"
     again = ask(client, "What is offside?")
     assert again.status_code == 429 and again.headers["retry-after"] == "60"
+
+
+def test_the_registry_store_comes_from_matchcast_store(monkeypatch) -> None:
+    monkeypatch.setenv("MATCHCAST_STORE", "bogus")
+    with pytest.raises(ValueError, match="MATCHCAST_STORE"):
+        create_app()

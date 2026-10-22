@@ -141,7 +141,9 @@ Catalog `matchcast`: schema `raw` (external volumes over Blob `scenes` and `seas
 No code outside the store modules imports an Azure storage SDK. This keeps tests fast and makes a later change of database a contained job.
 
 - One repository per table in §4 (`MatchRepo`, `EventRepo`, `StateRepo`, `ClaimRepo`, `LineRepo`, `PublicationRepo`, `AuditRepo`, `CheckpointRepo`, `ConversationRepo`), defined as Python `Protocol` classes in `packages/agents/matchcast_agents/store.py`.
-- Two implementations: `TableStore` (azure-data-tables with the managed identity, plus the Blob overflow rule) and `MemoryStore` (dictionaries, for unit tests and the local rules mode). The setting `MATCHCAST_STORE=table|memory` picks one; the default in Azure is `table`, locally and in CI it is `memory`.
+- Two implementations: `TableStore` (azure-data-tables with the managed identity, plus the Blob overflow rule) and `MemoryStore` (dictionaries, for unit tests and the local rules mode). The setting `MATCHCAST_STORE=table|memory` picks one; the default in Azure is `table`, locally and in CI it is `memory`. The api's `Registry` reads the setting (`build_store()`), so the MCP tools, the workflow and the routes share that one store.
+
+Known limits of `table` mode today (Oct 22 review): the Azure SDK clients are synchronous and the api calls them from async routes, so a busy match blocks the event loop (move the store calls to a thread before enabling it under load); after an api restart the same `session_id`/`match_id` resumes its stored checkpoint, lines and audit chain instead of starting fresh; and an event correction that keeps its `stream_sequence` overwrites revision 0, where `MemoryStore` keeps both revisions.
 - The same contract test suite runs against both (see [16-testing-and-quality.md](16-testing-and-quality.md) §7): `TableStore` against Azurite, `MemoryStore` in process. A new store is allowed only when it passes that suite unchanged.
 
 ## 12. If a feature needs a real database

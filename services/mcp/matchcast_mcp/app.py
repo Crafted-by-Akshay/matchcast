@@ -4,7 +4,7 @@ import logging
 import os
 
 import duckdb
-from matchcast_agents.store import MemoryStore
+from matchcast_agents.store import Store
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -26,7 +26,7 @@ def transport_security(env: str | None = None) -> TransportSecuritySettings:
     return TransportSecuritySettings(allowed_hosts=[*LOCAL_HOSTS, *hosts], allowed_origins=[])
 
 
-def build_app(store: MemoryStore) -> Starlette:
+def build_app(store: Store) -> Starlette:
     server = create_server(store)
 
     @server.custom_route("/health", methods=["GET"])

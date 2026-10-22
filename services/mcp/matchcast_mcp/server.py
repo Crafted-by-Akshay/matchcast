@@ -12,7 +12,7 @@ import duckdb
 from matchcast_agents.ask import default_assistant
 from matchcast_agents.context import MatchContext
 from matchcast_agents.state import MatchState, apply
-from matchcast_agents.store import MemoryStore, stream_key
+from matchcast_agents.store import Store, stream_key
 from matchcast_agents.tools import InProcessTools
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -43,7 +43,7 @@ def _cap(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def create_server(store: MemoryStore, season: Season | None = None) -> MCPServer:
+def create_server(store: Store, season: Season | None = None) -> MCPServer:
     server = MCPServer(
         "matchcast-tools",
         instructions=(
