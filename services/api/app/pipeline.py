@@ -70,14 +70,16 @@ class Pipeline:
         groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
         for event in events:
             stream = event.get("stream", {})
-            groups.setdefault((stream.get("session_id", ""), stream.get("match_id", "")), []).append(
-                event
-            )
+            groups.setdefault(
+                (stream.get("session_id", ""), stream.get("match_id", "")), []
+            ).append(event)
         for (session_id, match_id), batch in groups.items():
             try:
                 flow = await self.registry.flow_for(session_id, match_id)
                 await flow.ingest(batch)
-            except ContractError as error:  # the edge validates, so this is a stale or foreign event
+            except (
+                ContractError
+            ) as error:  # the edge validates, so this is a stale or foreign event
                 log.warning("dropping %d events of %s: %s", len(batch), match_id, error)
             except LookupError:
                 log.warning("dropping %d events of unknown match %s", len(batch), match_id)

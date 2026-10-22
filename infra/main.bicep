@@ -26,6 +26,10 @@ param mcpImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 @description('True once scripts/set_search_secrets.sh has stored srch-query-key in Key Vault (the post-provision hook sets it for the next provision).')
 param searchKeysInVault string = 'false'
 
+@allowed(['direct', 'eventhubs'])
+@description('How the api reaches the workflow: direct, or through the Event Hubs match-events hub (docs/infra.md, Event stream). Flip to eventhubs after scripts/smoke_pipeline.py passes.')
+param pipelineMode string = 'direct'
+
 var name = 'matchcast-${environmentName}'
 var tags = {
   project: 'matchcast'
@@ -89,6 +93,7 @@ module containerapps 'modules/containerapps.bicep' = {
     speechRegion: ai.outputs.speechRegion
     searchEndpoint: ai.outputs.searchEndpoint
     searchKeysInVault: searchKeysInVault == 'true'
+    pipelineMode: pipelineMode
   }
 }
 

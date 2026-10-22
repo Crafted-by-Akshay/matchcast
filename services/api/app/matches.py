@@ -37,6 +37,7 @@ from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
+from app.pipeline import Pipeline
 from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
 
@@ -436,15 +437,29 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/matches/{match_id}/events", status_code=202)
     async def post_events(match_id: str, session_id: str, body: EventBatch) -> dict[str, int]:
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         try:
-            return await flow.ingest(body.events)
+            if registry.pipeline is None:
+                return await flow.ingest(body.events)
+            # Through the event stream (F1 rule 2): publish before acknowledging.
+            flow.validate_batch(body.events)
         except ContractError as error:
             index = getattr(error, "index", 0)
             code = error.code if error.code == "roster_required" else "contract_invalid"
             raise Problem(
                 422, code, str(error), f"/events/{index}{error.path}".rstrip("/")
             ) from error
+        try:
+            await registry.pipeline.publish(flow.sk, body.events)
+        except Exception as error:  # noqa: BLE001 - any transport failure: the browser retries
+            logging.getLogger(__name__).exception("publish to the event stream failed")
+            raise Problem(
+                503, "publish_failed", "the event stream did not accept the batch; send it again"
+            ) from error
+        return {
+            "accepted": len(body.events),
+            "last_sequence": max(e["stream_sequence"] for e in body.events),
+        }
 
     @router.get("/matches/{match_id}/stream")
     async def stream(
@@ -758,6 +773,7 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     """Mount the match routes and the problem handler on ``app``."""
     registry = registry or Registry(os.environ.get("MATCHCAST_REQUIRE_ROLE") == "1")
     app.state.matches = registry
+    registry.pipeline = Pipeline.build(registry)
 
     @app.exception_handler(Problem)
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
@@ -781,7 +797,21 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     app.include_router(build_internal_router(registry))
     if os.environ.get("MATCHCAST_MCP_MOUNT") != "0":
         _mount_mcp(app, registry)
+    if registry.pipeline is not None:
+        _run_pipeline(app, registry.pipeline)
     return registry
+
+
+def _run_pipeline(app: FastAPI, pipeline: Pipeline) -> None:
+    """Start the event stream consumer with the app and stop it with the app (ADR-0005)."""
+    outer = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        async with outer(application), pipeline.running():
+            yield
+
+    app.router.lifespan_context = lifespan
 
 
 def _mount_mcp(app: FastAPI, registry: Registry) -> None:

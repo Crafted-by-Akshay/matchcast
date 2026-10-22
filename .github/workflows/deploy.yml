@@ -45,6 +45,7 @@ jobs:
       ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
       ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
       SEARCH_KEYS_IN_VAULT: ${{ vars.SEARCH_KEYS_IN_VAULT || 'false' }}
+      PIPELINE_MODE: ${{ vars.PIPELINE_MODE || 'direct' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,6 +114,7 @@ jobs:
           azd env set ENTRA_CLIENT_ID "$ENTRA_CLIENT_ID"
           azd env set ALERT_EMAIL "$ALERT_EMAIL"
           azd env set SEARCH_KEYS_IN_VAULT "$SEARCH_KEYS_IN_VAULT"
+          azd env set PIPELINE_MODE "$PIPELINE_MODE"
           if [ -z "${SKIP_API_IMAGE:-}" ]; then azd env set API_IMAGE "$REGISTRY/matchcast-api:${{ steps.tag.outputs.sha }}"; fi
           if [ -z "${SKIP_WEB_IMAGE:-}" ]; then azd env set WEB_IMAGE "$REGISTRY/matchcast-web:${{ steps.tag.outputs.sha }}"; fi
           if [ -n "${MCP_IMAGE:-}" ]; then azd env set MCP_IMAGE "$MCP_IMAGE"; fi
