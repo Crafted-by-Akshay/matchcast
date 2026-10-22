@@ -12,6 +12,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: PLT-4, PLT-5, AGT
 
 ## 2. Trust boundaries
 
+Exported image: [img/6-identity-and-security.png](img/6-identity-and-security.png) (regenerate with `scripts/export_diagrams.sh`).
+
 ```mermaid
 flowchart LR
   subgraph Internet[Untrusted: internet]

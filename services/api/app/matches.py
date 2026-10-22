@@ -7,32 +7,45 @@ import csv
 import hashlib
 import io
 import json
+import logging
 import os
+import time
 import uuid
+from collections import deque
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.hub import StreamEvent
+from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
+from matchcast_agents.personas import ALIASES, normalise
+from matchcast_agents.statsdesk import StatsDeskError
+from matchcast_agents.store import MemoryStore, stream_key
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
+from matchcast_mcp.app import build_app
+from matchcast_mcp.season import Season, SeasonError
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.auth import PRODUCER_ROLES, caller_role
+from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 
 TENANT = "demo"
 HEARTBEAT_S = 15
+ASK_PER_MINUTE = 5
+DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
-PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {
     "not_found": 404,
     "match_exists": 409,
     "forbidden_role": 403,
     "not_approvable": 409,
     "prompt_attack": 400,
+    "rate_limited": 429,
 }
 
 
@@ -93,6 +106,13 @@ class LineAction(BaseModel):
     reason: str | None = Field(default=None, max_length=200)
 
 
+class AskBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    question: str = Field(min_length=1, max_length=300)
+    persona: Literal["casual", "analyst", "broadcast"] = "casual"
+
+
 class ExportBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str = Field(pattern=ID)
@@ -102,6 +122,12 @@ class ExportBody(BaseModel):
     metric: str | None = None
 
 
+class DsAsk(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    question: str = Field(min_length=1, max_length=300)
+
+
 class RecapTrigger(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tenant_id: str = Field(default=TENANT, pattern=ID)
@@ -109,13 +135,86 @@ class RecapTrigger(BaseModel):
     match_id: str = Field(pattern=ID)
 
 
+class _LocalStatsDesk:
+    """The Stats Desk skill called in-process; the mcp container serves the same over A2A."""
+
+    transport = "in_process"
+
+    def __init__(self, season: Season) -> None:
+        self.season = season
+        self._season = season
+
+    async def compare(
+        self, metric: str, scope: str, value: float, team_id: str | None = None
+    ) -> dict[str, Any]:
+        try:
+            return self._season.compare(metric, scope, value, team_id)
+        except SeasonError as error:
+            raise StatsDeskError(str(error)) from error
+
+
+def _local_stats_desk() -> _LocalStatsDesk | None:
+    try:
+        return _LocalStatsDesk(Season())
+    except Exception:  # noqa: BLE001 - no season Parquet in this image
+        logging.getLogger(__name__).warning("season data missing; Stats Desk disabled")
+        return None
+
+
 class Registry:
     """Matches held by this single api replica (ADR-0005), keyed by session and match."""
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
+        self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
         self.require_role = require_role
+        self.stats_desk = _local_stats_desk()
+        self._model_client: ModelClient | None = None
+        self.asked: dict[str, deque[float]] = {}
         self.exports: dict[str, tuple[bytes, str, str]] = {}
+        self.season = self.stats_desk.season if self.stats_desk else None
+        self.ds_asked: dict[str, deque[float]] = {}
+
+    def allow_ask(self, session_id: str, now: float | None = None) -> bool:
+        """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
+        now = time.monotonic() if now is None else now
+        for key in [k for k, w in self.asked.items() if not w or now - w[-1] >= 60]:
+            del self.asked[key]  # idle sessions leave no entry behind
+        window = self.asked.setdefault(session_id, deque())
+        while window and now - window[0] >= 60:
+            window.popleft()
+        if len(window) >= ASK_PER_MINUTE:
+            return False
+        window.append(now)
+        return True
+
+    def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
+        """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
+        client = self.model_client()
+        if client is None:
+            return rules_agents(personas, **seed)
+        return live_agents(client, personas, **seed)
+
+    def model_client(self) -> ModelClient | None:
+        if self._model_client is None and os.environ.get("MATCHCAST_AGENT_MODE") == "live":
+            try:
+                self._model_client = FoundryModelClient()
+            except Exception:  # noqa: BLE001 - no endpoint, SDK or credential: stay on rules
+                logging.getLogger(__name__).warning("live mode requested; using rules agents")
+        return self._model_client
+
+    def allow_ds(self, client: str, now: float | None = None) -> bool:
+        """At most DS_PER_MINUTE Data Scientist questions per client per rolling minute."""
+        now = time.monotonic() if now is None else now
+        for key in [k for k, w in self.ds_asked.items() if not w or now - w[-1] >= 60]:
+            del self.ds_asked[key]
+        window = self.ds_asked.setdefault(client, deque())
+        while window and now - window[0] >= 60:
+            window.popleft()
+        if len(window) >= DS_PER_MINUTE:
+            return False
+        window.append(now)
+        return True
 
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))
@@ -210,12 +309,14 @@ def build_router(registry: Registry) -> APIRouter:
                 roster=body.roster,
                 names=names,
                 clubs=clubs,
-                agents=rules_agents(
+                agents=registry.agents_for(
                     config.personas,
                     seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
                     seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
                 ),
                 config=config,
+                store=registry.store,
+                stats_desk=registry.stats_desk,
             )
         except (ContractError, TypeError, KeyError) as error:
             raise Problem(
@@ -252,7 +353,12 @@ def build_router(registry: Registry) -> APIRouter:
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
         flow = registry.get(session_id, match_id)
-        persona = PERSONA_ALIASES.get(persona or "", persona)
+        if persona:
+            persona = normalise(persona, flow.clubs, flow.names)
+            if persona is None:
+                raise Problem(422, "contract_invalid", "unknown persona for this match")
+            if not flow.add_persona(persona):  # a watch mode gets lines from the next moment on
+                raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and persona and item.data["persona"] != persona)
@@ -309,19 +415,28 @@ def build_router(registry: Registry) -> APIRouter:
         rows = [ln for ln in flow.store.lines(flow.sk) if status in (None, ln.status)]
         return {"items": [_line_json(ln) for ln in rows]}
 
-    async def act(line_id: str, body: LineAction, role: str | None, action: str) -> dict[str, Any]:
+    async def act(
+        line_id: str,
+        body: LineAction,
+        role: str | None,
+        action: str,
+        actor: tuple[str, str | None] = ("producer", None),
+    ) -> dict[str, Any]:
         need_producer(role)
+        actor_id, actor_name = actor
         flow = registry.get(body.session_id, body.match_id)
         try:
             if action == "approve":
-                line = await flow.approve(line_id)
+                line = await flow.approve(line_id, actor_id, actor_name)
                 return {"line": _line_json(line)}
             if action == "kill":
-                line = await flow.kill(line_id, body.reason or "killed by producer")
+                line = await flow.kill(
+                    line_id, body.reason or "killed by producer", actor_id, actor_name
+                )
                 return {"line": _line_json(line)}
             if body.text is None:
                 raise Problem(422, "contract_invalid", "text is required", "/text")
-            line, verdict = await flow.edit(line_id, body.text)
+            line, verdict = await flow.edit(line_id, body.text, actor_id, actor_name)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         if verdict.verdict == "rejected":
@@ -330,21 +445,30 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/lines/{line_id}/approve")
     async def approve(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "approve")
+        return await act(line_id, body, x_matchcast_role, "approve", actor)
 
     @router.post("/lines/{line_id}/edit")
     async def edit(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "edit")
+        return await act(line_id, body, x_matchcast_role, "edit", actor)
 
     @router.post("/lines/{line_id}/kill")
     async def kill(
-        line_id: str, body: LineAction, x_matchcast_role: str | None = Depends(caller_role)
+        line_id: str,
+        body: LineAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
-        return await act(line_id, body, x_matchcast_role, "kill")
+        return await act(line_id, body, x_matchcast_role, "kill", actor)
 
     @router.get("/matches/{match_id}/audit")
     async def audit(
@@ -401,13 +525,58 @@ def build_router(registry: Registry) -> APIRouter:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )  # fmt: skip
 
+    @router.post("/ds/ask")
+    async def ds_ask(body: DsAsk, request: Request) -> dict[str, Any]:
+        """Data Scientist: a season question, answered from one verified SELECT (F10)."""
+        if registry.season is None:
+            raise Problem(503, "not_ready", "the season data is not loaded")
+        if not registry.allow_ds(request.client.host if request.client else "local"):
+            raise Problem(429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute")
+        try:
+            result = await asyncio.to_thread(ds_ask_season, body.question, registry.season)
+        except SeasonError as error:
+            raise Problem(400, "invalid_query", str(error)) from error
+        stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": "season"}
+        registry.store.append_audit(
+            stream_key(stream), stream=stream, actor_kind="agent", actor_id="data-scientist",
+            action="ds_answered" if result.verdict == "verified" else "ds_unverified",
+            subject_id="ds-ask",
+            details={"verdict": result.verdict, "sql": result.sql, "mismatch": result.mismatch},
+            time=_now(),
+        )  # fmt: skip
+        return {
+            "answer": result.answer,
+            "verdict": result.verdict,
+            "sql": result.sql,
+            "columns": result.columns,
+            "rows": result.rows,
+            "chart_spec": result.chart_spec,
+        }
+
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:
         flow = registry.get(session_id, match_id)
-        recap = flow.store.get_recap(flow.sk, PERSONA_ALIASES.get(persona, persona))
+        recap = flow.store.get_recap(flow.sk, ALIASES.get(persona, persona))
         if recap is None:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
         return recap
+
+    @router.post("/matches/{match_id}/ask")
+    async def ask(match_id: str, body: AskBody) -> dict[str, Any]:
+        flow = registry.get(body.session_id, match_id)
+        if not registry.allow_ask(body.session_id):
+            raise Problem(429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute")
+        try:
+            result = await flow.ask(body.question, body.persona)
+        except WorkflowError as error:
+            raise Problem(STATUS[error.code], error.code, str(error)) from error
+        return {
+            "answer": result.answer,
+            "intent": result.intent,
+            "abstained": result.abstained,
+            "citations": result.citations,
+            "mode": result.mode,
+        }
 
     return router
 
@@ -447,6 +616,36 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
         return problem_response(error)
 
+    @app.exception_handler(404)
+    async def unknown_path(_request: Request, _error: Exception) -> JSONResponse:
+        return problem_response(Problem(404, "not_found", "no such path"))
+
     app.include_router(build_router(registry))
     app.include_router(build_internal_router(registry))
+    if os.environ.get("MATCHCAST_MCP_MOUNT") != "0":
+        _mount_mcp(app, registry)
     return registry
+
+
+def _mount_mcp(app: FastAPI, registry: Registry) -> None:
+    """Serve the MCP tools at /mcp from this process: the matches live in its memory (ADR-0005).
+
+    The separate `mcp` container takes over when a shared store exists (DAT-2).
+    """
+    mcp_app = build_app(registry.store)
+    outer = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        async with outer(application), mcp_app.router.lifespan_context(mcp_app):
+            yield
+
+    app.router.lifespan_context = lifespan
+    taken = {getattr(r, "path", None) for r in app.router.routes}
+    # only the MCP paths join the api (A2A stays on the mcp container, which is not public), so
+    # unknown paths still return Problem JSON
+    app.router.routes.extend(
+        r
+        for r in mcp_app.router.routes
+        if getattr(r, "path", None) not in taken and str(getattr(r, "path", "")).startswith("/mcp")
+    )

@@ -1,0 +1,40 @@
+{"q": "How is xG worked out?", "kind": "knowledge", "expect_kb": "metrics:xg"}
+{"q": "What does expected goals mean?", "kind": "knowledge", "expect_kb": "metrics:xg"}
+{"q": "What counts as a shot on target?", "kind": "knowledge", "expect_kb": "metrics:shots"}
+{"q": "What is the difference between shots and shots on target?", "kind": "knowledge", "expect_kb": "metrics:shots"}
+{"q": "When is a tackle counted as won?", "kind": "knowledge", "expect_kb": "metrics:tackles-won"}
+{"q": "What does a red card do to a team?", "kind": "knowledge", "expect_kb": "metrics:fouls-and-cards"}
+{"q": "What is offside?", "kind": "knowledge", "expect_kb": "laws:offside"}
+{"q": "Is there offside from a throw-in?", "kind": "knowledge", "expect_kb": "laws:offside"}
+{"q": "What is the offside trap?", "kind": "knowledge", "expect_kb": "tactics:offside-trap"}
+{"q": "What does 4-3-3 mean?", "kind": "knowledge", "expect_kb": "tactics:formations"}
+{"q": "What is a high press?", "kind": "knowledge", "expect_kb": "tactics:pressing"}
+{"q": "What does the Verifier check?", "kind": "knowledge", "expect_kb": "app:verified-lines"}
+{"q": "What does Simulated mean?", "kind": "knowledge", "expect_kb": "app:simulated-data"}
+{"q": "Which watch modes are there?", "kind": "knowledge", "expect_kb": "app:watch-modes"}
+{"q": "What is MatchCast?", "kind": "knowledge", "expect_kb": "app:about-matchcast"}
+{"q": "How many shots has Northgate FC had so far?", "kind": "live", "expect_metric": "shots"}
+{"q": "How many shots has Harbour United had so far?", "kind": "live", "expect_metric": "shots"}
+{"q": "How many shots on target has Northgate FC had so far?", "kind": "live", "expect_metric": "shots_on_target"}
+{"q": "How many shots on target has Harbour United had so far?", "kind": "live", "expect_metric": "shots_on_target"}
+{"q": "How many fouls has Northgate FC had so far?", "kind": "live", "expect_metric": "fouls"}
+{"q": "How many fouls has Harbour United had so far?", "kind": "live", "expect_metric": "fouls"}
+{"q": "What is the score right now?", "kind": "live", "expect_metric": "goals"}
+{"q": "Who is winning at the moment?", "kind": "live", "expect_metric": "goals"}
+{"q": "How many red cards so far?", "kind": "live", "expect_metric": "red_cards"}
+{"q": "How many tackles has Harbour United won so far?", "kind": "live", "expect_metric": "tackles_won"}
+{"q": "How many cards have been shown so far?", "kind": "live", "expect_metric": "cards"}
+{"q": "How many fouls have there been so far?", "kind": "live", "expect_metric": "fouls"}
+{"q": "How many shots have there been so far?", "kind": "live", "expect_metric": "shots"}
+{"q": "How many goals have been scored so far?", "kind": "live", "expect_metric": "goals"}
+{"q": "Who is leading right now?", "kind": "live", "expect_metric": "goals"}
+{"q": "How many shots on target so far, and what counts as one?", "kind": "both"}
+{"q": "How many fouls so far, and what is a foul?", "kind": "both"}
+{"q": "What is the score now and what is xG?", "kind": "both"}
+{"q": "How many red cards so far and what does a red card do?", "kind": "both"}
+{"q": "How many tackles so far, and when is a tackle won?", "kind": "both"}
+{"q": "Who will win the match tomorrow?", "kind": "unanswerable"}
+{"q": "What is the capital of France?", "kind": "unanswerable"}
+{"q": "Which player will be transferred next season?", "kind": "unanswerable"}
+{"q": "Tell me a joke", "kind": "unanswerable"}
+{"q": "What is the weather in Paris tonight?", "kind": "unanswerable"}
