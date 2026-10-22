@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs the jobs from .github/workflows/ci.yml on this machine, for use while Actions is unavailable.
 # Usage: scripts/local_ci.sh [job ...]   jobs: checks e2e bicep secrets openapi (default: all)
+# BICEP=/path/to/bicep stands in for `az bicep` (the standalone binary from github.com/Azure/bicep/releases).
 # E2E_ARGS narrows Playwright, e.g. E2E_ARGS="tests/e2e/approval.spec.ts" scripts/local_ci.sh e2e
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -29,8 +30,9 @@ job_e2e() {
 }
 job_bicep() {
   [ -f infra/main.bicep ] || { echo "no infra/main.bicep"; return 0; }
-  local out
-  out=$(az bicep build --file infra/main.bicep --stdout 2>&1 >/dev/null) || { echo "$out"; return 1; }
+  local out build
+  if [ -n "${BICEP:-}" ]; then build=("$BICEP" build); else build=(az bicep build --file); fi
+  out=$("${build[@]}" infra/main.bicep --stdout 2>&1 >/dev/null) || { echo "$out"; return 1; }
   echo "$out"
   if echo "$out" | grep -qi "warning"; then echo "Bicep produced warnings"; return 1; fi
 }
@@ -51,7 +53,7 @@ job_openapi() {
 
 for j in "${jobs[@]}"; do
   case $j in
-    bicep) command -v az >/dev/null || { skip bicep "az not installed"; continue; } ;;
+    bicep) command -v az >/dev/null || [ -n "${BICEP:-}" ] || { skip bicep "az not installed; set BICEP=/path/to/bicep"; continue; } ;;
     secrets) command -v gitleaks >/dev/null || [ -n "${GITLEAKS:-}" ] || [ -x ./gitleaks ] || { skip secrets "gitleaks not installed"; continue; } ;;
     checks|e2e|openapi) ;;
     *) echo "unknown job $j"; exit 2 ;;
