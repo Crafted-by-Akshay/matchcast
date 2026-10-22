@@ -16,6 +16,10 @@ param webImage string
 param apiImage string
 param mcpImage string
 
+@description('Client ID of the Entra app registration matchcast-web (PLT-5). Empty leaves Easy Auth off.')
+param entraClientId string = ''
+param keyVaultUri string = ''
+
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsName
 }
@@ -52,9 +56,29 @@ var commonEnv = [
 
 // The App Insights connection string is not a credential, but it is stored as an app
 // secret and referenced, so no connection string appears as a plain environment value.
-var appInsightsSecrets = [
-  { name: 'appinsights-connection', value: appi.properties.ConnectionString }
-]
+var authEnabled = !empty(entraClientId)
+
+// The Entra client secret is the one secret Easy Auth needs (documented in docs/infra.md).
+// It lives in Key Vault as 'entra-client-secret' and is referenced, never stored here.
+var appInsightsSecrets = concat(
+  [{ name: 'appinsights-connection', value: appi.properties.ConnectionString }],
+  authEnabled
+    ? [
+        {
+          name: 'entra-client-secret'
+          keyVaultUrl: '${keyVaultUri}secrets/entra-client-secret'
+          identity: identityId
+        }
+      ]
+    : []
+)
+
+var authEnv = authEnabled
+  ? [
+      { name: 'MATCHCAST_EASY_AUTH', value: '1' }
+      { name: 'MATCHCAST_REQUIRE_ROLE', value: '1' }
+    ]
+  : []
 
 resource web 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'ca-web-${name}'
@@ -104,7 +128,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
           name: 'api'
           image: apiImage
           resources: { cpu: json('0.5'), memory: '1Gi' }
-          env: concat(commonEnv, [
+          env: concat(commonEnv, authEnv, [
             { name: 'MATCHCAST_AGENT_MODE', value: 'rules' }
             { name: 'FOUNDRY_PROJECT_ENDPOINT', value: foundryProjectEndpoint }
             { name: 'FOUNDRY_MODEL_DEPLOYMENT', value: 'gpt-6-luna' }
@@ -187,3 +211,46 @@ resource mcp 'Microsoft.App/containerApps@2025-01-01' = {
 output webFqdn string = web.properties.configuration.ingress.fqdn
 output apiFqdn string = api.properties.configuration.ingress.fqdn
 output mcpFqdn string = mcp.properties.configuration.ingress.fqdn
+
+var authAudience = 'api://${entraClientId}'
+
+resource webAuth 'Microsoft.App/containerApps/authConfigs@2025-01-01' = if (authEnabled) {
+  parent: web
+  name: 'current'
+  properties: {
+    platform: { enabled: true }
+    globalValidation: { unauthenticatedClientAction: 'AllowAnonymous' }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: entraClientId
+          clientSecretSettingName: 'entra-client-secret'
+          openIdIssuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
+        }
+        validation: { allowedAudiences: [authAudience, entraClientId] }
+      }
+    }
+    login: { preserveUrlFragmentsForLogins: true }
+  }
+}
+
+resource apiAuth 'Microsoft.App/containerApps/authConfigs@2025-01-01' = if (authEnabled) {
+  parent: api
+  name: 'current'
+  properties: {
+    platform: { enabled: true }
+    globalValidation: { unauthenticatedClientAction: 'AllowAnonymous' }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: entraClientId
+          clientSecretSettingName: 'entra-client-secret'
+          openIdIssuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
+        }
+        validation: { allowedAudiences: [authAudience, entraClientId] }
+      }
+    }
+  }
+}
