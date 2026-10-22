@@ -133,4 +133,4 @@ def test_verified_audit_records_name_the_deterministic_and_meaning_checks(
     run(flow.ingest(match["events"][:40]))
     verified = next(r for r in flow.store.audit_records(flow.sk) if r["action"] == "line_verified")
     names = [c["name"] for c in verified["details"]["checks"]]
-    assert names == ["sources", "freshness", "numbers", "names", "persona", "meaning"]
+    assert names == ["sources", "freshness", "numbers", "names", "persona", "meaning", "safety"]
