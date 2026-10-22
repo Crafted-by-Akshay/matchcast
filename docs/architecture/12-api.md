@@ -84,7 +84,7 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | `forbidden_role` | 403 | Producer route without the Producer or Admin role |
 | `invalid_query` | 400 | `/ds/ask` produced SQL the season guard refused |
 | `prompt_attack` | 400 | Prompt Shields flagged the input |
-| `rate_limited` | 429 | Over a limit in §7; `Retry-After` set |
+| `rate_limited` | 429 | Over a limit in §7; `Retry-After: 60` set on per-minute limits (not on the watch-mode cap, which time does not clear) |
 | `publish_failed` | 503 | Event Hubs publish failed; retry the same batch |
 | `not_ready` | 503 | Dependency not ready; see `/ready` |
 
