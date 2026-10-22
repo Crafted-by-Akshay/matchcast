@@ -10,6 +10,8 @@ const SS = { doc: undefined, loading: false };
     el.insertBefore(card, el.firstChild);
     ssPaint(card);
     if (SS.doc === undefined && !SS.loading) ssLoad();
+    const rc = el.querySelector('#pf-rc');   // "Run checks again" also asks the api again
+    if (rc) rc.addEventListener('click', () => { if (!SS.loading) { SS.doc = undefined; ssLoad(); } });
   };
 }
 async function ssLoad() {
@@ -20,12 +22,12 @@ async function ssLoad() {
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000);
     try { const r = await fetch(api + '/v1/status', { signal: ctl.signal }); if (r.ok) doc = await r.json(); } catch (e) { doc = null; } finally { clearTimeout(t); }
   }
-  if (doc && Array.isArray(doc.dependencies)) {
+  if (doc && typeof doc === 'object' && Array.isArray(doc.dependencies)) {
     doc.dependencies = doc.dependencies.filter((x) => x && typeof x === 'object').map((x) => ({ status: String(x.status || 'unavailable'), label: String(x.label || x.key || 'Unnamed'), detail: String(x.detail || '') }));
     SS.doc = doc;
   } else SS.doc = { none: true, api: !!api };
   SS.loading = false;
-  if (SS.doc.none) setTimeout(() => { SS.doc = undefined; }, 30000); // a failed answer is retried on a later redraw
+  if (SS.doc.none) { const failed = SS.doc; setTimeout(() => { if (SS.doc === failed) SS.doc = undefined; }, 30000); } // a failed answer is retried on a later redraw
   document.querySelectorAll('#ss-card').forEach(ssPaint);
 }
 function ssPaint(card) {
@@ -45,7 +47,7 @@ function ssPaint(card) {
   const tb = t.createTBody();
   for (const d of doc.dependencies) {
     const r = tb.insertRow(); r.insertCell().textContent = d.label;
-    const chip = document.createElement('span'); chip.className = 'chip ' + (tone[d.status] || ''); chip.textContent = lbl[d.status] || d.status; r.insertCell().append(chip);
+    const chip = document.createElement('span'); chip.className = 'chip ' + (Object.prototype.hasOwnProperty.call(tone, d.status) ? tone[d.status] : ''); chip.textContent = Object.prototype.hasOwnProperty.call(lbl, d.status) ? lbl[d.status] : 'Unknown'; r.insertCell().append(chip);
     r.insertCell().textContent = d.detail;
   }
   const sum = document.createElement('p'); sum.className = 'muted'; sum.textContent = 'Api mode ' + doc.mode + '. Counts: ' + Object.entries(doc.counts || {}).filter(([, n]) => n).map(([k, n]) => n + ' ' + k).join(', ') + '.';
