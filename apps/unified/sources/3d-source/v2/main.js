@@ -584,9 +584,9 @@ function offsideLine(ti) { const xs = teamOf(1 - ti).map((o) => w2own(ti, o.pos2
 // ---- owner decisions ----
 // ---- xG: logistic on goal-mouth angle and distance, fitted offline on Wyscout open-play shots (CC BY 4.0) by scripts/fit_xg.py.
 // Constants mirror data/calibration/xg.json; tests/xg_constants.test checks they agree. XG_SCALE is the tuned global scale (docs/simulator.md).
-const XG = { b0: -1.464609, b1: 1.413822, b2: -0.089141, scale: 1.0 };
+const XG = { b0: -1.464609, b1: 1.413822, b2: -0.089141, scale: 1.1 };
 // tuned action weights (docs/simulator.md); a `tune` query parameter overrides them for calibration runs only, e.g. ?tune=passBias:0.5,shotThr:0.05
-const TUNE = { passBias: 1.5, shotThr: 0.06, longShot: 0.05, holdScale: 1.5 };
+const TUNE = { passBias: 1.5, shotThr: 0.06, longShot: 0.05, holdScale: 1.5, boxFoul: 0.65 };
 try { for (const kv of (new URLSearchParams(location.search).get('tune') || '').split(',')) { const [k, v] = kv.split(':'); if (k in TUNE && v !== undefined) TUNE[k] = +v; if (k === 'xgScale') XG.scale = +v; } } catch (e) { /* no query string */ }
 const sig = (z) => 1 / (1 + Math.exp(-z));
 function xgAt(pos, goal) {
@@ -808,7 +808,8 @@ function challenges(dt) {
       if (rnd() < dt * 0.6 * d.tackle * loose * (1.15 - 0.4 * o.ctrl) * (0.8 + 0.4 * d.T.tac.cur.press)) {
         // foul risk: poor tacklers, tired legs, a wet surface, lunging from behind, a quick dribbler
         const behind = fwd(o).dot(d.pos2.clone().sub(o.pos2).normalize()) < -0.35;
-        const pf = 0.6 * clamp(0.05 + 0.2 * (1 - d.tackle) + 0.1 * clamp(ENV.slick, 0, 1) + 0.14 * (1 - d.stamina) + (behind ? 0.22 : 0) + d.T.tac.cur.foul + (o.vel.length() > 6 ? 0.08 : 0), 0.03, 0.65);
+        const inOwnBox = Math.abs(d.pos2.x - ownGoal(d.ti).x) < 16.5 && Math.abs(d.pos2.y - 34) < 20.16; // defenders are more careful in their own box
+        const pf = 0.6 * (inOwnBox ? TUNE.boxFoul : 1) * clamp(0.05 + 0.2 * (1 - d.tackle) + 0.1 * clamp(ENV.slick, 0, 1) + 0.14 * (1 - d.stamina) + (behind ? 0.22 : 0) + d.T.tac.cur.foul + (o.vel.length() > 6 ? 0.08 : 0), 0.03, 0.65);
         const tStyle = fwd(d).dot(o.pos2.clone().sub(d.pos2).normalize()) > 0.6 ? 'block' : 'poke'; const tFoot = right(d).dot(bp2().sub(d.pos2)) > 0 ? 1 : -1;
         if (rnd() < pf) { d.act = { type: 'poke', t: 0, dur: 0.55, style: tStyle, foot: tFoot }; foul(d, o, behind ? 'from behind' : rnd() < 0.2 ? 'pull' : 'trip'); return; }
         d.act = { type: 'poke', t: 0, dur: 0.55, style: tStyle, foot: tFoot };
