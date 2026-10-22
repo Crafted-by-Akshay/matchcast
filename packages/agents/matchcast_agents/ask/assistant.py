@@ -34,6 +34,9 @@ LIVE_METRICS: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("cards", "card", "booked", "booking", "yellow"), "cards", "Cards"),
     (("fouls", "foul"), "fouls", "Fouls"),
     (("tackles", "tackle"), "tackles_won", "Tackles won"),
+    (("passes", "pass completed", "passing"), "passes", "Passes"),
+    (("pressures", "pressing", "press"), "pressures", "Pressures"),
+    (("turnovers", "won back", "possession won", "regain"), "possession_won", "Possession won"),
     (
         ("score", "winning", "losing", "leading", "ahead", "behind", "result", "goals", "goal"),
         "goals",

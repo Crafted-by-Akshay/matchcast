@@ -154,7 +154,9 @@ def independent_count(
         if ev["stream_sequence"] > upto:
             continue
         p = ev["payload"]
-        if p["type"] in ("correction", "retraction") or p.get("team_id") != team:
+        if p["type"] in ("correction", "retraction"):
+            continue
+        if p.get("to_team_id" if p["type"] == "possession_change" else "team_id") != team:
             continue
         kind = p["type"]
         if metric == "goals":
@@ -169,6 +171,12 @@ def independent_count(
             total += kind == "card"
         elif metric == "red_cards":
             total += kind == "card" and p["colour"] != "yellow"
+        elif metric == "passes":
+            total += kind == "pass"
+        elif metric == "pressures":
+            total += kind == "pressure"
+        elif metric == "possession_won":
+            total += kind == "possession_change"
         elif metric == "tackles_won":
             total += kind == "tackle" and p["outcome"] == "won"
         else:

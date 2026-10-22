@@ -14,8 +14,52 @@ LABELS = {
     "red_cards": "Red cards",
     "tackles_won": "Tackles won",
     "fouls": "Fouls",
+    "passes": "Passes",
+    "pressures": "Pressures",
+    "possession_won": "Possession won",
     "xg": "xG",
 }
+
+
+# Why a goal matters, from the two goal claims alone (no new number, so nothing new to verify).
+GOAL_CONTEXT = {
+    "opens": {
+        "casual": "It opens the scoring.",
+        "analyst": "First goal of the match.",
+        "broadcast": "The opening goal.",
+    },
+    "level": {
+        "casual": "It levels the match.",
+        "analyst": "Equaliser: the score is level.",
+        "broadcast": "And it is all square.",
+    },
+    "ahead": {
+        "casual": "{club} take the lead.",
+        "analyst": "Lead change: {club} go ahead.",
+        "broadcast": "{club} go in front.",
+    },
+    "extends": {
+        "casual": "{club} stretch their lead.",
+        "analyst": "{club} extend the lead.",
+        "broadcast": "{club} move further clear.",
+    },
+    "pulls": {
+        "casual": "{club} are back in it.",
+        "analyst": "{club} reduce the deficit but still trail.",
+        "broadcast": "{club} are still behind, but they are alive.",
+    },
+}
+
+
+def goal_context(scored: int, conceded: int) -> str:
+    """Which of GOAL_CONTEXT a goal is, given the scorer's and the other side's goals after it."""
+    if scored == 1 and conceded == 0:
+        return "opens"
+    if scored == conceded:
+        return "level"
+    if scored < conceded:
+        return "pulls"
+    return "ahead" if scored - 1 <= conceded else "extends"
 
 
 def values(claims: list[dict[str, Any]]) -> dict[str, Any]:
@@ -48,12 +92,15 @@ class NarratorRules:
         kind = task.reason
         if kind == "goal":
             n = v[f"goals:{team}"]
+            other = aid if team == hid else hid
+            why = GOAL_CONTEXT[goal_context(n, v[f"goals:{other}"])]
             texts = {
-                "casual": f"Goal for {club}! {who} scores, goal number {n} for them.",
+                "casual": f"Goal for {club}! {who} scores, goal number {n} for them. "
+                + why["casual"].format(club=club),
                 "analyst": f"Goal: {who} ({club}). Score: {home} {v[f'goals:{hid}']}, "
-                f"{away} {v[f'goals:{aid}']}.",
+                f"{away} {v[f'goals:{aid}']}. " + why["analyst"].format(club=club),
                 "broadcast": f"{club} score through {who}. {home} {v[f'goals:{hid}']}, "
-                f"{away} {v[f'goals:{aid}']}.",
+                f"{away} {v[f'goals:{aid}']}. " + why["broadcast"].format(club=club),
             }
         elif kind == "shot_on_target":
             texts = {
@@ -72,7 +119,7 @@ class NarratorRules:
             texts = {
                 "casual": f"Red card! {who} is sent off for {club}.",
                 "analyst": f"{who} ({club}) sent off. {club} red cards: {v[f'red_cards:{team}']}.",
-                "broadcast": f"{who} is sent off. {club} are down to ten.",
+                "broadcast": f"{who} is sent off. {club} are a player short.",
             }
         elif kind == "summary":
             h, a = v[f"shots:{hid}"], v[f"shots:{aid}"]

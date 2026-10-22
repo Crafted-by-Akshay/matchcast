@@ -11,6 +11,9 @@ METRIC_UNITS = {
     "fouls": "count",
     "cards": "count",
     "red_cards": "count",
+    "passes": "count",
+    "pressures": "count",
+    "possession_won": "count",
     "xg": "ratio",
 }
 TOLERANCE = {"count": 0.0, "ratio": 0.01, "m": 0.5, "m/s": 0.5, "s": 0.5, "ms": 500.0}
