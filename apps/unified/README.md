@@ -108,5 +108,5 @@ The shell: arrow keys, Home and End move between the dashboard tabs (tab 1 to 4 
 
 ## Instant replay (Broadcast)
 - `embed/replay.js` (appended after `broadcast.js` by `build.py`) keeps the last 60 s of Watch's frames in Broadcast. The "Instant replay" bar on the live view plays back the last 10, 20 or 30 s at normal or half speed, with a red REPLAY tag and a Back to live button; it returns to live by itself at the end.
-- Only the pictures are replayed. Events, the score bug's agents and lines are not, and Watch keeps running underneath. The buffer is in the page, so it is empty after a reload. Test: `tests/e2e/replay.spec.ts`.
+- Only player and ball positions are replayed. Clock, score and stats stay live, events and agent lines are not replayed, and Watch keeps running underneath. The buttons stay disabled until two frames are buffered. The buffer is in the page, so it is empty after a reload. Test: `tests/e2e/replay.spec.ts`.
 - The desk's CSS hides every direct child of `body` except `#bc`, `#stage` and `#load`, so overlays for Broadcast must be appended inside `#bc-view`.

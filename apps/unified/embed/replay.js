@@ -1,5 +1,5 @@
 // ---- instant replay (Broadcast): the desk keeps the last minute of Watch's frames and can play the last 10 to 30 seconds back,
-// at normal or half speed, then returns to live. Events and the agents are not replayed, only the pictures.
+// at normal or half speed, then returns to live. Only the positions are replayed: clock, score and stats stay live, and events and the agents are not replayed.
 // Appended after broadcast.js in the same module (see build.py), so CONS, S and consumerStep are in scope.
 // A capture listener on window sees Watch's frames before the desk's own handler: it buffers each one and, while a replay plays, swallows it.
 const BUF = [], BUF_SEC = 60, RP = { on: false };
@@ -32,7 +32,7 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   };
   // start(seconds, rate): play back from `seconds` ago at `rate` (1 or 0.5). Returns false when the buffer is shorter than a second.
   const start = (sec, rate) => {
-    if (!BUF.length || BUF.length < 2) return false;
+    if (BUF.length < 2) return false;
     clearInterval(timer);
     const nowT = BUF[BUF.length - 1].at, from = Math.max(BUF[0].at, nowT - sec * 1000);
     const clip = BUF.filter((b) => b.at >= from);
@@ -42,12 +42,17 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
     timer = setInterval(() => {
       const el = (performance.now() - t0) * rate + clip[0].at;
       while (i < clip.length - 1 && clip[i + 1].at <= el) i++;
-      CONS.frame = clip[i].frame; CONS.at = performance.now();
+      // positions come from the replayed frame; clock, half, score and stats stay live so events that arrive meanwhile are stamped correctly
+      const lf = BUF[BUF.length - 1].frame;
+      CONS.frame = Object.assign({}, clip[i].frame, { mclock: lf.mclock, half: lf.half, ht: lf.ht, over: lf.over, score: lf.score, stats: lf.stats, paused: lf.paused, speed: lf.speed }); CONS.at = performance.now();
       if (S.paused) consumerStep(0.016, true);
       if (el >= clip[clip.length - 1].at) stop();
     }, 40);
     return true;
   };
+  const first = bar.querySelectorAll('button[data-sec]');
+  first.forEach((b) => { b.disabled = true; b.title = 'Buffering Watch frames'; });
+  const ready = setInterval(() => { if (BUF.length >= 2) { first.forEach((b) => { b.disabled = false; b.title = ''; }); clearInterval(ready); } }, 500);
   bar.addEventListener('click', (e) => { const b = e.target.closest('button[data-sec]'); if (b) start(+b.dataset.sec, bar.querySelector('#mc-replay-slow').checked ? 0.5 : 1); });
   live.addEventListener('click', stop);
   window.MCReplay = { start, stop, get playing() { return RP.on; }, get buffered() { return BUF.length ? (BUF[BUF.length - 1].at - BUF[0].at) / 1000 : 0; } };
