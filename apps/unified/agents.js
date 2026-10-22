@@ -230,6 +230,11 @@ const AG = (() => {
     }
     if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; }
     if (d.audio_url) c.audioUrl = new URL(d.audio_url, LV.base || location.href).href;   // the api's Azure Speech mp3 for this line (EXP-8)
+    if (d.text && d.text !== c.text) c.tr = {};   // the shown English line changed, so older translations no longer match it
+    if (d.variants && typeof d.variants === 'object') {   // the api's translate-then-verify (PR 118): only checked translations arrive; a missing language keeps the rules fallback
+      c.tr = c.tr || {};
+      for (const l of ['es', 'hi']) if (typeof d.variants[l] === 'string' && d.variants[l].trim()) c.tr[l] = { ok: true, text: d.variants[l], reason: 'api: translated and re-checked', api: true };
+    }
     if (d.text) { c.text = d.text; run.stat.lines++; say('Narrator', c.minute, c.id + ' · ' + d.text, ''); }
     if (d.status === 'approved') c.route = 'fan';
     c.source = src; changed();

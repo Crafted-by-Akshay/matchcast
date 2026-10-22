@@ -2222,6 +2222,30 @@
           "matches"
         ]
       }
+    },
+    "/v1/status": {
+      "get": {
+        "description": "Live, simulated, planned or unavailable per dependency, for the status pill and page.",
+        "operationId": "dependency_states_v1_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dependency States V1 Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Dependency States",
+        "tags": [
+          "health"
+        ]
+      }
     }
   }
 }

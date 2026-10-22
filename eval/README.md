@@ -22,5 +22,4 @@ against a separate recount, Verifier catch rate on mutated lines and on a seeded
 match times, false rejects, refusal and red-team rates. Offline it grades the rules agents and
 writes `results/agents.json` and `docs/eval/agents-eval.md`; `--live` grades the Foundry agents
 once quota exists. `tests/test_eval_agents.py` holds the floors and fails if the committed
-report is stale. Known gaps are in the report, for example a player from the other club is not
-caught by the roster check.
+report is stale. Known gaps are in the report, for example a wrong teammate is not caught.

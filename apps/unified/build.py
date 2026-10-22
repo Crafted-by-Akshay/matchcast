@@ -120,6 +120,8 @@ def build_watch():
         + r(EMB + "hook.js")
         + "\n"
         + r(EMB + "watch.js")
+        + "\n"
+        + r(EMB + "vision-crops.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
@@ -339,7 +341,7 @@ if __name__ == "__main__":
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
         shell = ["index.html", "contracts.js", "agents.js", "live.js", "trace-panel.js"]
-        shell += ["voice.js", "voices.json"]
+        shell += ["speech.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)
         print("local copy", dst)

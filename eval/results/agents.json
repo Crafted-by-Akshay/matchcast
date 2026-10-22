@@ -29,8 +29,8 @@
     "pairs_replayed": 34,
     "honest_lines_checked": 34,
     "false_reject_rate_on_clean": 0.0,
-    "content_mutations_tried": 121,
-    "catch_rate": 0.992,
+    "content_mutations_tried": 151,
+    "catch_rate": 0.993,
     "by_mutation": {
       "claim_stale": {
         "tried": 34,
@@ -62,6 +62,12 @@
         "rate": 0.947,
         "by_construction": false
       },
+      "player_from_other_club": {
+        "tried": 30,
+        "caught": 30,
+        "rate": 1.0,
+        "by_construction": false
+      },
       "source_forged": {
         "tried": 34,
         "caught": 34,
@@ -75,7 +81,7 @@
         "by_construction": true
       }
     },
-    "known_blind_spot_other_team_player": {
+    "known_gap_wrong_teammate": {
       "tried": 30,
       "caught": 0,
       "rate": 0.0
