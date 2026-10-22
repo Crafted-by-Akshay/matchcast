@@ -250,3 +250,46 @@ test('service status: without an api it says the console is simulated', async ({
   await expect(f.locator('#ss-card')).toContainText('No api is configured');
   expect(errs).toEqual([]);
 });
+
+// Service status card hardening: odd bodies, escaped labels, a refetch on "Run checks again".
+async function statusPage(page: Page, reply: object | null | 'abort', hits?: { n: number }) {
+  await page.route('**/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://api.test";' }));
+  await page.route('http://api.test/v1/status', (r) => {
+    if (hits) hits.n++;
+    return reply === 'abort' ? r.abort() : r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*' }, json: reply as any });
+  });
+  return openPage(page, 'status');
+}
+const statusBody = { mode: 'local', overall: 'pass', counts: { live: 1 }, dependencies: [null, 'x',
+  { key: 'k', label: 'Odd <b>x</b>', status: 'constructor', detail: 'd' }, { key: 'u', label: 'Unreachable', status: 'unavailable', detail: 'no endpoint' }] };
+
+test('service status: odd entries are skipped, labels escaped, unknown states say Unknown', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await statusPage(page, statusBody);
+  const card = f.locator('#ss-card');
+  await expect(card.locator('tbody tr')).toHaveCount(2);
+  await expect(card.locator('tr', { hasText: 'Odd' })).toContainText('Unknown');
+  await expect(card.locator('tr', { hasText: 'Odd' }).locator('.chip')).toHaveAttribute('class', 'chip ');
+  await expect(card.locator('b')).toHaveCount(0);
+  await expect(card.locator('tr', { hasText: 'Unreachable' })).toContainText('Unavailable');
+  expect(errs.filter((e) => !/api\.test/.test(e))).toEqual([]);
+});
+
+test('service status: a body that is not an object, or a network failure, says the api did not answer', async ({ page }) => {
+  const f = await statusPage(page, null);
+  await expect(f.locator('#ss-card')).toContainText('did not return its status');
+  const p2 = await page.context().newPage();
+  const g = await statusPage(p2, 'abort');
+  await expect(g.locator('#ss-card')).toContainText('did not return its status');
+  await p2.close();
+});
+
+test('service status: Run checks again asks the api again', async ({ page }) => {
+  const hits = { n: 0 };
+  const f = await statusPage(page, { ...statusBody, overall: 'pass' }, hits);
+  await expect(f.locator('#ss-card tbody tr')).toHaveCount(2);
+  const before = hits.n;
+  await f.locator('#pf-rc').click();
+  await expect.poll(() => hits.n, { timeout: 20_000 }).toBeGreaterThan(before);
+  await expect(f.locator('#ss-card tbody tr')).toHaveCount(2);
+});
