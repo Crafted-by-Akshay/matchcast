@@ -109,5 +109,5 @@ const LV = (() => {
   const setPersona = (p, l) => { l = l || 'en'; if (p === persona && l === lang) return; persona = p; lang = l; if (run) { if (run.es) run.es.close(); open(); } };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, stop, persona: setPersona, toPacket, audit, verifyChain, get status() { return st; }, get enabled() { return !!api(); } };
+    begin, events, stop, persona: setPersona, toPacket, audit, verifyChain, get base() { return api(); }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

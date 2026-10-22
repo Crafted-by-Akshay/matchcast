@@ -21,7 +21,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/matches` | anyone | `session_id, match_id, seed, engine_version, home_team_id, away_team_id, venue_id, kickoff_local, approval_mode, roster` | 201 match | 409 exists, 422 |
 | `GET /v1/matches/{match_id}` | anyone | `session_id` | 200 match + current state | 404 |
 | `POST /v1/matches/{match_id}/events` | anyone | `session_id`; `{events: [...]}` 1 to 50 contract events | 202 `{accepted, last_sequence}` | 422 invalid event (first bad index and validator message), 409 sequence gap over 50, 503 publish failed |
-| `GET /v1/matches/{match_id}/stream` | anyone | `session_id, persona, lang`; `Last-Event-ID` header | 200 `text/event-stream` | 404 |
+| `GET /v1/matches/{match_id}/stream` | anyone | `session_id, persona, lang`; `Last-Event-ID` header | 200 `text/event-stream` | 404, 422 unknown persona, 429 watch-mode cap |
 | `GET /v1/matches/{match_id}/claims` | anyone | `session_id, verdict?, agent?, metric?, limit ≤ 500, cursor?` | 200 page | 404 |
 | `GET /v1/matches/{match_id}/lines` | Producer | `session_id, status?` | 200 page (the approval queue) | 403 |
 | `POST /v1/lines/{line_id}/approve` | Producer | `session_id, match_id` | 200 line (+ publication) | 403, 404, 409 not approvable |
@@ -55,6 +55,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `recap_ready` | personas available | `recap` |
 | `status` | `{status, reason?}`: `live`, `rules_fallback` (with `reason` from the `fallback_reason` list in 04-agents.md §4) or `warming_up`. Sent only when the status or reason changes; every refusal is still audited as `fallback_used` | none |
 | `heartbeat` | server time | none, every 15 s |
+
+`persona` is `casual`, `analyst`, `broadcast` (aliases `fan`, `producer`) or a watch mode: `club:<id or name>`, `player:<id or name>`, `metric:<name>` (server forms `my-club:`, `player-focus:`, `one-metric:`). A watch mode must name a real club, player or metric of the match; opening the stream registers it for the match from the next moment on (no back-fill), at most 8 extra modes per match, kept until the match ends.
 
 On reconnect with `Last-Event-ID`, the server replays publications and audit records after that point (at most 500), then continues live.
 
