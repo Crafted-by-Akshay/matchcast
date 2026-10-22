@@ -86,7 +86,9 @@ def normalise(raw: str | None, clubs: dict[str, str], names: dict[str, str]) -> 
     raw = ALIASES.get(raw, raw)
     kind, _, arg = raw.partition(":")
     if kind == "club":
-        team = next((t for t, n in clubs.items() if arg in (t, _slug(n))), None)
+        team = next(
+            (t for t, n in clubs.items() if arg in (t, _slug(n)) or _slug(arg) == _slug(n)), None
+        )
         raw = f"my-club:{team}" if team else ""
     elif kind == "player":
         player = next(

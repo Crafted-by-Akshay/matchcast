@@ -111,3 +111,7 @@ Not verified: no live provision yet (`az bicep build` passes with no warnings on
 ## Judge path on one machine
 
 `make judge-path` (or `scripts/judge_path.py`, add `--e2e` for the Playwright unified spec) boots the api with rules agents, the in-memory store and the in-process event stream, builds the unified app, and checks `/health`, `/ready`, the three built views, a match from the fixture through to verified claims (`scripts/smoke_pipeline.py`) and the routes in the openapi document. It calls no Azure or Foundry service. Passes locally in about 15 s without `--e2e`; the browser-level flow is covered by the e2e suite.
+
+## Replaying a match into the hub
+
+`uv run python scripts/replay_match.py --match M001 --speed 4 --sink eventhub --url https://<api-fqdn> --session-id demo` creates the match through the api, then publishes the converted events to `match-events` with the stream key as partition key (needs `EVENTHUB_FQDN` and an Entra login with Azure Event Hubs Data Sender; the api must run with `PIPELINE_MODE=eventhubs` to consume them). Tested with a stub api and a fake publisher; **not run against a real hub**.

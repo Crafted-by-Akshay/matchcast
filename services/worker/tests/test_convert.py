@@ -117,3 +117,49 @@ def test_http_sink_creates_the_match_before_posting_events(tmp_path):
     posted = [e for p, b in seen[1:] for e in b["events"]]
     assert all(p.startswith("/v1/matches/m-m001/events?session_id=sx") for p, _ in seen[1:])
     assert len(posted) == len(converted()[1])
+
+
+def test_eventhub_sink_creates_the_match_then_publishes_by_stream_key(monkeypatch):
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import replay_match
+    from replay_sinks import eventhub
+
+    created, published = [], []
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            created.append(
+                (self.path, json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+            )
+            self.send_response(201)
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *a):
+            pass
+
+    class Fake:
+        closed = False
+
+        async def publish(self, sk, events):
+            published.append((sk, list(events)))
+
+        async def close(self):
+            Fake.closed = True
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(eventhub, "from_env", lambda: eventhub.EventHubSink(Fake()))
+    try:
+        replay_match.main(["--match", "M001", "--sink", "eventhub", "--no-wait",
+                           "--url", f"http://127.0.0.1:{srv.server_port}", "--session-id", "sx",
+                           "--tenant-id", "demo"])  # fmt: skip
+    finally:
+        srv.shutdown()
+    assert created[0][0] == "/v1/matches" and len(created) == 1  # events do not go over HTTP
+    assert {sk for sk, _ in published} == {"demo|sx|m-m001"}
+    assert sum(len(b) for _, b in published) == len(converted()[1])
+    assert all(len(b) <= 50 for _, b in published) and Fake.closed
