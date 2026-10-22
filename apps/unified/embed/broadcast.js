@@ -71,6 +71,19 @@ function consumerStep(dt, snap) {
     if (p.act && !snap) { p.act.t += dt; if (p.act.t >= p.act.dur) p.act = null; }
     let dy = q[4] - p.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); p.yaw += dy * k;
   });
+  // the referee and assistants: placed from the frame; a signal or flag is taken once per new frame and its clock runs here, like the players' actions
+  (f.officials || []).forEach((q, i) => {
+    const o = officials[i]; if (!o) return;
+    o.pos2.x += (q[0] + q[2] * age - o.pos2.x) * k; o.pos2.y += (q[1] + q[3] * age - o.pos2.y) * k; o.vel.set(q[2], q[3]);
+    let dy = q[4] - o.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); o.yaw += dy * k;
+    if (o._actFrame !== CONS.n) {
+      o._actFrame = CONS.n; const a = q[5];
+      if (a) { if (snap || !o.act || o.act.type !== a.type || Math.abs(o.act.t - a.t) > 0.35) o.act = a.dir ? Object.assign({}, a, { dir: V2(a.dir.x, a.dir.y) }) : a; }
+      else if (o.act && (snap || o.act.t >= o.act.dur * 0.9)) o.act = null;
+    }
+    if (o.act && !snap) { o.act.t += dt; if (o.act.t >= o.act.dur) o.act = null; }
+    animate(o, snap ? 0 : dt);
+  });
   const kb = snap ? 1 : Math.min(1, dt * 14);
   ball.p.x += (f.ball[0] - ball.p.x) * kb; ball.p.y += (f.ball[1] - ball.p.y) * kb; ball.p.z += (f.ball[2] - ball.p.z) * kb;
 }
