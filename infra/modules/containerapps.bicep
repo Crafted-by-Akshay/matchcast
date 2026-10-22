@@ -2,6 +2,7 @@ param name string
 param location string
 param tags object
 param logAnalyticsName string
+param appInsightsName string
 param identityId string
 param identityClientId string
 param foundryProjectEndpoint string
@@ -9,12 +10,18 @@ param storageTableUrl string
 param storageBlobUrl string
 param eventHubFqdn string
 param eventHubName string
+param eventHubNamespace string
+param storageAccountName string
 param webImage string
 param apiImage string
 param mcpImage string
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsName
+}
+
+resource appi 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: appInsightsName
 }
 
 resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
@@ -40,9 +47,16 @@ var identity = {
 var commonEnv = [
   { name: 'AZURE_CLIENT_ID', value: identityClientId }
   { name: 'MATCHCAST_MODE', value: 'cloud' }
+  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appinsights-connection' }
 ]
 
-resource web 'Microsoft.App/containerApps@2024-03-01' = {
+// The App Insights connection string is not a credential, but it is stored as an app
+// secret and referenced, so no connection string appears as a plain environment value.
+var appInsightsSecrets = [
+  { name: 'appinsights-connection', value: appi.properties.ConnectionString }
+]
+
+resource web 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'ca-web-${name}'
   location: location
   tags: union(tags, { 'azd-service-name': 'web' })
@@ -51,6 +65,7 @@ resource web 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      secrets: appInsightsSecrets
       ingress: { external: true, targetPort: 8080, transport: 'auto' }
     }
     template: {
@@ -71,7 +86,7 @@ resource web 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-resource api 'Microsoft.App/containerApps@2024-03-01' = {
+resource api 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'ca-api-${name}'
   location: location
   tags: union(tags, { 'azd-service-name': 'api' })
@@ -80,6 +95,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      secrets: appInsightsSecrets
       ingress: { external: true, targetPort: 8000, transport: 'auto' }
     }
     template: {
@@ -108,13 +124,31 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
       scale: {
         minReplicas: 0
         maxReplicas: 1
-        rules: [{ name: 'http', http: { metadata: { concurrentRequests: '20' } } }]
+        rules: [
+          { name: 'http', http: { metadata: { concurrentRequests: '20' } } }
+          {
+            name: 'match-events-backlog'
+            custom: {
+              type: 'azure-eventhub'
+              metadata: {
+                eventHubNamespace: eventHubNamespace
+                eventHubName: eventHubName
+                consumerGroup: '$Default'
+                unprocessedEventThreshold: '50'
+                storageAccountName: storageAccountName
+                blobContainer: 'eh-checkpoints'
+                checkpointStrategy: 'blobMetadata'
+              }
+              identity: identityId
+            }
+          }
+        ]
       }
     }
   }
 }
 
-resource mcp 'Microsoft.App/containerApps@2024-03-01' = {
+resource mcp 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'ca-mcp-${name}'
   location: location
   tags: union(tags, { 'azd-service-name': 'mcp' })
@@ -123,6 +157,7 @@ resource mcp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      secrets: appInsightsSecrets
       ingress: { external: false, targetPort: 8001, transport: 'auto' }
     }
     template: {
