@@ -80,10 +80,12 @@ All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A
 | `checkpoints` | `sk` | `<moment_id>:<executor>` | checkpoint (JSON), created_at | workflow | workflow on resume |
 | `conversations` | `sk|browser_session_id` | `turn` (4 digits) | question, persona, answer, citations (JSON), verdict, created_at | `api /ask` | `api /ask` |
 
+Built today (`packages/agents/matchcast_agents/tables.py`, AGT-3 and AGT-13): `TableStore` implements the repositories for `matches`, `events`, `matchstate`, `claims`, `lines`, `publications`, `recaps`, `checkpoints` and `audit` with the keys above. Each row stores the whole record as JSON in a `doc` column beside its key columns (`event_id` and `revision` on events, `revision` and `last_sequence` on matchstate, `processed_sequence` on checkpoints), and a value over 60 KB goes to the `overflow` container as described. Claims, lines and publications also carry `ord` (a zero-padded nanosecond clock) so lists keep insertion order. The checkpoint is one row per match (`current`) holding the processed sequence, the state and the Producer memory, which is what the workflow resumes from. `conversations` has no repository yet.
+
 Write rules:
 1. Idempotent keys: `claim_id = sha256(sk, moment_id, agent, derivation_version)[:24]`; `line_id = sha256(claim_ids, persona, attempt)[:24]`; `publication_id = sha256(line_id)[:24]`. Upserts with the same key are safe on replay.
 2. `audit.sequence` is assigned by a single writer per match (the `api` replica) with an optimistic insert; a 409 Conflict means another writer won, so re-read the tail and retry once.
-3. `matchstate/current` is updated with an ETag check (`If-Match`), so a stale writer fails instead of overwriting.
+3. `matchstate/current` is updated with an ETag check (`If-Match`), so a stale writer fails instead of overwriting. `TableStore.put_state` is a plain upsert today (one writer, ADR-0005); the check comes with a second writer.
 
 ## 5. Blob containers
 
