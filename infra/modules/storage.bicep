@@ -9,6 +9,7 @@ var tableNames = [
   'claims'
   'lines'
   'publications'
+  'recaps'
   'audit'
   'checkpoints'
   'conversations'

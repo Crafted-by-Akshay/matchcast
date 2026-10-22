@@ -10,6 +10,7 @@
     "alertEmail": { "value": "${ALERT_EMAIL=}" },
     "apiImage": { "value": "${API_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}" },
     "webImage": { "value": "${WEB_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}" },
+    "searchKeysInVault": { "value": "${SEARCH_KEYS_IN_VAULT=false}" },
     "mcpImage": { "value": "${MCP_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}" }
   }
 }

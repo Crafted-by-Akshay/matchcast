@@ -1,0 +1,184 @@
+"""Write the club, player and season-match knowledge pages (05-assistant-rag.md §2).
+
+Rosters come from the league file of the synthetic season (fictional clubs and players) and every
+number from the season Parquet, so a page can never disagree with ``query_season``. Output is
+deterministic: running it twice changes nothing.
+"""
+
+import argparse
+import json
+import re
+from pathlib import Path
+
+import duckdb
+
+ROOT = Path(__file__).resolve().parents[1]
+LEAGUE = ROOT / "apps/unified/sources/enterprise-console/data/league.json"
+SEASON = ROOT / "data/season/v1"
+KB = ROOT / "kb"
+GENERATED = ("clubs", "players", "season")
+
+
+def slug(*parts: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", " ".join(parts).lower()).strip("-")
+
+
+def page(title: str, entities: list[str], body: str) -> str:
+    head = f"title: {title}\nentities: {', '.join(entities)}\ngenerated: scripts/build_profiles.py"
+    return f"---\n{head}\n---\n{body.strip()}\n"
+
+
+def _pct(done: int, total: int) -> str:
+    return f"{100 * done / total:.0f}%" if total else "n/a"
+
+
+def club_pages(clubs: list[dict], con: duckdb.DuckDBPyConnection) -> dict[str, str]:
+    out = {}
+    names = {c["key"]: c["club"] for c in clubs}
+    for club in clubs:
+        key = club["key"]
+        rows = con.execute(
+            """SELECT m.match_id, m.date, t.side, t.goals, o.goals, t.xg, t.possession_pct,
+                      o.team_id
+               FROM team_match_stats t
+               JOIN team_match_stats o ON o.match_id = t.match_id AND o.team_id <> t.team_id
+               JOIN matches m ON m.match_id = t.match_id
+               WHERE t.team_id = ? ORDER BY m.date, m.match_id""",
+            [key],
+        ).fetchall()
+        won = sum(r[3] > r[4] for r in rows)
+        drawn = sum(r[3] == r[4] for r in rows)
+        lost = len(rows) - won - drawn
+        goals_for, goals_against = sum(r[3] for r in rows), sum(r[4] for r in rows)
+        xg = sum(r[5] for r in rows) / len(rows) if rows else 0.0
+        poss = sum(r[6] for r in rows) / len(rows) if rows else 0.0
+        squad = sorted(club["squad"], key=lambda p: (p["num"], p["name"]))
+        table = "\n".join(
+            f"| {p['num']} | {p['name']} | {p['pos']} | {p['rating']} |" for p in squad
+        )
+        results = "\n".join(
+            f"- {r[1]}: {'home' if r[2] == 'home' else 'away'} against {names.get(r[7], r[7])}, "
+            f"{r[3]}-{r[4]} ({'win' if r[3] > r[4] else 'draw' if r[3] == r[4] else 'loss'})"
+            for r in rows
+        )
+        body = f"""## Overview
+
+{club["club"]} ({key}) are a fictional club from {club["city"]}, coached by {club["coach"]}.
+Their strength rating is {club["str"]} on the league's scale. Everything here is synthetic.
+
+## Season record
+
+Played {len(rows)}: won {won}, drawn {drawn}, lost {lost}. Goals for {goals_for}, against
+{goals_against}. Average xG per match {xg:.2f}; average possession {poss:.0f}%.
+
+## Squad
+
+| Shirt | Player | Position | Rating |
+| --- | --- | --- | --- |
+{table}
+
+## Results
+
+{results}
+"""
+        out[f"clubs/{slug(key)}.md"] = page(club["club"], [key], body)
+    return out
+
+
+def player_pages(clubs: list[dict], con: duckdb.DuckDBPyConnection) -> dict[str, str]:
+    out = {}
+    for club in clubs:
+        for p in club["squad"]:
+            row = con.execute(
+                """SELECT count(*), sum(passes), sum(passes_completed), sum(tackles), sum(shots),
+                          sum(xg), avg(distance_km)
+                   FROM player_match_stats WHERE team_id = ? AND player = ?""",
+                [club["key"], p["name"]],
+            ).fetchone()
+            apps, passes, done, tackles, shots, xg, dist = row
+            pid = slug(club["key"], p["name"])
+            if apps:
+                season = (
+                    f"Appeared in {apps} matches: {passes} passes ({_pct(done, passes)} "
+                    f"completed), {tackles} tackles, {shots} shots, {xg:.2f} xG, "
+                    f"{dist:.1f} km on average per match."
+                )
+            else:
+                season = "Did not appear in the season data."
+            body = f"""## Profile
+
+{p["name"]} wears number {p["num"]} for {club["club"]} ({club["key"]}) and plays as {p["pos"]}.
+Rating {p["rating"]}. A fictional player; the data is synthetic.
+
+## Season
+
+{season}
+"""
+            out[f"players/{pid}.md"] = page(p["name"], [pid, club["key"]], body)
+    return out
+
+
+def match_pages(clubs: list[dict], con: duckdb.DuckDBPyConnection) -> dict[str, str]:
+    names = {c["key"]: c["club"] for c in clubs}
+    out = {}
+    for mid, date, home, away, sh, sa, venue in con.execute(
+        "SELECT match_id, date, home_team_id, away_team_id, score_home, score_away, venue "
+        "FROM matches ORDER BY match_id"
+    ).fetchall():
+        if home not in names or away not in names:
+            raise ValueError(f"{mid}: team missing from the league file")
+        stats = {
+            r[0]: r[1:]
+            for r in con.execute(
+                "SELECT team_id, shots, xg, possession_pct, fouls, yellow_cards, red_cards "
+                "FROM team_match_stats WHERE match_id = ?",
+                [mid],
+            ).fetchall()
+        }
+        if home not in stats or away not in stats:
+            raise ValueError(f"{mid}: team_match_stats rows missing")
+        result = "ended level" if sh == sa else f"were beaten by {names[home if sh > sa else away]}"
+        winner = (
+            f"{names[home]} and {names[away]} {result}"
+            if sh == sa
+            else (f"{names[away if sh > sa else home]} {result}")
+        )
+        lines = "\n".join(
+            f"| {names[t]} | {s[0]} | {s[1]:.2f} | {s[2]}% | {s[3]} | {s[4]} | {s[5]} |"
+            for t, s in ((home, stats[home]), (away, stats[away]))
+        )
+        body = f"""## Result
+
+{names[home]} {sh}-{sa} {names[away]} at {venue} on {date.isoformat()}. {winner}.
+
+## Team numbers
+
+| Team | Shots | xG | Possession | Fouls | Yellow | Red |
+| --- | --- | --- | --- | --- | --- | --- |
+{lines}
+"""
+        out[f"season/{mid.lower()}.md"] = page(f"Season match {mid}", [mid, home, away], body)
+    return out
+
+
+def build(league: Path = LEAGUE, season: Path = SEASON, kb: Path = KB) -> int:
+    clubs = json.loads(league.read_text())["clubs"]
+    con = duckdb.connect()
+    for table in ("matches", "team_match_stats", "player_match_stats"):
+        con.read_parquet(str(season / f"{table}.parquet")).create_view(table)
+    files = {**club_pages(clubs, con), **player_pages(clubs, con), **match_pages(clubs, con)}
+    for corpus in GENERATED:  # drop pages for players or matches that no longer exist
+        for old in (kb / corpus).glob("*.md") if (kb / corpus).is_dir() else []:
+            if f"{corpus}/{old.name}" not in files:
+                old.unlink()
+    for rel, text in files.items():
+        path = kb / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists() or path.read_text() != text:
+            path.write_text(text)
+    return len(files)
+
+
+if __name__ == "__main__":
+    argparse.ArgumentParser(description=__doc__).parse_args()
+    print(f"{build()} pages written to {KB}")

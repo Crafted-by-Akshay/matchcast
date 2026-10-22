@@ -1,0 +1,13 @@
+---
+title: B. Mbeki
+entities: mon-b-mbeki, MON
+generated: scripts/build_profiles.py
+---
+## Profile
+
+B. Mbeki wears number 7 for Montaña CF (MON) and plays as RW.
+Rating 86. A fictional player; the data is synthetic.
+
+## Season
+
+Appeared in 7 matches: 185 passes (81% completed), 55 tackles, 0 shots, 0.00 xG, 5.2 km on average per match.
