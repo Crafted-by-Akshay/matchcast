@@ -4,9 +4,19 @@ from typing import Any
 
 from ..context import MatchContext
 from ..messages import DraftLine, ProducerTask
+from ..personas import BASE, max_chars, slug, split
 
-MAX_CHARS = {"casual": 140, "analyst": 240, "broadcast": 180}
-MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
+MAX_CHARS = {"casual": 140, "analyst": 280, "broadcast": 180}
+LABELS = {
+    "goals": "Goals",
+    "shots": "Shots",
+    "shots_on_target": "Shots on target",
+    "cards": "Cards",
+    "red_cards": "Red cards",
+    "tackles_won": "Tackles won",
+    "fouls": "Fouls",
+    "xg": "xG",
+}
 
 
 def values(claims: list[dict[str, Any]]) -> dict[str, int]:
@@ -80,16 +90,79 @@ class NarratorRules:
                 for p in ("analyst", "broadcast")
             }
             texts["casual"] = f"That is the end of the half for {home} and {away}."
+        for persona in task.personas:
+            if persona not in BASE:
+                text = self._mode_text(ctx, persona, kind, payload, who, club, claims)
+                if text:
+                    texts[persona] = text
         lines = []
         for persona in task.personas:
             if persona in texts:
                 lines.append(
                     DraftLine(
-                        line_id=f"line-{task.moment_id}-{persona}-{attempt}",
+                        line_id=f"line-{task.moment_id}-{slug(persona)}-{attempt}",
                         claim_ids=ids,
                         persona=persona,
                         text=texts[persona],
-                        max_chars=MAX_CHARS[persona],
+                        max_chars=max_chars(persona),
                     )
                 )
         return lines
+
+    @staticmethod
+    def _mode_text(
+        ctx: MatchContext,
+        persona: str,
+        kind: str,
+        payload: dict[str, Any],
+        who: str,
+        club: str,
+        claims: list[dict[str, Any]],
+    ) -> str | None:
+        """my-club, player-focus and one-metric lines; None when the moment is not theirs."""
+        mode, arg = split(persona)
+        team = payload.get("team_id")
+        if mode == "my-club" and team and kind in MY_CLUB:
+            mine = ctx.club_name(arg)
+            return MY_CLUB[kind][team == arg].format(who=who, club=club, mine=mine)
+        if mode == "player-focus" and kind in FOCUS and payload.get("player_id") == arg:
+            return FOCUS[kind].format(who=who, club=club)
+        if mode == "one-metric":
+            matched = [c for c in claims if c["metric"].split(":", 1)[0] == arg]
+            if not matched:
+                return None
+            parts = [
+                f"{ctx.club_name(c['metric'].split(':', 1)[1])} {c['value']:.2f}"
+                if c["units"] == "ratio"
+                else f"{ctx.club_name(c['metric'].split(':', 1)[1])} {int(c['value'])}"
+                for c in matched
+            ]
+            return f"{LABELS.get(arg, arg)}: {', '.join(parts)}."
+        return None
+
+
+# (against, for) the chosen club; {club} is the event team, {mine} the chosen club
+MY_CLUB = {
+    "goal": (
+        "{who} scores for {club}, a setback for {mine}.",
+        "{who} scores for {mine}! A big moment for the club.",
+    ),
+    "shot_on_target": (
+        "{who} tests the keeper, and {mine} must stay alert.",
+        "{who} forces a save for {mine}, a real chance.",
+    ),
+    "yellow_card": (
+        "{who} of {club} is booked, a small help for {mine}.",
+        "{who} is booked for {mine}, so care is needed now.",
+    ),
+    "red_card": (
+        "{who} of {club} is sent off, and {mine} have the numbers.",
+        "{who} is sent off, and {mine} are down to ten.",
+    ),
+}
+FOCUS = {
+    "goal": "{who} scores for {club}!",
+    "shot_on_target": "{who} puts a shot on target for {club}.",
+    "yellow_card": "{who} goes into the book for {club}.",
+    "red_card": "{who} is sent off for {club}.",
+}

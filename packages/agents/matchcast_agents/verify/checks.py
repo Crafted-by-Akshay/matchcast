@@ -5,12 +5,12 @@ from typing import Any
 
 from ..context import MatchContext
 from ..messages import Check, DraftLine, ReasonCode
+from ..personas import max_numbers
 from ..state import counted
 
 FRESH_REVISIONS = 5
 FRESH_MS = 30_000
 TOLERANCE = {"count": 0.0, "ratio": 0.01, "m": 0.5, "m/s": 0.5, "s": 0.5, "ms": 500.0}
-MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 _NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w])")
 # two or more capitalised words in a row, e.g. "Arlo Dunne" or "Northgate FC"
 _NAME = re.compile(r"\b[A-Z][\w'’-]+(?:\s+(?:[A-Z][\w'’-]+|FC|United))+")
@@ -104,7 +104,7 @@ def check_persona(line: DraftLine) -> Check:
         return Check(
             name="persona", passed=False, detail=f"{len(line.text)} chars; limit {line.max_chars}"
         )
-    if len(extract_numbers(line.text)) > MAX_NUMBERS[line.persona]:
+    if len(extract_numbers(line.text)) > max_numbers(line.persona):
         return Check(name="persona", passed=False, detail=f"too many numbers for {line.persona}")
     return Check(name="persona", passed=True, detail="within persona limits")
 
