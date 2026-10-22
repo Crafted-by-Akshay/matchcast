@@ -1417,7 +1417,7 @@ function runRestart(dt) {
   if (R.type === 'kickoff') whistle('short');
   const mates = teamOf(R.team).filter((q) => q !== tk && !q.gk);
   if (R.type === 'kickoff') {
-    const q = mates.filter((m) => m.pos.includes('M')).sort((a, b) => a.pos2.distanceTo(tk.pos2) - b.pos2.distanceTo(tk.pos2))[0];
+    const q = mates.filter((m) => m.pos.includes('M')).sort((a, b) => a.pos2.distanceTo(tk.pos2) - b.pos2.distanceTo(tk.pos2))[0] || mates.find((m) => m !== tk && !m.gk);
     S.restart = null; S.owner = tk; tk.ownT = 1; startKick(tk, { type: 'pass', q, tgt: q.pos2.clone(), lofted: false, d: q.pos2.distanceTo(tk.pos2) }); tk.act.t = tk.act.dur * 0.3; ball.last = tk;
     say('Kick-off. ' + TEAMS[R.team].club + ' get us going again.');
   } else if (R.type === 'freekick' || R.type === 'penalty') { setPieceKick(R, tk);
@@ -1480,10 +1480,10 @@ function restartFormation() {
     }
     if (R.type === 'throw' && !p.gk) {
       if (!R.show) { const inw = R.spot.y < 34 ? 1 : -1; const at = dirOf(R.team); R.show = [R.spot.clone().add(V2(at * 9, inw * 3)), R.spot.clone().add(V2(-at * 4, inw * 11)), R.spot.clone().add(V2(at * 3, inw * 16))].map((v) => V2(clamp(v.x, 3, 102), clamp(v.y, 3, 65)));
-        const used = new Set(); R.showers = R.show.map((pt) => { const q = teamOf(R.team).filter((m) => m !== R.taker && !m.gk && !used.has(m)).sort((a, b) => a.pos2.distanceTo(pt) - b.pos2.distanceTo(pt))[0]; used.add(q); return q; });
+        const used = new Set(); R.showers = R.show.map((pt) => { const q = teamOf(R.team).filter((m) => m !== R.taker && !m.gk && !used.has(m)).sort((a, b) => a.pos2.distanceTo(pt) - b.pos2.distanceTo(pt))[0]; used.add(q); return q; }).filter(Boolean);
         R.markers = R.showers.map((m) => { const q = teamOf(1 - R.team).filter((o) => !o.gk && !used.has(o)).sort((a, b) => a.pos2.distanceTo(m.pos2) - b.pos2.distanceTo(m.pos2))[0]; used.add(q); return q; }); }
       const k = R.showers.indexOf(p); if (k >= 0) { p.tgt.copy(R.show[k]); p.urg = 0.7; p.lookAt = R.spot; if (R.phase === 'ready' && rnd() < 0.02) p.call = 0.8; continue; }
-      const m = R.markers.indexOf(p); if (m >= 0) { const sh = R.showers[m]; p.tgt.copy(sh.pos2.clone().add(ownGoal(p.ti).clone().sub(sh.pos2).normalize().multiplyScalar(1.5))); p.urg = 0.7; p.lookAt = R.spot; p.watch = true; continue; }
+      const m = R.markers.indexOf(p); if (m >= 0 && R.showers[m]) { const sh = R.showers[m]; p.tgt.copy(sh.pos2.clone().add(ownGoal(p.ti).clone().sub(sh.pos2).normalize().multiplyScalar(1.5))); p.urg = 0.7; p.lookAt = R.spot; p.watch = true; continue; }
     }
     if (p.gk && R.type !== 'goalkick') { p.tgt.copy(ownGoal(p.ti)).add(V2(dirOf(p.ti) * 1.2, 0)); p.urg = 0.5; p.lookAt = R.spot; }
   }
@@ -1612,17 +1612,17 @@ mkGroup($('play'), playDefs(), () => String(S.speed), playSet);
 // The engine simulates the whole match at full density; this director scores each passage of play from 0 to 1 and
 // frame() plays passages scoring 0.5 or more live at the chosen speed and fast-forwards the rest at FF_X behind a wipe
 // that shows the minute range. Every step still runs, so events, stats, agents and the Verifier see everything.
-//   shot or goal 1.0 (6 s after a shot, through the celebration) · ball in a penalty area 0.7 · set piece near goal 0.6
-//   · card 0.6 (6 s) · first 15 s of a half 0.5 · otherwise 0.1. Live status is held 3 s after the score drops.
-const FF_X = 20;
-const DIRC = { on: false, ff: false, liveS: 0, ffS: 0, hold: 0, score: 0.1, cardT: -99, cut: null, ranges: [], wipe: null };
+//   shot or goal 1.0 (5 s after a shot, through the celebration) · ball in a penalty area 0.4 (cut) · set piece near goal 0.6
+//   · card 0.6 (6 s) · first 15 s of a half 0.5 · otherwise 0.1. Live status is held 2 s after the score drops.
+const FF_X = 40;
+const DIRC = { ffX: FF_X, on: false, ff: false, liveS: 0, ffS: 0, hold: 0, score: 0.1, cardT: -99, cut: null, ranges: [], wipe: null };
 onMatchEvent((e) => { if (e.type === 'yellow_card' || e.type === 'red_card') DIRC.cardT = S.t; });
 function passageScore() {
-  const si = S.shotInfo; if (si && S.t - si.t < 6) return 1;
+  const si = S.shotInfo; if (si && S.t - si.t < 5) return 1;
   if (S.celebrate > 0) return 1;
   const near = (S.owner || { pos2: V2(ball.p.x, ball.p.z) }).pos2; const box = Math.min(near.x, 105 - near.x) < 16.5 && Math.abs(near.y - 34) < 20.16;
-  if (box) return 0.7;
-  const R = S.restart || S.dead; if (R && (R.type === 'corner' || R.type === 'penalty' || (R.type === 'freekick' && R.spot && Math.min(R.spot.x, 105 - R.spot.x) < 40))) return 0.6;
+  if (box) return 0.4;
+  const R = S.restart || S.dead; if (R && (R.type === 'corner' || R.type === 'penalty' || (R.type === 'freekick' && R.spot && Math.min(R.spot.x, 105 - R.spot.x) < 30))) return 0.6;
   if (S.t - DIRC.cardT < 6) return 0.6;
   const mc = S.mclock % (45 * 60); if (mc < 15) return 0.5;
   return 0.1;
@@ -1631,7 +1631,7 @@ const minuteOf = () => Math.floor(S.mclock / 60) + 1;
 function dirUpdate(dt) {
   if (!DIRC.on) { DIRC.liveS += dt; return; }
   DIRC.score = passageScore();
-  if (DIRC.score >= 0.5) DIRC.hold = 3; else DIRC.hold = Math.max(0, DIRC.hold - dt);
+  if (DIRC.score >= 0.5) DIRC.hold = 2; else DIRC.hold = Math.max(0, DIRC.hold - dt);
   const ff = DIRC.score < 0.5 && DIRC.hold <= 0;
   if (ff && !DIRC.ff) DIRC.cut = { from: minuteOf(), fromClock: S.mclock };
   if (!ff && DIRC.ff && DIRC.cut) { DIRC.ranges.push({ from: DIRC.cut.from, to: minuteOf(), seconds: +(S.mclock - DIRC.cut.fromClock).toFixed(1) }); DIRC.cut = null; }
