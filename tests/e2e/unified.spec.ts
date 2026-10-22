@@ -96,8 +96,11 @@ test('a fixture change reloads Watch with the new seed; New match in Broadcast m
 });
 
 test('keys 3 and 1 switch views', async () => {
-  await page.keyboard.press('3'); await expect(page.locator('#v-broadcast')).toBeVisible();
-  await page.keyboard.press('1'); await expect(page.locator('#v-watch')).toBeVisible();
+  // keys are handled by the shell; after a view loads, focus can sit inside its iframe, which swallows them
+  const toShell = () => page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.focus(); });
+  await toShell();
+  await page.keyboard.press('3'); await expect(page.locator('#v-broadcast')).toBeVisible({ timeout: 15_000 });
+  await toShell(); await page.keyboard.press('1'); await expect(page.locator('#v-watch')).toBeVisible({ timeout: 15_000 });
 });
 
 test('phone width has no horizontal page scroll', async ({ browser }) => {
