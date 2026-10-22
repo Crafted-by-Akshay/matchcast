@@ -484,6 +484,7 @@ source = { editable = "packages/agents" }
 dependencies = [
     { name = "httpx" },
     { name = "matchcast-contracts" },
+    { name = "matchcast-metrics" },
     { name = "opentelemetry-api" },
     { name = "pydantic" },
 ]
@@ -492,6 +493,7 @@ dependencies = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "matchcast-contracts", editable = "packages/contracts" },
+    { name = "matchcast-metrics", editable = "packages/metrics" },
     { name = "opentelemetry-api", specifier = ">=1.27,<2" },
     { name = "pydantic", specifier = ">=2.9,<3" },
 ]

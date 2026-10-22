@@ -12,7 +12,7 @@ DERIVATION_VERSION = "1.0.0"
 # {h} and {a} are the roster's first and second team, {t} the team of the picked event
 COUNT_METRICS = {
     "goal": ("goals:{h}", "goals:{a}"),
-    "shot_on_target": ("shots:{t}", "shots_on_target:{t}"),
+    "shot_on_target": ("shots:{t}", "shots_on_target:{t}", "xg:{t}"),
     "yellow_card": ("cards:{t}",),
     "red_card": ("red_cards:{t}", "cards:{t}"),
     "summary": ("shots:{h}", "shots:{a}"),
@@ -79,8 +79,8 @@ class AnalystRules:
                 },
                 "metric": metric,
                 "value": value,
-                "units": "count",
-                "derivation_version": DERIVATION_VERSION,
+                "units": result["values"][metric]["units"],
+                "derivation_version": result["values"][metric]["derivation_version"],
                 "snapshot": snapshot,
                 "max_evidence_sequence": snapshot["max_evidence_sequence"],
                 "approval_status": "pending",
