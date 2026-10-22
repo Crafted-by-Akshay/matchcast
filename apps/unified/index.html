@@ -273,22 +273,28 @@ function url(view) {
 }
 
 // load a view with the shared match. Watch and Broadcast restart at kick-off when the match changed; Analyst routes.
-function waitText(view, text) { const t = document.querySelector('#v-' + view + ' .wt'); if (t) t.textContent = text; }
+const since = {};
+function waitText(view, text) { const t = document.querySelector('#v-' + view + ' .wt'); if (t) t.textContent = text; since[view] = Date.now(); const b = document.querySelector('#v-' + view + ' .stall'); if (b) b.remove(); }
 
-// loading states (EXP-15): no WebGL means Watch and Broadcast cannot draw, so say so at once; a slow start gets a note and a reload button
+// loading states (EXP-15): no WebGL means Watch and Broadcast cannot draw, so say so once; a slow start gets a note and a reload button outside the live region
 const hasGL = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } })();
-const SLOW_MS = window.MC_SLOW_MS || 25000, since = {};
+const SLOW_MS = window.MC_SLOW_MS || 25000;
+const NOGL = 'Your browser has WebGL off or unavailable. Try Chrome, Edge or Safari with hardware acceleration on. The Analyst and Agents tabs still work.';
 function stallCheck() {
   for (const v of ['watch', 'broadcast', 'analyst']) {
-    const sec = $('v-' + v), w = sec && sec.querySelector('.wait');
-    if (!sec || !w || sec.hidden || sec.classList.contains('ready') || !FR[v]) { delete since[v]; continue; }
-    if (v !== 'analyst' && !hasGL) { w.querySelector('b').textContent = 'This view needs WebGL'; waitText(v, 'Your browser has WebGL off or unavailable. Try Chrome, Edge or Safari with hardware acceleration on. The Analyst and Agents tabs still work.'); w.querySelector('.bar').hidden = true; continue; }
+    const sec = $('v-' + v), w = sec && sec.querySelector('.wait'), btn = sec && sec.querySelector('.stall');
+    if (!sec || !w || !FR[v] || sec.hidden || sec.classList.contains('ready')) { delete since[v]; if (btn) btn.remove(); continue; }
+    if (v !== 'analyst' && !hasGL) {
+      if (w.querySelector('b').textContent !== 'This view needs WebGL') { w.querySelector('b').textContent = 'This view needs WebGL'; w.querySelector('.wt').textContent = NOGL; w.querySelector('.bar').hidden = true; }
+      continue;
+    }
     since[v] = since[v] || Date.now();
-    if (Date.now() - since[v] > SLOW_MS && !w.querySelector('button')) {
-      waitText(v, 'Still loading. The first load is the slowest, and a busy machine takes longer.');
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'pill'; b.textContent = 'Reload this view'; b.style.cssText = 'pointer-events:auto;margin-top:12px';
-      b.onclick = () => { b.remove(); since[v] = Date.now(); FR[v].el.src = FR[v].el.src; waitText(v, 'Loading again'); };
-      w.firstElementChild.appendChild(b);
+    if (Date.now() - since[v] > SLOW_MS && !btn) {
+      w.querySelector('.wt').textContent = 'Still loading. The first load is the slowest, and a busy machine takes longer.';
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'pill stall'; b.textContent = 'Reload this view';
+      b.style.cssText = 'position:absolute;left:50%;top:62%;transform:translateX(-50%);z-index:2';
+      b.onclick = () => { b.remove(); since[v] = Date.now(); waitText(v, 'Loading again'); try { FR[v].el.contentWindow.location.reload(); } catch (e) { FR[v].el.src = FR[v].el.src; } };
+      sec.appendChild(b);
     }
   }
 }
