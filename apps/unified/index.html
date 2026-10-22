@@ -243,6 +243,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visi
 <script src="agents.js"></script>
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
+<script src="speech.js"></script>
 <script src="voice.js"></script>
 <script>
 "use strict";
@@ -485,7 +486,7 @@ function cardOf(c) {
 // 300 characters, 5 questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
 const askTimes = [];
 async function answerAsk(id, q) {
-  const reply = (answer) => post('watch', { src: 'matchcast-shell', type: 'answer', id, answer });
+  const reply = (answer) => { post('watch', { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
   const now = Date.now(); while (askTimes.length && now - askTimes[0] > 60000) askTimes.shift();
   if (askTimes.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
