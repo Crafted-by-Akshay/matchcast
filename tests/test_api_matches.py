@@ -455,3 +455,23 @@ def test_ds_ask_abstains_and_reports_a_missing_season(client: TestClient) -> Non
     client.app.state.matches.season = None
     missing = client.post("/v1/ds/ask", json={"session_id": "short", "question": "total goals"})
     assert missing.status_code == 503 and missing.json()["code"] == "not_ready"
+
+
+def test_stream_with_a_watch_mode_gets_that_modes_lines(client: TestClient) -> None:
+    create(client)
+    client.get(
+        "/v1/matches/match-short/stream", params={**Q, "persona": "metric:shots", "follow": "false"}
+    )
+    post_all(client)
+    lines = client.get("/v1/matches/match-short/lines", params=Q).json()["items"]
+    assert any(ln["persona"] == "one-metric:shots" for ln in lines)
+
+
+def test_stream_refuses_a_persona_that_is_not_real_for_this_match(client: TestClient) -> None:
+    create(client)
+    for bad in ("my-club:EvilFC", "club:nobody", "one-metric:bogus", "poet"):
+        got = client.get(
+            "/v1/matches/match-short/stream", params={**Q, "persona": bad, "follow": "false"}
+        )
+        assert got.status_code == 422 and got.json()["code"] == "contract_invalid", bad
+    assert client.app.state.matches.get("short", "match-short").extra_personas == []
