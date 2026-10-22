@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..context import MatchContext
+from ..state import counted
 
 MAX_WORDS = 60
 TOPICS = (
@@ -55,20 +56,11 @@ def player_stats(ctx: MatchContext, player_id: str) -> PlayerStats | None:
     counts = dict.fromkeys(PHRASE, 0)
     for event in ctx.events:
         p = event["payload"]
-        if p.get("player_id") != player_id:
+        if p.get("player_id") != player_id or p["type"] in ("correction", "retraction"):
             continue
-        kind = p["type"]
-        if kind == "goal":
-            counts["goals"] += 1
-        elif kind == "shot":
-            counts["shots"] += 1
-            counts["shots_on_target"] += int(bool(p["on_target"]))
-        elif kind == "tackle" and p.get("outcome") == "won":
-            counts["tackles_won"] += 1
-        elif kind == "foul":
-            counts["fouls"] += 1
-        elif kind == "card":
-            counts["cards"] += 1
+        for metric, _team in counted(p):
+            if metric in counts:
+                counts[metric] += 1
     return PlayerStats(player_id, team or "", **counts)
 
 
@@ -76,8 +68,8 @@ def player_reply(ctx: MatchContext, player_id: str, utterance: str) -> tuple[str
     """(reply, facts used). The reply may only contain numbers that are in the facts."""
     stats = player_stats(ctx, player_id)
     name = ctx.player_name(player_id)
-    if stats is None:
-        return f"{name} is not on the pitch in this match.", {}
+    if stats is None:  # talk() answers 404 before this; kept so the function is total
+        return "I can't find that player in this match.", {}
     topics = [m for pattern, m in TOPICS if pattern.search(utterance)]
     if "shots_on_target" in topics and "shots" in topics:
         topics.remove("shots")  # "shots on target" also matches the plain shots pattern

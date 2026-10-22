@@ -5,6 +5,7 @@ from typing import Any
 
 from ..context import MatchContext
 from ..rules.producer import moment_score
+from ..verify.checks import recompute
 
 KEY = re.compile(r"\bkey\b|\bbiggest\b|\bmoment\b|\bhighlight", re.I)
 SCORE = re.compile(r"\bscore\b|\bwinning\b|\bresult\b", re.I)
@@ -13,7 +14,7 @@ WHAT = {
     "red_card": "{who} was sent off for {club}",
     "yellow_card": "{who} was booked for {club}",
     "shot_on_target": "{who} forced a save for {club}",
-    "period_end": "the half ended",
+    "period_end": "the period ended",
 }
 
 
@@ -40,6 +41,8 @@ def producer_reply(ctx: MatchContext, utterance: str) -> tuple[str, dict[str, An
         text = WHAT[kind].format(who=who, club=club)
         return f"The key moment so far: {text}.", {"event_id": event["event_id"], "kind": kind}
     if SCORE.search(utterance):
-        gh, ga = ctx.state.count("goals", ctx.home), ctx.state.count("goals", ctx.away)
-        return f"It's {home} {gh}, {away} {ga}.", {"goals_home": gh, "goals_away": ga}
+        upto = ctx.state.max_sequence
+        gh = int(recompute(ctx.events, f"goals:{ctx.home}", upto))
+        ga = int(recompute(ctx.events, f"goals:{ctx.away}", upto))
+        return f"The score is {home} {gh}, {away} {ga}.", {"goals_home": gh, "goals_away": ga}
     return "Ask me for the key moment or the score.", {}

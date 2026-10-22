@@ -563,6 +563,8 @@ def build_router(registry: Registry) -> APIRouter:
     @router.post("/matches/{match_id}/talk")
     async def talk(match_id: str, body: TalkBody) -> dict[str, Any]:
         flow = registry.get(body.session_id, match_id)
+        if not registry.allow_ask(body.session_id):  # /ask and /talk share one budget
+            raise Problem(429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute")
         try:
             return await flow.talk(body.target, body.utterance)
         except WorkflowError as error:

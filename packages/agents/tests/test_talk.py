@@ -49,6 +49,7 @@ def test_the_producers_key_moment_is_in_the_top_three(flow, match) -> None:
 
 def test_producer_score_and_unknown_target(flow) -> None:
     reply = run(flow.talk("producer", "What's the score?"))
+    assert reply["verdict"] == "verified" and "The score is" in reply["reply"]
     assert reply["facts"] == {"goals_home": 1, "goals_away": 2}
     with pytest.raises(WorkflowError) as error:
         run(flow.talk("nobody", "hello"))
@@ -65,3 +66,45 @@ def test_an_attack_is_refused_and_audited(flow) -> None:
 def test_every_answer_is_audited(flow) -> None:
     run(flow.talk("producer", "score?"))
     assert [r["action"] for r in flow.store.audit_records(flow.sk)][-1] == "talk_answered"
+
+
+def test_a_number_attached_to_the_wrong_metric_is_rejected(flow, monkeypatch) -> None:
+    from matchcast_agents.roles import player
+
+    shots = len(shots_by_log(flow, "home9"))
+    wrong = {"goals": shots}  # the right number, the wrong metric
+    monkeypatch.setattr(
+        "matchcast_agents.roles.player_reply",
+        lambda ctx, pid, text: (f"So far I have {shots + 1 if shots else 7} shots.", wrong),
+    )
+    reply = run(flow.talk("home9", "shots?"))
+    assert reply["verdict"] == "rejected" and reply["facts"] == {}
+    assert "can't confirm" in reply["reply"]
+    assert player.PHRASE["shots"]
+
+
+def shots_by_log(flow, player):
+    return [
+        e for e in flow._ctx().events
+        if e["payload"]["type"] == "shot" and e["payload"].get("player_id") == player
+    ]  # fmt: skip
+
+
+def test_a_rostered_player_with_no_events_yet_gets_checked_zeros(make_workflow, match) -> None:
+    flow = make_workflow()
+    early = match["events"][:3]
+    assert not any(e["payload"].get("player_id") == "home9" for e in early)
+    run(flow.ingest(early))
+    reply = run(flow.talk("home9", "How many shots?"))
+    assert reply["verdict"] == "verified" and "0 shots" in reply["reply"]
+
+
+def test_the_producer_before_anything_happened_and_off_topic(make_workflow) -> None:
+    flow = make_workflow()
+    assert run(flow.talk("producer", "key moment?"))["reply"] == "Nothing big has happened yet."
+    assert "Ask me for" in run(flow.talk("producer", "how are you"))["reply"]
+
+
+def test_a_question_with_several_topics_answers_each(flow) -> None:
+    reply = run(flow.talk("home9", "How many shots and goals have you had?"))
+    assert reply["verdict"] == "verified" and set(reply["facts"]) == {"shots", "goals"}
