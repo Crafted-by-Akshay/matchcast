@@ -26,6 +26,43 @@ const AG = (() => {
     return i.title + '. ' + String(i.why).slice(0, 200);   // a moment: Watch's explain module wrote the reason, the Narrator copies it
   };
 
+  // Translator (rules): fixed Spanish and Hindi templates over the same claim inputs, names and numbers copied untouched.
+  // Anything the templates cannot say (a moment's prose from Watch) is not translated; the English line stays with a note.
+  const KIND = { es: { 'open play': 'jugada abierta', penalty: 'penalti', 'free kick': 'tiro libre', header: 'cabezazo' }, hi: { 'open play': 'खुले खेल से', penalty: 'पेनल्टी', 'free kick': 'फ्री किक', header: 'हेडर' } };
+  const TPL = {
+    es: {
+      score: (i, m) => 'Gol de ' + i.teamName + ' (' + i.scorer + ') en el min ' + m + '. ' + i.H + ' ' + i.score[0] + '–' + i.score[1] + ' ' + i.A + '.',
+      shot: (i, m) => i.player + ' dispara (' + (KIND.es[i.kind] || i.kind) + ') para ' + i.teamName + ' en el min ' + m + '. xG ' + f2(i.xg) + '.',
+      xg_total: (i, m) => 'Tras el min ' + m + ': ' + i.H + ' ' + f2(i.xg[0]) + ' xG, ' + i.A + ' ' + f2(i.xg[1]) + ' xG.'
+    },
+    hi: {
+      score: (i, m) => i.teamName + ' का गोल (' + i.scorer + '), ' + m + ' मिनट पर। ' + i.H + ' ' + i.score[0] + '–' + i.score[1] + ' ' + i.A + '।',
+      shot: (i, m) => i.player + ' का शॉट (' + (KIND.hi[i.kind] || i.kind) + '), ' + i.teamName + ', ' + m + ' मिनट पर। xG ' + f2(i.xg) + '।',
+      xg_total: (i, m) => m + ' मिनट के बाद: ' + i.H + ' ' + f2(i.xg[0]) + ' xG, ' + i.A + ' ' + f2(i.xg[1]) + ' xG।'
+    }
+  };
+  let translator = (c, lang) => { const f = TPL[lang] && TPL[lang][c.kind]; return f ? f(Object.assign({ H: run.names.home, A: run.names.away }, c.inputs), Math.floor(c.minute)) : null; };
+  const numbers = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
+  const namesOf = (c) => [c.inputs.scorer, c.inputs.player, c.inputs.teamName, run.names.home, run.names.away].filter((n) => n && c.text.includes(n));
+  // Verifier re-check on a translation: the same numbers and every player and club name, unchanged
+  const checkTranslation = (c, text) => {
+    const a = numbers(c.text).sort().join(','), b = numbers(text).sort().join(',');
+    if (a !== b) return { ok: false, reason: 'numbers differ from the English line' };
+    const lost = namesOf(c).find((n) => !text.includes(n));
+    return lost ? { ok: false, reason: 'name changed: ' + lost } : { ok: true, reason: 'numbers and names match the English line' };
+  };
+  // only verified lines are translated; a rejected translation is audited and the viewer keeps the English line
+  const translateClaim = (c) => {
+    c.tr = {};
+    for (const lang of ['es', 'hi']) {
+      const text = translator(c, lang);
+      if (text == null) { c.tr[lang] = { ok: false, reason: 'no template for this line' }; continue; }
+      const v = checkTranslation(c, text);
+      c.tr[lang] = { ok: v.ok, reason: v.reason, text: v.ok ? text : null };
+      if (!v.ok) log(c, 'verifier', 'translation_rejected', { lang, reason: v.reason });
+    }
+  };
+
   // Verifier: recount the claim from the raw event log, never from the Analyst's rolling counters
   const recount = (c) => {
     const i = c.inputs, upTo = (r) => r.minute <= c.minute + 1e-9;
@@ -82,6 +119,7 @@ const AG = (() => {
     say('Verifier', c.minute, c.id + ' ' + v.verdict + ': ' + v.reason, v.verdict === 'verified' ? 'ok' : 'warn');
     if (v.verdict === 'verified') {
       run.stat.verified++;
+      translateClaim(c);
       c.route = c.kind === 'xg_total' ? 'analyst' : c.kind === 'shot' ? 'fan' : 'broadcast';
       if (c.route === 'broadcast' && mode === 'producer') {
         c.approval = 'pending';
@@ -142,5 +180,5 @@ const AG = (() => {
     c.source = src; changed();
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  return { approve, kill, edit, get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { approve, kill, edit, checkTranslation, setTranslator: (fn) => { translator = fn || translator; }, get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();
