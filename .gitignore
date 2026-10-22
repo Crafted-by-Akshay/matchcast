@@ -32,3 +32,9 @@ pnpm-debug.log*
 .idea/
 .vscode/
 coverage/
+
+# apps/unified generated output (rebuild with `python3 apps/unified/build.py`)
+apps/unified/watch/
+apps/unified/broadcast/
+apps/unified/analyst/
+apps/unified/shared/
