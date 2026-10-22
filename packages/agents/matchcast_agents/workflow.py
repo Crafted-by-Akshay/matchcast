@@ -25,7 +25,7 @@ from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
-from .store import MemoryStore, stream_key
+from .store import MemoryStore, Store, stream_key
 from .tools import InProcessTools, ToolCall, ToolError
 
 STATS_DESK_BUDGET_S = 2.0
@@ -153,7 +153,7 @@ class MatchWorkflow:
         roster: dict[str, Any],
         names: dict[str, str] | None = None,
         clubs: dict[str, str] | None = None,
-        store: MemoryStore | None = None,
+        store: Store | None = None,
         hub: StreamHub | None = None,
         agents: AgentSet | None = None,
         config: WorkflowConfig | None = None,

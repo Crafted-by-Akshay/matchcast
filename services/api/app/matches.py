@@ -25,7 +25,8 @@ from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, normalise
 from matchcast_agents.statsdesk import StatsDeskError
-from matchcast_agents.store import MemoryStore, stream_key
+from matchcast_agents.store import stream_key
+from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
@@ -196,7 +197,9 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
-        self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
+        self.store = (
+            build_store()
+        )  # MATCHCAST_STORE=table|memory; one store for every match, so the MCP tools see them all
         self.require_role = require_role
         self.stats_desk = _local_stats_desk()
         self._model_client: ModelClient | None = None
@@ -275,8 +278,8 @@ def _line_json(line: LineRecord) -> dict[str, Any]:
     return line.model_dump()
 
 
-def _claim_verdict(flow: MatchWorkflow, claim_id: str) -> str:
-    states = [ln.status for ln in flow.store.lines(flow.sk) if claim_id in ln.claim_ids]
+def _claim_verdict(lines: list[LineRecord], claim_id: str) -> str:
+    states = [ln.status for ln in lines if claim_id in ln.claim_ids]
     if any(s in ("verified", "approved", "published") for s in states):
         return "verified"
     if any(s in ("rejected", "abstained", "killed") for s in states):
@@ -288,10 +291,11 @@ def _claim_rows(
     flow: MatchWorkflow, verdict: str | None, agent: str | None, metric: str | None
 ) -> list[dict[str, Any]]:
     rows = []
+    lines = list(flow.store.lines(flow.sk))  # read once: a durable store scans a partition per call
     for row in flow.store.claims(flow.sk):
         packet = row["packet"]
         item = {**packet, "agent": row["agent"], "moment_id": row["moment_id"],
-                "verdict": _claim_verdict(flow, packet["claim_id"])}  # fmt: skip
+                "verdict": _claim_verdict(lines, packet["claim_id"])}  # fmt: skip
         if (verdict and item["verdict"] != verdict) or (agent and item["agent"] != agent):
             continue
         if metric and item["metric"] != metric:
