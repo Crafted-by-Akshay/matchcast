@@ -28,6 +28,9 @@
     if (d.type === 'feed') { livePill(d); return; }
     if (!D.matches.length) return;
     if (d.type === 'route') go(d.page, d.arg);
-    if (d.type === 'import' && d.dataset) mcImport({ name: 'live-match.json', text: async () => JSON.stringify(d.dataset) });
+    if (d.type === 'import' && d.dataset) {
+      const n = D.matches.length;
+      mcImport({ name: 'live-match.json', text: async () => JSON.stringify(d.dataset) }).then(() => { if (d.recap && D.matches.length > n) D.matches[D.matches.length - 1].recap = d.recap; });   // lets the match page fetch the full-time recap
+    }
   });
 })();
