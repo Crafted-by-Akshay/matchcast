@@ -2,7 +2,7 @@
 """Train the danger-moment model (DAT-6).
 
 Reads the scene Parquet written by scripts/generate_scenes.py (DAT-5), trains a gradient-boosted
-gradient-boosted classifier for `danger` (the event's team shoots within 10 s), logs to MLflow when it is installed
+classifier for `danger` (the event's team shoots within 10 s), logs to MLflow when it is installed
 (always, on Databricks), and exports `model.onnx` plus `model-card.json`.
 
     Databricks job : pass --scenes as an abfss:// or /Volumes path; UC_MODEL names the UC model.
@@ -120,7 +120,8 @@ def main() -> int:
     }  # fmt: skip
     card = {
         "name": UC_MODEL, "version": a.version, "label": "danger = same-team shot within 10 s",
-        "features": names, "missing_value": MISSING, "metrics": metrics, "calibration": calibration_bins(y[held], p),
+        "features": names, "missing_value": MISSING, "metrics": metrics,
+        "calibration": calibration_bins(y[held], p),
         "training_data": "synthetic scenes from scripts/generate_scenes.py; no real match data",
         "limits": "learned from simulator events; describes the simulator, not real football",
     }  # fmt: skip
@@ -143,8 +144,9 @@ def main() -> int:
         mlflow = None
     if mlflow:
         with mlflow.start_run(run_name="train-danger"):
-            mlflow.log_params({"model": "GradientBoosting", "n_estimators": 200, "max_depth": 3,
-                               "seed": SEED})
+            mlflow.log_params(
+                {"model": "GradientBoosting", "n_estimators": 200, "max_depth": 3, "seed": SEED}
+            )
             mlflow.log_metrics({k: v for k, v in metrics.items() if isinstance(v, float)})
             mlflow.log_artifacts(str(out))
             mlflow.set_registry_uri("databricks-uc")
