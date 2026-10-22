@@ -11,7 +11,9 @@ const STX = (() => {
     try {
       const r = await fetch(api() + '/v1/status', { signal: ctl.signal });
       const d = r.ok ? await r.json() : null;
-      return d && Array.isArray(d.dependencies) ? d : null;
+      if (!d || !Array.isArray(d.dependencies)) return null;
+      d.dependencies = d.dependencies.filter((x) => x && typeof x === 'object').map((x) => ({ status: String(x.status || 'unavailable'), label: String(x.label || x.key || 'Unnamed'), detail: String(x.detail || '') }));
+      return d;
     } catch (e) { return null; } finally { clearTimeout(t); }
   };
   const summary = (d) => ['live', 'simulated', 'planned', 'unavailable'].filter((k) => d.counts && d.counts[k]).map((k) => d.counts[k] + ' ' + LABEL[k].toLowerCase()).join(', ');
@@ -29,7 +31,7 @@ const STX = (() => {
     const ul = document.createElement('ul'); ul.className = 'st-list';
     for (const x of [...d.dependencies].sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9))) {
       const li = document.createElement('li'), tag = document.createElement('strong');
-      tag.textContent = LABEL[x.status] || x.status; tag.className = 'st-' + x.status;
+      tag.textContent = LABEL[x.status] || x.status; tag.className = 'st-' + (ORDER[x.status] === undefined ? 'unknown' : x.status);
       li.append(tag, ' ' + x.label + ' - ' + x.detail); ul.append(li);
     }
     box.append(ul); return d;

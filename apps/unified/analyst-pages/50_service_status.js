@@ -20,8 +20,12 @@ async function ssLoad() {
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000);
     try { const r = await fetch(api + '/v1/status', { signal: ctl.signal }); if (r.ok) doc = await r.json(); } catch (e) { doc = null; } finally { clearTimeout(t); }
   }
-  SS.doc = doc && Array.isArray(doc.dependencies) ? doc : { none: true, api: !!api };
+  if (doc && Array.isArray(doc.dependencies)) {
+    doc.dependencies = doc.dependencies.filter((x) => x && typeof x === 'object').map((x) => ({ status: String(x.status || 'unavailable'), label: String(x.label || x.key || 'Unnamed'), detail: String(x.detail || '') }));
+    SS.doc = doc;
+  } else SS.doc = { none: true, api: !!api };
   SS.loading = false;
+  if (SS.doc.none) setTimeout(() => { SS.doc = undefined; }, 30000); // a failed answer is retried on a later redraw
   document.querySelectorAll('#ss-card').forEach(ssPaint);
 }
 function ssPaint(card) {
