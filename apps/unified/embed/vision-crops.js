@@ -68,3 +68,5 @@
   window.mcOcrStats = () => ({ ...stats, per_minute_cap: PER_MIN, tracks_with_result: results.size, tracks_too_small: tooSmall.size });
   window.mcOcr = { results, conf, cropPng, pick };
 })();
+// the tracker's accuracy report for the measurement run (tests/e2e/vision-measure.spec.ts, DAT-11 task 279)
+window.mcVisReport = () => (typeof visReport === 'function' ? visReport() : null);

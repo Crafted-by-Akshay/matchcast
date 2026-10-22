@@ -79,3 +79,16 @@ If the target is missed, we report the measured number. We never round it up.
 ## Browser crop queue (task 275, browser side)
 
 `apps/unified/embed/vision-crops.js` builds the crop and `index.html` relays it (`vision-crop` to `LV.identify`, `vision-ocr` back). Rules in code: confidence proxy `min(1, stable/6)` below 0.8, at most one call in flight and one per 4.1 s, lowest confidence first, PNG at most 40 KB, nothing kept. Tracks under 24 px tall are counted as "too small to read" and not sent, since a number cannot fit in the pixels. Counters (`sent`, `answered`, `read`, `no_digits`, `skipped_small`, `unavailable`, `errors`) travel in the vision report to the Tracking lab. Measured on the Broadcast camera in the sandbox: players are 8 to 13 px tall, so OCR is expected to help only on the Tactical camera; task 279 reports the real numbers.
+
+## Measurement (task 279)
+
+`MEASURE=1 make e2e E2E_ARGS="tests/e2e/vision-measure.spec.ts"` loads Watch on 3 seeds (`MEASURE_SEEDS`, default 11, 22, 33) on the Broadcast and the Tactical camera, waits for `MEASURE_CAPTURES` tracker captures (default 150) and writes the tracker's own report (detection, identity, speed, ball, passes, cost per capture) to `$MEASURE_OUT` (default `/tmp/vision-measure.json`). Targets from §3: identity at least 85% on the Broadcast camera and at least 92% on the Tactical camera; the measured value is reported whatever it is.
+
+**Status: not measured at full length.** A capture costs about 6.5 s in the sandbox (software WebGL, 6.3 to 6.8 s per capture), so a representative run (the tracker needs the kick-off calibration window and some minutes of play) takes hours. It must run on a machine with a GPU, the Mac mini. Smoke result only, seed 11, 40 captures (about 8 s of match time, so the identity gallery had barely started to learn):
+
+| Camera | Resolution | Captures | Detection recall | Precision | Position error | Identity | Unknown | Switches |
+|---|---|---|---|---|---|---|---|---|
+| Broadcast | 640x400 | 40 | 96.4% | 79.4% | 0.42 m | 29.2% | 18.9% | 78 |
+| Tactical | 1120x700 | 40 | 95.9% | 69.6% | 0.37 m | 31.8% | 33.4% | 84 |
+
+These identity figures are far below target and say nothing about a full match; do not quote them as results.
