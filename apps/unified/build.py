@@ -32,6 +32,15 @@ def r(p):
     return open(p, encoding="utf-8").read()
 
 
+# EXP-4: the language picker offers English, Spanish and Hindi.
+# The other prototype languages are labelled Planned.
+LANG_OLD = "+ n + '</button>').join('')"
+LANG_NEW = (
+    """+ n + (['en', 'es', 'hi'].includes(k) ? '' : ' <small class=fm-planned>Planned</small>')"""
+)
+LANG_NEW += """ + '</button>').join('')"""
+
+
 def sub(text, old, new, label):
     n = text.count(old)
     assert n == 1, label + ": expected 1 match, found " + str(n)
@@ -79,6 +88,7 @@ def build_watch():
     main = sub(main, "'./players.json'", "'../shared/players.json'", "watch players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
+    main = sub(main, LANG_OLD, LANG_NEW, "watch language labels")
     head = sub(
         r(W + "head.html"),
         "<title>MatchCast 3D</title>",
@@ -130,6 +140,7 @@ def build_broadcast():
     main = sub(main, "'./players.json'", "'../shared/players.json'", "broadcast players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "broadcast intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "broadcast half chips")
+    main = sub(main, LANG_OLD, LANG_NEW, "broadcast language labels")
     main = sub(main, "bcNewMatch(q.get('seed'));", "bcEmbedStart(q);", "broadcast start")
     head = sub(
         r(BE + "head.html"),
