@@ -26,10 +26,13 @@ from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, normalise
 from matchcast_agents.statsdesk import StatsDeskError
 from matchcast_agents.store import MemoryStore, stream_key
+from matchcast_agents.tools import ToolCall
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
+from matchcast_mcp.server import create_server
+from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
@@ -209,9 +212,27 @@ class Registry:
     def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
         """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
         client = self.model_client()
+        tool_call = self.tool_call()
         if client is None:
-            return rules_agents(personas, **seed)
-        return live_agents(client, personas, **seed)
+            return rules_agents(personas, tool_call=tool_call, **seed)
+        return live_agents(client, personas, tool_call=tool_call, **seed)
+
+    def tool_call(self) -> ToolCall | None:
+        """With MATCHCAST_TOOLS=mcp the Analyst calls the MCP tools: over HTTP when
+        MCP_URL names the `mcp` container, else in memory against this store."""
+        if os.environ.get("MATCHCAST_TOOLS") != "mcp":
+            return None
+        url = os.environ.get("MCP_URL")
+        server = None if url else create_server(self.store)
+
+        async def call(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+            async with Client(url or server) as client:
+                result = await client.call_tool(tool, arguments)
+            if result.is_error or result.structured_content is None:
+                raise RuntimeError(f"{tool} returned an error")
+            return result.structured_content
+
+        return call
 
     def model_client(self) -> ModelClient | None:
         if self._model_client is None and os.environ.get("MATCHCAST_AGENT_MODE") == "live":

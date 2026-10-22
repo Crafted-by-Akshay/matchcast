@@ -56,6 +56,21 @@ def test_events_yield_claims_lines_and_a_valid_audit_chain(client: TestClient) -
     assert match["state"]["revision"] == 137 and match["mode"] == "rules"
 
 
+def test_tools_over_mcp_give_the_same_claims(client: TestClient, monkeypatch) -> None:
+    create(client)
+    post_all(client)
+    plain = client.get("/v1/matches/match-short/claims", params=Q).json()["items"]
+    monkeypatch.setenv("MATCHCAST_TOOLS", "mcp")
+    over_mcp = TestClient(create_app())
+    create(over_mcp)
+    post_all(over_mcp)
+    claims = over_mcp.get("/v1/matches/match-short/claims", params=Q).json()["items"]
+    key = lambda c: (c["claim_id"], c["metric"], c["value"])  # noqa: E731
+    assert [key(c) for c in claims] == [key(c) for c in plain] and claims
+    audit = over_mcp.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    assert not [r for r in audit if r["action"] == "fallback_used"]
+
+
 def test_claim_filters_and_paging(client: TestClient) -> None:
     create(client)
     post_all(client)
