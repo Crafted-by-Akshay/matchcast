@@ -4,7 +4,7 @@ import random
 from pathlib import Path
 
 from matchcast_worker.reducer import StreamState, reduce
-from matchcast_worker.repo import MemoryStateRepo, process
+from matchcast_worker.repo import MemoryStateRepo, process, process_applied
 
 FIX = Path(__file__).resolve().parents[3] / "packages" / "contracts" / "fixtures"
 
@@ -155,3 +155,22 @@ def test_correction_delivered_before_its_target_waits_for_it():
     assert s.max_sequence == 0 and s.missing() == [1]
     s = reduce(s, ev(1, goal()))
     assert s.max_sequence == 2 and s.score == {}
+
+
+def test_applied_events_come_back_in_stream_order_once_the_gap_closes():
+    repo = MemoryStateRepo()
+    e1, e2, e3 = (ev(i, goal()) for i in (1, 2, 3))
+    _, first = process_applied(repo, [e1, e3])
+    assert [e["stream_sequence"] for e in first] == [1]
+    _, second = process_applied(repo, [e2, e3])  # e3 is a duplicate of the held event
+    assert [e["stream_sequence"] for e in second] == [2, 3]
+    _, again = process_applied(repo, [e1, e2, e3])
+    assert again == []
+
+
+def test_applied_events_match_the_in_order_run_for_a_shuffled_batch():
+    events = [ev(i, goal()) for i in range(1, 9)]
+    shuffled = events + events[:3]
+    random.Random(7).shuffle(shuffled)
+    _, applied = process_applied(MemoryStateRepo(), shuffled)
+    assert [e["stream_sequence"] for e in applied] == list(range(1, 9))
