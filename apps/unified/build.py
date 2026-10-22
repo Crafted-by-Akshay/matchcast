@@ -184,6 +184,8 @@ def build_broadcast():
         + r(EMB + "broadcast.js")
         + "\n"
         + r(EMB + "replay.js")
+        + "\n"
+        + r(EMB + "onair.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
