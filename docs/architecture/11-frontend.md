@@ -100,6 +100,10 @@ Watch's 4 Hz `frame` message carries a sixth element per player, `actOf(p.act)` 
 ### Broadcast on-air log (AB#362)
 `apps/unified/embed/onair.js` keeps the lines the shell sent as `air` (approved lines only, from the shell window) and exports them as `matchcast.onair/1` JSON for external graphics tools, with the file's SHA-256 shown. The content is marked `simulated: true` while the agents are the in-page rules.
 
+## Status dialog and Analyst service status (22 Oct)
+
+The top bar has a Status button beside the api pill. It opens a dialog built by `apps/unified/status.js` from `GET {MATCHCAST_API}/v1/status` (doc 12): every dependency as Live, Simulated, Planned or Unavailable, with the api's own detail text. With no api configured, or no answer in 8 s, it says the console runs on in-page stand-ins (simulated); the page never invents a state. The Analyst's Platform > Service status page shows the same table in a card above its checks (`analyst-pages/50_service_status.js`; the card is redrawn with the page from a cached answer). Text is set with `textContent`. Tested in `tests/e2e/connection.spec.ts` and `analyst.spec.ts`.
+
 ### Analyst service status card
 
 The Analyst Service status page shows a card from the api's `GET /v1/status` (12-api.md) above the console's in-page checks. Labels and states (live, simulated, planned, unavailable) come from the api and are not derived in the browser; without an api the card says so. Source: `apps/unified/analyst-pages/50_status.js`.
