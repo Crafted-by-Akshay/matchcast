@@ -212,6 +212,7 @@ const AG = (() => {
       run.claims.push(c); run.stat.claims++;
     }
     if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; }
+    if (d.audio_url) c.audioUrl = new URL(d.audio_url, LV.base || location.href).href;   // the api's Azure Speech mp3 for this line (EXP-8)
     if (d.text) { c.text = d.text; run.stat.lines++; say('Narrator', c.minute, c.id + ' · ' + d.text, ''); }
     if (d.status === 'approved') c.route = 'fan';
     c.source = src; changed();
