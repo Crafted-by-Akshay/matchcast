@@ -91,6 +91,8 @@ With an api configured, "Verify chain" in the Agents tab fetches `GET /v1/matche
 ## Wild-moment alerts (EXP-9)
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
 
+## Accessibility (EXP-14)
+The shell: arrow keys, Home and End move between the dashboard tabs (tab 1 to 4 still switch from anywhere outside a field); a skip link jumps to the match view; every button and tab shows a focus ring; each published line is announced through a polite live region (`#sr-lines`); tab labels, the selected tab and the filter buttons meet WCAG AA contrast (axe-core reports no serious or critical issue on the Agents tab). The trace panel is a native dialog, so Esc closes it. Not yet checked: the three views inside their frames (QUA-9 `a11y.spec.ts` covers them) and a VoiceOver listen-through.
 ## Analyst Data platform page (EXP-13)
 - `analyst-pages/*.js` holds Analyst pages we own; `build.py` appends them after the prototype pages. `10_data_platform.js` adds Platform > Data platform.
 - It shows the Fabric dashboard clip or screenshot (`shared/fabric-dashboard.mp4` / `.png`) and the Databricks model card (`shared/model-card.json`). Each block says **Planned** and names its ticket (DAT-8, DAT-6) until the file exists. Fabric is labelled paused after filming.
