@@ -6,6 +6,7 @@ a hash-chained audit record (ADR-0013: lines carry verdicts and approvals).
 """
 
 import asyncio
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -27,6 +28,11 @@ from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, stream_key
 from .tools import InProcessTools, ToolError
 
+TALK_PHRASES = {
+    "shots on target": "shots_on_target", "shots": "shots", "goals": "goals",
+    "tackles won": "tackles_won", "fouls": "fouls", "cards": "cards",
+}  # fmt: skip
+TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 
@@ -400,6 +406,63 @@ class MatchWorkflow:
     def record_export(self, export_id: str, kind: str, sha256: str, rows: int) -> None:
         self._audit("person", "viewer", "export_created", export_id,
                     {"kind": kind, "sha256": sha256, "rows": rows})  # fmt: skip
+
+    # ---- talk to a player or the producer (EXP-16) ---------------------------------------
+
+    async def talk(self, target: str, utterance: str) -> dict[str, Any]:
+        """A role agent answers from its own facts; the reply is checked before it is returned."""
+        from .roles import player_reply, producer_reply
+        from .verify import extract_names
+
+        async with self._lock:
+            shield = await self.safety.shield(utterance)
+            if shield.attack_detected:
+                self._audit("system", "content-safety", "safety_blocked", "talk",
+                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+                raise WorkflowError("prompt_attack", "the utterance was flagged as a prompt attack")
+            ctx = self._ctx()
+            if target == "producer":
+                reply, facts = producer_reply(ctx, utterance)
+            elif target in ctx.names or any(
+                e["payload"].get("player_id") == target for e in ctx.events
+            ):
+                reply, facts = player_reply(ctx, target, utterance)
+            else:
+                raise WorkflowError("not_found", f"unknown talk target {target}")
+            numbers_ok = self._talk_numbers_ok(ctx, target, reply)
+            names_ok = all(n.casefold() in ctx.allowed_names for n in extract_names(reply))
+            words = len(reply.split())
+            verdict = "verified" if numbers_ok and names_ok and words <= 60 else "rejected"
+            if verdict == "rejected":
+                reply, facts = "I can't confirm that from the match data yet.", {}
+            self._audit("agent", f"talk-{target}", "talk_answered", "talk",
+                        {"target": target, "verdict": verdict, "facts": facts})  # fmt: skip
+            return {"target": target, "reply": reply, "verdict": verdict, "facts": facts}
+
+    @staticmethod
+    def _talk_numbers_ok(ctx: MatchContext, target: str, reply: str) -> bool:
+        """Every number must be one the log gives, attached to the metric it names.
+
+        Recounted from the stored events here, not taken from the facts the role agent built.
+        """
+        from .state import counted
+        from .verify import extract_numbers
+        from .verify.checks import recompute
+
+        numbers = extract_numbers(reply)
+        if target == "producer":
+            upto = ctx.state.max_sequence
+            goals = {recompute(ctx.events, f"goals:{t}", upto) for t in (ctx.home, ctx.away)}
+            return all(n in goals for n in numbers)
+        recount = dict.fromkeys(TALK_PHRASES.values(), 0)
+        for event in ctx.events:
+            p = event["payload"]
+            if p.get("player_id") == target and p["type"] not in ("correction", "retraction"):
+                for metric, _team in counted(p):
+                    if metric in recount:
+                        recount[metric] += 1
+        named = [(float(m.group(1)), TALK_PHRASES[m.group(2)]) for m in TALK_RE.finditer(reply)]
+        return len(named) == len(numbers) and all(recount[k] == n for n, k in named)
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
