@@ -1,0 +1,38 @@
+# Shutdown runbook (PLT-10)
+
+Keeps total spend near the plan (about $49, about $60 with the Translator, Vision and Content Safety caps) and under the $100 cap. Run every command on the Mac mini with `az login` done. Subscription `538de541-d855-4dcc-8644-8c1ce1da7486`, resource group `rg-matchcast`.
+
+## Daily check (every build day, and each judging day)
+```
+scripts/cost_today.sh
+```
+Prints month-to-date spend per service beside its target and flags anything above 80% of target. Alerts exist at $40 and $50 on budget `matchcast-budget` (see "Budget alerts").
+
+## Schedule
+
+| When | Step | Command or portal path |
+| --- | --- | --- |
+| After filming the demo video (target 26 Oct) | Pause the Fabric capacity (DAT-8) | `az fabric capacity suspend --resource-group rg-matchcast --capacity-name <capacity>`; if the 60-day trial is used, nothing to pause, note it here |
+| After the `train-danger` and `fit-xg` jobs finish (DAT-6, target 24 Oct) | Stop Databricks compute | Portal: Databricks workspace > Compute > terminate every cluster; confirm no running job in Workflows. The workspace itself costs nothing while idle |
+| 27 Oct (after the submission closes 23:59 PT) if the demo replays from Blob | Delete the Event Hubs namespace | `az eventhubs namespace delete --resource-group rg-matchcast --name evhns-matchcast-dev`. Skip if live ingestion is part of the judged demo |
+| 10 Nov (judging ends) | Final cost check | `scripts/cost_today.sh` and save the output in `docs/evidence/cost-final.txt` |
+| 11 Nov | Remove everything | `azd down --purge --force` from the repo root with the `dev` environment selected |
+| 11 Nov | Verify empty | `az resource list --resource-group rg-matchcast -o table` shows only `matchcast-foundry` (hand-made) unless it is also removed |
+
+Do not delete `matchcast-foundry` or `rg-matchcast` without Akshay's say-so; `azd down` only removes what the template created.
+
+## Budget alerts
+Budget `matchcast-budget` should have alerts at $40 and $50 (acceptance criterion of PLT-10).
+
+Check: `az consumption budget list --query "[?name=='matchcast-budget'].notifications" -o json`
+
+Add or update the $40 alert (Owner: Akshay, portal path Cost Management > Budgets > matchcast-budget > Edit > Alert conditions > add 40 USD actual, with Akshay's email). If the CLI is preferred, `az consumption budget` cannot edit single notifications; use the portal.
+
+## Foundry and Speech
+Both bill by use, so they stop costing money when nothing calls them. During judging the `api` replica count stays at 0 until a visitor arrives, and `docs/runbook-demo.md` sets `min replicas = 1` only for recording and live judging windows. Set it back to 0 afterwards:
+```
+az containerapp update --resource-group rg-matchcast --name ca-api-matchcast-dev --min-replicas 0
+```
+
+## Rollback of a bad deploy
+`az containerapp revision list --resource-group rg-matchcast --name ca-api-matchcast-dev -o table`, then `az containerapp revision activate` on the previous revision.
