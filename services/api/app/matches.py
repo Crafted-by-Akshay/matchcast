@@ -315,6 +315,21 @@ class Registry:
         return flow
 
 
+def client_ip(request: Request) -> str:
+    """The address rate limits key on.
+
+    Behind the Container Apps ingress (``MATCHCAST_BEHIND_INGRESS=true``, set by Bicep) the socket
+    peer is the ingress, so the client is the rightmost ``X-Forwarded-For`` entry, the one the
+    ingress appended; entries to its left come from the caller and can be forged. Anywhere else
+    the header is ignored.
+    """
+    if os.environ.get("MATCHCAST_BEHIND_INGRESS", "").lower() == "true":
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if last := forwarded.rsplit(",", 1)[-1].strip():
+            return last
+    return request.client.host if request.client else "local"
+
+
 def _is_stored(store: Any, sk: str) -> bool:
     hydrate = getattr(store, "hydrate", None)
     if hydrate is not None:
@@ -693,7 +708,7 @@ def build_router(registry: Registry) -> APIRouter:
         speech = registry.speech
         if not speech.ready:
             raise Problem(503, "not_ready", "no Speech resource is configured")
-        if not speech.allow(request.client.host if request.client else "local"):
+        if not speech.allow(client_ip(request)):
             raise Problem(
                 429, "rate_limited", f"at most {SPEECH_PER_MINUTE} tokens a minute", retry_after=60
             )
@@ -707,7 +722,7 @@ def build_router(registry: Registry) -> APIRouter:
         """Data Scientist: a season question, answered from one verified SELECT (F10)."""
         if registry.season is None:
             raise Problem(503, "not_ready", "the season data is not loaded")
-        if not registry.allow_ds(request.client.host if request.client else "local"):
+        if not registry.allow_ds(client_ip(request)):
             raise Problem(
                 429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute", retry_after=60
             )
