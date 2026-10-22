@@ -26,6 +26,7 @@
     const d = e.data || {};
     if (d.src !== 'matchcast-shell') return;
     if (d.type === 'feed') { livePill(d); return; }
+    if (d.type === 'vision') { window.MC_VISION = d.report; if (typeof visRefresh === 'function') visRefresh(); return; }
     if (!D.matches.length) return;
     if (d.type === 'route') go(d.page, d.arg);
     if (d.type === 'import' && d.dataset) {

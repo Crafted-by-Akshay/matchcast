@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { collectErrors, openShell, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // EXP-13: Data platform page in the Analyst view. Fabric and Databricks are not connected, so the page must say Planned.
 async function openPage(page: Page, route = 'data-platform') {
@@ -173,4 +173,37 @@ test('match centre: a 500 from the recap api shows Unavailable', async ({ page }
   const f = await recapCard(page, 500, {});
   await expect(f.locator('#rc-card')).toContainText('Unavailable');
   await expect(f.locator('#rc-card')).toContainText('HTTP 500');
+});
+
+// DAT-11 task 278: the Tracking lab shows Watch's vision accuracy, with OCR marked Planned.
+test('tracking lab: shows the vision report from Watch and keeps the OCR row Planned', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await openPage(page, 'ds-tracking');
+  await expect(f.locator('#vis-panel')).toContainText('No vision run yet');
+  const report = { on: true, camera: 'broadcast', captures: 120, resolution: '640x360', detection: { gt: 400, recall: 95.5, precision: 97, posErr: 0.45 },
+    identity: { frames: 300, accuracy: 71.2, unknownPct: 8, switches: 3 }, speed: { playerErr: 0.6, ballErr: 1.1 }, ball: { inView: 100, found: 80, posErr: 0.7 }, passes: { gt: 20, vis: 15, recall: 61, precision: 80 } };
+  await f.evaluate((r) => window.postMessage({ src: 'matchcast-shell', type: 'vision', report: r }, '*'), report);
+  await expect(f.locator('#vis-panel')).toContainText('95.5%');
+  await expect(f.locator('#vis-panel')).toContainText('71.2%');
+  await expect(f.locator('#vis-panel tr', { hasText: 'glyph + Azure OCR' })).toContainText('Planned');
+  await f.evaluate((r) => window.postMessage({ src: 'matchcast-shell', type: 'vision', report: { ...r, on: false, detection: { ...r.detection, recall: null } } }, '*'), report);
+  await expect(f.locator('#vis-panel')).toContainText('n/a');
+  await expect(f.locator('#vis-panel')).toContainText('switched off');
+  expect(errs).toEqual([]);
+});
+
+// DAT-11 task 278, end to end: Vision switched on in Watch reaches the Analyst's Tracking lab through the shell.
+test('vision on in Watch reaches the Tracking lab', async ({ page }) => {
+  test.setTimeout(300_000);
+  await openShell(page, 'watch');
+  const watch = await viewFrame(page, 'watch');
+  await ready('watch')(page);
+  await watch.evaluate(() => (window as any).visToggle?.(true) ?? (document.getElementById('visb') as HTMLElement).click());
+  await page.waitForTimeout(6000);   // Watch posts the report every 5 s while Vision is on
+  await page.evaluate(() => { location.hash = 'analyst'; });
+  const f = await viewFrame(page, 'analyst');
+  await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
+  await f.evaluate(() => (window as any).go('ds-tracking'));
+  await expect(f.locator('#vis-panel')).toContainText(/frames at 640x\d+/, { timeout: 20_000 });
+  await expect(f.locator('#vis-panel')).toContainText('Identity, glyph reader only');
 });
