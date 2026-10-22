@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { collectErrors, openShell, stepSim, viewFrame } from './helpers';
 
+declare const AG: any;
+
 // EXP-2: Watch is the only engine. Broadcast follows its frames and events; the Analyst pill shows its score, minute and last five events.
 const tab = (page: import('@playwright/test').Page, v: string) => page.evaluate((x) => document.getElementById('tab-' + x)!.click(), v);
 const state = (f: import('@playwright/test').Frame) => f.evaluate(() => { const m = (window as any).__mc; return { paused: m.S.paused, score: m.S.score.slice(), mclock: m.S.mclock, last: m.ENV.events.slice(-5).map((e: any) => e.type) }; });
@@ -12,7 +14,7 @@ test('Broadcast and the Analyst follow Watch (same score, minute, events; pause 
   const w = await viewFrame(page, 'watch');
   await expect.poll(() => w.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
   await stepSim(w, 2000);   // a couple of match minutes, so there are events and a clock to compare
-  await expect.poll(() => page.evaluate(() => (window as any).AG.run?.events.length > 0), { timeout: 30_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => AG.run?.events.length > 0), { timeout: 30_000 }).toBe(true);
   await w.evaluate(() => { (window as any).__mc.S.paused = true; });
   await page.waitForTimeout(1500);
   const ws = await state(w);

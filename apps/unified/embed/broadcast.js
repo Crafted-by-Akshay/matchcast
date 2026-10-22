@@ -34,7 +34,17 @@ if (window.MC_CONSUMER) {
     const d = e.data || {};
     if (d.src !== 'matchcast-shell') return;
     if (d.type === 'frame') { CONS.frame = d.frame; CONS.at = performance.now(); CONS.n++; wait.hidden = true; S.paused = !!d.frame.paused; S.speed = d.frame.speed || 1; if (S.paused || !S.started) consumerStep(0.016, true); }   // paused: the sim loop is idle, so apply the frame at once
-    if (d.type === 'events') for (const ev of d.batch) { const { type, ...rest } = ev; try { dataEvent(type, rest); } catch (err) { console.error(err); } }
+    if (d.type === 'events') {
+      for (const ev of d.batch) {
+        const { type, ...rest } = ev;
+        // the explain and fan modules read the pass in flight from S.passInfo, so rebuild it from the event
+        if (type === 'pass' || type === 'throw_in') {
+          const by = (n) => players.find((q) => q.name === n && q.T.key === ev.team);
+          S.passInfo = { from: by(ev.player), to: by(ev.to), kind: ev.kind || 'throw-in', pq: ev.quality, diff: ev.difficulty, t: S.t, done: false };
+        }
+        try { dataEvent(type, rest); } catch (err) { console.error(err); }
+      }
+    }
   });
 }
 // one consumer step: move everything toward Watch's latest frame (called from stepSim, so the desk's own per-tick modules still run)
