@@ -19,16 +19,18 @@ ENGINES = [
 
 BLOCKLIST = set(
     """
-    messi ronaldo neymar mbappe haaland modric salah benzema lewandowski griezmann bellingham saka
-    rodri pedri gavi vinicius kante iniesta xhaka arbeloa cuadrado eriksen coman olmo zielinski
-    lozano falcao guerreiro fofana jovanovic ilicic kroos casemiro courtois alisson ederson
-    fernandes sterling rashford foden grealish mahrez firmino mane suarez cavani aguero dybala
-    lautaro osimhen leao pulisic pogba matuidi lloris giroud dembele tchouameni camavinga
+    messi ronaldo neymar mbappe haaland modric salah benzema lewandowski griezmann bellingham
+    saka rodri pedri gavi vinicius kante iniesta xhaka arbeloa cuadrado eriksen coman olmo
+    zielinski lozano falcao guerreiro fofana jovanovic ilicic kroos casemiro courtois alisson
+    ederson fernandes sterling rashford foden grealish mahrez firmino mane suarez cavani aguero
+    dybala lautaro osimhen leao pulisic pogba matuidi lloris giroud dembele tchouameni camavinga
     musiala gundogan sane kimmich neuer muller havertz rudiger hakimi ziyech sancho lukaku
-    hazard tielemans doku trossard onana szczesny mitrovic tadic kvaratskhelia donnarumma
-    chiesa barella insigne immobile verratti locatelli bonucci chiellini zaniolo spinazzola
-    isak gyokeres odegaard ramsdale gabriel jesus martinelli xavi puyol busquets piqué pique
-    iker casillas sergio alba jordi carvajal nacho morata asensio isco koke saul oblak
+    hazard tielemans doku trossard onana szczesny mitrovic tadic kvaratskhelia donnarumma chiesa
+    barella insigne immobile verratti locatelli bonucci chiellini zaniolo spinazzola isak
+    gyokeres odegaard ramsdale martinelli xavi puyol busquets pique casillas carvajal morata
+    asensio isco koke oblak alves arbeloa brandao coman cuadrado ekstrom eriksen falcao fofana
+    guerreiro ilic iniesta jovanovic kante keane lozano nakamura olmo petit ramos sorensen
+    srensen toure vidal xhaka yeboah zielinski
     """.split()
 )
 
@@ -48,7 +50,7 @@ def league_names() -> list[str]:
 
 def default_team_names(path: Path) -> list[str]:
     text = path.read_text()
-    block = text[text.index("const TEAMS = ["):]
+    block = text[text.index("const TEAMS = [") :]
     block = block[: block.index("];")]
     return re.findall(r"\[\d+, '([^']+)'", block)
 
