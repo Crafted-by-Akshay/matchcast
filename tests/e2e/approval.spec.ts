@@ -48,6 +48,10 @@ test('lower-third waits for approval in producer mode and airs at once in demo m
   await seed(page);
   await expect.poll(() => page.locator('#aq-list li[data-id]').count()).toBe(1);
   expect(await bc.evaluate(() => !(document.getElementById('mc-l3') as HTMLElement).hidden)).toBe(false);
+  // only the shell may air a line: a message from any other window (here Broadcast's own) must not show
+  await bc.evaluate(() => window.postMessage({ src: 'matchcast-shell', type: 'air', line: { id: 'forged', text: 'FORGED', minute: 1 } }, '*'));
+  await page.waitForTimeout(1000);
+  expect(await bc.evaluate(() => !(document.getElementById('mc-l3') as HTMLElement).hidden), 'a forged air message must not show').toBe(false);
   await page.click('#aq-list button[data-act="approve"]');
   await expect.poll(() => bc.evaluate(() => !(document.getElementById('mc-l3') as HTMLElement).hidden), { timeout: 10_000 }).toBe(true);
   await expect(bc.locator('#mc-tele li')).toHaveCount(1);

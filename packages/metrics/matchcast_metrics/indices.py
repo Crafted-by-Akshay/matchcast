@@ -62,11 +62,7 @@ def control_index(events: Sequence[dict], now_ms: float, window_ms: float = WIND
     if passes:
         teams = sorted({p["team"] for p in passes})
         lead = max(teams, key=lambda t: sum(1 for p in passes if p["team"] == t))
-        ends = [
-            abs(p["x1"] - (p["attack_x"] - 105 if p["attack_x"] > 52.5 else p["attack_x"]))
-            for p in passes
-            if p["team"] == lead
-        ]
+        ends = [abs(p["x1"] - (105 - p["attack_x"])) for p in passes if p["team"] == lead]
         territory = _clamp((sum(ends) / len(ends) - 40) / 40)
     return 100 * (0.35 * stability + 0.35 * completion + 0.30 * territory)
 

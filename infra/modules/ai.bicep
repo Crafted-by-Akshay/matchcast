@@ -1,5 +1,5 @@
 // Cognitive Services accounts and AI Search for the app (AGT-12, AGT-16). Foundry is hand-made and not here.
-// Speech, Translator and Vision are added to `accounts` by their own stories.
+// Vision is added to `accounts` by its own story.
 @minLength(3)
 param name string
 param location string
@@ -11,6 +11,8 @@ var suffix = take(uniqueString(resourceGroup().id), 5)
 @description('Cognitive Services accounts: kind and the short prefix of the name and custom subdomain.')
 param accounts array = [
   { key: 'contentSafety', kind: 'ContentSafety', prefix: 'cs', sku: 'S0' }
+  { key: 'speech', kind: 'SpeechServices', prefix: 'sp', sku: 'S0' }
+  { key: 'translator', kind: 'TextTranslation', prefix: 'tr', sku: 'S1' }
 ]
 
 resource cog 'Microsoft.CognitiveServices/accounts@2024-10-01' = [for a in accounts: {
@@ -43,5 +45,10 @@ resource search 'Microsoft.Search/searchServices@2023-11-01' = {
 
 output cognitiveNames array = [for (a, i) in accounts: cog[i].name]
 output contentSafetyEndpoint string = cog[indexOf(map(accounts, a => a.key), 'contentSafety')].properties.endpoint
+output speechEndpoint string = cog[indexOf(map(accounts, a => a.key), 'speech')].properties.endpoint
+output speechRegion string = location
+// A Translator account's `endpoint` is the global API host; Entra tokens need the custom subdomain.
+output translatorEndpoint string = 'https://${cog[indexOf(map(accounts, a => a.key), 'translator')].properties.customSubDomainName}.cognitiveservices.azure.com/'
+output translatorRegion string = location
 output searchName string = search.name
 output searchEndpoint string = 'https://${search.name}.search.windows.net'

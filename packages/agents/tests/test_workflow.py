@@ -249,3 +249,25 @@ def test_shot_moments_carry_an_xg_claim_and_the_analyst_line_reads_it(make_workf
     assert xg and all(c["units"] == "ratio" for c in xg)
     texts = [ln.text for ln in flow.store.lines(flow.sk) if ln.persona == "analyst"]
     assert any("xG: " in t for t in texts)
+
+
+def test_a_repeated_value_is_sent_to_the_narrator_not_the_analyst(make_workflow, match) -> None:
+    from matchcast_agents.rules.narrator import NarratorRules
+
+    class Repeats(NarratorRules):
+        async def write(self, ctx, task, claims, *, attempt=0):
+            drafts = await super().write(ctx, task, claims, attempt=attempt)
+            if attempt or task.reason != "goal":
+                return drafts
+            return [
+                d.model_copy(update={"text": d.text + f" That is {int(claims[0]['value'])}."})
+                for d in drafts
+            ]
+
+    flow = make_workflow()
+    flow.agents.narrator = Repeats()
+    run(flow.ingest(match["events"]))
+    asks = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "line_repair_requested"]
+    assert asks and {r["details"]["target"] for r in asks} == {"narrator"}
+    assert flow.stats["abstained"] == 0
+    assert any(ln.repair_of and ln.status == "published" for ln in flow.store.lines(flow.sk))

@@ -5,11 +5,12 @@ description = "Initial MatchCast API service"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "azure-identity>=1.19,<2",
-    "fastapi>=0.115,<0.120",
+    "fastapi>=0.120,<0.130",
     "matchcast-agents",
     "matchcast-mcp",
     "matchcast-contracts",
     "matchcast-shared",
+    "matchcast-worker",
     "openai>=1.60,<3",
     "uvicorn[standard]>=0.34,<1",
 ]
@@ -19,6 +20,7 @@ matchcast-agents = { workspace = true }
 matchcast-mcp = { workspace = true }
 matchcast-contracts = { workspace = true }
 matchcast-shared = { workspace = true }
+matchcast-worker = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

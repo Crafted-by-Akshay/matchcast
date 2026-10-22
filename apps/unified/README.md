@@ -72,7 +72,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - The views are separate engines inside frames. Their own headers stay under the shell bar, and the Analyst keeps its own design. A single merged code base would be a larger job.
 - Each view runs its own simulation. Watch is the only live source for the score, the events and the agents. Broadcast shows Watch's score, but its pitch and goals come from its own engine, and the Analyst's season runs are headless recordings. The live full-time handoff is the way to get the played match into the Analyst. Making Broadcast and the Analyst consume Watch's events directly is the next refactor (option A in the orchestration design).
 - The agents and the Verifier are rules, not models. They are labelled as simulated, and the Azure parts are not connected.
-- The shell is in English only. Broadcast has its own EN and Tamil script.
+- The shell is in English only. Broadcast has its own EN, ES and HI desk script (Tamil is out until a native speaker reviews it).
 - Azure parts, Entra roles and the Foundry agents are simulated and labelled as such in each view.
 - Tested in local headless Chromium. Not yet tested inside the claude.ai artifact host.
 
@@ -114,7 +114,7 @@ A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chi
 
 ## Full-time recap in the Analyst library (AGT-15, task 105)
 - At full time the shell adds `recap: { api, session_id, match_id }` to the import message it sends the Analyst (only when Watch is the source and an api is configured; `LV.key` exposes the run's key). `embed/analyst.js` stores it on the imported match.
-- `analyst-pages/30_recap.js` wraps the Match centre page: for such a match it shows a Full-time recap card from `GET /v1/matches/{id}/recap/analyst`, polling every 5 s for a minute ("Being written by the agents…"), then "Planned: not ready". It shows the Verifier tick only when every sentence has verdict `verified`, and "Rules fallback" when the api's mode is `rules`. Recorded season matches have no recap card. Watch and Broadcast recap cards belong to their lanes.
+- `analyst-pages/30_recap.js` wraps the Match centre page: for such a match it shows a Full-time recap card from `GET /v1/matches/{id}/recap/analyst`, polling every 5 s for a minute ("Being written by the agents…"), then "Planned: not ready". It shows only the sentences whose verdict is `verified` (the rest are counted as "unverified hidden", never displayed; none verified means no recap text; the word count is recomputed from the shown sentences), and "Rules fallback" when the api's mode is `rules`. Recorded season matches have no recap card. Watch and Broadcast recap cards belong to their lanes.
 
 ## Instant replay (Broadcast)
 - `embed/replay.js` (appended after `broadcast.js` by `build.py`) keeps the last 60 s of Watch's frames in Broadcast. The "Instant replay" bar on the live view plays back the last 10, 20 or 30 s at normal or half speed, with a red REPLAY tag and a Back to live button; it returns to live by itself at the end.
@@ -135,3 +135,15 @@ Ask the producer in Broadcast has a hold-to-talk mic (`MCS.ptt` in `embed/hook.j
 
 ## Broadcast overlay layout
 - The replay bar, on-air log, lower-third and teleprompter sit inside the live view. Below 560 px wide they stack (teleprompter on one line at the top, replay bar under it, lower-third and on-air log at the bottom) so none cover each other. `tests/e2e/broadcast-layout.spec.ts` checks the four boxes for overlap on a desktop and a phone viewport.
+
+## Fast first load (EXP-15)
+- Only Watch loads at first; Broadcast and Analyst load on first switch (`tests/e2e/load.spec.ts`: no request to `analyst/` while only Watch runs). Compression, cache headers and the file list of the web image are in `nginx.conf` and the Dockerfile (PLT-7, `tests/test_web_image.py`).
+- Timings (headless Chromium, software WebGL, cache off, local server, 22 Oct): season picker 0.7 s, Watch started 11 s, Analyst ready 21 s, Broadcast ready 56 s. Software rendering is far slower than a real GPU, so the 4 s target is **not yet measured**; it needs the live URL with the api warm. `load.spec.ts` records these marks as a test annotation on every run.
+
+## Loading states and where Watch's start time goes (EXP-15)
+- Profile of Watch alone (headless Chromium, SwiftShader software WebGL, cache off, local server, 22 Oct, ~10 s to kick-off): about 9.3 s is native work (`(program)`: software shader compile and rasterising), about 1.5 s is our JavaScript (`paintPitch` 0.5 s of grass noise, `glbFrom` 0.36 s decoding the player model, three.js first-use shader setup 0.5 s). Network is under 0.1 s locally; on the wire `players.json` is 5.8 MB raw (2.6 MB gzip, pre-compressed by the web image) and three.js 1.3 MB raw. So the JS and network share is a couple of seconds and the rest depends on the GPU: a real browser with hardware WebGL should be far faster than this sandbox, but that is **not yet measured**; the 4 s target needs the live URL on a real machine.
+- Only Watch is loaded at first (one iframe); Broadcast and Analyst are created on first switch.
+- The shell now says what is happening: with no WebGL, Watch and Broadcast show "This view needs WebGL" at once (Analyst and Agents still work); a view still loading after 25 s shows a note and a "Reload this view" button. Test: `tests/e2e/loading-states.spec.ts`.
+- Ideas not done (visual risk, in the prototype source): fewer grass-noise specks in `paintPitch`, decode the player model off the main thread.
+## Broadcast desk script: English, Spanish, Hindi
+- `embed/bclang.js` wraps the desk's line builder: each event gets a Spanish and a Hindi line from rules templates that copy the names and numbers. Every translation goes through the same Verifier re-check as the shell (same numbers, same facts in the same order, no new capitalised names); a line that fails stays in English and the script list says why ("English shown: ..."). Tamil is removed from the desk. Translations are rules templates (**Planned**: Azure AI Translator, ADR in docs/architecture). Test: `tests/e2e/broadcast-lang.spec.ts`.

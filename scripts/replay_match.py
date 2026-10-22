@@ -18,6 +18,7 @@ import argparse
 import json
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -56,6 +57,8 @@ def main() -> int:
     ap.add_argument("--tenant-id", default="demo")
     ap.add_argument("--no-wait", action="store_true", help="skip the pacing (tests)")
     a = ap.parse_args()
+    if a.speed <= 0:
+        ap.error("--speed must be above 0")
 
     events, meta, teams, match_id = load(a)
     stream = {
@@ -67,37 +70,54 @@ def main() -> int:
     out = sys.stdout if a.out == "-" else open(a.out, "w")  # noqa: SIM115 closed at exit
     batch: list[dict] = []
 
-    def flush() -> None:
-        if not batch:
-            return
-        if a.sink == "http":
-            q = f"?session_id={a.session_id}"
-            req = urllib.request.Request(
-                f"{a.url}/v1/matches/{stream['match_id']}/events{q}",
-                data=json.dumps({"events": batch}).encode(),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
+    def post(path: str, body: dict, ok: tuple[int, ...] = ()) -> None:
+        req = urllib.request.Request(
+            f"{a.url}{path}",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
             urllib.request.urlopen(req).read()  # noqa: S310 operator-supplied URL
+        except urllib.error.HTTPError as err:
+            if err.code not in ok:
+                detail = err.read()[:200]
+                raise SystemExit(f"api answered {err.code} for {path}: {detail!r}") from err
+
+    def flush() -> None:
+        if batch and a.sink == "http":
+            post(f"/v1/matches/{stream['match_id']}/events?session_id={a.session_id}",
+                 {"events": batch})  # fmt: skip
         batch.clear()
 
+    if a.sink == "http":
+        # a match must exist before events are posted; 409 means a previous run created it
+        post("/v1/matches", {"session_id": a.session_id, "match_id": stream["match_id"],
+                             "roster": roster}, ok=(409,))  # fmt: skip
+
+    events_out = list(to_contract_events(events, stream, teams))
     start = time.monotonic()
     sent = 0
-    for e in to_contract_events(events, stream, teams):
+    for n, e in enumerate(events_out):
         try:
             validate(e, roster=roster)
         except ContractError as err:
             print(f"skipped {e['event_id']}: {err}", file=sys.stderr)
             continue
         if not a.no_wait:
-            due = start + e["event_time_ms"] / 1000 / a.speed
-            flush()
-            time.sleep(max(0.0, due - time.monotonic()))
+            time.sleep(max(0.0, start + e["event_time_ms"] / 1000 / a.speed - time.monotonic()))
         if a.sink == "jsonl":
             out.write(json.dumps(e) + "\n")
+            out.flush()
         else:
             batch.append(e)
-            if len(batch) >= 50:
+            nxt_due = (
+                start + events_out[n + 1]["event_time_ms"] / 1000 / a.speed
+                if n + 1 < len(events_out)
+                else None
+            )
+            # send now unless the next event is already due, so a goal never waits for the lull
+            if len(batch) >= 50 or nxt_due is None or nxt_due > time.monotonic() + 0.05:
                 flush()
         sent += 1
     flush()

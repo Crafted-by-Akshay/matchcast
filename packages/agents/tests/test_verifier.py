@@ -92,8 +92,27 @@ def test_persona_limits(match) -> None:
     claims = [claim(ctx, "shots:home", shots)]
     long = verdict(ctx, line("Northgate FC " + "keep going " * 30, limit=100), claims)
     assert long.reason_code == "length_exceeded"
-    two = verdict(ctx, line(f"{shots} and {shots}.", persona="casual", limit=140), claims)
+    away = ctx.state.count("shots", "away")
+    both = [*claims, claim(ctx, "shots:away", away)]
+    two = verdict(ctx, line(f"{shots} and {away}.", persona="casual", limit=140), both)
     assert two.reason_code == "length_exceeded"
+
+
+def test_one_claim_cannot_back_a_number_twice(match) -> None:
+    ctx = context(match)
+    shots = ctx.state.count("shots", "home")
+    claims = [claim(ctx, "shots:home", shots)]
+    result = verdict(ctx, line(f"Northgate FC {shots}, then {shots} again.", limit=140), claims)
+    assert result.reason_code == "number_mismatch"
+
+
+def test_a_score_with_one_side_wrong_is_refused_when_the_wrong_side_equals_the_other(match) -> None:
+    ctx = context(match)
+    home, away = ctx.state.count("goals", "home"), ctx.state.count("goals", "away")
+    claims = [claim(ctx, "goals:home", home), claim(ctx, "goals:away", away)]
+    assert verdict(ctx, line(f"Score {home}-{away}.", limit=140), claims).verdict == "verified"
+    wrong = verdict(ctx, line(f"Score {away}-{away}.", limit=140), claims)
+    assert home != away and wrong.reason_code == "number_mismatch"
 
 
 def test_future_or_missing_source_is_rejected(match) -> None:

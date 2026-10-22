@@ -115,3 +115,43 @@ def test_replay_from_the_start_matches_the_original_run_through_the_repo():
     assert repo.get(sk).model_dump() == original.model_dump()
     assert len(first) == 60 and first[-1]["snapshot"]["state_revision"] == 60
     assert [r.revision for r in repo.revisions(sk)] == list(range(1, 61))
+
+
+def test_event_ahead_of_a_gap_is_held_then_applied_in_order():
+    s = StreamState()
+    for seq in (1, 3, 2):
+        s = reduce(s, ev(seq, goal()))
+    assert s.score == {"home": 3} and s.max_sequence == 3 and s.pending == {}
+    assert [s.revision] == [3]
+
+
+def test_gap_is_reported_until_it_is_filled():
+    s = run([ev(1, goal()), ev(4, goal())])
+    assert s.score == {"home": 1} and s.missing() == [2, 3] and list(s.pending) == [4]
+    assert reduce(s, ev(4, goal())) is s  # the same held event again changes nothing
+    s = reduce(reduce(s, ev(2, shot())), ev(3, shot()))
+    assert s.score == {"home": 2} and s.missing() == [] and s.max_sequence == 4
+
+
+def test_out_of_order_run_matches_the_in_order_run():
+    events = [ev(i, goal() if i % 3 == 0 else shot()) for i in range(1, 31)]
+    shuffled = events[:]
+    random.Random(7).shuffle(shuffled)
+    a, b = run(events), run(shuffled)
+    assert (a.score, a.counts, a.max_sequence) == (b.score, b.counts, b.max_sequence)
+
+
+def test_correction_after_its_target_changes_the_score():
+    fix = ev(2, {"type": "correction", "target_event_id": "e1", "target_revision": 0,
+                 "new_revision": 1, "replacement": shot()})  # fmt: skip
+    s = run([ev(1, goal()), fix])
+    assert s.score == {} and s.ledger["e1"].revision == 1
+
+
+def test_correction_delivered_before_its_target_waits_for_it():
+    fix = ev(2, {"type": "correction", "target_event_id": "e1", "target_revision": 0,
+                 "new_revision": 1, "replacement": shot()})  # fmt: skip
+    s = run([fix])
+    assert s.max_sequence == 0 and s.missing() == [1]
+    s = reduce(s, ev(1, goal()))
+    assert s.max_sequence == 2 and s.score == {}

@@ -6,6 +6,7 @@ import asyncio
 import csv
 import hashlib
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ from matchcast_agents.statsdesk import StatsDeskError
 from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
+from matchcast_agents.translate import LANGUAGES, TranslationService
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
@@ -37,6 +39,8 @@ from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
+from app.pipeline import Pipeline
+from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
 
 TENANT = "demo"
@@ -127,6 +131,7 @@ class AskBody(BaseModel):
     session_id: str = Field(pattern=ID)
     question: str = Field(min_length=1, max_length=300)
     persona: Literal["casual", "analyst", "broadcast"] = "casual"
+    lang: Literal["en", "es", "hi"] = "en"
 
 
 class ExportBody(BaseModel):
@@ -210,6 +215,9 @@ class Registry:
         self.season = self.stats_desk.season if self.stats_desk else None
         self.ds_asked: dict[str, deque[float]] = {}
         self.vision = VisionService()
+        self.speech = SpeechTokenService()
+        self.pipeline: Pipeline | None = None  # set by install() when MATCHCAST_PIPELINE says so
+        self.translation = TranslationService()
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -269,11 +277,70 @@ class Registry:
         window.append(now)
         return True
 
+    async def flow_for(self, session_id: str, match_id: str) -> MatchWorkflow:
+        """The workflow of a match, rebuilt from its stored roster after a restart (F1)."""
+        key = (session_id, match_id)
+        if (flow := self.flows.get(key)) is not None:
+            return flow
+        async with self.create_lock:
+            if (flow := self.flows.get(key)) is not None:
+                return flow
+            stream = {"tenant_id": TENANT, "session_id": session_id, "match_id": match_id}
+            sk = stream_key(stream)
+
+            def stored() -> dict[str, Any] | None:
+                _is_stored(self.store, sk)  # hydrates a buffered store off the event loop
+                return self.store.get_match(sk)
+
+            info = await asyncio.to_thread(stored)
+            if info is None:
+                raise Problem(404, "not_found", f"unknown match {match_id}")
+            config = WorkflowConfig()
+            flow = MatchWorkflow(
+                stream=stream,
+                roster=info["roster"],
+                names=info.get("names", {}),
+                clubs=info.get("clubs", {}),
+                agents=self.agents_for(config.personas),
+                config=config,
+                store=self.store,
+                stats_desk=self.stats_desk,
+            )
+            self.flows[key] = flow
+            return flow
+
     def get(self, session_id: str, match_id: str) -> MatchWorkflow:
         flow = self.flows.get((session_id, match_id))
         if flow is None:
             raise Problem(404, "not_found", f"unknown match {match_id}")
         return flow
+
+
+def _bare_ip(entry: str) -> str | None:
+    """The address in a forwarded entry, without a port; None when it is not an address."""
+    if entry.startswith("["):  # [v6]:port
+        entry = entry[1:].split("]", 1)[0]
+    elif entry.count(":") == 1:  # v4:port
+        entry = entry.split(":", 1)[0]
+    try:
+        return str(ipaddress.ip_address(entry))
+    except ValueError:
+        return None
+
+
+def client_ip(request: Request) -> str:
+    """The address rate limits key on.
+
+    Behind the Container Apps ingress (``MATCHCAST_BEHIND_INGRESS=true``, set by Bicep) the socket
+    peer is the ingress, so the client is the rightmost ``X-Forwarded-For`` entry, the one the
+    ingress appended; entries to its left come from the caller and can be forged. Anywhere else
+    the header is ignored.
+    """
+    if os.environ.get("MATCHCAST_BEHIND_INGRESS", "").strip().lower() == "true":
+        entries = [e.strip() for e in request.headers.get("x-forwarded-for", "").split(",")]
+        if (entry := next((e for e in reversed(entries) if e), "")) and (ip := _bare_ip(entry)):
+            return ip
+    return request.client.host if request.client else "local"
 
 
 def _is_stored(store: Any, sk: str) -> bool:
@@ -339,6 +406,11 @@ def _state_json(flow: MatchWorkflow) -> dict[str, Any]:
     }
 
 
+def _names(flow: MatchWorkflow) -> list[str]:
+    """Player and club names the Translator must leave alone and the re-check must find."""
+    return [*flow.names.values(), *flow.clubs.values()]
+
+
 def build_router(registry: Registry) -> APIRouter:
     router = APIRouter(prefix="/v1", tags=["matches"])
 
@@ -401,15 +473,32 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/matches/{match_id}/events", status_code=202)
     async def post_events(match_id: str, session_id: str, body: EventBatch) -> dict[str, int]:
-        flow = registry.get(session_id, match_id)
+        if registry.pipeline is None:
+            flow = registry.get(session_id, match_id)
+        else:
+            flow = await registry.flow_for(session_id, match_id)
         try:
-            return await flow.ingest(body.events)
+            if registry.pipeline is None:
+                return await flow.ingest(body.events)
+            # Through the event stream (F1 rule 2): publish before acknowledging.
+            flow.validate_batch(body.events)
         except ContractError as error:
             index = getattr(error, "index", 0)
             code = error.code if error.code == "roster_required" else "contract_invalid"
             raise Problem(
                 422, code, str(error), f"/events/{index}{error.path}".rstrip("/")
             ) from error
+        try:
+            await registry.pipeline.publish(flow.sk, body.events)
+        except Exception as error:  # noqa: BLE001 - any transport failure: the browser retries
+            logging.getLogger(__name__).exception("publish to the event stream failed")
+            raise Problem(
+                503, "publish_failed", "the event stream did not accept the batch; send it again"
+            ) from error
+        return {
+            "accepted": len(body.events),
+            "last_sequence": max(e["stream_sequence"] for e in body.events),
+        }
 
     @router.get("/matches/{match_id}/stream")
     async def stream(
@@ -421,6 +510,8 @@ def build_router(registry: Registry) -> APIRouter:
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
         flow = registry.get(session_id, match_id)
+        if lang not in LANGUAGES:
+            raise Problem(422, "contract_invalid", "lang must be en, es or hi", "/lang")
         if persona:
             persona = normalise(persona, flow.clubs, flow.names)
             if persona is None:
@@ -431,13 +522,31 @@ def build_router(registry: Registry) -> APIRouter:
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and persona and item.data["persona"] != persona)
 
+        async def localised(item: StreamEvent) -> StreamEvent:
+            """The publication with a checked `variants[lang]`, or untouched (English)."""
+            if lang == "en" or item.event != "publication":
+                return item
+            data = item.data
+            pub_id = data["publication_id"]
+            variant = await registry.translation.variant(
+                f"{session_id}/{match_id}",
+                pub_id,
+                data["text"],
+                lang,
+                _names(flow),
+                lambda reason: flow.record_translation_rejected(pub_id, lang, reason),
+            )
+            if variant.text is None:
+                return item
+            return StreamEvent(item.event, item.id, {**data, "variants": {lang: variant.text}})
+
         async def body() -> AsyncIterator[str]:
             yield StreamEvent("status", None, {"status": flow.status}).encode()
             yield StreamEvent("state", None, _state_json(flow)).encode()
             replay = [e for e in flow.hub.replay_after(last_event_id) if wanted(e)]
             if not follow:
                 for item in replay:
-                    yield item.encode()
+                    yield (await localised(item)).encode()
                 return
             source = flow.hub.subscribe(replay).__aiter__()
             while True:
@@ -447,7 +556,7 @@ def build_router(registry: Registry) -> APIRouter:
                     yield StreamEvent("heartbeat", None, {"time": _now()}).encode()
                     continue
                 if wanted(item):
-                    yield item.encode()
+                    yield (await localised(item)).encode()
 
         return StreamingResponse(
             body(),
@@ -606,12 +715,27 @@ def build_router(registry: Registry) -> APIRouter:
                 error.status, error.code, error.detail, retry_after=error.retry_after
             ) from error
 
+    @router.get("/speech/token")
+    async def speech_token(request: Request) -> dict[str, Any]:
+        """A short-lived Entra token for the browser's Speech SDK; never a key (EXP-16)."""
+        speech = registry.speech
+        if not speech.ready:
+            raise Problem(503, "not_ready", "no Speech resource is configured")
+        if not speech.allow(client_ip(request)):
+            raise Problem(
+                429, "rate_limited", f"at most {SPEECH_PER_MINUTE} tokens a minute", retry_after=60
+            )
+        try:
+            return await asyncio.to_thread(speech.issue)
+        except SpeechError as error:
+            raise Problem(503, "not_ready", str(error)) from error
+
     @router.post("/ds/ask")
     async def ds_ask(body: DsAsk, request: Request) -> dict[str, Any]:
         """Data Scientist: a season question, answered from one verified SELECT (F10)."""
         if registry.season is None:
             raise Problem(503, "not_ready", "the season data is not loaded")
-        if not registry.allow_ds(request.client.host if request.client else "local"):
+        if not registry.allow_ds(client_ip(request)):
             raise Problem(
                 429, "rate_limited", f"at most {DS_PER_MINUTE} questions a minute", retry_after=60
             )
@@ -667,13 +791,27 @@ def build_router(registry: Registry) -> APIRouter:
             result = await flow.ask(body.question, body.persona)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
-        return {
+        reply: dict[str, Any] = {
             "answer": result.answer,
             "intent": result.intent,
             "abstained": result.abstained,
             "citations": result.citations,
             "mode": result.mode,
+            "lang": "en",
         }
+        if body.lang != "en" and not result.abstained:
+            key = "ask-" + hashlib.sha256(result.answer.encode()).hexdigest()[:12]
+            variant = await registry.translation.variant(
+                f"{body.session_id}/{match_id}",
+                key,
+                result.answer,
+                body.lang,
+                _names(flow),
+                lambda reason: flow.record_translation_rejected(key, body.lang, reason),
+            )
+            if variant.text is not None:
+                reply["variants"] = {body.lang: variant.text}
+        return reply
 
     return router
 
@@ -708,6 +846,7 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     """Mount the match routes and the problem handler on ``app``."""
     registry = registry or Registry(os.environ.get("MATCHCAST_REQUIRE_ROLE") == "1")
     app.state.matches = registry
+    registry.pipeline = Pipeline.build(registry)
 
     @app.exception_handler(Problem)
     async def problem_handler(_request: Request, error: Problem) -> JSONResponse:
@@ -731,7 +870,21 @@ def install(app: FastAPI, registry: Registry | None = None) -> Registry:
     app.include_router(build_internal_router(registry))
     if os.environ.get("MATCHCAST_MCP_MOUNT") != "0":
         _mount_mcp(app, registry)
+    if registry.pipeline is not None:
+        _run_pipeline(app, registry.pipeline)
     return registry
+
+
+def _run_pipeline(app: FastAPI, pipeline: Pipeline) -> None:
+    """Start the event stream consumer with the app and stop it with the app (ADR-0005)."""
+    outer = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        async with outer(application), pipeline.running():
+            yield
+
+    app.router.lifespan_context = lifespan
 
 
 def _mount_mcp(app: FastAPI, registry: Registry) -> None:
