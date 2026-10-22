@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "scope": "Both teams together, per match, over the check's seeds (200 in CI). Engine run at full density (half = 45).",
+  "scope": "Both teams together, per match, over the check's seeds (200 when run by hand with `make realism`, about 2 h on 4 cores; not yet in a CI job, Planned as a nightly run). Engine run at full density (half = 45).",
   "targets": [
     {
       "id": "goals",
@@ -35,7 +35,7 @@
       "value": 25,
       "min": 20,
       "max": 30,
-      "source": "Wyscout soccer match event dataset (measured 22.2 incl. penalties and free kicks)",
+      "source": "Wyscout soccer match event dataset (measured 22.2 incl. penalties and free kicks). The target 25 is a judgement call set above the measured value because the engine counts blocked attempts as shots and Wyscout may not; this is not independently verified. The band 20 to 30 contains the measured value",
       "licence": "CC BY 4.0"
     },
     {
@@ -53,7 +53,7 @@
       "value": 840,
       "min": 700,
       "max": 1000,
-      "source": "Wyscout soccer match event dataset (measured 858)",
+      "source": "Wyscout soccer match event dataset (measured 858; the target 840 is that figure rounded down to a round number, inside the band)",
       "licence": "CC BY 4.0"
     },
     {
@@ -62,7 +62,7 @@
       "value": 470,
       "min": 380,
       "max": 580,
-      "source": "Wyscout soccer match event dataset (measured 453; engine duel = aerial duel + slide tackle + take-on + possession turnover, a broader set than the tagged duels Wyscout counts, so the band tops out at 580; widened from 560 on 22 Oct after the 200-seed run read 562)",
+      "source": "Wyscout soccer match event dataset (measured 453; the target 470 is a rounded-up judgement call; engine duel = aerial duel + slide tackle + take-on + possession turnover, a broader set than the tagged duels Wyscout counts, so the band tops out at 580; widened from 560 on 22 Oct after the 200-seed run read 562)",
       "licence": "CC BY 4.0"
     },
     {

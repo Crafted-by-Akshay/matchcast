@@ -56,10 +56,13 @@ def main() -> int:
     ap.add_argument(
         "--results", type=Path, help="reuse a folder holding summary.json instead of running"
     )
+    ap.add_argument("--out", type=Path, help="keep the run's files here (default: a temp folder)")
     a = ap.parse_args()
     out = a.results
     if out is None:
-        out = Path(tempfile.mkdtemp(prefix="realism-"))
+        out = a.out or Path(tempfile.mkdtemp(prefix="realism-"))
+        out.mkdir(parents=True, exist_ok=True)
+        print(f"run files: {out}", file=sys.stderr)
         seeds = f"{a.first_seed}-{a.first_seed + a.matches - 1}"
         subprocess.run(
             [

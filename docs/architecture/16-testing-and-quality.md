@@ -11,7 +11,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: QUA-1 to QUA-9, D
 | Golden | Metrics Python vs JS values (50 events, ±0.001); audit chain vectors | pytest | `packages/metrics/tests/golden/` | Every PR |
 | Integration | `api` with Azurite and in-memory bus; MCP tools against fixtures; SSE replay; store contract suite (§7) | pytest + httpx | `services/api/tests/`, `tests/store/` | Every PR |
 | End to end | Every screen in headless Chromium against local `api` in rules mode, no Azure calls (§5) | Playwright (`@playwright/test`) | `tests/e2e/*.spec.ts` | Every PR |
-| Realism | 200 seeds against 9 targets; determinism | `scripts/check_realism.py` | CI when engine paths change | Path-gated |
+| Realism | 200 seeds against 9 targets; determinism | `scripts/check_realism.py` | By hand (`make realism`); CI nightly is **Planned** | Not gated yet |
 | AI quality | QUA-4 single vs four agents; Ask golden set; red-team set | `eval/compare.py`, `eval/ask_eval.py`, `eval/redteam.jsonl` | CI smoke (5 moments, 10 questions) per PR; full run nightly on the Mac mini | Path-gated + nightly |
 | Smoke (cloud) | `/ready` 200; one event round-trip to a publication | `scripts/smoke_cloud.py` | After every deploy | Every deploy |
 | Release | Logged-out walk-through of the judge path | `docs/release-check.md` | Before the video and on 27 Oct | Manual |

@@ -44,7 +44,7 @@ The engine source is `apps/unified/sources/3d-source/v2`; an identical copy live
 
 ## 5. Realism targets
 
-Both teams together, per match, over 200 seeds. Stored in `data/calibration/targets.json` with value, band, source and licence. Checked by `scripts/check_realism.py`; any miss exits non-zero.
+Both teams together, per match, over 200 seeds. Stored in `data/calibration/targets.json` with value, band, source and licence. Checked by `scripts/check_realism.py`; any miss exits non-zero. Run by hand with `make realism` today; the CI job is **Planned** (nightly).
 
 | Measure | Target | Pass band | Source |
 | --- | --- | --- | --- |

@@ -106,7 +106,7 @@ flowchart LR
     c3[bicep: az bicep build]
     c4[secrets: gitleaks]
     c5[openapi: schema drift]
-    c6[gates on changed paths:<br/>check_realism, ask_eval, compare smoke]
+    c6[gates on changed paths:<br/>ask_eval, compare smoke; check_realism is Planned]
   end
   ci --> ci_jobs
   ci_jobs --> rev[review gate: reviewer session + Akshay merges]
