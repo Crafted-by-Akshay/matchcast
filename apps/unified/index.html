@@ -216,7 +216,7 @@ button,select{font:inherit;color:inherit}
         <div class="ag-table"><table><thead><tr><th>Time</th><th>Metric</th><th>Value</th><th>Units</th><th>Agent</th><th>Source</th><th>Verdict</th><th>Reason</th><th>Approval</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
       </section>
       <section class="ag-panel"><h3>Audit chain</h3>
-        <div class="ag-audit"><button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
+        <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
         <ol class="ag-recs" id="ag-recs"></ol>
       </section>
       <p class="ag-note">Simulated: the agents run rules in the page; the Azure parts are not connected. Watch is the live source. Its events and moments reach this pipeline each second, and its score goes to Broadcast's scoreboard and the Analyst's live pill. Broadcast's pitch still runs its own engine, and the Analyst keeps its season runs, until the single-engine refactor (see README).</p>
@@ -234,6 +234,7 @@ button,select{font:inherit;color:inherit}
 <script src="config.js"></script>
 <script src="agents.js"></script>
 <script src="live.js"></script>
+<script src="trace-panel.js"></script>
 <script>
 "use strict";
 // ---------------------------------------------------------------- the shell
@@ -427,7 +428,8 @@ function renderAgents() {
     ['Route', esc(c.route || 'held, not aired')],
     ['Contract', esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
     ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules fallback · Foundry not connected'],
-    ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending']
+    ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending'],
+    ['Trace', '<button type="button" class="ag-how" data-id="' + esc(c.id) + '">How was this made?</button>']
   ].map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>' : '<p class="empty">Pick a claim to see its provenance.</p>';
   $('ag-recs').innerHTML = MCC.records().slice(-6).reverse().map((x) => '<li>#' + x.seq + ' ' + esc(x.agent) + ' ' + esc(x.action) + ' ' + esc(x.ref) + ' · ' + x.hash.slice(0, 16) + '</li>').join('') || '<li class="empty">No records yet</li>';
 }
@@ -473,6 +475,7 @@ window.addEventListener('message', (e) => {
     }
     return;
   }
+  if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
   if (d.type === 'persona' && view === 'watch') { LV.persona(d.persona); return; }   // the viewer's watch mode changed (EXP-4)
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
@@ -544,6 +547,7 @@ function init(list) {
     if (map[e.key]) location.hash = map[e.key];
   });
   window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'watch'));
+  $('ag-prov').onclick = (e) => { const b = e.target.closest('.ag-how'); if (b) TP.open(b.dataset.id); };
   for (const id of ['lg-verdict', 'lg-agent', 'lg-metric']) $(id).onchange = renderAgents;
   $('lg-export').onclick = exportLedger;
   $('ag-claims').onclick = (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) { picked = tr.dataset.id; renderAgents(); } };
@@ -551,6 +555,7 @@ function init(list) {
     const v = await MCC.verify();
     $('ag-verify-out').textContent = v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '…' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count;
   };
+  $('ag-bad').onchange = (e) => AG.seedBad(e.target.checked);
   AG.onAir((l) => post('broadcast', { src: 'matchcast-shell', type: 'air', line: l }));
   $('aq-mode').onchange = (e) => AG.setMode(e.target.value);
   $('aq-list').onclick = (e) => {
@@ -562,7 +567,7 @@ function init(list) {
     else { const t = prompt('Edit the line (numbers must already be in it)', c.text); if (t == null) return; res = AG.edit(id, PRODUCER, t); }
     $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
   };
-  AG.onChange(() => { renderAgents(); pushCards(); });
+  AG.onChange(() => { $('ag-bad').checked = AG.seeding; renderAgents(); pushCards(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
   const paintPill = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; };
