@@ -4,15 +4,16 @@
 {
   const num = (v, unit) => (typeof v === 'number' && isFinite(v) ? v + (unit || '') : 'n/a');
   const draw = (box) => {
-    const r = window.MC_VISION;
-    if (!r || !r.detection) {
+    const r0 = window.MC_VISION;
+    if (!r0 || typeof r0 !== 'object' || !r0.detection) {
       box.innerHTML = '<h3>Live vision accuracy</h3><p class="muted">No vision run yet. Open Watch, press <b>👁 Vision</b> while a match plays, and the scores appear here.</p>';
       return;
     }
+    const r = Object.assign({}, r0, { detection: r0.detection || {}, identity: r0.identity || {}, passes: r0.passes || {}, ball: r0.ball || {}, speed: r0.speed || {} });
     const rows = [
       ['Detection recall', num(r.detection.recall, '%'), 'players found of those in view (' + num(r.detection.gt) + ' in view)'],
       ['Detection precision', num(r.detection.precision, '%'), 'detections that were real players'],
-      ['Position error', num(r.detection.posErr, ' m'), 'median distance to the true position'],
+      ['Position error', num(r.detection.posErr, ' m'), 'mean distance to the true position'],
       ['Identity, glyph reader only', num(r.identity.accuracy, '%'), 'shirt number read from pixels; ' + num(r.identity.unknownPct, '%') + ' not yet identified, ' + num(r.identity.switches) + ' switches'],
       ['Identity, glyph + Azure OCR', 'Planned', 'second opinion from Azure AI Vision Read (DAT-11, tasks 275 and 277)'],
       ['Pass recall / precision', num(r.passes.recall, '%') + ' / ' + num(r.passes.precision, '%'), num(r.passes.gt) + ' real passes, ' + num(r.passes.vis) + ' detected'],

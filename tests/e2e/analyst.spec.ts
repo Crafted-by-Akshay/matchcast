@@ -180,7 +180,7 @@ test('tracking lab: shows the vision report from Watch and keeps the OCR row Pla
   const errs = collectErrors(page);
   const f = await openPage(page, 'ds-tracking');
   await expect(f.locator('#vis-panel')).toContainText('No vision run yet');
-  const report = { on: true, camera: 'broadcast', captures: 120, resolution: '640x360', detection: { gt: 400, recall: 95.5, precision: 97, posErr: 0.45 },
+  const report = { on: true, camera: 'broadcast', captures: 120, resolution: '640x316', detection: { gt: 400, recall: 95.5, precision: 97, posErr: 0.45 },
     identity: { frames: 300, accuracy: 71.2, unknownPct: 8, switches: 3 }, speed: { playerErr: 0.6, ballErr: 1.1 }, ball: { inView: 100, found: 80, posErr: 0.7 }, passes: { gt: 20, vis: 15, recall: 61, precision: 80 } };
   await f.evaluate((r) => window.postMessage({ src: 'matchcast-shell', type: 'vision', report: r }, '*'), report);
   await expect(f.locator('#vis-panel')).toContainText('95.5%');
@@ -189,6 +189,11 @@ test('tracking lab: shows the vision report from Watch and keeps the OCR row Pla
   await f.evaluate((r) => window.postMessage({ src: 'matchcast-shell', type: 'vision', report: { ...r, on: false, detection: { ...r.detection, recall: null } } }, '*'), report);
   await expect(f.locator('#vis-panel')).toContainText('n/a');
   await expect(f.locator('#vis-panel')).toContainText('switched off');
+  // a report with whole sections missing still draws; a null report (new match) goes back to the empty state
+  await f.evaluate(() => window.postMessage({ src: 'matchcast-shell', type: 'vision', report: { on: true, detection: {} } }, '*'));
+  await expect(f.locator('#vis-panel [data-vis="table"]')).toBeVisible();
+  await f.evaluate(() => window.postMessage({ src: 'matchcast-shell', type: 'vision', report: null }, '*'));
+  await expect(f.locator('#vis-panel')).toContainText('No vision run yet');
   expect(errs).toEqual([]);
 });
 
@@ -198,8 +203,8 @@ test('vision on in Watch reaches the Tracking lab', async ({ page }) => {
   await openShell(page, 'watch');
   const watch = await viewFrame(page, 'watch');
   await ready('watch')(page);
-  await watch.evaluate(() => (window as any).visToggle?.(true) ?? (document.getElementById('visb') as HTMLElement).click());
-  await page.waitForTimeout(6000);   // Watch posts the report every 5 s while Vision is on
+  await watch.evaluate(() => { const b = document.getElementById('visb') as HTMLElement; if (b.getAttribute('aria-pressed') !== 'true') b.click(); });
+  await expect(watch.locator('#visb')).toHaveAttribute('aria-pressed', 'true');
   await page.evaluate(() => { location.hash = 'analyst'; });
   const f = await viewFrame(page, 'analyst');
   await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });

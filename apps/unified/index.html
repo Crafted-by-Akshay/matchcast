@@ -506,6 +506,7 @@ window.addEventListener('message', (e) => {
     const s = d.setup, fxId = fixtureOf(s);
     f.key = keyOf(s); f.sent = null;
     M.setup = s; M.fixture = fxId;
+    if (view === 'watch' && M.vision) { M.vision = null; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'vision', report: null }); }   // a new Watch match: the old match's scores no longer apply
     $('v-' + view).classList.add('ready');
     if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); }   // a new match from Watch starts a new agent run
     prefetchOthers();
