@@ -8,6 +8,8 @@ dependencies = [
     "matchcast-agents",
     "matchcast-contracts",
     "mcp>=2,<3",
+    "numpy",
+    "onnxruntime",
     "starlette",
 ]
 
