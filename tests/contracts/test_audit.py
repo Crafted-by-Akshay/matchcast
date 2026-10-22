@@ -122,9 +122,7 @@ def test_unknown_action_is_rejected() -> None:
 
 def test_canonical_json_is_stable_across_languages() -> None:
     value = {"b": [1.0, 2.5, None, True], "a": "Köln ☃", "c": {"z": 0, "y": -3.25}}
-    assert canonical_json(value) == (
-        '{"a":"Köln ☃","b":[1,2.5,null,true],"c":{"y":-3.25,"z":0}}'
-    )
+    assert canonical_json(value) == ('{"a":"Köln ☃","b":[1,2.5,null,true],"c":{"y":-3.25,"z":0}}')
 
 
 @pytest.mark.parametrize("bad", [float("nan"), 1e-7, 1e21, 2**53])

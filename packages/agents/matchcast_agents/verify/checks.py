@@ -28,7 +28,7 @@ def recompute(
     events: tuple[dict[str, Any], ...] | list[dict[str, Any]], metric: str, upto: int
 ) -> int:
     """Count a metric straight from the stored events up to a sequence; never from agent state."""
-    name, team = metric.split(":")
+    name, team = metric.split(":", 1)
     total = 0
     for event in events:
         if event["stream_sequence"] > upto or event["payload"]["type"] in (

@@ -77,6 +77,7 @@ def test_stream_replays_publications_then_audit_as_sse(client: TestClient) -> No
     frames = [f for f in response.text.split("\n\n") if f]
     names = [f.splitlines()[0] for f in frames]
     assert names[:2] == ["event: status", "event: state"]
+    assert "rules_fallback" in frames[0]
     pubs = [
         json.loads(f.splitlines()[-1][6:]) for f in frames if f.startswith("event: publication")
     ]
@@ -169,3 +170,60 @@ def test_trace_lists_each_agent_step_for_a_line(client: TestClient) -> None:
     assert "line_drafted" in actions and "line_verified" in actions
     first = client.get(f"/v1/matches/match-short/trace/{repaired['repair_of']}", params=Q).json()
     assert "line_rejected" in [s["action"] for s in first["steps"]]
+
+
+def test_the_unified_app_client_can_create_a_match_and_get_lines(client: TestClient) -> None:
+    """Mirrors apps/unified/live.js: extra descriptive fields, slug ids, no names, persona 'fan'."""
+    stream = {"tenant_id": "demo", "session_id": "demo-x", "match_id": "m-x"}
+    roster = {
+        "kind": "roster",
+        "schema_version": "1.0.0",
+        "stream": stream,
+        "pitch": {"length_m": 105, "width_m": 68},
+        "ball_id": "ball",
+        "team_ids": ["harbour", "north-gate"],
+        "players": [
+            {"player_id": "ada-kerr", "team_id": "harbour"},
+            {"player_id": "bo-ito", "team_id": "north-gate"},
+        ],
+    }
+    body = {
+        "session_id": "demo-x",
+        "match_id": "m-x",
+        "seed": 0,
+        "engine_version": "unified-1",
+        "home_team_id": "harbour",
+        "away_team_id": "north-gate",
+        "venue_id": "v1",
+        "kickoff_local": "2026-10-22T10:00:00",
+        "approval_mode": "auto",
+        "roster": roster,
+    }
+    assert client.post("/v1/matches", json=body).status_code == 201
+    goal = {
+        "kind": "event",
+        "schema_version": "1.0.0",
+        "stream": stream,
+        "event_id": "e1",
+        "stream_sequence": 1,
+        "revision": 0,
+        "event_time_ms": 60000,
+        "emitted_at": "2026-10-22T10:01:00.000Z",
+        "clock": {"period": 1, "period_elapsed_ms": 60000},
+        "payload": {
+            "type": "goal",
+            "player_id": "ada-kerr",
+            "team_id": "harbour",
+            "own_goal": False,
+            "position_unit": "m",
+            "position": {"x": 100, "y": 34, "z": 0},
+        },
+    }
+    q = {"session_id": "demo-x"}
+    assert (
+        client.post("/v1/matches/m-x/events", params=q, json={"events": [goal]}).status_code == 202
+    )
+    text = client.get(
+        "/v1/matches/m-x/stream", params={**q, "persona": "fan", "follow": "false"}
+    ).text
+    assert "Ada Kerr" in text and "Harbour" in text

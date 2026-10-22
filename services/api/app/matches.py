@@ -21,7 +21,13 @@ TENANT = "demo"
 HEARTBEAT_S = 15
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 PRODUCER_ROLES = ("Producer", "Admin")
+PERSONA_ALIASES = {"fan": "casual", "producer": "broadcast"}
 STATUS = {"not_found": 404, "match_exists": 409, "forbidden_role": 403, "not_approvable": 409}
+
+
+def pretty(identifier: str) -> str:
+    """'harbour-united' -> 'Harbour United': display text when the client sends no names."""
+    return " ".join(part.capitalize() for part in identifier.replace("_", "-").split("-") if part)
 
 
 class Problem(Exception):
@@ -53,6 +59,13 @@ class MatchCreate(BaseModel):
     clubs: dict[str, str] = Field(default_factory=dict)
     approval_mode: Literal["auto", "producer"] = "auto"
     seed_bad_claim: bool = False
+    # descriptive fields from docs/architecture/12-api.md; stored with the match, not used by agents
+    seed: int | None = None
+    engine_version: str | None = None
+    home_team_id: str | None = None
+    away_team_id: str | None = None
+    venue_id: str | None = None
+    kickoff_local: str | None = None
 
 
 class EventBatch(BaseModel):
@@ -124,17 +137,23 @@ def build_router(registry: Registry) -> APIRouter:
                 422, "contract_invalid", "roster stream must match this match", "/roster/stream"
             )
         config = WorkflowConfig(approval_mode=body.approval_mode)
+        players = body.roster.get("players")
+        teams = body.roster.get("team_ids")
         try:
+            names = {p["player_id"]: pretty(p["player_id"]) for p in players or []} | body.names
+            clubs = {team: pretty(team) for team in teams or []} | body.clubs
             flow = MatchWorkflow(
                 stream=stream,
                 roster=body.roster,
-                names=body.names,
-                clubs=body.clubs,
+                names=names,
+                clubs=clubs,
                 agents=rules_agents(config.personas, seed_bad_claim=body.seed_bad_claim),
                 config=config,
             )
-        except ContractError as error:
-            raise Problem(422, "contract_invalid", str(error), error.path) from error
+        except (ContractError, TypeError, KeyError) as error:
+            raise Problem(
+                422, "contract_invalid", str(error), getattr(error, "path", "/roster")
+            ) from error
         registry.flows[key] = flow
         return {"stream": stream, "approval_mode": body.approval_mode, "mode": flow.agents.mode}
 
@@ -166,12 +185,15 @@ def build_router(registry: Registry) -> APIRouter:
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
         flow = registry.get(session_id, match_id)
+        persona = PERSONA_ALIASES.get(persona or "", persona)
 
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and persona and item.data["persona"] != persona)
 
+        status_name = "rules_fallback" if flow.agents.mode == "rules" else "live"
+
         async def body() -> AsyncIterator[str]:
-            yield StreamEvent("status", None, {"status": flow.agents.mode}).encode()
+            yield StreamEvent("status", None, {"status": status_name}).encode()
             yield StreamEvent("state", None, _state_json(flow)).encode()
             replay = [e for e in flow.hub.replay_after(last_event_id) if wanted(e)]
             if not follow:

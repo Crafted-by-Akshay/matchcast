@@ -4,7 +4,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-TEAMS = ("home", "away")
 COUNTED = ("goals", "shots", "shots_on_target", "tackles_won", "fouls", "cards", "red_cards")
 
 
@@ -14,10 +13,12 @@ class MatchState(BaseModel):
     event_time_ms: int = 0
     period: int = 1
     possession: str | None = None
-    score: dict[str, int] = Field(default_factory=lambda: dict.fromkeys(TEAMS, 0))
-    counts: dict[str, dict[str, int]] = Field(
-        default_factory=lambda: {m: dict.fromkeys(TEAMS, 0) for m in COUNTED}
-    )
+    score: dict[str, int] = Field(default_factory=dict)
+    counts: dict[str, dict[str, int]] = Field(default_factory=lambda: {m: {} for m in COUNTED})
+
+    def count(self, metric: str, team: str) -> int:
+        return self.score.get(team, 0) if metric == "goals" else self.counts[metric].get(team, 0)
+
     last_events: list[str] = Field(default_factory=list)
 
     def snapshot(self) -> dict[str, int]:
@@ -53,9 +54,10 @@ def apply(state: MatchState, event: dict[str, Any]) -> MatchState:
     nxt.event_time_ms = max(nxt.event_time_ms, event["event_time_ms"])
     nxt.period = event["clock"]["period"]
     for metric, team in counted(payload):
-        nxt.counts[metric][team] += 1
+        nxt.counts[metric][team] = nxt.counts[metric].get(team, 0) + 1
     if payload["type"] == "goal":
-        nxt.score[payload["team_id"]] += 1
+        scorer = payload["team_id"]
+        nxt.score[scorer] = nxt.score.get(scorer, 0) + 1
     if payload["type"] == "possession_change":
         nxt.possession = payload["to_team_id"]
     elif payload["type"] in ("pass", "carry", "shot"):
