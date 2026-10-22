@@ -25,11 +25,15 @@ from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, normalise
 from matchcast_agents.statsdesk import StatsDeskError
-from matchcast_agents.store import MemoryStore, stream_key
+from matchcast_agents.store import stream_key
+from matchcast_agents.tables import build_store
+from matchcast_agents.tools import ToolCall
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
+from matchcast_mcp.server import create_server
+from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
@@ -184,7 +188,9 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
-        self.store = MemoryStore()  # one store for every match, so the MCP tools see them all
+        self.store = (
+            build_store()
+        )  # MATCHCAST_STORE=table|memory; one store for every match, so the MCP tools see them all
         self.require_role = require_role
         self.stats_desk = _local_stats_desk()
         self._model_client: ModelClient | None = None
@@ -209,9 +215,26 @@ class Registry:
     def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
         """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
         client = self.model_client()
+        tool_call = self.tool_call()
         if client is None:
-            return rules_agents(personas, **seed)
-        return live_agents(client, personas, **seed)
+            return rules_agents(personas, tool_call=tool_call, **seed)
+        return live_agents(client, personas, tool_call=tool_call, **seed)
+
+    def tool_call(self) -> ToolCall | None:
+        """With MATCHCAST_TOOLS=mcp the Analyst calls the MCP tools in memory, against this
+        process's store. A separate `mcp` container needs the shared store first (DAT-2)."""
+        if os.environ.get("MATCHCAST_TOOLS") != "mcp":
+            return None
+        server = create_server(self.store)
+
+        async def call(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+            async with Client(server) as client:
+                result = await client.call_tool(tool, arguments)
+            if result.is_error or result.structured_content is None:
+                raise RuntimeError(f"{tool} returned an error")
+            return result.structured_content
+
+        return call
 
     def model_client(self) -> ModelClient | None:
         if self._model_client is None and os.environ.get("MATCHCAST_AGENT_MODE") == "live":
@@ -245,8 +268,8 @@ def _line_json(line: LineRecord) -> dict[str, Any]:
     return line.model_dump()
 
 
-def _claim_verdict(flow: MatchWorkflow, claim_id: str) -> str:
-    states = [ln.status for ln in flow.store.lines(flow.sk) if claim_id in ln.claim_ids]
+def _claim_verdict(lines: list[LineRecord], claim_id: str) -> str:
+    states = [ln.status for ln in lines if claim_id in ln.claim_ids]
     if any(s in ("verified", "approved", "published") for s in states):
         return "verified"
     if any(s in ("rejected", "abstained", "killed") for s in states):
@@ -258,10 +281,11 @@ def _claim_rows(
     flow: MatchWorkflow, verdict: str | None, agent: str | None, metric: str | None
 ) -> list[dict[str, Any]]:
     rows = []
+    lines = list(flow.store.lines(flow.sk))  # read once: a durable store scans a partition per call
     for row in flow.store.claims(flow.sk):
         packet = row["packet"]
         item = {**packet, "agent": row["agent"], "moment_id": row["moment_id"],
-                "verdict": _claim_verdict(flow, packet["claim_id"])}  # fmt: skip
+                "verdict": _claim_verdict(lines, packet["claim_id"])}  # fmt: skip
         if (verdict and item["verdict"] != verdict) or (agent and item["agent"] != agent):
             continue
         if metric and item["metric"] != metric:

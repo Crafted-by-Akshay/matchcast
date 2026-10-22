@@ -63,6 +63,13 @@ class AuditRepo(Protocol):
     def audit_records(self, sk: str, from_sequence: int = 1, limit: int = 1000) -> list[dict]: ...
 
 
+class Store(
+    MatchRepo, EventRepo, StateRepo, ClaimRepo, LineRepo, PublicationRepo, RecapRepo,
+    CheckpointRepo, AuditRepo, Protocol,
+):  # fmt: skip
+    """Every repository at once: what the workflow and the MCP tools need (ADR-0015)."""
+
+
 class MemoryStore:
     """Dictionaries behind the repository protocols; one process, no persistence."""
 
