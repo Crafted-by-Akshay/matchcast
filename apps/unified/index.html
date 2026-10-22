@@ -557,6 +557,7 @@ window.addEventListener('message', (e) => {
     LV.identify(d.track_id, d.team_hint, d.crop).then((result) => reply({ result }), (err) => reply({ error: !err.status ? 'unavailable' : err.status === 429 ? 'rate_limited' : 'failed', retry_after: err.retry_after || 0 }));
     return;
   }
+  if (d.type === 'vision-events' && view === 'watch') { LV.visionEvents(d.batch); return; }   // the tracker's derived passes, on the separate .vision stream (DAT-11)
   if (d.type === 'ask' && (view === 'watch' || view === 'broadcast')) { answerAsk(d.id, d.q, view); return; }
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
   if (d.type === 'vision' && view === 'watch') {   // Watch's pixel-only tracker, scored against engine truth (DAT-11); the Analyst's Tracking lab shows it

@@ -124,9 +124,45 @@ const LV = (() => {
     for (const ev of batch || []) { const p = toPacket(ev, run.key, run.seq + 1, new Date().toISOString()); if (p) { run.seq++; run.queue.push(p); } }
     flush();
   };
+  // Vision derived events (DAT-11 task 277): the tracker's passes, on their own stream `<session>.vision` so they never mix with engine truth.
+  // Its own match is created on first use from the same roster; packets are plain contract `pass` events.
+  const vstream = (r) => Object.assign({}, r.key, { session_id: r.key.session_id + '.vision' });
+  const visionEvents = (batch) => {
+    const r = run; if (!r || !r.roster || !batch || !batch.length) return;
+    const v = r.vision || (r.vision = { key: vstream(r), seq: 0, queue: [], created: false, sending: false });
+    for (const b of batch) {
+      if (b.type !== 'pass' || !b.team || !b.from || !b.to) continue;
+      const ms = Math.max(0, Math.round(b.minute * 60000)), second = b.minute >= 45;
+      v.queue.push({ kind: 'event', schema_version: '1.0.0', stream: v.key, event_id: 'v' + (++v.seq), stream_sequence: v.seq, revision: 0, event_time_ms: ms, emitted_at: new Date().toISOString(),
+        clock: { period: second ? 2 : 1, period_elapsed_ms: second ? ms - 45 * 60000 : ms },
+        payload: { type: 'pass', player_id: slug(b.from), recipient_player_id: slug(b.to), team_id: slug(b.team), position_unit: 'm',
+          start_position: { x: b.start.x, y: b.start.y, z: 0 }, end_position: { x: b.end.x, y: b.end.y, z: 0 } } });
+    }
+    if (v.queue.length > 2000) v.queue.splice(0, v.queue.length - 2000);   // an api that never accepts the stream does not grow the queue without bound
+    sendVision(r, v);
+  };
+  const sendVision = async (r, v) => {
+    if (v.sending || !v.queue.length) return;
+    v.sending = true;
+    const at = (path) => api() + path + '?' + new URLSearchParams({ session_id: v.key.session_id }), json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    try {
+      if (!v.created) {
+        const res = await fetch(api() + '/v1/matches', json({ session_id: v.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1-vision', home_team_id: r.roster.team_ids[0], away_team_id: r.roster.team_ids[1], venue_id: 'v1',
+          kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: Object.assign({}, r.roster, { stream: v.key }) }));
+        if (res.ok || res.status === 409) v.created = true; else throw new Error('create ' + res.status);
+      }
+      const batch = v.queue.slice(0, BATCH);
+      const res = await fetch(at('/v1/matches/' + r.id + '/events'), json({ events: batch }));
+      if (!res.ok) throw new Error('events ' + res.status);
+      v.queue.splice(0, batch.length);
+    } catch (e) { /* kept; the next batch retries */ }
+    v.sending = false;
+    if (v.queue.length && run === r && v.created) sendVision(r, v);
+  };
+
   // the viewer's watch mode (casual, analyst, club:<key>, player:<name>, metric:<name>): the stream is reopened for it
   const setPersona = (p, l) => { l = l || 'en'; if (p === persona && l === lang) return; persona = p; lang = l; if (run) { if (run.es) run.es.close(); open(); } };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, stop, persona: setPersona, toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
+    begin, events, visionEvents, stop, persona: setPersona, toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();
