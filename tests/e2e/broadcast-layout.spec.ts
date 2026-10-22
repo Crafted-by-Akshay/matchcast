@@ -12,8 +12,8 @@ for (const [name, size] of [['desktop', { width: 1440, height: 900 }], ['phone',
     const bc = await viewFrame(page, 'broadcast');
     await bc.evaluate(() => {   // show every overlay at once, with a realistic goal line
       const l3 = document.getElementById('mc-l3')!, tele = document.getElementById('mc-tele')!;
-      l3.hidden = false; l3.textContent = "23' Goal for Arsenal (A One). Arsenal 1–0 Chelsea at 23 minutes.";
-      tele.hidden = false; tele.innerHTML = '<li>Goal for Arsenal (A One). Arsenal 1–0 Chelsea.</li><li>Shot by Chelsea.</li>';
+      l3.hidden = false; l3.textContent = "23' Goal for Thames Rovers (A One). Thames Rovers 1–0 Coloso Ciudad at 23 minutes.";
+      tele.hidden = false; tele.innerHTML = '<li>Goal for Thames Rovers (A One). Thames Rovers 1–0 Coloso Ciudad.</li><li>Shot by Coloso Ciudad.</li>';
     });
     const boxes = await bc.evaluate(() => ['mc-replay', 'mc-onair', 'mc-l3', 'mc-tele'].map((id) => { const r = document.getElementById(id)!.getBoundingClientRect(); const v = document.getElementById('bc-view')!.getBoundingClientRect(); return { id, x: r.x, y: r.y, w: r.width, h: r.height, vx: v.x, vw: v.width }; }));
     for (const b of boxes) { expect(b.w, b.id + ' has a size').toBeGreaterThan(0); expect(b.x, b.id + ' inside the view (left)').toBeGreaterThanOrEqual(b.vx - 1); expect(b.x + b.w, b.id + ' inside the view (right)').toBeLessThanOrEqual(b.vx + b.vw + 1); }

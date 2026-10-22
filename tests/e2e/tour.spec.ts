@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { openShell, viewFrame } from './helpers';
 
 // First-time tour: opens from the Tour button or ?tour=1, never by itself; each step shows its view; Esc and Close leave it.

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // EXP-17: one EN/ES/HI selector in the shell drives Watch, Broadcast (graphics and desk script) and the voice; a line with no checked translation stays English.
@@ -24,8 +24,8 @@ test('language selector: voice speaks the checked translation, falls back to Eng
   // voice: the Spanish line is spoken with lang es; a line whose translation failed is spoken in English
   await page.evaluate(() => {
     const w = window as any; w.__said = []; const say = VC.say; VC.say = (t: string, o: any) => { w.__said.push([t, o.lang]); return say(t, o); };
-    AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'ars', player: 'A One', score: '1-0', data: {} }], []);
+    AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });
   await expect.poll(() => page.evaluate(() => (window as any).__said.length)).toBeGreaterThan(0);
   const said = await page.evaluate(() => (window as any).__said);

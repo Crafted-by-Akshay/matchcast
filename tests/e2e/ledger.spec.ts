@@ -10,9 +10,9 @@ test('ledger: newest first, filters, provenance, CSV export with a matching SHA-
   const errs = collectErrors(page);
   await openShell(page, 'agents');
   await page.evaluate(() => {
-    const key = 'k1'; AG.reset(key, { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
-    AG.onWatch(key, [{ minute: 10.1, type: 'goal', team: 'ars', player: 'A One', score: '1-0', data: {} }], []);
-    AG.onWatch(key, [{ minute: 33.3, type: 'shot', team: 'che', player: 'C One', x: 90, y: 30, xg: 0.4, kind: 'open play', data: { xg: 0.4, kind: 'open play' } }], []);
+    const key = 'k1'; AG.reset(key, { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
+    AG.onWatch(key, [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
+    AG.onWatch(key, [{ minute: 33.3, type: 'shot', team: 'cco', player: 'C One', x: 90, y: 30, xg: 0.4, kind: 'open play', data: { xg: 0.4, kind: 'open play' } }], []);
   });
   const rows = page.locator('#ag-claims tr[data-id]');
   await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(2);

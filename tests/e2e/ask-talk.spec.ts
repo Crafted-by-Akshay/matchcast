@@ -5,9 +5,9 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 declare const AG: any; declare function answerAsk(id: number, q: string): Promise<void>;
 
 const seed = (page) => page.evaluate(() => {
-  AG.reset('k1', { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
+  AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
   const sh = (m: number, team: string, player: string) => ({ minute: m, type: 'shot', team, player, x: 90, y: 30, xg: 0.1, kind: 'open play', data: { xg: 0.1, kind: 'open play' } });
-  AG.onWatch('k1', [sh(5, 'ars', 'A One'), sh(9, 'ars', 'A One'), sh(12, 'che', 'C One'), sh(20, 'ars', 'A One'), sh(31, 'che', 'C One')], []);
+  AG.onWatch('k1', [sh(5, 'thr', 'A One'), sh(9, 'thr', 'A One'), sh(12, 'cco', 'C One'), sh(20, 'thr', 'A One'), sh(31, 'cco', 'C One')], []);
 });
 
 test('ask: the player with the most shots, a verified tick, from the event log; an unknown question abstains', async ({ page }) => {
@@ -43,7 +43,7 @@ test('ask: Watch sends the typed question to the shell and shows the checked ans
   await ready('watch')(page);
   const w = await viewFrame(page, 'watch');
   await page.evaluate(() => {
-    AG.reset((AG.run && AG.run.key) || 'k1', (AG.run && AG.run.names) || { hk: 'ars', ak: 'che', home: 'Arsenal', away: 'Chelsea' });
+    AG.reset((AG.run && AG.run.key) || 'k1', (AG.run && AG.run.names) || { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
   });
   await seed(page);
   const key = await page.evaluate(() => AG.run.key);
