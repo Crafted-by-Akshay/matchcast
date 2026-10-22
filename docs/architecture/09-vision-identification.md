@@ -1,6 +1,6 @@
 # 09 Vision: auto-eventing and player identification (OCR)
 
-Status: **Proposed**. It needs Akshay's OK on ADR-0010. Last reviewed 22 Oct 2026. Backlog: DAT-11 (new). Prototype: `autoevent.js` (v9 report `/mnt/project-files/matchcast-v2/v9/reports/auto.md`).
+Status: **Agreed design** (ADR-0010 accepted by Akshay, 22 Oct 2026). Last reviewed 22 Oct 2026. Backlog: DAT-11 (new). Prototype: `autoevent.js` (v9 report `/mnt/project-files/matchcast-v2/v9/reports/auto.md`).
 
 ## 1. Why
 

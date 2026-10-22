@@ -1,6 +1,6 @@
 # ADR-0009: AI Search Free tier for the knowledge base, with a Blob fallback
 
-- **Status:** Proposed (needs Akshay's OK)
+- **Status:** Accepted (Akshay, 22 Oct 2026)
 - **Date:** 2026-10-22
 - **Decided by:** Agents lane
 

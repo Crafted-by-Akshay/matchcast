@@ -1,6 +1,6 @@
 # 05 MatchCast Assistant (RAG chatbot)
 
-Status: **Proposed**. It needs Akshay's OK on ADR-0009 (AI Search Free tier). Last reviewed 22 Oct 2026. Backlog: EXP-5 (Ask), AGT-16 (knowledge base and retrieval, new).
+Status: **Agreed design** (ADR-0009 accepted by Akshay, 22 Oct 2026). Last reviewed 22 Oct 2026. Backlog: EXP-5 (Ask), AGT-16 (knowledge base and retrieval, new).
 
 ## 1. What it is
 

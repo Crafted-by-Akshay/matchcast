@@ -7,7 +7,7 @@ Last reviewed 22 Oct 2026. Structure: [arc42](https://arc42.org/overview) sectio
 ## Status legend
 
 - **Agreed design**: build to it.
-- **Proposed**: build to it, but the linked ADR still needs Akshay's OK; keep the change easy to swap.
+- **Proposed**: build to it, but the linked ADR still needs Akshay's OK; keep the change easy to swap. (None open as of 22 Oct 2026.)
 - **Simulated**: shown in the UI but not connected; must carry the "Simulated" label.
 
 ## Contents

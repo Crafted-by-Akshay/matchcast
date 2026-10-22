@@ -1,6 +1,6 @@
 # ADR-0010: Azure AI Vision Read as a second opinion for shirt numbers
 
-- **Status:** Proposed (needs Akshay's OK)
+- **Status:** Accepted (Akshay, 22 Oct 2026)
 - **Date:** 2026-10-22
 - **Decided by:** Data lane
 
