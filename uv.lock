@@ -520,6 +520,7 @@ dependencies = [
     { name = "httpx" },
     { name = "matchcast-contracts" },
     { name = "matchcast-metrics" },
+    { name = "opentelemetry-api" },
     { name = "pydantic" },
 ]
 
@@ -528,6 +529,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "matchcast-contracts", editable = "packages/contracts" },
     { name = "matchcast-metrics", editable = "packages/metrics" },
+    { name = "opentelemetry-api", specifier = ">=1.27,<2" },
     { name = "pydantic", specifier = ">=2.9,<3" },
 ]
 
@@ -611,6 +613,7 @@ source = { virtual = "." }
 dev = [
     { name = "httpx" },
     { name = "numpy" },
+    { name = "opentelemetry-sdk" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -624,6 +627,7 @@ smoke = [
 dev = [
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "numpy", specifier = ">=2,<3" },
+    { name = "opentelemetry-sdk", specifier = ">=1.27,<2" },
     { name = "pytest", specifier = ">=8.3,<9" },
     { name = "ruff", specifier = ">=0.11,<1" },
 ]
