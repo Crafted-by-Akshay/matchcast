@@ -33,3 +33,30 @@ test('data platform: model card renders escaped, and the Fabric clip notes it is
   await expect(f.locator('#dp-fab')).toContainText('Paused after filming');
   expect(errs).toEqual([]);
 });
+
+// QUA-3: audit chain and report generation. Ledger, approval and server audit join when EXP-11/12 land in this view.
+test('audit: Verify chain reports the session chain intact', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openShell(page, 'analyst');
+  const f = await viewFrame(page, 'analyst');
+  await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
+  await f.evaluate(() => (window as any).go('audit'));
+  await expect(f.locator('.pg')).toContainText('Unverified');
+  await f.click('#gv-ver');
+  await expect(f.locator('.pg')).toContainText('Intact');
+  expect(errs).toEqual([]);
+});
+
+test('reports: a sample report is drafted from the match numbers and can be submitted', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openShell(page, 'analyst');
+  const f = await viewFrame(page, 'analyst');
+  await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
+  await f.evaluate(() => (window as any).go('reports'));
+  await f.click('#gv-sample');
+  await expect(f.locator('.pg')).toContainText('Key numbers');
+  await expect(f.locator('.pg')).toContainText('Expected goals');
+  await expect(f.getByRole('button', { name: 'Submit for approval' })).toBeVisible();
+  await expect(f.getByRole('button', { name: 'Export .md' })).toBeVisible();
+  expect(errs).toEqual([]);
+});
