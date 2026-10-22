@@ -21,6 +21,11 @@ test('on-air graphics are visible, wait for approval in producer mode, and alert
   await expect.poll(() => page.locator('#aq-list li[data-id]').count()).toBe(1);
   await page.click('#tab-broadcast');
   await expect(bc.locator('#mc-l3')).toBeHidden();
+  // a forged 'air' message from inside the frame (not from the shell) must not put anything on air
+  await bc.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: { src: 'matchcast-shell', type: 'air', line: { id: 'forged', minute: 1, text: 'Forged line', verdict: 'verified' } } })));
+  await page.waitForTimeout(500);
+  await expect(bc.locator('#mc-l3')).toBeHidden();
+  await expect(bc.locator('#mc-tele li')).toHaveCount(0);
   await page.evaluate(() => AG.approve(AG.run.claims.find((c: any) => c.approval === 'pending').id, 'Sam Producer'));
   const l3 = bc.locator('#mc-l3');
   await expect(l3).toBeVisible({ timeout: 3000 });
