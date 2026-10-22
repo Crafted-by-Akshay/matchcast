@@ -155,6 +155,7 @@ class RecapTrigger(BaseModel):
     tenant_id: str = Field(default=TENANT, pattern=ID)
     session_id: str = Field(pattern=ID)
     match_id: str = Field(pattern=ID)
+    final: bool = False  # full time after extra time: write the recaps again over the first ones
 
 
 class _LocalStatsDesk:
@@ -264,6 +265,13 @@ class Registry:
         return flow
 
 
+def _is_stored(store: Any, sk: str) -> bool:
+    hydrate = getattr(store, "hydrate", None)
+    if hydrate is not None:
+        hydrate(sk)
+    return store.get_match(sk) is not None
+
+
 def _line_json(line: LineRecord) -> dict[str, Any]:
     return line.model_dump()
 
@@ -336,6 +344,10 @@ def build_router(registry: Registry) -> APIRouter:
         if key in registry.flows:
             raise Problem(409, "match_exists", "match already exists")
         stream = {"tenant_id": TENANT, "session_id": body.session_id, "match_id": body.match_id}
+        # A match an earlier process stored is not started again over its rows (07 §11).
+        # The store reads Table Storage, so it runs off the event loop.
+        if await asyncio.to_thread(_is_stored, registry.store, stream_key(stream)):
+            raise Problem(409, "match_exists", "match already exists in the store; use a new id")
         if body.roster.get("stream") != stream:
             raise Problem(
                 422, "contract_invalid", "roster stream must match this match", "/roster/stream"
@@ -651,7 +663,7 @@ def build_internal_router(registry: Registry) -> APIRouter:
             raise Problem(403, "forbidden_role", "this route needs the recap function identity")
         flow = registry.get(body.session_id, body.match_id)
         try:
-            recaps = await flow.recap()
+            recaps = await flow.recap(force=body.final)
         except WorkflowError as error:
             raise Problem(503, error.code, str(error)) from error
         return {"match_id": body.match_id, "personas": sorted(recaps)}

@@ -49,9 +49,26 @@ def test_each_match_once_in_first_seen_order() -> None:
 
 def test_extra_time_is_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RECAP_FINAL_PERIODS", "2, 4")
-    assert full_time_matches([event(period=4)]) == [MatchKey("demo", "s1", "m1")]
+    assert full_time_matches([event(period=4)]) == [MatchKey("demo", "s1", "m1", True)]
     monkeypatch.setenv("RECAP_FINAL_PERIODS", "2")
     assert full_time_matches([event(period=4)]) == []
+
+
+def test_with_extra_time_the_end_of_period_two_is_not_final(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The function cannot know whether extra time follows, so period 2 writes a first recap and
+    the end of period 4 asks the api to write it again."""
+    monkeypatch.setenv("RECAP_FINAL_PERIODS", "2,4")
+    assert full_time_matches([event(period=2)]) == [MatchKey("demo", "s1", "m1", False)]
+    assert full_time_matches([event(period=4)]) == [MatchKey("demo", "s1", "m1", True)]
+    both = [event(period=2), event(period=4)]
+    assert full_time_matches(both) == [MatchKey("demo", "s1", "m1", True)]  # one request, final
+
+
+def test_a_league_match_is_never_final(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RECAP_FINAL_PERIODS", "2")
+    assert full_time_matches([event(period=2)]) == [MatchKey("demo", "s1", "m1", False)]
 
 
 def client(handler, token=None) -> RecapClient:
@@ -70,7 +87,7 @@ def test_posts_the_match_with_a_bearer_token() -> None:
     assert result == {"match_id": "m1", "personas": ["casual"]}
     assert seen == {
         "path": "/internal/v1/recaps", "auth": "Bearer tok",
-        "body": {"tenant_id": "demo", "session_id": "s1", "match_id": "m1"},
+        "body": {"tenant_id": "demo", "session_id": "s1", "match_id": "m1", "final": False},
     }  # fmt: skip
 
 
