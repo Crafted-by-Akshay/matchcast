@@ -7,7 +7,7 @@
     const W = 160, H = 28, ok = pts.filter((p) => p && fin(p[key]));
     if (ok.length < 2) return '<span class="muted">too early</span>';
     const line = ok.map((p, i) => (i / (ok.length - 1) * W).toFixed(1) + ',' + (H - Math.max(0, Math.min(1, p[key] / max)) * (H - 3) - 1.5).toFixed(1)).join(' ');
-    return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(label) + ' over the last ' + ok.length + ' minutes"><polyline fill="none" stroke="' + color + '" stroke-width="2" points="' + line + '"/></svg>';
+    return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(label) + ' by minute, ' + ok.length + ' points, latest ' + esc(String(Math.round(ok[ok.length - 1][key] * 10) / 10)) + '"><polyline fill="none" stroke="' + color + '" stroke-width="2" points="' + line + '"/></svg>';
   };
   const draw = (box) => {
     const d = window.MC_INDICES;

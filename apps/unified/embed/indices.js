@@ -1,5 +1,5 @@
 // ---- DAT-4 task 272: control, chaos and tempo over a rolling 5-minute window, from the match's own events (docs/metrics.md).
-// A JavaScript port of packages/metrics/matchcast_metrics/indices.py; tests/e2e/indices-parity.spec.ts holds it to the Python results on shared golden cases.
+// A JavaScript port of packages/metrics/matchcast_metrics/indices.py; tests/e2e/indices.spec.ts holds it to the Python results on shared golden cases.
 // In the Watch build it also turns the engine's events into the metric inputs, draws a sparkline in Analyst mode, and sends the series to the shell
 // for the Analyst's match page. Pass completion is inferred: a pass counts as completed unless the other team wins the ball within 6 s of it.
 (() => {
@@ -48,6 +48,7 @@
   const byName = (n) => players.find((q) => q.name === n);
   onMatchEvent((e) => {
     const t_ms = Math.round((+e.minute || 0) * 60000);
+    if (ev.length && t_ms < ev[ev.length - 1].t_ms - 60000) ev.length = 0;   // the clock went back: a new match started in this page
     if (e.type === 'pass') {
       const p = byName(e.player), q = byName(e.to); if (!p || !q) return;
       ev.push({ type: 'pass', t_ms, team: e.team, completed: true, x0: p.pos2.x, y0: p.pos2.y, x1: q.pos2.x, y1: q.pos2.y, attack_x: dirOf(p.ti) > 0 ? 105 : 0 });
@@ -55,7 +56,8 @@
     if (ev.length > 6000) ev.splice(0, ev.length - 6000);
   });
   // completion is decided from the turnovers that followed, so it is applied to a copy when the numbers are read
-  const view = () => ev.map((e) => (e.type === 'pass' ? Object.assign({}, e, { completed: !ev.some((o) => o.type === 'turnover' && o.team !== e.team && o.t_ms > e.t_ms && o.t_ms <= e.t_ms + 6000) }) : e));
+  // (event minutes are rounded to 0.1, so a later event in the same bucket has the same time: order decides, and the window allows one bucket of slack)
+  const view = () => ev.map((e, i) => (e.type === 'pass' ? Object.assign({}, e, { completed: !ev.some((o, j) => j > i && o.type === 'turnover' && o.team !== e.team && o.t_ms <= e.t_ms + 6000) }) : e));
   const nowMs = () => Math.round((ENV.minute || 0) * 60000);
   window.mcIndicesNow = () => { const v = view(), n = nowMs(); return { t_ms: n, control: control(v, n), chaos: chaos(v, n), tempo: tempo(v, n), series: series(v, n), passes: count(v, (e) => e.type === 'pass') }; };
   window.mcIndicesReset = () => { ev.length = 0; };
@@ -63,7 +65,7 @@
   // sparkline panel in Analyst mode, under the Match Pulse cards
   const box = document.createElement('div'); box.id = 'mcx-idx'; box.hidden = true;
   box.style.cssText = 'position:fixed;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(150px + env(safe-area-inset-bottom,0px));width:min(260px,calc(100% - 28px));z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:11px/1.4 var(--f-mono);color:var(--ink)';
-  box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Control, chaos and tempo, last 5 minutes');
+  box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Control, chaos and tempo, each over the last 5 minutes');
   document.body.appendChild(box);
   const spark = (pts, key, max, color) => {
     if (pts.length < 2) return '<span style="color:var(--muted)">too early</span>';
@@ -76,7 +78,7 @@
     const r = window.mcIndicesNow();
     const row = (label, key, max, color, val, unit) => '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="width:52px">' + label + '</span>' + spark(r.series, key, max, color) + '<b style="width:44px;text-align:right">' + val + unit + '</b></div>';
     box.innerHTML = row('Control', 'control', 100, '#6BD08A', Math.round(r.control), '') + row('Chaos', 'chaos', 100, '#F5B942', Math.round(r.chaos), '') + row('Tempo', 'tempo', 12, '#8CC2FF', r.tempo.toFixed(1), '/m')
-      + '<div style="color:var(--muted);margin-top:4px">Rolling 5 min from this match\'s events. Pass completion is inferred (no turnover within 6 s).</div>';
+      + '<div style="color:var(--muted);margin-top:4px">Each line is one point a minute for the whole match; the numbers use the last 5 min. Pass completion is inferred (no turnover within 6 s).</div>';
   };
   setInterval(paint, 2000);
   setInterval(() => { if (MCS.framed && S.started) MCS.send({ type: 'indices', data: window.mcIndicesNow() }); }, 5000);
