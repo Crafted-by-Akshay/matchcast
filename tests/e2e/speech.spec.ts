@@ -51,10 +51,13 @@ test('speech: Azure push-to-talk fills Ask the producer; a verified answer is sp
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   await page.evaluate(() => { SPX.listen = async () => 'who is on the ball'; });
-  await bc.evaluate(() => { (window as any).__submitted = []; document.getElementById('dk-askf')!.addEventListener('submit', (e) => { e.stopImmediatePropagation(); e.preventDefault(); (window as any).__submitted.push((document.getElementById('dk-q') as HTMLInputElement).value); }, true); });
-  await bc.locator('.mcx-ptt').dispatchEvent('pointerdown');
-  await expect.poll(() => bc.evaluate(() => (window as any).__submitted)).toEqual(['who is on the ball']);
-
+  await bc.locator('#bc-tabs button[data-p="desk"]').click();
+  await expect(bc.locator('#bcd-q')).toBeVisible();
+  const mic = bc.locator('#pane-desk .mcx-ptt');
+  await expect(mic).toHaveCount(1);
+  await mic.dispatchEvent('pointerdown');
+  await expect(bc.locator('#bcd-q')).toHaveValue('who is on the ball');
+  await expect(bc.locator('#bcd-ans')).not.toHaveText('');   // the mic submitted it
   await page.click('#voice-btn');
   await page.evaluate(() => {
     const w = window as any; w.__said = []; const say = VC.say; VC.say = (t: string, x: any) => { w.__said.push(t); return say(t, x); };
@@ -108,5 +111,22 @@ test('speech: Broadcast Ask the producer shows and speaks a verified answer; an 
   await bc.locator('#bcd-ask').click();
   await expect(bc.locator('#bcd-ai')).not.toContainText('Verified by the Verifier', { timeout: 20_000 });
   expect(await page.evaluate(() => (window as any).__said.length)).toBe(1);   // the unverified question was not spoken
+  expect(errs).toEqual([]);
+});
+
+test('speech: Broadcast Ask shows the rate-limit message and only the newest question writes', async ({ page }) => {
+  test.setTimeout(420_000);
+  const errs = collectErrors(page);
+  await openShell(page, 'agents');
+  await page.click('#tab-broadcast');
+  await ready('broadcast')(page);
+  const bc = await viewFrame(page, 'broadcast');
+  await expect.poll(() => bc.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
+  await page.evaluate(() => { AG.ask = (q: string) => ({ text: 'Answer to ' + q, verdict: 'verified' }); });
+  await bc.locator('#bc-tabs button[data-p="desk"]').click();
+  for (let i = 1; i <= 5; i++) { await bc.locator('#bcd-q').fill('q' + i); await bc.locator('#bcd-ask').click(); await expect(bc.locator('#bcd-ans')).toHaveText('Answer to q' + i); }
+  await bc.locator('#bcd-q').fill('q6'); await bc.locator('#bcd-ask').click();
+  await expect(bc.locator('#bcd-ans')).toContainText('5 questions a minute');
+  await expect(bc.locator('#bcd-ai')).toHaveText('Slow down');
   expect(errs).toEqual([]);
 });
