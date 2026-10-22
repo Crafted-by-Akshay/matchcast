@@ -4,7 +4,7 @@ Status: **Agreed design** (ADR-0009 accepted by Akshay, 22 Oct 2026). Last revie
 
 ## 0. What is built (22 Oct)
 
-Built: the markdown knowledge base and chunker, in-memory BM25 retrieval (the "Search fallback" path), the rules router, Prompt Shields on the question (local screen, Azure client ready), answers with `[kb:…]`/`[claim:…]` citations checked by the Verifier, word limits per persona, the out-of-scope and abstain texts, and 5 questions a minute per browser session. **Planned (needs Azure or later work):** the model router, embeddings and the AI Search index with hybrid search, Prompt Shields on retrieved documents, conversation memory (`conversations` table), the "Search fallback" and "Rules fallback" chips, and the CI quality gate described in §8.
+Built: the markdown knowledge base and chunker, in-memory BM25 retrieval (the "Search fallback" path), the rules router, Prompt Shields on the question (local screen, Azure client ready), answers with `[kb:…]`/`[claim:…]` citations checked by the Verifier, word limits per persona, the out-of-scope and abstain texts, and 5 questions a minute per match session. **Planned (needs Azure or later work):** the model router, embeddings and the AI Search index with hybrid search, Prompt Shields on retrieved documents, conversation memory (`conversations` table), the "Search fallback" and "Rules fallback" chips, and the CI quality gate described in §8.
 
 ## 1. What it is
 
@@ -88,7 +88,7 @@ Rules:
 3. Answer length: casual ≤ 80 words, broadcast ≤ 60 words, analyst ≤ 200 words.
 4. Every sentence ends with at least one citation. A number in the answer must come from a claim (live) or from a chunk (knowledge). Live numbers taken from chunks are rejected with reason `stale_state`.
 5. Conversation memory: the last 3 turns (question and verified answer) from Table `conversations`; at most 10 turns per browser session (**Planned**; each question is answered on its own today).
-6. Rate limit: 5 questions a minute per browser session, shared with `/talk`; 429 with `Retry-After: 60`.
+6. Rate limit: 5 questions a minute per match `session_id` (a per-browser key is **Planned**), shared with `/talk`; 429 with `Retry-After: 60`.
 
 ## 6. Access and keys
 

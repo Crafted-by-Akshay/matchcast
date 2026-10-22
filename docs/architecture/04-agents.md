@@ -95,15 +95,15 @@ Checks 1 to 7 are deterministic and run first. Check 8 runs only if 1 to 7 pass.
 
 ## 6. Tools (MCP server)
 
-All tools are served by `services/mcp` over Streamable HTTP; until a shared store exists (DAT-2) the api mounts the same app at `/mcp` (ADR-0005). Every call carries `match_id` and `up_to_sequence`, so an agent can never read the future. Each result is at most 20 KB.
+All tools are served by `services/mcp` over Streamable HTTP; until a shared store exists (DAT-2) the api mounts the same app at `/mcp` (ADR-0005). Every match tool takes `session_id` and `up_to_sequence` as well as `match_id` (`describe_views`, `query_season` and `search_kb` are not match-scoped), so an agent can never read the future. Each result is at most 20 KB.
 
 | Tool | Parameters | Returns | Source |
 | --- | --- | --- | --- |
 | `get_state` | match_id, up_to_sequence | score, clock, possession, revision, last 10 event ids (players on pitch and cards are **Planned**) | the store's match state |
 | `get_events` | match_id, from_seq, to_seq, kinds[] (max 200) | contract events | Table `events` |
 | `get_metrics` | match_id, up_to_sequence, names[] as `<metric>:<team_id>` (`window_s`, `player_id` are **Planned**) | values with units and `derivation_version` | counts from the match state, xG from `xg.py` |
-| `get_evidence` | claim_id | source events, tool calls, formula inputs | Tables `claims`, `events` |
-| `get_replay_clip` | event_id | event window ±5 s for the explain replay | Table `events` |
+| `get_evidence` | claim_id (plus `session_id`, `up_to_sequence`) | source events, tool calls, formula inputs | Tables `claims`, `events` |
+| `get_replay_clip` | event_id (plus `session_id`, `up_to_sequence`) | event window ±5 s for the explain replay | Table `events` |
 | `predict_danger` | match_id, event_id | probability of a shot within 10 s, model version | **Planned** (needs the danger model, ONNX from Blob `models/danger/`) |
 | `query_season` | sql (SELECT only), limit ≤ 1,000 | rows, columns, sql_hash, elapsed_ms | DuckDB over Blob `season/v1/*.parquet` |
 | `describe_views` | none | allowed views and columns | DuckDB catalogue |
@@ -142,6 +142,9 @@ packages/agents/
     safety.py          Content Safety and Prompt Shields clients, local screens
     store.py tables.py repositories: in-memory and Table Storage
     messages.py        workflow packets
+    context.py state.py  per-event context and the match state the agents read
+    xg.py metrics_spec.py  the xG model and the metric definitions with units
+    recap.py hub.py    full-time recap and the stream hub for SSE
   prompts/             producer.md analyst.md narrator.md verifier.md
   tests/               unit tests, fixtures/match-short.json
 ```
