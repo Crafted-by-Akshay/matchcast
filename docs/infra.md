@@ -44,3 +44,6 @@ Known exception to "no secret": `entra-client-secret` (Key Vault reference on th
 
 ## Scaling proof (PLT-9)
 KEDA rule `match-events-backlog` (threshold 50 unprocessed events) wakes the api from 0. To record the graph: in one shell run `scripts/watch_replicas.sh replicas.csv 1200 5`, in another publish 500 events in 10 s with the replay publisher (DAT-1, 4x mode), then plot `replicas.csv` and commit the image under `docs/evidence/`. Expected: 0 to 1 within 60 s, back to 0 within 10 minutes of the last event. Waiting on DAT-1's replay publisher and the first deployed api image.
+
+## Secret scan proof (PLT-4)
+CI job `secrets` runs gitleaks on the history, then `scripts/gitleaks_proof.sh`, which builds a throwaway repo, checks a clean commit passes, then commits a fake AWS key (assembled at run time, never stored in the repo) and requires the scan to fail. Run it locally with `scripts/gitleaks_proof.sh path/to/gitleaks`.
