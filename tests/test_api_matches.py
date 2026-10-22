@@ -344,6 +344,39 @@ def test_a_stored_match_is_not_started_again_after_a_restart() -> None:
     assert again.status_code == 409 and again.json()["code"] == "match_exists"
 
 
+def test_two_concurrent_creates_of_one_match_make_one_match(monkeypatch) -> None:
+    import asyncio
+    import time
+
+    import httpx
+    from app import matches
+
+    real = matches._is_stored
+
+    def slow(store, sk):  # the store lookup is where the second request would slip past
+        found = real(store, sk)
+        time.sleep(0.2)
+        return found
+
+    monkeypatch.setattr(matches, "_is_stored", slow)
+    app = create_app()
+    body = {
+        "session_id": "short",
+        "match_id": "match-short",
+        "roster": FIXTURE["roster"],
+        "names": FIXTURE["names"],
+        "clubs": FIXTURE["teams"],
+    }
+
+    async def both() -> list[int]:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as http:
+            replies = await asyncio.gather(*(http.post("/v1/matches", json=body) for _ in range(2)))
+        return sorted(r.status_code for r in replies)
+
+    assert asyncio.run(both()) == [201, 409]
+
+
 def test_final_trigger_writes_the_recaps_again(client: TestClient) -> None:
     """After extra time the last period's end replaces the recap written at the end of period 2."""
     create(client)

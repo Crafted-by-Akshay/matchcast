@@ -341,3 +341,28 @@ def test_buffered_store_raises_a_failed_background_write_and_keeps_order() -> No
         TableStore.put_state = real
         store.close()
     assert TableStore(service).get_checkpoint(SK) is None  # nothing landed after the failure
+
+
+def test_buffered_store_changes_nothing_once_a_background_write_failed() -> None:
+    """A retry after the error must not find the event already in memory and skip the table."""
+    service = FakeTableService()
+    store = _buffered(service, FakeContainer())
+    real = TableStore.add_event
+
+    def broken(self, sk, ev):
+        raise RuntimeError("storage down")
+
+    TableStore.add_event = broken
+    try:
+        store.add_event(SK, event(1))
+        with pytest.raises(RuntimeError, match="storage down"):
+            store.flush()
+        with pytest.raises(RuntimeError, match="storage down"):
+            store.add_event(SK, event(2))
+        assert [e["stream_sequence"] for e in store.events(SK)] == [1]  # event 2 left no trace
+        with pytest.raises(RuntimeError, match="storage down"):
+            store.put_state(SK, MatchState(max_sequence=2))
+        assert store.get_state(SK) == MatchState()
+    finally:
+        TableStore.add_event = real
+        store.close()

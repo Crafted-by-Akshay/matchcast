@@ -287,9 +287,13 @@ class BufferedTableStore:
 
     # ---- plumbing ----------------------------------------------------------------------------
 
-    def _write(self, fn: Any, *args: Any) -> None:
+    def _guard(self) -> None:
+        """Refuse a change once a background write has failed, before memory is changed."""
         if self._error is not None:
             raise self._error
+
+    def _write(self, fn: Any, *args: Any) -> None:
+        self._guard()
         self._last = self._pool.submit(self._run, fn, *args)
 
     def _run(self, fn: Any, *args: Any) -> None:
@@ -340,8 +344,9 @@ class BufferedTableStore:
     # ---- matches -----------------------------------------------------------------------------
 
     def put_match(self, sk: str, info: dict[str, Any]) -> None:
+        self._guard()
         self._m.put_match(sk, info)
-        self._write(self._t.put_match, sk, info)
+        self._write(self._t.put_match, sk, copy.deepcopy(info))
 
     def get_match(self, sk: str) -> dict[str, Any] | None:
         info = self._m.get_match(sk)
@@ -354,10 +359,11 @@ class BufferedTableStore:
     # ---- events and state --------------------------------------------------------------------
 
     def add_event(self, sk: str, event: dict[str, Any]) -> bool:
+        self._guard()
         self.hydrate(sk)
         if not self._m.add_event(sk, event):
             return False
-        self._write(self._t.add_event, sk, event)
+        self._write(self._t.add_event, sk, copy.deepcopy(event))
         return True
 
     def events(self, sk: str, up_to_sequence: int | None = None) -> list[dict[str, Any]]:
@@ -369,6 +375,7 @@ class BufferedTableStore:
         return self._m.get_state(sk)
 
     def put_state(self, sk: str, state: MatchState) -> None:
+        self._guard()
         self.hydrate(sk)
         self._m.put_state(sk, state)
         self._write(self._t.put_state, sk, state.model_copy(deep=True))
@@ -376,6 +383,7 @@ class BufferedTableStore:
     # ---- claims, lines, publications, recaps -------------------------------------------------
 
     def put_claim(self, sk: str, claim: dict[str, Any], meta: dict[str, Any]) -> None:
+        self._guard()
         self.hydrate(sk)
         self._m.put_claim(sk, claim, meta)
         self._write(self._t.put_claim, sk, copy.deepcopy(claim), copy.deepcopy(meta))
@@ -389,6 +397,7 @@ class BufferedTableStore:
         return self._m.claims(sk)
 
     def put_line(self, sk: str, line: LineRecord) -> None:
+        self._guard()
         self.hydrate(sk)
         self._m.put_line(sk, line)
         self._write(self._t.put_line, sk, line.model_copy(deep=True))
@@ -402,6 +411,7 @@ class BufferedTableStore:
         return self._m.lines(sk)
 
     def put_publication(self, sk: str, publication: dict[str, Any]) -> None:
+        self._guard()
         self.hydrate(sk)
         self._m.put_publication(sk, publication)
         self._write(self._t.put_publication, sk, copy.deepcopy(publication))
@@ -411,6 +421,7 @@ class BufferedTableStore:
         return self._m.publications(sk)
 
     def put_recap(self, sk: str, persona: str, recap: dict[str, Any]) -> None:
+        self._guard()
         self._m.put_recap(sk, persona, recap)
         self._write(self._t.put_recap, sk, persona, copy.deepcopy(recap))
 
@@ -425,6 +436,7 @@ class BufferedTableStore:
     # ---- checkpoint and audit ----------------------------------------------------------------
 
     def put_checkpoint(self, sk: str, row: dict[str, Any]) -> None:
+        self._guard()
         self.hydrate(sk)
         self._m.put_checkpoint(sk, row)
         self._write(self._t.put_checkpoint, sk, copy.deepcopy(row))
@@ -434,6 +446,7 @@ class BufferedTableStore:
         return self._m.get_checkpoint(sk)
 
     def append_audit(self, sk: str, **fields: Any) -> dict[str, Any]:
+        self._guard()
         self.hydrate(sk)
         record = self._m.append_audit(sk, **fields)
         self._write(self._t.write_audit, sk, copy.deepcopy(record))
