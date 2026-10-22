@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // EXP-5: a typed question is answered by the agents from the event log, or abstains. Shell-driven, as in connection.spec.ts.

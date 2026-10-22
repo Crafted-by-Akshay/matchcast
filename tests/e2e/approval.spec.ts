@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // EXP-7 and EXP-11: approval queue in the Agents tab, lower-third and teleprompter in Broadcast.

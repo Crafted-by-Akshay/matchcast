@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell } from './helpers';
 
 // EXP-8: captions match the line and still show when muted; audio is skipped for stale lines. Speech is stubbed.

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import AxeBuilder from '@axe-core/playwright';
 
 // EXP-14: the Analyst view has no serious or critical WCAG 2 A/AA violations on any of its main pages.

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // EXP-8/EXP-16: Azure Speech through the api's short-lived token. The api and the SDK are faked; the browser voice stays the fallback and keeps its label.

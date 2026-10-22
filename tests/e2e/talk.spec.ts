@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { openShell, ready, viewFrame } from './helpers';
 
 // EXP-16: push-to-talk for Ask the producer in Broadcast, and the Game mode label in Watch. Speech recognition is faked.
