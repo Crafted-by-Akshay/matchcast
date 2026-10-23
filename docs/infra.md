@@ -185,3 +185,5 @@ The api gets `STATS_DESK_URL=https://<mcp internal fqdn>/a2a` from Bicep, so the
 
 ## Agent mode (23 Oct)
 `MATCHCAST_AGENT_MODE` on the api comes from the Bicep parameter `agentMode` (`azd env set AGENT_MODE live`, default `rules`). Flip it to `live` only after the `gpt-6-luna` deployment exists and the quota is approved; `/v1/status` then reports the agents as live, and `scripts/smoke_foundry.py` is the check. Set it back to `rules` if the model call fails.
+
+The chat model deployment name is the Bicep parameter `foundryModelDeployment` (`azd env set FOUNDRY_MODEL_DEPLOYMENT <name>`, default `gpt-6-luna`). While the luna quota is 0, deploy an approved model (for example `gpt-5-mini`, Global Standard, 10K TPM) under its own name and set this value to that name; switching to luna later is the same one setting. Do not name a deployment after a model it does not run.
