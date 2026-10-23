@@ -25,8 +25,9 @@ test('screenshots: Watch, Broadcast, Analyst and Agents', async ({ page }) => {
   await page.screenshot({ path: `${dir}/broadcast.png` });
 
   await tab(page, 'analyst');
-  await viewFrame(page, 'analyst');
-  await page.waitForTimeout(4000);
+  const a = await viewFrame(page, 'analyst');
+  await a.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
+  await page.waitForTimeout(2500);
   await page.screenshot({ path: `${dir}/analyst.png` });
 
   await tab(page, 'agents');
