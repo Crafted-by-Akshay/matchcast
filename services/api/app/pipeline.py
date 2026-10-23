@@ -161,7 +161,7 @@ class Pipeline:
         results = await asyncio.gather(
             *(one(sid, mid, batch) for (sid, mid), batch in groups.items()), return_exceptions=True
         )
-        failures = [r for r in results if isinstance(r, Exception)]
+        failures = [r for r in results if isinstance(r, BaseException)]  # a cancelled match too
         for failure in failures:  # deliver() logs only the one re-raised, so log them all here
             log.error("a match in the batch failed: %r", failure)
         if failures:

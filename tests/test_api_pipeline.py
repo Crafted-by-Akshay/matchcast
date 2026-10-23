@@ -310,3 +310,27 @@ def test_one_failing_match_still_lets_the_others_finish_and_the_batch_retry() ->
     with pytest.raises(RuntimeError):
         asyncio.run(pipeline.handle(batch))
     assert done == ["ok"]
+
+
+def test_a_cancelled_match_is_not_swallowed_by_the_batch() -> None:
+    import asyncio
+
+    from app.pipeline import Pipeline
+
+    class _Registry:
+        async def flow_for(self, session_id: str, match_id: str):
+            class _Flow:
+                async def ingest(self, events: list[dict]) -> dict:
+                    if match_id == "cancelled":
+                        raise asyncio.CancelledError
+                    return {}
+
+            return _Flow()
+
+    pipeline = Pipeline(_Registry(), None, None, None)  # type: ignore[arg-type]
+    batch = [
+        {"stream": {"session_id": "s", "match_id": m}, "stream_sequence": 1}
+        for m in ("cancelled", "ok")
+    ]
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(pipeline.handle(batch))
