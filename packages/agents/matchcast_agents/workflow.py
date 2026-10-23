@@ -839,6 +839,11 @@ class MatchWorkflow:
         if verdict.verdict == "rejected":
             return verdict
         result = await self.safety.analyze(draft.text)
+        if result.source == "local" and hasattr(self.safety, "fallbacks"):
+            self._audit(
+                "system", "content-safety", "fallback_used", draft.line_id,
+                {"fallback_reason": "content_safety"},
+            )  # fmt: skip
         check = Check(
             name="safety",
             passed=result.allowed,

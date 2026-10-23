@@ -91,7 +91,8 @@ def create_app(
         """Live, simulated, planned or unavailable per dependency, for the status pill and page."""
         result: SettingsResult = application.state.settings_result
         mode = result.settings.mode if result.settings is not None else "local"
-        return dependency_status(os.environ, mode)
+        registry = getattr(application.state, "matches", None)
+        return dependency_status(os.environ, mode, getattr(registry, "safety", None))
 
     @application.get("/ready", tags=["health"])
     async def readiness(response: Response) -> dict[str, Any]:

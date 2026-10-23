@@ -165,5 +165,9 @@ After the sign-in run:
 
 mcp: `services/mcp/Dockerfile` did not copy the workspace members `services/api`, `services/worker` and `services/recap`, so `uv sync --locked` failed the same way the api image did. It now copies them. The image `ghcr.io/crafted-by-akshay/matchcast-mcp:sha-f348755` is pushed for linux/amd64. The GHCR package is still private, so `ca-mcp-matchcast-dev` stays on the placeholder until the package is made public, and then its image is set to this tag.
 
+## Content Safety wiring (AGT-12)
+
+`/v1/status` reports `content_safety` live when `CONTENT_SAFETY_ENDPOINT` is a well-formed Cognitive Services host, unavailable when malformed, and simulated locally. Lines are screened by Azure first and by the local screen if Azure fails (counted in `FallbackSafety.fallbacks`). Not verified against the live account from the agent container (no Azure access); check `/v1/status` after the next deploy.
+
 ## CORS and keeping warm (23 Oct)
 The browser calls the api from the web origin (`apps/unified` is built with `API_URL`), so the api app gets `CORS_ORIGINS=https://<web fqdn>` from Bicep; without it a preflight to `/v1/matches` returned 405 with no `access-control-allow-origin`. Both apps scale to zero by default and a cold start takes 17 to 22 s; `azd env set KEEP_WARM true` and `azd provision` keeps one api and one web replica running for the demo window (a small idle compute cost, set it back to `false` afterwards).
