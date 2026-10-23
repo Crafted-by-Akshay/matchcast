@@ -3,7 +3,6 @@
 // With an api, the rules agents keep running beside it, so if the api never answers the viewer still gets lines: status 'fallback'.
 const LV = (() => {
   const WARM_MS = window.MATCHCAST_WARM_MS || 45000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
-  const BROWSER = 'b-' + Math.random().toString(36).slice(2, 10);
   let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
@@ -91,12 +90,16 @@ const LV = (() => {
   };
 
   // a question to the agents (EXP-5): the api's Ask router answers with citations and a verdict; throws when it cannot
+  // the api's Ask takes one of three audiences and answers {answer, abstained, citations, mode, variants?}
+  const audience = () => (persona === 'analyst' || persona === 'broadcast' ? persona : 'casual');
   const ask = async (question) => {
     if (!run) throw new Error('no match yet');
-    const res = await post('/v1/matches/' + run.id + '/ask', { question, persona, browser_session_id: BROWSER, lang });
+    if (!String(question).trim()) throw new Error('empty question');   // the api needs at least one character
+    const res = await post('/v1/matches/' + run.id + '/ask', { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' });
     if (!res.ok) throw new Error('ask ' + res.status);
     const j = await res.json();
-    return { text: j.answer, verdict: j.verdict === 'verified' || j.verdict === 'approved' ? 'verified' : 'abstained', source: 'model', citations: j.claim_ids || [] };
+    const t = j.variants && j.variants[lang];
+    return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true };
   };
 
   // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one
