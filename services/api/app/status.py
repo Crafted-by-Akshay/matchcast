@@ -15,16 +15,19 @@ from typing import Any
 LIVE, SIMULATED, PLANNED, UNAVAILABLE = "live", "simulated", "planned", "unavailable"
 
 # Provisioned by Bicep but not called by any app code yet: shown as planned, whatever the settings.
-_NOT_WIRED = (
-    ("content_safety", "Azure AI Content Safety"),
-    ("search", "Azure AI Search"),
-)
+_NOT_WIRED = (("search", "Azure AI Search"),)
 
 
 def _speech_ok(env: Mapping[str, str]) -> bool:
     from app.speech import SpeechTokenService
 
     return SpeechTokenService(env.get("SPEECH_ENDPOINT", ""), env.get("SPEECH_REGION", "")).ready
+
+
+def _safety_ok(env: Mapping[str, str]) -> bool:
+    from matchcast_agents.safety import ENDPOINT
+
+    return bool(ENDPOINT.match(env.get("CONTENT_SAFETY_ENDPOINT", "").strip()))
 
 
 def _vision_ok(env: Mapping[str, str]) -> bool:
@@ -73,6 +76,7 @@ def dependency_status(env: Mapping[str, str], mode: str) -> dict[str, Any]:
         ("speech", "Azure AI Speech", "SPEECH_ENDPOINT", _speech_ok),
         ("translator", "Azure AI Translator", "TRANSLATOR_ENDPOINT", lambda e: True),
         ("vision", "Azure AI Vision", "VISION_ENDPOINT", _vision_ok),
+        ("content_safety", "Azure AI Content Safety", "CONTENT_SAFETY_ENDPOINT", _safety_ok),
     )
     for key, label, variable, valid in resources:
         if not env.get(variable):

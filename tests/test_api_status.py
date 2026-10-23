@@ -42,10 +42,15 @@ def test_speech_needs_its_region_and_vision_a_valid_host():
     )
 
 
-def test_content_safety_and_search_are_planned_even_when_configured():
-    env = {"CONTENT_SAFETY_ENDPOINT": "https://x", "SEARCH_ENDPOINT": "https://y"}
-    got = states(env, "cloud")
-    assert got["content_safety"] == got["search"] == "planned"
+def test_search_is_planned_even_when_configured_and_content_safety_is_live_with_its_host():
+    env = {
+        "CONTENT_SAFETY_ENDPOINT": "https://cs-x.cognitiveservices.azure.com/",
+        "SEARCH_ENDPOINT": "https://y",
+    }
+    assert states(env, "cloud")["content_safety"] == "live"
+    bad = {"CONTENT_SAFETY_ENDPOINT": "https://evil.example"}
+    assert states(bad, "cloud")["content_safety"] == "unavailable"
+    assert states(env, "cloud")["search"] == "planned"
 
 
 def test_easy_auth_without_required_roles_is_not_live():

@@ -5,8 +5,11 @@ identity in Azure); it never sees keys. ``LocalSafetyScreen`` is deterministic a
 and the rules-mode demo behave the same everywhere. A block is any category severity >= 2.
 """
 
+import asyncio
+import logging
+import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 import httpx
@@ -68,10 +71,13 @@ class AzureContentSafety:
         self._client = client or httpx.AsyncClient(timeout=5.0)
 
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        token = await asyncio.to_thread(
+            self._token
+        )  # the credential may call the identity endpoint
         response = await self._client.post(
             f"{self._endpoint}/contentsafety/{path}",
             params={"api-version": API_VERSION},
-            headers={"Authorization": f"Bearer {self._token()}"},
+            headers={"Authorization": f"Bearer {token}"},
             json=body,
         )
         response.raise_for_status()
@@ -92,3 +98,59 @@ class AzureContentSafety:
         return ShieldResult(
             attack_detected=bool(data["userPromptAnalysis"]["attackDetected"]), source="azure"
         )
+
+
+log = logging.getLogger(__name__)
+ENDPOINT = re.compile(r"^https://[a-z0-9-]+\.cognitiveservices\.azure\.com/?$")
+SCOPE = "https://cognitiveservices.azure.com/.default"
+
+
+class FallbackSafety:
+    """Azure Content Safety first; the local screen when the Azure call fails (ADR-0014).
+
+    A failure is logged and counted in ``fallbacks``; the result's ``source`` says ``local`` so the
+    trace shows which screen decided. The local screen is stricter about attacks than it is about
+    tone, so a degraded screen still blocks the obvious cases."""
+
+    source = "azure"
+
+    def __init__(self, primary: SafetyScreen, fallback: SafetyScreen | None = None) -> None:
+        self._primary = primary
+        self._fallback = fallback or LocalSafetyScreen()
+        self.fallbacks = 0
+
+    async def analyze(self, text: str) -> SafetyResult:
+        try:
+            return await self._primary.analyze(text)
+        except Exception:  # noqa: BLE001 - any transport, auth or quota failure
+            self.fallbacks += 1
+            log.warning("Content Safety analyze failed; using the local screen", exc_info=True)
+            return await self._fallback.analyze(text)
+
+    async def shield(self, user_prompt: str) -> ShieldResult:
+        try:
+            return await self._primary.shield(user_prompt)
+        except Exception:  # noqa: BLE001
+            self.fallbacks += 1
+            log.warning("Prompt Shields failed; using the local screen", exc_info=True)
+            return await self._fallback.shield(user_prompt)
+
+
+def safety_from_env(env: Mapping[str, str] | None = None) -> SafetyScreen:
+    """``CONTENT_SAFETY_ENDPOINT`` set and well formed: Azure with the local screen behind it.
+    Otherwise the local screen alone. The endpoint must be a ``*.cognitiveservices.azure.com`` host,
+    so a bad setting can never send the Azure token elsewhere."""
+    env = os.environ if env is None else env
+    endpoint = env.get("CONTENT_SAFETY_ENDPOINT", "").strip()
+    if not endpoint:
+        return LocalSafetyScreen()
+    if not ENDPOINT.match(endpoint):
+        log.warning("CONTENT_SAFETY_ENDPOINT is not a cognitiveservices.azure.com host; ignored")
+        return LocalSafetyScreen()
+
+    def token() -> str:
+        from matchcast_shared import azure_clients
+
+        return azure_clients.credential().get_token(SCOPE).token
+
+    return FallbackSafety(AzureContentSafety(endpoint, token))

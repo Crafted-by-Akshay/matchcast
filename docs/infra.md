@@ -164,3 +164,7 @@ After the sign-in run:
 - Match create and the events POST are open without sign-in. The code applies the role gate only to the line routes, so smoke passes without a token: 137 events accepted, 45 verified claims.
 
 mcp: `services/mcp/Dockerfile` did not copy the workspace members `services/api`, `services/worker` and `services/recap`, so `uv sync --locked` failed the same way the api image did. It now copies them. The image `ghcr.io/crafted-by-akshay/matchcast-mcp:sha-f348755` is pushed for linux/amd64. The GHCR package is still private, so `ca-mcp-matchcast-dev` stays on the placeholder until the package is made public, and then its image is set to this tag.
+
+## Content Safety wiring (AGT-12)
+
+`/v1/status` reports `content_safety` live when `CONTENT_SAFETY_ENDPOINT` is a well-formed Cognitive Services host, unavailable when malformed, and simulated locally. Lines are screened by Azure first and by the local screen if Azure fails (counted in `FallbackSafety.fallbacks`). Not verified against the live account from the agent container (no Azure access); check `/v1/status` after the next deploy.

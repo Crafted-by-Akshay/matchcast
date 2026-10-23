@@ -88,7 +88,7 @@ Audit `action` values (closed list; add new ones here first): `event_rejected`, 
 | 4 | Names | Every player or club name is in the roster for this match | exact, case-insensitive |
 | 5 | Persona rules | Length limit and number limit per persona: casual 140 chars, 1 number; analyst 280 chars, 6 numbers; broadcast 180 chars, 2 numbers; the watch modes `my-club:<team>`, `player-focus:<player>` and `one-metric:<metric>` use casual, casual and analyst character limits and 1, 1 and 2 numbers | exact |
 | 6 | Citations (Ask only) | Every sentence carries `[kb:…]` or `[claim:…]` | exact |
-| 7 | Safety | Content Safety text:analyze, all categories severity < 2 | as stated |
+| 7 | Safety | Content Safety text:analyze, all categories severity < 2. The api calls Azure when `CONTENT_SAFETY_ENDPOINT` is a `*.cognitiveservices.azure.com` host (Entra token, `safety_from_env`); a failed call falls back to the local screen, is counted, and the result source says `local`. Without the variable only the local screen runs (**Simulated**) | as stated |
 | 8 | Meaning (model) | Does the line say only what the claims support? Returns supported, unclear or unsupported | unclear gives `review` |
 
 Checks 1 to 7 are deterministic and run first. Check 8 runs only if 1 to 7 pass. In rules mode check 8 is skipped and the verdict is `verified` only if the line came from a template; otherwise `review`.

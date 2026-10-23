@@ -25,6 +25,7 @@ from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, normalise
+from matchcast_agents.safety import safety_from_env
 from matchcast_agents.statsdesk import StatsDeskError
 from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
@@ -218,6 +219,7 @@ class Registry:
         self.speech = SpeechTokenService()
         self.pipeline: Pipeline | None = None  # set by install() when MATCHCAST_PIPELINE says so
         self.translation = TranslationService()
+        self.safety = safety_from_env()  # Azure Content Safety when CONTENT_SAFETY_ENDPOINT is set
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -305,6 +307,7 @@ class Registry:
                 config=config,
                 store=self.store,
                 stats_desk=self.stats_desk,
+                safety=self.safety,
             )
             self.flows[key] = flow
             return flow
@@ -457,6 +460,7 @@ def build_router(registry: Registry) -> APIRouter:
                     config=config,
                     store=registry.store,
                     stats_desk=registry.stats_desk,
+                    safety=registry.safety,
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
