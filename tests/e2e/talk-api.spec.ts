@@ -48,7 +48,7 @@ test('talk to a player: the api reply with facts is added to the chat, a rejecte
     verdict = 'rejected';
     await ask('who will win the league');
     await expect.poll(() => talks.length).toBe(2);
-    await page.waitForTimeout(800);
+    await expect.poll(() => f.evaluate(() => (window as any).__mcTalkReplies), { timeout: 15_000 }).toBe(2);   // both replies reached Watch, so the absence below is real
     expect(await log()).not.toContain("can't confirm");
     void name;
   } finally { server.close(); }

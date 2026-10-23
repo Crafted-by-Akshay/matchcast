@@ -232,12 +232,14 @@ const AG = (() => {
     if (!c && isLine) return;
     if (!c) {
       c = MCC.claim({ id, kind: d.metric || 'line', minute: last, agent: 'analyst', evidence: [], inputs: d.metric ? { metric: d.metric, value: d.value, units: d.units } : {}, source: src, api: true });
-      run.claims.push(c); run.stat.claims++;
+      if (d.publication_id) c.pub = true; else run.stat.claims++;   // a publication is the viewer-facing line, not evidence: it stays out of the claims ledger
+      run.claims.push(c);
     }
     if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; }
-    if (d.publication_id) { c.verdict = 'verified'; c.reason = 'api: published after the server Verifier'; c.apiClaims = d.claim_ids || []; }
+    if (d.publication_id) { c.verdict = 'verified'; c.reason = 'api: published after the server Verifier'; c.apiClaims = d.claim_ids || [];
+      for (const cid of c.apiClaims) { const e = run.claims.find((x) => x.id === cid); if (e && e.api) { e.verdict = 'verified'; e.reason = 'api: published in ' + c.id; } } }   // the evidence behind a published line was approved
     if (isLine) {
-      if (['rejected', 'killed', 'failed', 'expired'].includes(d.status)) { c.verdict = 'abstained'; c.reason = 'api: line ' + d.status; }
+      if (['abstained', 'rejected', 'killed'].includes(d.status)) { c.verdict = 'abstained'; c.reason = 'api: line ' + d.status; }
       if (Array.isArray(d.checks) && d.checks.length) c.apiChecks = d.checks;
       changed(); return;
     }

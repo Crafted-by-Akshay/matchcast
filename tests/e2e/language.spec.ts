@@ -89,3 +89,31 @@ test('language: api variants are shown for the language they cover; the other ke
   expect(r.afterText.es).toBe('Otra linea, 1-0.');
   expect(r.afterText.hi, 'a changed English line drops translations of the old one').toBeNull();
 });
+
+// The api stream: a publication is the viewer-facing card (kept out of the claims ledger), a line event only updates it, a claim event is evidence.
+test('ingest: publication card, line updates, evidence claims approved on publish', async ({ page }) => {
+  await openShell(page, 'agents');
+  await page.evaluate(() => AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }));
+  const r = await page.evaluate(() => {
+    const run = AG.run, n0 = run.stat.claims;
+    AG.ingest({ line_id: 'ln-9', status: 'drafted' }, 'live');
+    const noCardFromLine = !run.claims.some((c: any) => c.id === 'pub-ln-9');
+    AG.ingest({ claim_id: 'cl-9', metric: 'shots', value: 3, approval_status: 'pending' }, 'live');
+    const pending = run.claims.find((c: any) => c.id === 'cl-9').verdict;
+    AG.ingest({ line_id: 'ln-9', claim_ids: ['cl-9'], status: 'verified' }, 'live');
+    const claimUntouched = run.claims.find((c: any) => c.id === 'cl-9').verdict;
+    AG.ingest({ publication_id: 'pub-ln-9', line_id: 'ln-9', claim_ids: ['cl-9'], text: 'Rovers have 3 shots.', variants: { es: 'Rovers tienen 3 tiros.' } }, 'live');
+    const card = run.claims.find((c: any) => c.id === 'pub-ln-9'), ev = run.claims.find((c: any) => c.id === 'cl-9');
+    AG.ingest({ line_id: 'ln-9', status: 'killed', checks: [{ name: 'numbers', ok: true }] }, 'live');
+    return { noCardFromLine, pending, claimUntouched, cardPub: card.pub, evVerdict: ev.verdict, claimsStat: run.stat.claims - n0, cardVerdict: card.verdict, checks: card.apiChecks.length, es: card.tr.es.text };
+  });
+  expect(r.noCardFromLine).toBe(true);
+  expect(r.pending).toBe('pending');
+  expect(r.claimUntouched).toBe('pending');
+  expect(r.cardPub).toBe(true);
+  expect(r.evVerdict).toBe('verified');
+  expect(r.claimsStat, 'only the evidence claim counts').toBe(1);
+  expect(r.cardVerdict).toBe('abstained');
+  expect(r.checks).toBe(1);
+  expect(r.es).toBe('Rovers tienen 3 tiros.');
+});

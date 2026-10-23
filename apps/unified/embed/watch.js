@@ -77,6 +77,7 @@ MCS.progress('Loading the stadium and players');
     const d = e.data || {};
     if (d.src !== 'matchcast-shell' || d.type !== 'talk-reply' || !talks.has(d.id)) return;
     const p = talks.get(d.id); talks.delete(d.id);
+    window.__mcTalkReplies = (window.__mcTalkReplies || 0) + 1;   // read by tests
     const r = d.reply;
     if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) { talkLine(p, 'pl', '✓ Checked against the match record: ' + r.text); renderTalk(); }
   });
