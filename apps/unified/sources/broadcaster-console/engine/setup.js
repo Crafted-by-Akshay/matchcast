@@ -140,8 +140,9 @@ function kickOff() {
   seed = hash32(SET.seed + ':play'); wordsRnd = subStream(SET.seed, 'words'); initEnv(Object.assign({}, SET)); paintStadium(SET.st, SET.month); S.flip = 0;
   for (const p of players) { p.off = false; p.model.visible = true; p.yellows = 0; p.act = null; }
   rollAuto(); // 'Auto' picks follow the match seed
+  simAcc = 0; // the fixed-step remainder starts from zero too
   setupTactics({ tactics: [resolvedTac(0), resolvedTac(1)] });
-  Object.assign(S, { clock: 0, mclock: 0, half: 1, mscale: 45 / SET.half, stop: [0, 0], hold: null, over: false, ht: false, envAcc: 0, lastLogMin: 0, score: [0, 0], celebrate: 0, inspT: -99, cool: 0, insp: 0, goalsHalf: [0, 0] });
+  Object.assign(S, { t: 0, trajT: 0, passInfo: null, shotInfo: null, lastTouch: null, clock: 0, mclock: 0, half: 1, mscale: 45 / SET.half, stop: [0, 0], hold: null, over: false, ht: false, envAcc: 0, lastLogMin: 0, score: [0, 0], celebrate: 0, inspT: -99, cool: 0, insp: 0, goalsHalf: [0, 0] });
   Object.assign(STATS, { kinds: {}, xg: [0, 0], shots: [0, 0], poss: [0, 0], passes: [0, 0], done: [0, 0], goals: [], fouls: [0, 0], yellows: [0, 0], reds: [0, 0], offsides: [0, 0], onTarget: [0, 0] });
   for (const p of players) { p.stamina = 1; p.cap = 1; }
   lineUp(0); $('intro').hidden = true; $('setup').hidden = true; for (const id of ['bug', 'ctrl', 'third', 'cap', 'wxchip', 'cpbtn']) $(id).hidden = false;

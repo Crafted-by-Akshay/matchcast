@@ -1692,14 +1692,26 @@ function loop() { frame(Math.min(clk.getDelta(), 0.05), true); }
 // The engine always integrates in fixed STEP-second steps, whatever the frame time or playback speed, and carries the
 // remainder to the next frame (simAcc), so one seed plays the same match at any speed and on any machine.
 const STEP = 0.02; let simAcc = 0;
+// Rendering shows the state between the last two fixed steps (alpha = how far the leftover time is into the next step),
+// so slow playback does not judder. The blend is visual only: the simulated state is restored right after the draw.
+const prevBall = new THREE.Vector3();
+function snapPrev() { for (const p of players) { if (p.pv) p.pv.copy(p.pos2); else p.pv = p.pos2.clone(); } prevBall.copy(ball.p); }
+function blendTo(alpha) {
+  const saved = [];
+  for (const p of players) { if (!p.pv || p.pv.distanceToSquared(p.pos2) > 9) continue; saved.push([p, p.pos2.clone()]); p.pos2.lerpVectors(p.pv, saved[saved.length - 1][1], alpha); }
+  const ballNow = ball.p.clone(); if (prevBall.distanceToSquared(ballNow) < 25) ball.p.lerpVectors(prevBall, ballNow, alpha);
+  return () => { for (const [p, v] of saved) p.pos2.copy(v); ball.p.copy(ballNow); };
+}
 function frame(dt, draw) {
   const sim = S.paused ? 0 : window.__mcHeadless ? (window.__mcDt || 0) : dt * S.speed; // headless: the runner steps the engine itself, and a test may drive frame() with a fixed budget through __mcDt
   if (!S.started && sim > 0) S.t += sim;
   applyWorldVisuals(sim);
+  let alpha = 1;
   if (S.started && !S.over && players.length && sim > 0) {
-    if (DIRC.on) { let budget = sim + simAcc, guard = 0; while (!S.over && guard++ < 4000) { const cost = DIRC.ff ? STEP / FF_X : STEP; if (budget < cost - 1e-9) break; stepSim(STEP); budget -= cost; } simAcc = budget; }   // fast-forward spends 1/FF_X of the frame's time per simulated second
-    else { let acc = sim + simAcc, guard = 0; while (!S.over && acc >= STEP - 1e-9 && guard++ < 4000) { stepSim(STEP); acc -= STEP; } simAcc = Math.min(acc, STEP); }
+    if (DIRC.on) { let budget = sim + simAcc, guard = 0, cost = STEP; while (!S.over && guard++ < 4000) { cost = DIRC.ff ? STEP / FF_X : STEP; if (budget < cost - 1e-9) break; snapPrev(); stepSim(STEP); budget -= cost; } simAcc = Math.min(budget, cost); alpha = simAcc / cost; }   // fast-forward spends 1/FF_X of the frame's time per simulated second
+    else { let acc = sim + simAcc, guard = 0; while (!S.over && acc >= STEP - 1e-9 && guard++ < 4000) { snapPrev(); stepSim(STEP); acc -= STEP; } simAcc = Math.min(acc, STEP); alpha = simAcc / STEP; }
   }
+  const unblend = alpha < 1 ? blendTo(alpha) : null;
   for (const p of players) if (!p.off) animate(p, sim);
   // ball render: roll from displacement
   const bw = W(ball.p.x, ball.p.y, ball.p.z); const mv = bw.clone().sub(ballMesh.position); const hd = Math.hypot(mv.x, mv.z);
@@ -1711,6 +1723,7 @@ function frame(dt, draw) {
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   if (players.length) hud();
   if (draw) { composer.render(); labelRenderer.domElement.style.visibility = S.started ? 'visible' : 'hidden'; labelRenderer.render(scene, camera); }
+  if (unblend) unblend();
 }
 function start() {
   setRestart('kickoff', 0, V2(52.5, 34));
