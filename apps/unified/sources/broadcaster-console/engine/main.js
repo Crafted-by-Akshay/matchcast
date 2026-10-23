@@ -15,6 +15,9 @@ const ease = (u) => u * u * (3 - 2 * u);
 const wrapA = (a) => ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
 let seed = 48213;
 const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+// visual-only randomness (head scans): its own stream, so drawing a frame never changes what the match does
+let vseed = 90210;
+const vrnd = () => { vseed |= 0; vseed = vseed + 0x6D2B79F5 | 0; let t = Math.imul(vseed ^ vseed >>> 15, 1 | vseed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const gauss = () => { let u = 0, v = 0; while (u === 0) u = rnd(); v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 const V2 = (x, z) => new THREE.Vector2(x, z);
 
@@ -1121,7 +1124,7 @@ function animate(p, dt) {
   // torso and head track the ball
   if (p.lookAt) {
     const la = Math.atan2(p.lookAt.x - p.pos2.x, p.lookAt.y - p.pos2.y); let d = wrapA(la - p.yaw);
-    p.scanT -= dt; if (p.scanT < 0) { p.scanT = 2 + rnd() * 4; p.scan = 0.6; }
+    p.scanT -= dt; if (p.scanT < 0) { p.scanT = 2 + vrnd() * 4; p.scan = 0.6; }
     if (p.scan > 0) { p.scan -= dt; d += Math.sin((0.6 - p.scan) / 0.6 * Math.PI) * 1.2 * (p.i % 2 ? 1 : -1) * p.scanF; }
     const tw = clamp(d, -1.0, 1.0); rot(B.Spine1, 0, tw * 0.35, 0); rot(B.Spine2, 0, tw * 0.25, 0); rot(B.Neck, 0, clamp(d - tw * 0.6, -0.8, 0.8) * 0.5, 0); rot(B.Head, p.headUp + (ball.p.y > 3 ? -0.25 : 0.08), clamp(d - tw * 0.6, -0.8, 0.8) * 0.5, 0);
   }
@@ -1686,13 +1689,16 @@ function stepSim(dt) {
 const clk = new THREE.Clock();
 let ledAcc = 0;
 function loop() { frame(Math.min(clk.getDelta(), 0.05), true); }
+// The engine always integrates in fixed STEP-second steps, whatever the frame time or playback speed, and carries the
+// remainder to the next frame (simAcc), so one seed plays the same match at any speed and on any machine.
+const STEP = 0.02; let simAcc = 0;
 function frame(dt, draw) {
   const sim = S.paused ? 0 : window.__mcHeadless ? (window.__mcDt || 0) : dt * S.speed; // headless: the runner steps the engine itself, and a test may drive frame() with a fixed budget through __mcDt
   if (!S.started && sim > 0) S.t += sim;
   applyWorldVisuals(sim);
   if (S.started && !S.over && players.length && sim > 0) {
-    if (DIRC.on) { let budget = sim, guard = 0; while (budget > 0 && !S.over && guard++ < 4000) { const st = Math.min(0.02, budget * (DIRC.ff ? FF_X : 1)); stepSim(st); budget -= DIRC.ff ? st / FF_X : st; } }   // fast-forward spends 1/FF_X of the frame's time per simulated second
-    else { const n = Math.ceil(sim / 0.02); for (let i = 0; i < n; i++) stepSim(sim / n); }
+    if (DIRC.on) { let budget = sim + simAcc, guard = 0; while (!S.over && guard++ < 4000) { const cost = DIRC.ff ? STEP / FF_X : STEP; if (budget < cost - 1e-9) break; stepSim(STEP); budget -= cost; } simAcc = budget; }   // fast-forward spends 1/FF_X of the frame's time per simulated second
+    else { let acc = sim + simAcc, guard = 0; while (!S.over && acc >= STEP - 1e-9 && guard++ < 4000) { stepSim(STEP); acc -= STEP; } simAcc = Math.min(acc, STEP); }
   }
   for (const p of players) if (!p.off) animate(p, sim);
   // ball render: roll from displacement

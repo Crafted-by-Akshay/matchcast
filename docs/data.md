@@ -30,4 +30,4 @@ This turns the engine events into contract v1.1 events (goal, shot, pass, foul, 
 node services/simulation/run.cjs --seeds 1-1 --half 45 --events --out /tmp/mc-run
 ```
 
-The same seed gives the same events. The seed alone decides the clubs, stadium, month and weather for the runner, so a seed number is a complete match id.
+The same seed gives the same events, at any playback speed and frame rate (the engine steps a fixed 0.02 s and carries the remainder). The runner derives the clubs, stadium and month from the seed and passes them in the query; `node services/simulation/run.cjs --seeds 2026 --url` prints that query so the live app plays the same match. A seed number plus that query is a complete match id.
