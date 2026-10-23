@@ -1,12 +1,9 @@
 name: deploy
 
-# Deploys main to Azure after ci passes (PLT-7). Azure access is OIDC only; the repo holds
-# no Azure secret. Images go to GHCR (ADR-0008) and Bicep points the Container Apps at them.
+# Manual only (Akshay, 23 Oct: Actions minutes cost money, so deploys run from the Mac mini with
+# scripts/deploy_local.sh). Kept so a run can be started by hand with workflow_dispatch (PLT-7). Azure access is
+# OIDC only; the repo holds no Azure secret. Images go to GHCR (ADR-0008) and Bicep points the Container Apps at them.
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
