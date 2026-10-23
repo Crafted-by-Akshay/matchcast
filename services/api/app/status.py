@@ -77,6 +77,15 @@ def dependency_status(
     else:
         items.append(_item("agents", "Foundry agents", SIMULATED, "rules agents, no model call"))
 
+    from matchcast_agents.statsdesk import A2A_URL
+
+    if A2A_URL.match(env.get("STATS_DESK_URL", "").strip()):
+        items.append(_item("stats_desk", "Stats Desk (A2A)", LIVE, "STATS_DESK_URL is configured"))
+    else:
+        items.append(
+            _item("stats_desk", "Stats Desk (A2A)", SIMULATED, "same skill, called in the api")
+        )
+
     if env.get("MATCHCAST_STORE") == "table":
         items.append(_item("store", "Table Storage", LIVE, "events and audit are in Table Storage"))
     else:
