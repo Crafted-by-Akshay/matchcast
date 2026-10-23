@@ -4,6 +4,7 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 // QUA-2: what a viewer of the Broadcast desk can actually SEE. approval.spec.ts checks the queue logic; this checks the pixels' owners:
 // the on-air graphics are visible on screen (not only un-hidden), appear only after approval in producer mode, and sit inside the live view.
 declare const AG: any;
+declare const VC: any;
 
 test('on-air graphics are visible, wait for approval in producer mode, and alerts are red', async ({ page }) => {
   test.setTimeout(420_000);
@@ -39,4 +40,21 @@ test('on-air graphics are visible, wait for approval in producer mode, and alert
   await expect(l3).toContainText('ALERT · Red card · verified', { timeout: 3000 });
   expect(await l3.evaluate((el) => getComputedStyle(el).borderLeftColor)).toBe('rgb(255, 77, 77)');
   expect(errs).toEqual([]);
+});
+
+// EXP-8: an approved line's audio_url (the api's Azure Speech clip) is played when Voice is on and never fetched when it is off; the caption shows either way.
+test('voice: the api clip of an on-air line plays only with Voice on', async ({ page }) => {
+  const clips: string[] = [];
+  await page.route('**/clip-*.mp3', (rt) => { clips.push(new URL(rt.request().url()).pathname); rt.fulfill({ contentType: 'audio/mpeg', body: Buffer.alloc(64) }); });
+  await openShell(page, 'agents');
+  await page.evaluate(() => AG.reset('k3', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }));
+  const publish = (id: string) => page.evaluate((i) => AG.ingest({ publication_id: i, line_id: i, claim_ids: [], text: 'Rovers lead 1-0.', audio_url: '/clip-' + i + '.mp3' }, 'live'), id);
+  await page.evaluate(() => VC.set(false));
+  await publish('pub-a');
+  await expect(page.locator('#vc-bar')).toContainText('Rovers lead 1-0.');   // captions always show
+  await page.waitForTimeout(500);
+  expect(clips, 'muted: the clip is not fetched').toEqual([]);
+  await page.evaluate(() => VC.set(true));
+  await publish('pub-b');
+  await expect.poll(() => clips).toEqual(['/clip-pub-b.mp3']);
 });
