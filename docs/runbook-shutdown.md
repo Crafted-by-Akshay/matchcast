@@ -35,7 +35,10 @@ Add or update the $40 alert (Owner: Akshay, portal path Cost Management > Budget
 Both bill by use, so they stop costing money when nothing calls them. During judging the `api` replica count stays at 0 until a visitor arrives, and `docs/runbook-demo.md` sets `min replicas = 1` only for recording and live judging windows. Set it back to 0 afterwards:
 ```
 az containerapp update --resource-group rg-matchcast --name ca-api-matchcast-dev --min-replicas 0
+az containerapp update --resource-group rg-matchcast --name ca-web-matchcast-dev --min-replicas 0
+az containerapp update --resource-group rg-matchcast --name ca-mcp-matchcast-dev --min-replicas 0
 ```
+`scripts/shutdown.sh scale-down` runs all three, and `azd env set KEEP_WARM false` then `azd provision` does the same through Bicep (`keepWarm` gates the api, web and mcp minimums).
 
 ## Rollback of a bad deploy
 `az containerapp revision list --resource-group rg-matchcast --name ca-api-matchcast-dev -o table`, then `az containerapp revision activate` on the previous revision.

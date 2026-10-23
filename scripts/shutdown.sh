@@ -29,7 +29,9 @@ need_confirm() {
 
 case "$STEP" in
   scale-down)
-    run az containerapp update --resource-group "$RG" --name "$API_APP" --min-replicas 0
+    for app in "$API_APP" "${API_APP/ca-api-/ca-web-}" "${API_APP/ca-api-/ca-mcp-}"; do
+      run az containerapp update --resource-group "$RG" --name "$app" --min-replicas 0
+    done
     ;;
   pause-fabric)
     [ -n "$FABRIC_CAPACITY" ] || { echo "set FABRIC_CAPACITY to the capacity name, or to none if the trial is used" >&2; exit 2; }
