@@ -35,7 +35,7 @@ SPID=$(az ad sp show --id "$APP" --query id -o tsv)
 az ad app federated-credential create --id "$APP" --parameters '{"name":"matchcast-production","issuer":"https://token.actions.githubusercontent.com","subject":"repo:Crafted-by-Akshay/matchcast:environment:production","audiences":["api://AzureADTokenExchange"]}'
 az role assignment create --assignee-object-id "$SPID" --assignee-principal-type ServicePrincipal --role Contributor --scope /subscriptions/$SUB/resourceGroups/rg-matchcast
 # Role Based Access Control Administrator, limited to the roles in infra/modules/roles.bicep
-ROLES="53ca6127-db72-4b80-b1b0-d745d6d5456d,0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3,ba92f5b4-2d11-453d-a403-e96b0029c9fe,2b629674-e913-4c01-ae53-ef4638d8f975,a638d3c7-ab3a-418d-83e6-5f17a39d4fde,4633458b-17de-406a-b5cd-9c4a5b5cd8ee,a97b65f3-24c7-4388-baec-2e87135dc908,b7e6dc6d-f1e8-4753-8033-0f276bb0955b,974c5e8b-45b9-4653-ba55-5f855dd0fb88"
+ROLES="53ca6127-db72-4b80-b1b0-d745d6d5456d,0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3,ba92f5b4-2d11-453d-a403-e96b0029c9fe,2b629674-e913-4c01-ae53-ef4638d8f975,a638d3c7-ab3a-418d-83e6-5f17a39d4fde,4633458b-17de-408a-b874-0445c86b69e6,a97b65f3-24c7-4388-baec-2e87135dc908,b7e6dc6d-f1e8-4753-8033-0f276bb0955b,974c5e8b-45b9-4653-ba55-5f855dd0fb88"
 COND=$(cat <<EOF
 ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {$ROLES})) AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {$ROLES}))
 EOF
