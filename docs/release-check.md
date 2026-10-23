@@ -20,8 +20,8 @@ Automated cover: `make e2e` (Chromium) and `make e2e-live E2E_BASE_URL=<deployed
 ## Manual-only checks
 
 - [ ] Voice: commentary is audible in Chrome and in Safari (webkit project on the Mac mini).
-- [ ] Phone width (390 px): no horizontal scroll in any view.
-- [ ] Lighthouse accessibility score for each view is recorded (screenshot attached to the PR).
+- [x] Phone width (390 px): no horizontal scroll in any view. Automated: `watch-mobile`, `broadcast-mobile`, `analyst-mobile` and `unified.spec.ts` assert no horizontal overflow; keep a manual look on a real phone.
+- [ ] Lighthouse accessibility score for each view is recorded. 23 Oct, Lighthouse 12.2.1 against the deployed web: shell 1.00, Analyst page 0.98 (`heading-order`). Watch and Broadcast cannot be scored on their own page (they need the shell's frames), so axe inside the shell covers them (`a11y*.spec.ts`). Re-run on 26 Oct from a clean checkout and attach the numbers.
 - [ ] VoiceOver walk through Watch (Tab order, Esc closes the trace).
 - [ ] Fabric capacity is paused or in its planned state; Databricks job last run is recorded.
 - [ ] `scripts/cost_today.sh` shows spend under the plan targets.
