@@ -1,0 +1,103 @@
+{
+  "arms": {
+    "four_agent_rules": {
+      "moments": {
+        "mean": 30,
+        "min": 30,
+        "max": 30
+      },
+      "lines_shown": {
+        "mean": 14,
+        "min": 14,
+        "max": 14
+      },
+      "coverage": {
+        "mean": 0.467,
+        "min": 0.467,
+        "max": 0.467
+      },
+      "clean_rate": {
+        "mean": 0.467,
+        "min": 0.467,
+        "max": 0.467
+      },
+      "wrong_line_rate": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "bad_numbers_per_100_lines": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "bad_names_per_100_lines": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "latency_p50_ms": {
+        "mean": 154.82,
+        "min": 148.52,
+        "max": 164.66
+      },
+      "latency_p95_ms": {
+        "mean": 182.54,
+        "min": 180.02,
+        "max": 185.9
+      }
+    },
+    "single_agent": {
+      "moments": {
+        "mean": 30,
+        "min": 30,
+        "max": 30
+      },
+      "lines_shown": {
+        "mean": 30,
+        "min": 30,
+        "max": 30
+      },
+      "coverage": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "clean_rate": {
+        "mean": 0.867,
+        "min": 0.8,
+        "max": 0.9
+      },
+      "wrong_line_rate": {
+        "mean": 0.133,
+        "min": 0.1,
+        "max": 0.2
+      },
+      "bad_numbers_per_100_lines": {
+        "mean": 6.7,
+        "min": 6.7,
+        "max": 6.7
+      },
+      "bad_names_per_100_lines": {
+        "mean": 6.633,
+        "min": 3.3,
+        "max": 13.3
+      },
+      "latency_p50_ms": {
+        "mean": 0.017,
+        "min": 0.01,
+        "max": 0.02
+      },
+      "latency_p95_ms": {
+        "mean": 0.03,
+        "min": 0.03,
+        "max": 0.03
+      }
+    }
+  },
+  "runs": 3,
+  "moments": 30,
+  "matches": 19,
+  "single_model": "FakeModel (offline stand-in)",
+  "note": "30 frozen moments from the season. Offline numbers show the harness works, not model quality. Live run needs gpt-6-luna quota."
+}
