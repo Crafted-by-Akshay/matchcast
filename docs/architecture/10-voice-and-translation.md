@@ -15,8 +15,9 @@ Voices are configured only in `services/api/config/voices.json`. Player voices f
 
 ## 2. Text to speech (commentary)
 
-- Synthesis runs in `api`, never in the browser, with `id-matchcast` (role Cognitive Services User) on `spch-matchcast-dev` (S0, East US 2).
-- Output: MP3 24 kHz mono to Blob `audio/{prefix}/{publication_id}.{lang}.mp3`; the publication's `audio_generation_id` holds the blob name; the browser fetches it through `GET /v1/audio/{publication_id}.{lang}.mp3` (api streams it, so Blob stays private).
+- Synthesis runs in `api` (`services/api/app/voice.py`), never in the browser. It calls the Speech neural TTS REST endpoint on the custom domain (`SPEECH_ENDPOINT`/tts/cognitiveservices/v1) with the api's managed identity (role Cognitive Services User on `spch-matchcast-dev`, S0, East US 2). No key.
+- Built (23 Oct, EXP-16): English only, output MP3 24 kHz mono. Voices live in `services/api/config/voices.json` (commentary, producer, player default). The route `GET /v1/matches/{match_id}/lines/{line_id}/audio.mp3` voices a line on air (any age: the route does not apply the 5 s rule), and `GET /v1/voice/audition.mp3` serves the 30-second audition clip. The browser does not call them yet (see 6a). Clips are cached in process (300 at most), keyed by a hash of voice and text; a clip is made only for approved text, so an audio id names only what the api voiced. Limits: 1,000 characters a clip, 30 new clips a minute per IP (a talk reply that is over the allowance is shown unspoken), and a process-wide character budget (`SPEECH_MAX_CHARS`, default 200,000) as a cost cap.
+- **Planned:** storing clips in Blob (the cache is in memory, so a restart re-synthesises and an `audio_url` from before it stops working; the 5 s rule belongs to the browser that asks), es and hi voices (waiting for checked translations), and the browser playing the api clip in place of the SDK voice.
 - Lines older than 5 s (publication expiry) are captioned but not voiced. At most one line is voiced at a time per view; a priority 1 line interrupts.
 - Every line is synthesised live (Akshay, 21 Oct: no pre-rendered audio counted against the plan).
 
@@ -56,7 +57,10 @@ Built (22 Oct, `matchcast_agents/translate.py`): `GET /stream?lang=es|hi` adds `
 - Tamil is out of the desk until a native speaker reviews it.
 
 ## 6. Built in the browser (22 Oct)
-`apps/unified/speech.js` implements the token fetch (section 3) and both directions: synthesis with the role/language voice from `voices.json`, and push-to-talk recognition in Broadcast. It has only been tested against a fake api and a fake SDK until the Speech resource is deployed. The browser voice remains the labelled fallback.
+`apps/unified/speech.js` implements the token fetch (section 3) and both directions: synthesis and push-to-talk recognition in Broadcast. It has only been tested against a fake api and a fake SDK until the Speech resource is deployed. The browser voice remains the labelled fallback.
+
+## 6a. Talk replies (EXP-16, 23 Oct)
+The api's `/talk` runs the role agent, then the Verifier's number and name check, then Content Safety on the reply. Only a reply that passes all three is voiced: the response carries `audio_url` (`/v1/audio/{id}.mp3`) and `lang: en`. A refused reply is shown as the fixed refusal text with `audio_url: null`, and nothing is spoken. The browser does not yet play `audio_url`; it still uses the SDK voice. Wiring that is Experience-lane work. Content Safety is Azure when `CONTENT_SAFETY_ENDPOINT` is set, otherwise the local word list (**Simulated**).
 
 ## 7. The console's language selector (22 Oct)
 The top-bar selector (EN, ES, HI) is the single viewer language. It re-opens the api stream with `lang` (section 4), switches Watch and Broadcast, and chooses the voice: the checked translation with its es/hi voice, else the English line. The desk's rules translations log `translation_rejected` through the shell. Not covered: the Analyst view and Ask answers are English only.

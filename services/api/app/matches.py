@@ -43,6 +43,16 @@ from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 from app.pipeline import Pipeline
 from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
+from app.voice import (
+    AUDITION_SCRIPT,
+    VoiceError,
+    VoiceService,
+    clip_key,
+    speakable,
+)
+from app.voice import (
+    PER_MINUTE as VOICE_PER_MINUTE,
+)
 
 TENANT = "demo"
 HEARTBEAT_S = 15
@@ -231,6 +241,7 @@ class Registry:
         self.ds_asked: dict[str, deque[float]] = {}
         self.vision = VisionService()
         self.speech = SpeechTokenService()
+        self.voice = VoiceService()  # Azure Speech synthesis, EXP-16 (docs/architecture/10)
         self.pipeline: Pipeline | None = None  # set by install() when MATCHCAST_PIPELINE says so
         self.translation = TranslationService()
         self.safety = safety_from_env()  # Azure Content Safety when CONTENT_SAFETY_ENDPOINT is set
@@ -426,6 +437,27 @@ def _state_json(flow: MatchWorkflow) -> dict[str, Any]:
 def _names(flow: MatchWorkflow) -> list[str]:
     """Player and club names the Translator must leave alone and the re-check must find."""
     return [*flow.names.values(), *flow.clubs.values()]
+
+
+CLIP_HEADERS = {"Cache-Control": "private, max-age=600"}
+ON_AIR = ("approved", "published")  # the lines a viewer can hear
+
+
+async def _audio(request: Request, registry: Registry, text: str, voice_name: str) -> Response:
+    """A clip from the cache, or made now: a new clip is rate limited per client address."""
+    voice = registry.voice
+    if voice.get(clip_key(text, voice_name)) is None and not voice.allow(client_ip(request)):
+        raise Problem(
+            429,
+            "rate_limited",
+            f"at most {VOICE_PER_MINUTE} new voice clips a minute",
+            retry_after=60,
+        )
+    try:
+        audio = await voice.clip(text, voice_name)
+    except VoiceError as error:
+        raise Problem(503, "not_ready", str(error)) from error
+    return Response(audio, media_type="audio/mpeg", headers=CLIP_HEADERS)
 
 
 def build_router(registry: Registry) -> APIRouter:
@@ -779,16 +811,62 @@ def build_router(registry: Registry) -> APIRouter:
         }
 
     @router.post("/matches/{match_id}/talk")
-    async def talk(match_id: str, body: TalkBody) -> dict[str, Any]:
+    async def talk(match_id: str, body: TalkBody, request: Request) -> dict[str, Any]:
         flow = registry.get(body.session_id, match_id)
         if not registry.allow_ask(body.session_id):  # /ask and /talk share one budget
             raise Problem(
                 429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
             )
         try:
-            return await flow.talk(body.target, body.utterance)
+            result = await flow.talk(body.target, body.utterance)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
+        result["lang"] = "en"
+        result["audio_url"] = None
+        voice = registry.voice
+        if result["verdict"] == "verified" and voice.ready:  # only a checked reply is spoken
+            role = "producer" if body.target == "producer" else "player"
+            voice_name = voice.voice_for(role, body.target)
+            key = clip_key(result["reply"], voice_name)
+            # A new clip uses the caller's voice allowance; once spent, the reply is shown unspoken.
+            if voice.get(key) is not None or voice.allow(client_ip(request)):
+                try:
+                    await voice.clip(result["reply"], voice_name)
+                    result["audio_url"] = f"/v1/audio/{key}.mp3"
+                except VoiceError:
+                    pass  # the reply is still shown, just not spoken
+        return result
+
+    @router.get("/voice/audition.mp3")
+    async def audition(request: Request) -> Response:
+        return await _audio(
+            request, registry, AUDITION_SCRIPT, registry.voice.voice_for("commentary")
+        )
+
+    @router.get("/audio/{audio_id}.mp3")
+    async def audio_by_id(audio_id: str) -> Response:
+        audio = registry.voice.get(audio_id)
+        if audio is None:
+            raise Problem(404, "not_found", "no clip with that id; no clip with that id")
+        return Response(audio, media_type="audio/mpeg", headers=CLIP_HEADERS)
+
+    @router.get("/matches/{match_id}/lines/{line_id}/audio.mp3")
+    async def line_audio(
+        match_id: str, line_id: str, session_id: str, request: Request
+    ) -> Response:
+        flow = registry.get(session_id, match_id)
+        line = next(
+            (
+                ln
+                for ln in flow.store.lines(flow.sk)
+                if ln.line_id == line_id and ln.status in ON_AIR
+            ),
+            None,
+        )
+        words = speakable(line.text) if line else ""
+        if not words:
+            raise Problem(404, "not_found", "no line on air with that id")
+        return await _audio(request, registry, words, registry.voice.voice_for("commentary"))
 
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:

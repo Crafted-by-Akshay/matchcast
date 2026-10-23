@@ -471,6 +471,12 @@ class MatchWorkflow:
             names_ok = all(n.casefold() in ctx.allowed_names for n in extract_names(reply))
             words = len(reply.split())
             verdict = "verified" if numbers_ok and names_ok and words <= 60 else "rejected"
+            if verdict == "verified":  # Content Safety before the reply is shown or spoken
+                safe = await self.safety.analyze(reply)
+                if not safe.allowed:
+                    self._audit("system", "content-safety", "safety_blocked", "talk",
+                                {"source": safe.source, "kind": "unsafe_content"})  # fmt: skip
+                    verdict = "rejected"
             if verdict == "rejected":
                 reply, facts = "I can't confirm that from the match data yet.", {}
             self._audit("agent", f"talk-{target}", "talk_answered", "talk",
