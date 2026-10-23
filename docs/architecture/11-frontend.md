@@ -51,7 +51,7 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | `ask`, `talk` | any view → shell | request; reply arrives as `ask_reply`, `talk_reply` |
 | `approve`, `edit`, `kill` | Broadcast or Analyst → shell | line ID (ADR-0013) |
 
-**Full-time recap card.** When Watch reports full time against a live api, the shell polls `GET /v1/matches/{id}/recap/{persona}` (404 means not written yet) for `casual` and `broadcast` and shows a card in the matching view with the text, the verified-sentence count and a "Rules fallback" label when the agents ran on rules. Listen plays `GET …/recap/{persona}/audio.mp3` through the voice path only when Voice is on; the card is absent without the live api (`tests/e2e/recap-card.spec.ts`, not run in the agent container).
+**Full-time recap card.** When Watch reports full time against a live api, the shell polls `GET /v1/matches/{id}/recap/{persona}` (404 means not written yet; up to about two minutes) for `casual` and `broadcast` and shows a card in the matching view with the verified sentences only, their count and a "Rules fallback" (or "partly Rules fallback") label when the agents ran on rules. Listen plays `GET …/recap/{persona}/audio.mp3` through the voice path only when Voice is on; the card is absent without the live api (`tests/e2e/recap-card.spec.ts`, not run in the agent container).
 
 ## 3. Connection behaviour
 

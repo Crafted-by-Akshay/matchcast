@@ -205,12 +205,12 @@ const LV = (() => {
     const r = run; if (!r) return null;
     const path = '/v1/matches/' + r.id + '/recap/' + p;
     const q = '?' + new URLSearchParams({ session_id: r.key.session_id });
-    for (let i = 0; i < (tries || 10) && run === r; i++) {
+    for (let i = 0; i < (tries || 40) && run === r; i++) {   // the recap waits on the final event, the function and the Verifier: about two minutes in all
       let res = null;
       try { res = await fetch(api() + path + q); } catch (e) { return null; }
-      if (res.ok) { const j = await res.json(); return j && j.text ? { text: j.text, sentences: (j.sentences || []).length, mode: j.mode || 'rules', audioUrl: api() + path + '/audio.mp3' + q } : null; }
+      if (res.ok) { const j = await res.json(); const ok = (j.sentences || []).filter((x) => x.verdict === 'verified'); return ok.length ? { text: ok.map((x) => x.text).join(' '), sentences: ok.length, partial: ok.length < (j.sentences || []).length, mode: j.mode || 'rules', audioUrl: api() + path + '/audio.mp3' + q } : null; }
       if (res.status !== 404) return null;
-      await new Promise((ok) => setTimeout(ok, 1500));
+      await new Promise((ok) => setTimeout(ok, i < 10 ? 1500 : 4000));
     }
     return null;
   };

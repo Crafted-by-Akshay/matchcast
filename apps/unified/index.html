@@ -87,7 +87,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
 .toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
-.recap{position:fixed;left:var(--gut);bottom:44px;z-index:4;max-width:min(420px,calc(100vw - 2*var(--gut)));background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:13px}
+.recap{max-height:40vh;overflow:auto;position:fixed;left:var(--gut);bottom:44px;z-index:4;max-width:min(420px,calc(100vw - 2*var(--gut)));background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:13px}
 .recap[hidden]{display:none}
 .recap h2{margin:0 0 4px;font-size:13px}
 .recap p{margin:0 0 8px;line-height:1.45}
@@ -321,7 +321,7 @@ function paintRecap() {
   if (el.hidden) return;
   $('recap-h').textContent = 'Full-time recap (' + (p === 'casual' ? 'fan' : 'broadcast') + ')';
   $('recap-t').textContent = r.text;
-  $('recap-m').textContent = r.sentences + ' verified sentences, ' + (r.mode === 'live' ? 'written by the agents' : 'Rules fallback');
+  $('recap-m').textContent = r.sentences + ' verified sentences, ' + (r.mode === 'live' ? 'written by the agents' : r.mode === 'mixed' ? 'partly Rules fallback' : 'Rules fallback');
 }
 function loadRecap() {
   const gen = ++RECAP.gen; RECAP = { gen, closed: false };
@@ -658,7 +658,7 @@ window.addEventListener('message', (e) => {
     const msg = { src: 'matchcast-shell', type: 'import', dataset: d.dataset, recap: LV.enabled && LV.key && view === 'watch' && LV.status !== 'fallback' && LV.status !== 'offline' ? { api: LV.base, session_id: LV.key.session_id, match_id: LV.key.match_id } : null };
     if (FR.analyst && FR.analyst.ready) post('analyst', msg); else pendingImports.push(msg);
     toast('Full time: the live match went to the Analyst as a new library entry');
-    loadRecap();
+    if (view === 'watch') loadRecap();
     paint();
   }
 });

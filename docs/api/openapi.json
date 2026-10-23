@@ -2025,6 +2025,65 @@
         ]
       }
     },
+    "/v1/matches/{match_id}/recap/{persona}/audio.mp3": {
+      "get": {
+        "description": "The stored recap read aloud: only the sentences the Verifier marked verified are spoken.",
+        "operationId": "recap_audio_v1_matches__match_id__recap__persona__audio_mp3_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "title": "Persona",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recap Audio",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/matches/{match_id}/stream": {
       "get": {
         "operationId": "stream_v1_matches__match_id__stream_get",

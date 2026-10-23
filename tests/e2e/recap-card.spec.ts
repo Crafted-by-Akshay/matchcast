@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { collectErrors, openShell } from './helpers';
+import { collectErrors, openShell, ready } from './helpers';
 
 // AGT-8 tasks 105/106: the full-time recap shows in Watch and Broadcast and can be read aloud through the api's voice route.
 // Shell-driven, as in ask-talk.spec.ts: the api and the voice are stubbed in the page.
@@ -22,6 +22,7 @@ const stubApi = (page) => page.evaluate(() => {
 test('recap: Watch shows the casual recap and Broadcast the broadcast one, with an honest label', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'watch');
+  await ready('watch')(page);   // Watch's own start resets the card, so stub after it
   await stubApi(page);
   const card = page.locator('#recap');
   await expect(card).toBeVisible();
@@ -35,6 +36,7 @@ test('recap: Watch shows the casual recap and Broadcast the broadcast one, with 
 
 test('recap: Listen speaks the recap from the api voice route when Voice is on, and Close hides the card', async ({ page }) => {
   await openShell(page, 'watch');
+  await ready('watch')(page);   // Watch's own start resets the card, so stub after it
   await stubApi(page);
   await expect(page.locator('#recap')).toBeVisible();
   await page.evaluate(() => Object.defineProperty(VC, 'on', { get: () => false, configurable: true }));
@@ -49,8 +51,10 @@ test('recap: Listen speaks the recap from the api voice route when Voice is on, 
   await expect(page.locator('#recap')).toBeHidden();
 });
 
-test('recap: no card without the live api', async ({ page }) => {
+test('recap: no request and no card without the live api', async ({ page }) => {
   await openShell(page, 'watch');
-  await page.evaluate(() => { loadRecap(); });
+  await ready('watch')(page);
+  await page.evaluate(() => { (window as any).__asked = []; LV.recap = async (p: string) => { (window as any).__asked.push(p); return null; }; loadRecap(); });
   await expect(page.locator('#recap')).toBeHidden();
+  expect(await page.evaluate(() => (window as any).__asked)).toEqual([]);
 });
