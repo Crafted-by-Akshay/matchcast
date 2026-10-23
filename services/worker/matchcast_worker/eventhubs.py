@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
@@ -85,8 +86,17 @@ class EventHubsSource:
                     events.append(decode(data.body_as_str()))
                 except ValueError:
                     log.error("dropping an event that is not JSON (offset %s)", data.offset)
+            started = time.monotonic()
+            lag = _lag_s(batch[0])
             await deliver(handler, events, self._delay)
             await partition_context.update_checkpoint(batch[-1])
+            log.info(
+                "partition %s: handled %d events in %.2f s, %s behind the hub",
+                getattr(partition_context, "partition_id", "?"),
+                len(events),
+                time.monotonic() - started,
+                "?" if lag is None else f"{lag:.1f} s",
+            )
 
         async with self._consumer:
             await self._consumer.receive_batch(
@@ -95,6 +105,14 @@ class EventHubsSource:
                 max_wait_time=1,
                 starting_position="-1",
             )
+
+
+def _lag_s(data: Any) -> float | None:
+    """Seconds since the hub enqueued the first event of a batch: how far the consumer is behind."""
+    try:
+        return max(0.0, time.time() - data.enqueued_time.timestamp())
+    except (AttributeError, TypeError, ValueError, OSError):  # a metric must never stop the stream
+        return None
 
 
 async def deliver(handler: Handler, events: list[dict[str, Any]], delay_s: float = 0) -> bool:
