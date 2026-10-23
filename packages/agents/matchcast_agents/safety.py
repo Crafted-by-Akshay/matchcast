@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
@@ -71,9 +72,8 @@ class AzureContentSafety:
         self._client = client or httpx.AsyncClient(timeout=5.0)
 
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        token = await asyncio.to_thread(
-            self._token
-        )  # the credential may call the identity endpoint
+        # the credential may call the identity endpoint; a hung chain must not hold the workflow
+        token = await asyncio.wait_for(asyncio.to_thread(self._token), TOKEN_TIMEOUT)
         response = await self._client.post(
             f"{self._endpoint}/contentsafety/{path}",
             params={"api-version": API_VERSION},
@@ -89,6 +89,8 @@ class AzureContentSafety:
             {"text": text, "categories": list(CATEGORIES), "outputType": "FourSeverityLevels"},
         )
         found = {row["category"]: int(row["severity"]) for row in data["categoriesAnalysis"]}
+        if not found:
+            raise ValueError("Content Safety answered with no categories")
         return SafetyResult(
             allowed=all(s < BLOCK_AT for s in found.values()), categories=found, source="azure"
         )
@@ -103,37 +105,69 @@ class AzureContentSafety:
 log = logging.getLogger(__name__)
 ENDPOINT = re.compile(r"^https://[a-z0-9-]+\.cognitiveservices\.azure\.com/?$")
 SCOPE = "https://cognitiveservices.azure.com/.default"
+TOKEN_TIMEOUT = 5.0
+OPEN_AFTER, OPEN_FOR = 3, 60.0  # consecutive failures, then seconds to skip Azure
 
 
 class FallbackSafety:
     """Azure Content Safety first; the local screen when the Azure call fails (ADR-0014).
 
     A failure is logged and counted in ``fallbacks``; the result's ``source`` says ``local`` so the
-    trace shows which screen decided. The local screen is stricter about attacks than it is about
-    tone, so a degraded screen still blocks the obvious cases."""
+    trace shows which screen decided. After ``OPEN_AFTER`` failures in a row the circuit opens and
+    Azure is skipped for ``OPEN_FOR`` seconds, so an outage costs one timeout, not one per line.
+    The local screen is a short word list: a degraded screen is **Simulated** strength."""
 
     source = "azure"
 
-    def __init__(self, primary: SafetyScreen, fallback: SafetyScreen | None = None) -> None:
+    def __init__(
+        self,
+        primary: SafetyScreen,
+        fallback: SafetyScreen | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._primary = primary
         self._fallback = fallback or LocalSafetyScreen()
+        self._clock = clock
+        self._failures = 0
+        self._open_until = 0.0
         self.fallbacks = 0
+        self.last_error = ""
+
+    @property
+    def degraded(self) -> bool:
+        return self._clock() < self._open_until
+
+    def _failed(self, what: str, error: Exception) -> None:
+        self.fallbacks += 1
+        self._failures += 1
+        self.last_error = type(error).__name__
+        if self._failures >= OPEN_AFTER:
+            self._open_until = self._clock() + OPEN_FOR
+        log.warning("%s failed (%s); using the local screen", what, self.last_error)
 
     async def analyze(self, text: str) -> SafetyResult:
-        try:
-            return await self._primary.analyze(text)
-        except Exception:  # noqa: BLE001 - any transport, auth or quota failure
+        if not self.degraded:
+            try:
+                result = await self._primary.analyze(text)
+                self._failures = 0
+                return result
+            except Exception as error:  # noqa: BLE001 - transport, auth, quota or a bad body
+                self._failed("Content Safety analyze", error)
+        else:
             self.fallbacks += 1
-            log.warning("Content Safety analyze failed; using the local screen", exc_info=True)
-            return await self._fallback.analyze(text)
+        return await self._fallback.analyze(text)
 
     async def shield(self, user_prompt: str) -> ShieldResult:
-        try:
-            return await self._primary.shield(user_prompt)
-        except Exception:  # noqa: BLE001
+        if not self.degraded:
+            try:
+                result = await self._primary.shield(user_prompt)
+                self._failures = 0
+                return result
+            except Exception as error:  # noqa: BLE001
+                self._failed("Prompt Shields", error)
+        else:
             self.fallbacks += 1
-            log.warning("Prompt Shields failed; using the local screen", exc_info=True)
-            return await self._fallback.shield(user_prompt)
+        return await self._fallback.shield(user_prompt)
 
 
 def safety_from_env(env: Mapping[str, str] | None = None) -> SafetyScreen:
@@ -141,7 +175,7 @@ def safety_from_env(env: Mapping[str, str] | None = None) -> SafetyScreen:
     Otherwise the local screen alone. The endpoint must be a ``*.cognitiveservices.azure.com`` host,
     so a bad setting can never send the Azure token elsewhere."""
     env = os.environ if env is None else env
-    endpoint = env.get("CONTENT_SAFETY_ENDPOINT", "").strip()
+    endpoint = env.get("CONTENT_SAFETY_ENDPOINT", "").strip().lower()
     if not endpoint:
         return LocalSafetyScreen()
     if not ENDPOINT.match(endpoint):

@@ -73,3 +73,28 @@ def test_route_is_public_never_503_and_leaks_no_values(monkeypatch):
     assert response.status_code == 200
     assert "secret-name" not in response.text
     assert {"mode", "overall", "counts", "dependencies"} <= response.json().keys()
+
+
+def test_content_safety_status_reports_local_screening_and_an_open_circuit():
+    class Screen:
+        fallbacks, degraded = 4, False
+
+    env = {"CONTENT_SAFETY_ENDPOINT": "https://cs-x.cognitiveservices.azure.com/"}
+
+    def item(screen):
+        deps = dependency_status(env, "cloud", screen)["dependencies"]
+        return next(i for i in deps if i["key"] == "content_safety")
+
+    assert item(Screen())["status"] == "live" and "4 lines" in item(Screen())["detail"]
+    Screen.degraded = True
+    assert item(Screen())["status"] == "unavailable"
+
+
+def test_the_registry_screens_with_azure_when_the_endpoint_is_set(monkeypatch):
+    from app.matches import Registry
+    from matchcast_agents.safety import FallbackSafety, LocalSafetyScreen
+
+    monkeypatch.setenv("CONTENT_SAFETY_ENDPOINT", "https://cs-x.cognitiveservices.azure.com")
+    assert isinstance(Registry(False).safety, FallbackSafety)
+    monkeypatch.delenv("CONTENT_SAFETY_ENDPOINT")
+    assert isinstance(Registry(False).safety, LocalSafetyScreen)

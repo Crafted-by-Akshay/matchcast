@@ -27,7 +27,7 @@ def _speech_ok(env: Mapping[str, str]) -> bool:
 def _safety_ok(env: Mapping[str, str]) -> bool:
     from matchcast_agents.safety import ENDPOINT
 
-    return bool(ENDPOINT.match(env.get("CONTENT_SAFETY_ENDPOINT", "").strip()))
+    return bool(ENDPOINT.match(env.get("CONTENT_SAFETY_ENDPOINT", "").strip().lower()))
 
 
 def _vision_ok(env: Mapping[str, str]) -> bool:
@@ -44,7 +44,9 @@ def _item(key: str, label: str, state: str, detail: str) -> dict[str, str]:
     return {"key": key, "label": label, "status": state, "detail": detail}
 
 
-def dependency_status(env: Mapping[str, str], mode: str) -> dict[str, Any]:
+def dependency_status(
+    env: Mapping[str, str], mode: str, safety: object | None = None
+) -> dict[str, Any]:
     """The status document. ``mode`` is ``local`` or ``cloud`` (the settings mode)."""
     cloud = mode == "cloud"
     items: list[dict[str, str]] = []
@@ -89,9 +91,13 @@ def dependency_status(env: Mapping[str, str], mode: str) -> dict[str, Any]:
                 )
             )
         elif not valid(env):
-            state, detail = UNAVAILABLE, f"{variable} or its region is malformed"
+            state, detail = UNAVAILABLE, f"{variable} is malformed"
         else:
             state, detail = LIVE, "resource configured"
+            if key == "content_safety" and getattr(safety, "fallbacks", 0):
+                detail = f"{safety.fallbacks} lines screened locally after a failed call"  # type: ignore[attr-defined]
+                if getattr(safety, "degraded", False):
+                    state = UNAVAILABLE
         items.append(_item(key, label, state, detail))
     for key, label in _NOT_WIRED:
         items.append(_item(key, label, PLANNED, "provisioned, not called by the app yet"))

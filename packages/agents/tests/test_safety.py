@@ -142,3 +142,76 @@ def test_azure_answers_are_used_when_the_call_works() -> None:
     azure = AzureContentSafety("https://cs.cognitiveservices.azure.com", lambda: "tok", client)
     screen = FallbackSafety(azure)
     assert run(screen.analyze("fine")).source == "azure" and screen.fallbacks == 0
+
+
+def _azure(handler):
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return AzureContentSafety("https://cs.cognitiveservices.azure.com", lambda: "tok", client)
+
+
+def test_an_azure_block_survives_the_fallback_wrapper() -> None:
+    from matchcast_agents.safety import FallbackSafety
+
+    rows = [{"category": "Violence", "severity": 4}]
+    azure = _azure(lambda r: httpx.Response(200, json={"categoriesAnalysis": rows}))
+    shown = run(FallbackSafety(azure).analyze("anything"))
+    assert not shown.allowed and shown.source == "azure"
+
+
+def test_an_empty_azure_answer_is_an_error_not_an_allow() -> None:
+    from matchcast_agents.safety import FallbackSafety
+
+    azure = _azure(lambda r: httpx.Response(200, json={"categoriesAnalysis": []}))
+    screen = FallbackSafety(azure)
+    assert run(screen.analyze("fine")).source == "local" and screen.fallbacks == 1
+    assert screen.last_error == "ValueError"
+
+
+def test_the_circuit_opens_after_three_failures_and_closes_later() -> None:
+    from matchcast_agents.safety import OPEN_AFTER, OPEN_FOR, FallbackSafety
+
+    calls = []
+
+    def boom(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(503)
+
+    now = [0.0]
+    screen = FallbackSafety(_azure(boom), clock=lambda: now[0])
+    for _ in range(OPEN_AFTER + 2):
+        run(screen.analyze("x"))
+    assert len(calls) == OPEN_AFTER and screen.degraded and screen.fallbacks == OPEN_AFTER + 2
+    now[0] = OPEN_FOR + 1
+    assert not screen.degraded
+    run(screen.analyze("x"))
+    assert len(calls) == OPEN_AFTER + 1
+
+
+def test_a_hung_token_provider_falls_back_instead_of_hanging(monkeypatch) -> None:
+    import threading
+
+    from matchcast_agents import safety
+    from matchcast_agents.safety import FallbackSafety
+
+    monkeypatch.setattr(safety, "TOKEN_TIMEOUT", 0.05)
+    release = threading.Event()
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    azure = AzureContentSafety(
+        "https://cs.cognitiveservices.azure.com", lambda: release.wait(5) and "tok", client
+    )
+    screen = FallbackSafety(azure)
+    try:
+        assert run(screen.analyze("fine")).source == "local"
+    finally:
+        release.set()
+
+
+def test_a_local_fallback_is_audited_as_fallback_used(match) -> None:
+    from matchcast_agents.safety import FallbackSafety
+
+    azure = _azure(lambda r: httpx.Response(503))
+    flow = build(match, safety=FallbackSafety(azure))
+    run(flow.ingest(match["events"]))
+    records = flow.store.audit_records(flow.sk)
+    used = [r for r in records if r["action"] == "fallback_used"]
+    assert used and used[0]["details"]["fallback_reason"] == "content_safety"
