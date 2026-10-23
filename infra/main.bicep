@@ -3,6 +3,9 @@ targetScope = 'resourceGroup'
 @description('Azure region for all resources except the resource group.')
 param location string = 'eastus2'
 
+@description('Region for the AI Search free tier. eastus2 had no capacity on 22 Oct 2026 (InsufficientResourcesAvailable).')
+param searchLocation string = 'eastus'
+
 @description('azd environment name, used in resource names and the azd-env-name tag.')
 param environmentName string = 'dev'
 
@@ -63,7 +66,7 @@ module eventhubs 'modules/eventhubs.bicep' = {
 
 module ai 'modules/ai.bicep' = {
   name: 'ai'
-  params: { name: name, location: location, tags: tags }
+  params: { name: name, location: location, searchLocation: searchLocation, tags: tags }
 }
 
 module containerapps 'modules/containerapps.bicep' = {
