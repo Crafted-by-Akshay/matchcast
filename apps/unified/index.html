@@ -50,7 +50,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
 #lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
-@media (max-width:560px){.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
+@media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
@@ -149,7 +149,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .switch{margin-left:0;width:100%}
   .switch button{flex:1 0 auto;justify-content:center}
   .status{width:100%;flex-wrap:wrap}   /* language, Voice and Status stay reachable on a phone */
-  #voice-src:empty{display:none}
+  #voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0}   /* out of sight, still in the accessibility tree for its announcements */
   .matchbar{gap:10px}
   .fx{width:100%}
   .fx select{max-width:none;min-width:0;width:100%}
@@ -185,7 +185,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
     <span class="pill" id="api-pill" role="status" title="">Offline (simulated)</span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
-    <span class="pill">Browser prototype</span>
+    <span class="pill proto">Browser prototype</span>
     <span class="pill warn">Azure parts simulated</span>
   </div>
 </header>

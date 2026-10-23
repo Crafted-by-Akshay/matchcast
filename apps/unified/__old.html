@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<!-- warm the 3D engine while the shell paints: Watch and Broadcast both import it; keep the version equal to CDN in build.py (EXP-15) -->
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" crossorigin>
+<title>MatchCast Console</title>
+<meta name="description" content="One console for MatchCast: the fan Watch view, the Analyst workspace and the Broadcast desk, on one shared season match.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A1320; --bg2:#101D30; --bg3:#17283F; --line:#22375A; --text:#E8EEF7; --muted:#8CA0BC;
+  --accent:#3D86F0; --accent-strong:#2862C9; --accent-ink:#FFFFFF; --hot:#FF7A2E; --ok:#35C48A; --warn:#F5B942; --bad:#F26B6B;
+  --r:12px; --gut:16px; --bar:52px; --mbar:64px;
+  --font:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){ --bg:#0A1320; } /* the shell stays dark in both modes so the views sit on one frame */
+}
+:root[data-theme="dark"]{ --bg:#0A1320; }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.4 var(--font);display:flex;flex-direction:column;overflow:hidden}
+button,select{font:inherit;color:inherit}
+[hidden]{display:none !important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---- top bar: brand, the dashboard switcher, status ---- */
+.top{display:flex;align-items:center;gap:16px;height:var(--bar);padding:0 var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,var(--accent),#7B5CF0);color:var(--accent-ink);flex:none}
+.brand b{font-size:15px;letter-spacing:.01em}
+.brand small{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.switch{display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;overflow-x:auto;scrollbar-width:none;max-width:100%}
+.switch::-webkit-scrollbar{display:none}
+.switch button{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:8px;font-weight:600}
+.switch button small{font-weight:500;font-size:11px}
+.switch button[aria-selected="true"]{background:#2A62C9;color:var(--accent-ink)}
+.switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.status{display:flex;gap:6px;flex:none}
+.pill{font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill.warn{color:var(--warn);border-color:rgba(245,185,66,.35)}
+button.pill{background:none;cursor:pointer;font-family:inherit}
+#status-dlg{background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:10px;max-width:560px;padding:16px 20px}
+#status-dlg::backdrop{background:rgba(0,0,0,.55)}
+.st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
+.st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
+#lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+@media (max-width:560px){.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
+
+/* ---- match bar: the one shared match every view opens on ---- */
+.matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+.fx{display:flex;flex-direction:column;gap:3px;min-width:0}
+.fx label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fx select{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:6px 10px;max-width:320px;min-width:220px}
+.scoreline{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;justify-content:center}
+.team{display:flex;align-items:center;gap:7px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.team i{width:10px;height:10px;border-radius:50%;flex:none}
+.team.h{justify-content:flex-end}
+.score{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;padding:2px 12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;min-width:82px;text-align:center}
+.score small{display:block;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.meta{color:var(--muted);font-size:12px;min-width:0}
+.meta b{color:var(--text);font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{font-size:12px;padding:4px 9px;border-radius:999px;background:var(--bg3);border:1px solid var(--line);white-space:nowrap}
+.chip.ok{color:var(--ok);border-color:rgba(53,196,138,.35)}
+.chip.live{color:var(--hot);border-color:rgba(255,122,46,.4)}
+.chip button{margin-left:6px;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-weight:600}
+
+/* ---- stage: the three views, one visible at a time, each kept loaded ---- */
+.stage{position:relative;flex:1 1 auto;min-height:0;background:#060D17}
+.view{position:absolute;inset:0}
+.view iframe{width:100%;height:100%;border:0;display:block;background:#060D17}
+.view .wait{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);pointer-events:none;background:#060D17;z-index:1;transition:opacity .3s}
+.view .wait b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
+.view .wait .wt{display:block;font-size:12px}
+.view .wait .bar{display:block;width:200px;height:3px;margin:14px auto 0;background:var(--line);border-radius:3px;overflow:hidden;position:relative}
+.view .wait .bar::after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:var(--accent);animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
+.view.ready .wait{opacity:0}
+.view.gone .wait{display:none}
+.foot{flex:none;padding:6px var(--gut);font-size:11px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
+.foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
+.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+
+/* ---- agents: one pipeline for the three views, drawn by the shell (no iframe) ---- */
+#v-agents{overflow:auto;background:var(--bg)}
+.ag{max-width:1180px;margin:0 auto;padding:18px var(--gut) 40px;display:grid;gap:14px}
+.ag-head{display:flex;gap:14px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.ag-head h2{margin:0 0 4px;font-size:18px}
+.ag-head p,.muted{margin:0;color:var(--muted);font-size:13px}
+.ag-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.ag-card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:grid;gap:4px;align-content:start}
+.ag-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.ag-card small{color:var(--muted)}
+.ag-card p{margin:4px 0 0;font-size:13px}
+.tag{font-size:10px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--warn);white-space:nowrap}
+.ag-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.ag-panel{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;min-width:0}
+.ag-panel h3{margin:0 0 8px;font-size:14px}
+.ag-feed{list-style:none;margin:0;padding:0;max-height:320px;overflow:auto;font-size:13px;display:grid;gap:6px}
+.ag-feed li{border-left:2px solid var(--line);padding-left:8px}
+.ag-feed li.ok{border-color:var(--ok)}
+.ag-feed li.warn{border-color:var(--warn)}
+.ag-feed .m{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px}
+.ag-prov dl{display:grid;grid-template-columns:96px minmax(0,1fr);gap:6px 10px;margin:0;font-size:13px}
+.ag-prov dt{color:var(--muted)}
+.ag-prov dd{margin:0;overflow-wrap:anywhere}
+.ag-prov code{font-size:12px;overflow-wrap:anywhere}
+.ag-table{overflow-x:auto}
+.ag-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 8px;font-size:12px;color:var(--muted)}
+.ag-filters button{background:var(--bg3);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:3px 8px;cursor:pointer}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skip{position:absolute;left:8px;top:-48px;z-index:100;background:var(--accent-strong);color:#fff;padding:8px 12px;border-radius:6px}.skip:focus{top:8px}
+button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.ag-filters select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
+.ag-panel table{width:100%;border-collapse:collapse;font-size:13px}
+.ag-panel th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
+.ag-panel td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.ag-panel tbody tr{cursor:pointer}
+.ag-panel tbody tr:hover,.ag-panel tbody tr.on{background:var(--bg3)}
+.v.verified{color:var(--ok)}
+.v.abstained{color:var(--bad)}
+.ag-audit{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.ag-audit button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:600}
+.ag-recs{list-style:none;margin:0;padding:0;font:12px ui-monospace,Menlo,monospace;color:var(--muted);display:grid;gap:3px}
+.ag-note{margin:0;font-size:12px;color:var(--muted)}
+.empty{color:var(--muted)}
+/* ---- first-time tour (EXP-14 polish) ---- */
+dialog.tour{max-width:460px;width:calc(100% - 2 * var(--gut));background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+dialog.tour::backdrop{background:rgba(3,8,16,.7)}
+dialog.tour h2{margin:0 0 6px;font-size:17px}
+dialog.tour p{margin:0 0 10px;font-size:14px;line-height:1.5}
+dialog.tour .tour-n{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+dialog.tour .tour-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px}
+dialog.tour button{border:1px solid var(--line);background:var(--bg3);color:var(--text);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit;font-weight:600}
+dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-strong);color:var(--accent-ink)}
+@media (max-width:820px){ .ag-grid{grid-template-columns:1fr} }
+
+/* ---- narrow screens: the switcher scrolls, the match bar stacks ---- */
+@media (max-width:820px){
+  :root{--bar:auto}
+  .top{flex-wrap:wrap;padding:10px var(--gut);gap:10px}
+  .switch{margin-left:0;width:100%}
+  .switch button{flex:1 0 auto;justify-content:center}
+  .status{display:none}
+  .matchbar{gap:10px}
+  .fx{width:100%}
+  .fx select{max-width:none;min-width:0;width:100%}
+  .scoreline{width:100%;justify-content:space-between}
+  .team{max-width:40%}
+  .foot{display:none}
+}
+@media (max-width:420px){
+  .brand small{display:none}
+  .switch button small{display:none}
+}
+@media (prefers-reduced-motion: reduce){ .view .wait{transition:none} .view .wait .bar::after{animation:none;width:100%;opacity:.5} }
+</style>
+</head>
+<body>
+<a class="skip" href="#stage">Skip to the match view</a>
+<div class="sr-only" id="sr-lines" aria-live="polite" aria-atomic="true"></div>
+
+<header class="top">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">MC</span>
+    <div><b>MatchCast</b><small>One console: fan Watch, Analyst and Broadcast on one match</small></div>
+  </div>
+  <nav class="switch" role="tablist" aria-label="Dashboards">
+    <button role="tab" id="tab-watch" data-view="watch" aria-controls="v-watch" aria-selected="true" title="Watch (1)">Watch <small>fan 3D</small></button>
+    <button role="tab" id="tab-analyst" data-view="analyst" aria-controls="v-analyst" aria-selected="false" title="Analyst (2)">Analyst <small>enterprise</small></button>
+    <button role="tab" id="tab-broadcast" data-view="broadcast" aria-controls="v-broadcast" aria-selected="false" title="Broadcast (3)">Broadcast <small>desk</small></button>
+    <button role="tab" id="tab-agents" data-view="agents" aria-controls="v-agents" aria-selected="false" title="Agents (4)">Agents <small>pipeline</small></button>
+  </nav>
+  <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
+  <div class="status" aria-label="Environment">
+    <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
+    <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
+    <span class="pill" id="api-pill" role="status" title="">Offline (simulated)</span>
+    <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
+    <span class="pill">Browser prototype</span>
+    <span class="pill warn">Azure parts simulated</span>
+  </div>
+</header>
+
+<dialog class="tour" id="tour" aria-labelledby="tour-h" aria-describedby="tour-p">
+  <div class="tour-n" id="tour-n"></div>
+  <h2 id="tour-h"></h2>
+  <p id="tour-p"></p>
+  <div class="tour-row">
+    <button type="button" id="tour-skip">Close</button>
+    <button type="button" id="tour-back">Back</button>
+    <button type="button" id="tour-go" class="go" autofocus></button>
+  </div>
+</dialog>
+
+<section class="matchbar" aria-label="Shared match">
+  <div class="fx">
+    <label for="fx">Season fixture</label>
+    <select id="fx"></select>
+  </div>
+  <div class="scoreline" aria-live="polite">
+    <span class="team h" id="home-name"><i id="home-dot"></i><span id="home-club">Choose a fixture</span></span>
+    <span class="score" id="score"><span id="score-v">–</span><small id="score-l">Recorded</small></span>
+    <span class="team a" id="away-name"><span id="away-club"></span><i id="away-dot"></i></span>
+  </div>
+  <div class="meta" id="meta"></div>
+  <div class="chips">
+    <span class="chip" id="sync">In sync</span>
+    <span class="chip" id="src">Analyst: season run</span>
+  </div>
+</section>
+
+<main class="stage" id="stage" tabindex="-1">
+  <section class="view" id="v-watch" data-view="watch" aria-label="Watch: fan 3D match">
+    <div class="wait" role="status"><div><b>Starting Watch</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div></div>
+  </section>
+  <section class="view gone" id="v-analyst" data-view="analyst" aria-label="Analyst: enterprise console" hidden>
+    <div class="wait" role="status"><div><b>Opening the Analyst</b><span class="wt">Loading the season</span><i class="bar"></i></div></div>
+  </section>
+  <section class="view gone" id="v-broadcast" data-view="broadcast" aria-label="Broadcast: desk" hidden>
+    <div class="wait" role="status"><div><b>Starting the Broadcast desk</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div></div>
+  </section>
+  <section class="view gone" id="v-agents" data-view="agents" aria-label="Agents: the shared pipeline" hidden>
+    <div class="ag">
+      <div class="ag-head">
+        <div><h2>Agent pipeline</h2><p>One pipeline for Watch, Analyst and Broadcast. Every claim is recounted by the Verifier and written to the audit chain.</p></div>
+        <div class="chips">
+          <span class="chip warn">Foundry: not connected</span>
+          <span class="chip">matchcast.event/1 · claim/1 · audit/1</span>
+          <span class="chip" id="ag-src">Source: waiting for Watch</span>
+        </div>
+      </div>
+      <div class="ag-cards" id="ag-cards"></div>
+      <section class="ag-panel" id="aq"><h3>Approval queue <span class="muted" id="aq-n"></span></h3>
+        <div class="ag-filters"><label>Mode <select id="aq-mode"><option value="demo">Demo: verified lines air at once</option><option value="producer">Producer: a person approves each line</option></select></label>
+          <span class="muted" id="aq-who">Signed in as Sam Producer (simulated account, Planned: Entra ID)</span></div>
+        <ul class="ag-queue" id="aq-list" aria-live="polite"></ul>
+        <p class="muted" id="aq-msg" role="status"></p>
+      </section>
+      <div class="ag-grid">
+        <section class="ag-panel"><h3>Live flow</h3><ol class="ag-feed" id="ag-feed"></ol></section>
+        <section class="ag-panel"><h3>Provenance</h3><div class="ag-prov" id="ag-prov"></div></section>
+      </div>
+      <section class="ag-panel"><h3>Claims <span class="muted" id="ag-n"></span></h3>
+        <div class="ag-filters"><label>Verdict <select id="lg-verdict"><option value="">all</option><option>verified</option><option>pending</option><option>abstained</option></select></label>
+          <label>Agent <select id="lg-agent"><option value="">all</option><option>analyst</option><option>verifier</option><option>producer</option></select></label>
+          <label>Metric <select id="lg-metric"><option value="">all</option><option>score</option><option>shot_xg</option><option>xg_total</option><option>moment</option><option>line</option></select></label>
+          <button type="button" id="lg-export">Export CSV</button> <span class="muted" id="lg-hash" aria-live="polite"></span></div>
+        <div class="ag-table"><table><thead><tr><th>Time</th><th>Metric</th><th>Value</th><th>Units</th><th>Agent</th><th>Source</th><th>Verdict</th><th>Reason</th><th>Approval</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
+      </section>
+      <section class="ag-panel"><h3>Audit chain</h3>
+        <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <span id="ag-bad-note" class="muted" role="status"></span> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
+        <ol class="ag-recs" id="ag-recs"></ol>
+      </section>
+      <p class="ag-note">Simulated: the agents run rules in the page; the Azure parts are not connected. Watch is the live source. Its events and moments reach this pipeline each second, and its score goes to Broadcast's scoreboard and the Analyst's live pill. Broadcast's pitch still runs its own engine, and the Analyst keeps its season runs, until the single-engine refactor (see README).</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>Simulated match, fictional clubs. Each view keeps its own clock; switching does not restart a running match.</span>
+  <span><kbd>1</kbd> Watch · <kbd>2</kbd> Analyst · <kbd>3</kbd> Broadcast · <kbd>4</kbd> Agents</span>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="contracts.js"></script>
+<script src="config.js"></script>
+<script src="agents.js"></script>
+<script src="live.js"></script>
+<script src="trace-panel.js"></script>
+<dialog id="status-dlg" aria-labelledby="status-h"><h2 id="status-h">What is running</h2><div id="status-box"></div><form method="dialog"><button class="pill">Close</button></form></dialog>
+<script src="speech.js"></script>
+<script src="status.js"></script>
+<script src="voice.js"></script>
+<script>
+"use strict";
+// ---------------------------------------------------------------- the shell
+// One shared match: the setup every view opens on. Watch and Broadcast play it live, and the Analyst opens the
+// season's recorded run for the same fixture. A live match sent from Watch or Broadcast at full time goes to the Analyst.
+const VIEWS = { watch: 'watch/index.html', analyst: 'analyst/index.html', broadcast: 'broadcast/index.html' };   // the three iframes
+const PANES = ['watch', 'analyst', 'broadcast', 'agents'];                                                    // every tab; agents is drawn here
+const KEYS = ['h', 'a', 'seed', 'st', 'month', 'kick', 'half', 'f0', 's0', 'f1', 's1'];
+const $ = (id) => document.getElementById(id);
+const M = { fixture: null, setup: null };                // the shared match
+const FR = {};                                           // view -> { el, key, ready, live, sent }
+let FX = [], STADIUM = {}, current = 'watch', pendingImports = [];
+
+const keyOf = (s) => KEYS.map((k) => s[k]).join('|');
+const setupOf = (fx) => ({ h: fx.home.key, a: fx.away.key, seed: fx.setup.seed, st: fx.stIndex, month: fx.setup.month, kick: fx.setup.kickoff, half: fx.setup.half,
+  f0: fx.formations[0], s0: fx.styles[0], f1: fx.formations[1], s1: fx.styles[1] });
+const fixtureOf = (s) => { const f = FX.find((x) => keyOf(setupOf(x)) === keyOf(s)); return f ? f.id : null; };
+const byId = (id) => FX.find((x) => x.id === id);
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const toast = (t) => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+const frameOf = (view) => FR[view] && FR[view].el;
+
+function url(view) {
+  const s = M.setup; const q = new URLSearchParams();
+  for (const k of KEYS) q.set(k, s[k]);
+  if (view === 'watch' && M.speed) q.set('speed', M.speed);
+  return VIEWS[view] + '?' + q.toString();
+}
+
+// load a view with the shared match. Watch and Broadcast restart at kick-off when the match changed; Analyst routes.
+const since = {};
+function waitText(view, text) { const t = document.querySelector('#v-' + view + ' .wt'); if (t) t.textContent = text; }   // progress text; the slow-start timer (stallCheck) counts from when the view began loading
+function restartWait(view) { delete since[view]; const b = document.querySelector('#v-' + view + ' .stall'), m = document.querySelector('#v-' + view + ' .stallmsg'); if (b) b.remove(); if (m) m.remove(); }
+
+// loading states (EXP-15): no WebGL means Watch and Broadcast cannot draw, so say so once; a slow start gets a note and a reload button outside the live region
+const hasGL = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } })();
+const SLOW_MS = window.MC_SLOW_MS || 25000;
+const NOGL = 'Your browser has WebGL off or unavailable. Try Chrome, Edge or Safari with hardware acceleration on. The Analyst and Agents tabs still work.';
+function stallCheck() {
+  for (const v of ['watch', 'broadcast', 'analyst']) {
+    const sec = $('v-' + v), w = sec && sec.querySelector('.wait'), btn = sec && sec.querySelector('.stall');
+    if (!sec || !w || !FR[v] || sec.hidden || sec.classList.contains('ready')) { delete since[v]; if (btn) btn.remove(); const m0 = sec && sec.querySelector('.stallmsg'); if (m0) m0.remove(); continue; }
+    if (v !== 'analyst' && !hasGL) {
+      if (w.querySelector('b').textContent !== 'This view needs WebGL') { w.querySelector('b').textContent = 'This view needs WebGL'; w.querySelector('.wt').textContent = NOGL; w.querySelector('.bar').hidden = true; }
+      continue;
+    }
+    since[v] = since[v] || Date.now();
+    if (Date.now() - since[v] > SLOW_MS && !btn && !sec.querySelector('.stallmsg')) {
+      const m = document.createElement('span'); m.className = 'wt stallmsg'; m.textContent = 'Still loading. The first load is the slowest, and a busy machine takes longer.'; w.firstElementChild.appendChild(m);
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'pill stall'; b.textContent = 'Reload this view';
+      b.style.cssText = 'position:absolute;left:50%;top:62%;transform:translateX(-50%);z-index:2';
+      b.onclick = () => { restartWait(v); since[v] = Date.now(); waitText(v, 'Loading again'); try { FR[v].el.contentWindow.location.reload(); } catch (e) { FR[v].el.src = FR[v].el.src; } };
+      sec.appendChild(b);
+    }
+  }
+}
+setInterval(stallCheck, 1500);
+
+function ensure(view) {
+  if (view === 'analyst') { routeAnalyst(); return; }
+  if (!VIEWS[view]) return;
+  const want = keyOf(M.setup);
+  if (!FR[view]) {
+    const el = document.createElement('iframe');
+    el.title = view === 'watch' ? 'Watch: fan 3D match' : 'Broadcast: desk';
+    el.setAttribute('allow', 'fullscreen');
+    if (window.mcHookKeys) window.mcHookKeys(el);
+    el.src = url(view);
+    $('v-' + view).appendChild(el);
+    FR[view] = { el, key: want, ready: false, live: null, sent: null };
+  } else if (FR[view].key !== want) {
+    FR[view].key = want; FR[view].live = null; FR[view].sent = null; FR[view].el.src = url(view);
+    $('v-' + view).classList.remove('ready'); waitText(view, 'Loading the 3D engine'); restartWait(view);
+  }
+}
+
+// the Analyst loads its season only when it is opened, so Watch and Broadcast get the machine first
+function routeAnalyst() {
+  if (!M.fixture) return;
+  if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
+    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#match.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
+  if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
+    FR.analyst.route = M.fixture;
+    post('analyst', { src: 'matchcast-shell', type: 'route', page: 'match', arg: M.fixture });
+  }
+}
+
+function post(view, msg) { const f = frameOf(view); if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); }
+
+function show(view) {
+  if (!PANES.includes(view)) view = 'watch';
+  current = view;
+  for (const v of PANES) {
+    const on = v === view;
+    $('v-' + v).hidden = !on; $('v-' + v).classList.toggle('gone', !on);
+    const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-selected', String(on));
+    tab.tabIndex = on ? 0 : -1;
+  }
+  ensure(view);
+  if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
+  paint();
+}
+
+// ---------------------------------------------------------------- the match bar
+function setMatch(setup, fixtureId) {
+  M.setup = setup; M.fixture = fixtureId;
+  for (const v of ['watch', 'broadcast']) if (FR[v]) FR[v].live = null;
+  ensure(current);
+  paint();
+}
+
+function stadiumName(st) { return STADIUM[st] ? STADIUM[st].stadium + ', ' + STADIUM[st].city : 'Stadium ' + st; }
+function paint() {
+  const s = M.setup, fx = M.fixture && byId(M.fixture);
+  const sel = $('fx');
+  if (!fx && !sel.querySelector('option[value="custom"]')) {
+    const o = document.createElement('option'); o.value = 'custom'; o.textContent = 'Custom setup (from Watch or Broadcast)'; sel.appendChild(o);
+  }
+  if (fx) { const o = sel.querySelector('option[value="custom"]'); if (o) o.remove(); }
+  sel.value = fx ? fx.id : 'custom';
+
+  const live = [FR.watch, FR.broadcast].find((f) => f && f.live && f.live.started && f.live.setup && keyOf(f.live.setup) === keyOf(s));
+  if (fx) {
+    $('home-club').textContent = fx.home.club; $('home-dot').style.background = fx.home.color;
+    $('away-club').textContent = fx.away.club; $('away-dot').style.background = fx.away.color;
+    $('meta').innerHTML = '<b>' + fx.home.club + ' v ' + fx.away.club + '</b> · matchday ' + fx.matchday + ' · ' + stadiumName(fx.stIndex) + ' · ' + fx.date + ' · kick-off ' + s.kick + ' · ' + s.half + ' min halves';
+  } else {
+    $('home-club').textContent = 'Custom'; $('home-dot').style.background = '#3D86F0';
+    $('away-club').textContent = 'setup'; $('away-dot').style.background = '#FF7A2E';
+    $('meta').innerHTML = '<b>' + stadiumName(s.st) + '</b> · ' + MONTHS[s.month] + ' · kick-off ' + s.kick + ' · ' + s.half + ' min halves · seed ' + s.seed;
+  }
+  if (live) { $('score-v').textContent = live.live.score.join('–'); $('score-l').textContent = live.live.over ? 'Full time' : live.live.minute + "'"; }
+  else if (fx) { $('score-v').textContent = fx.score.join('–'); $('score-l').textContent = 'Recorded'; }
+  else { $('score-v').textContent = '–'; $('score-l').textContent = 'Not in season'; }
+
+  const f = FR[current];
+  const synced = f && f.key === keyOf(s);
+  $('sync').textContent = current === 'agents' ? 'Shared pipeline' : current === 'analyst' ? (fx ? 'Showing ' + fx.id : 'Season fixtures only') : (synced ? 'In sync' : 'Loads on switch');
+  $('sync').className = 'chip ' + (current === 'analyst' || synced ? 'ok' : '');
+  $('src').textContent = current === 'analyst'
+    ? (fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
+    : (live ? 'Live engine · ' + (current === 'agents' ? 'watch' : current) : 'Live engine: same setup as Analyst');
+  $('src').className = 'chip ' + (live ? 'live' : '');
+  pushFeed(); renderAgents();
+}
+
+// ---------------------------------------------------------------- the shared score, and the agents tab
+// Watch's live score for the shared match goes to the Broadcast scoreboard and the Analyst's live pill
+function pushFeed() {
+  const w = FR.watch && FR.watch.live;
+  const on = !!(w && w.started && keyOf(w.setup) === keyOf(M.setup));
+  const last = on && AG.run ? AG.run.events.slice(-5).map((e) => ({ minute: e.minute, type: e.type, player: e.player })) : [];
+  const msg = { src: 'matchcast-shell', type: 'feed', on, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over), last };
+  post('broadcast', msg); post('analyst', msg);
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const mins = (m) => Math.floor(m) + "'";
+const nameOf = (k) => { const f = FX.find((x) => x.home.key === k || x.away.key === k); return f ? (f.home.key === k ? f.home.club : f.away.club) : k; };
+const teamsOf = (s) => ({ hk: s.h, ak: s.a, home: nameOf(s.h), away: nameOf(s.a) });
+// the claims ledger (EXP-10): one row per claim, newest first, filtered by verdict, agent and metric; the export is the same rows
+const METRIC = { score: ['score', 'goals'], shot: ['shot_xg', 'xG'], xg_total: ['xg_total', 'xG'] };
+const valueOf = (c) => c.kind === 'score' ? c.inputs.score.join('–') : c.kind === 'shot' ? (+c.inputs.xg).toFixed(2) : c.kind === 'xg_total' ? c.inputs.xg.map((x) => (+x).toFixed(2)).join(' / ')
+  : c.inputs && c.inputs.value != null ? String(c.inputs.value) : '';
+function ledgerRows(claims) {
+  const f = { verdict: $('lg-verdict').value, agent: $('lg-agent').value, metric: $('lg-metric').value };
+  return claims.filter((c) => !c.pub).reverse().map((c) => ({ id: c.id, time: mins(c.minute), metric: (METRIC[c.kind] || [c.inputs && c.inputs.metric ? c.inputs.metric : c.kind])[0], value: valueOf(c), units: (METRIC[c.kind] || [null, c.inputs && c.inputs.units || ''])[1],
+    agent: c.agent, source: c.source === 'model' ? 'model' : 'rules', verdict: c.verdict, repaired: c.repaired, reason: c.reason || '', approval: c.approval || (c.verdict === 'verified' ? 'approved' : c.verdict === 'pending' ? 'pending' : 'held') }))
+    .filter((x) => (!f.verdict || x.verdict === f.verdict) && (!f.agent || x.agent === f.agent) && (!f.metric || x.metric === f.metric));
+}
+const csvCell = (s) => /[",\n]/.test(String(s)) ? '"' + String(s).replace(/"/g, '""') + '"' : String(s);
+async function exportLedger() {
+  const rows = ledgerRows(AG.run ? AG.run.claims : []);
+  const head = ['time', 'metric', 'value', 'units', 'agent', 'source', 'verdict', 'reason', 'approval'];
+  const csv = [head.join(',')].concat(rows.map((x) => head.map((k) => csvCell(x[k])).join(','))).join('\n') + '\n';
+  const bytes = new TextEncoder().encode(csv);
+  const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((n) => n.toString(16).padStart(2, '0')).join('');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: 'text/csv' })); a.download = 'matchcast-claims.csv'; document.body.appendChild(a); a.click(); a.remove();
+  $('lg-hash').textContent = rows.length + ' rows · SHA-256 ' + hash;
+}
+let picked = null;   // the claim the provenance panel shows; the latest one when none is picked
+const PRODUCER = 'Sam Producer (simulated)';
+function renderQueue() {
+  const r = AG.run, q = r ? r.claims.filter((c) => c.approval === 'pending').sort((a, b) => !!b.alert - !!a.alert) : [];   // priority 1 alerts first
+  $('aq-mode').value = AG.mode; $('aq-n').textContent = q.length ? q.length + ' waiting' : '';
+  const qhtml = q.length ? q.map((c) => '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
+    : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';
+  if ($('aq-list').dataset.html !== qhtml) { $('aq-list').innerHTML = qhtml; $('aq-list').dataset.html = qhtml; }   // redrawing an unchanged list detaches the buttons mid-click
+}
+function renderAgents() {
+  renderQueue();
+  if (current !== 'agents') return;
+  const r = AG.run, st = r ? r.stat : { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 };
+  const sel = picked || (r && r.claims.length ? r.claims[r.claims.length - 1].id : null);
+  const card = (name, role, line, tag) => '<article class="ag-card"><div class="ag-top"><b>' + name + '</b><span class="tag">' + tag + '</span></div><small>' + role + '</small><p>' + line + '</p></article>';
+  $('ag-cards').innerHTML = [
+    card('Producer', 'Picks moments and routes lines', st.moments + ' moments seen · ' + st.verified + ' approved · ' + st.abstained + ' held', 'Rules · simulated'),
+    card('Analyst', 'Turns events into claims with evidence', st.claims + ' claims from ' + st.events + ' events', 'Rules · simulated'),
+    card('Narrator', 'Writes each line from the claim inputs', st.lines + ' lines in English', 'Rules · simulated'),
+    card('Verifier', 'Recounts every claim from the event log', st.verified + ' verified · ' + st.repaired + ' repaired · ' + st.abstained + ' abstained', 'Checks all claims'),
+    card('Predictor', 'A tool the agents call, not an agent', st.predictions + ' predictions seen in the stream', 'Tool'),
+    card('Data Scientist', 'Analyst dashboard only, when asked', 'Not called in this match', 'On demand')
+  ].join('');
+  $('ag-src').textContent = r ? 'Source: Watch · ' + r.names.home + ' v ' + r.names.away : 'Source: waiting for Watch';
+  $('ag-feed').innerHTML = r && r.feed.length
+    ? r.feed.slice(-40).reverse().map((f) => '<li class="' + f.tone + '"><span class="m">' + mins(f.minute) + '</span><b>' + esc(f.who) + '</b> ' + esc(f.text) + '</li>').join('')
+    : '<li class="empty">Waiting for the kick-off in Watch. Events and claims appear here as the match runs.</li>';
+  $('ag-n').textContent = r ? r.claims.filter((c) => !c.pub).length + ' claims' : '';
+  const rows = ledgerRows(r ? r.claims : []);
+  $('ag-claims').innerHTML = rows.length
+    ? rows.slice(0, 40).map((x) => '<tr data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td>' + esc(x.time) + '</td><td>' + esc(x.metric) + '</td><td>' + esc(x.value) + '</td><td>' + esc(x.units) + '</td><td>' + esc(x.agent) + '</td><td>' + esc(x.source) + '</td><td class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td>' + esc(x.reason) + '</td><td>' + esc(x.approval) + '</td></tr>').join('')
+    : '<tr><td colspan="9" class="empty">No claims yet</td></tr>';
+  const c = r && r.claims.find((x) => x.id === sel);
+  $('ag-prov').innerHTML = c ? '<dl>' + [
+    ['Claim', c.id + ' · ' + c.kind + ' · ' + mins(c.minute)],
+    ['Line', esc(c.text)],
+    ['Inputs', '<code>' + esc(MCC.canon(c.inputs)) + '</code>'],
+    ['Evidence', esc(c.evidence.join(', ') || c.basis || '')],
+    ['Verifier', esc(c.verdict + ': ' + c.reason)],
+    ['Route', esc(c.route || 'held, not aired')],
+    ['Contract', esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
+    ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules fallback · Foundry not connected'],
+    ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending'],
+    ['Trace', '<button type="button" class="ag-how" data-id="' + esc(c.id) + '">How was this made?</button>']
+  ].map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>' : '<p class="empty">Pick a claim to see its provenance.</p>';
+  $('ag-recs').innerHTML = MCC.records().slice(-6).reverse().map((x) => '<li>#' + x.seq + ' ' + esc(x.agent) + ' ' + esc(x.action) + ' ' + esc(x.ref) + ' · ' + x.hash.slice(0, 16) + '</li>').join('') || '<li class="empty">No records yet</li>';
+}
+
+// ---------------------------------------------------------------- Match Pulse cards in Watch (EXP-3)
+// Every line the agents write for the fan view goes to Watch as a card: text for the Analyst mode, a plain version for Casual, chips, the Verifier's verdict, where the line came from, and its evidence.
+const sentCards = new Map();
+function cardOf(c) {
+  const r = AG.run, i = c.inputs || {}, evs = r.events.filter((e) => c.evidence.includes(e.id)).map((e) => ({ minute: e.minute, type: e.type, player: e.player, team: e.team, xg: e.data && e.data.xg != null ? e.data.xg : null }));
+  const m = c.kind === 'moment' ? r.moments.find((q) => q.id === i.momentId) : null;
+  if (m) evs.push({ minute: m.minute, type: m.type, player: null, team: m.team, xg: null, why: m.why });
+  const card = { id: c.id, minute: c.minute, kind: c.kind, text: c.text, verdict: c.verdict, source: c.source || 'rules', api: !!c.api, player: i.player || i.scorer || null, evidence: evs, tr: c.tr || null };
+  if (c.kind === 'score') Object.assign(card, { plain: 'Goal for ' + i.teamName + '!', chips: ['Score ' + i.score.join('–'), mins(c.minute)] });
+  else if (c.kind === 'shot') Object.assign(card, { plain: 'A big chance for ' + i.teamName + '.', chips: ['xG ' + (+i.xg).toFixed(2), i.kind] });
+  else Object.assign(card, { plain: i.title || c.text, chips: [mins(c.minute), String(i.type || c.kind).replace('_', ' ')] });
+  return card;
+}
+// ---------------------------------------------------------------- Ask (EXP-5)
+// 300 characters, 5 questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
+const LANGS_OK = ['en', 'es', 'hi'];
+const askTimes = { watch: [], broadcast: [] };   // one budget per view
+async function answerAsk(id, q, to = 'watch') {
+  const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
+  q = String(q || '').trim().slice(0, 300);
+  const times = askTimes[to] || (askTimes[to] = []), now = Date.now(); while (times.length && now - times[0] > 60000) times.shift();
+  if (times.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
+  times.push(now);
+  if (LV.enabled && LV.status === 'live') { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
+  const a = AG.ask(q);
+  reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
+}
+function pushCards() {
+  const r = AG.run; if (!r) return;
+  for (const c of r.claims) {
+    if (c.approval === 'pending' || c.approval === 'killed') continue;   // a line waiting for a person, or killed, reaches no view
+    if (!c.text || c.route === 'analyst' || c.kind === 'xg_total') continue;
+    const sig = c.verdict + '|' + c.source + '|' + c.text + '|' + JSON.stringify(c.tr || null);
+    if (sentCards.get(c.id) === sig) continue;
+    sentCards.set(c.id, sig);
+    post('watch', { src: 'matchcast-shell', type: 'pulse', card: cardOf(c) });
+    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); { const t = !c.airText && M.lang !== 'en' && c.tr && c.tr[M.lang] && c.tr[M.lang].ok && c.tr[M.lang].text; VC.say(t || c.airText || c.text, { id: c.id, lang: t ? M.lang : 'en', at: c.airedAt, audio: t ? null : (c.audioUrl || null) }); } }
+    $('sr-lines').textContent = (c.verdict === 'verified' ? 'Verified line: ' : 'Line awaiting review: ') + c.text;   // screen readers hear each published line
+  }
+}
+
+// ---------------------------------------------------------------- messages from the views
+window.addEventListener('message', (e) => {
+  const d = e.data || {};
+  if (d.src !== 'matchcast') return;
+  const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
+  if (!view) return;
+  if (d.type === 'vision-crop' && view === 'watch') {   // the tracker's OCR second opinion (DAT-11); only when the agent api is live
+    const reply = (extra) => post('watch', Object.assign({ src: 'matchcast-shell', type: 'vision-ocr', id: d.id }, extra));
+    if (!(LV.enabled && LV.status === 'live')) { reply({ error: 'unavailable' }); return; }
+    LV.identify(d.track_id, d.team_hint, d.crop).then((result) => reply({ result }), (err) => reply({ error: !err.status ? 'unavailable' : err.status === 429 ? 'rate_limited' : 'failed', retry_after: err.retry_after || 0 }));
+    return;
+  }
+  if (d.type === 'vision-events' && view === 'watch') { LV.visionEvents(d.batch); return; }   // the tracker's derived passes, on the separate .vision stream (DAT-11)
+  if (d.type === 'ask' && (view === 'watch' || view === 'broadcast')) { answerAsk(d.id, d.q, view); return; }
+  if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
+  if (d.type === 'indices' && view === 'watch') {   // control, chaos and tempo from Watch's events (DAT-4); the Analyst's match page shows them
+    M.indices = d.data; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'indices', data: d.data }); return;
+  }
+  if (d.type === 'vision' && view === 'watch') {   // Watch's pixel-only tracker, scored against engine truth (DAT-11); the Analyst's Tracking lab shows it
+    M.vision = d.report; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'vision', report: d.report }); return;
+  }
+  if (view === 'analyst') {
+    if (d.type === 'progress') { waitText('analyst', d.text); return; }
+    if (d.type === 'ready') {
+      FR.analyst.ready = true; FR.analyst.route = null; $('v-analyst').classList.add('ready');
+      if (M.vision) post('analyst', { src: 'matchcast-shell', type: 'vision', report: M.vision });
+      if (M.indices) post('analyst', { src: 'matchcast-shell', type: 'indices', data: M.indices });
+      routeAnalyst();
+      for (const m of pendingImports.splice(0)) post('analyst', m);
+    }
+    return;
+  }
+  if (d.type === 'lang' && LANGS_OK.includes(d.lang)) { window.setLang(d.lang, view); return; }   // the Broadcast desk's own language buttons
+  if (d.type === 'audit' && view === 'broadcast' && d.action === 'translation_rejected') { if (LANGS_OK.includes(d.lang) && d.lang !== 'en' && Number.isFinite(+d.minute)) AG.note('verifier', 'translation_rejected', String(d.id).slice(0, 60), { lang: d.lang, reason: String(d.reason).slice(0, 120) }, +d.minute); return; }
+  if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
+  if (d.type === 'talk' && view === 'watch') {   // EXP-16: the api's player agent, when there is a match on the api
+    const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply });
+    if (!LV.enabled || !LV.key) { back(null); return; }
+    LV.talk(d.player, d.utterance).then((r) => { back(r); if (r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
+    return;
+  }
+  if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
+   // the viewer's watch mode changed (EXP-4)
+  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
+  if (d.type === 'events') {
+    AG.onWatch(keyOf(d.setup), d.batch, d.moments);
+    if (AG.run && AG.run.key === keyOf(d.setup)) { LV.events(d.batch); post('broadcast', { src: 'matchcast-shell', type: 'events', batch: d.batch }); pushFeed(); }
+    return;
+  }   // Watch's live events and moments
+  if (d.type === 'progress') { waitText(view, d.text); return; }
+  const f = FR[view];
+  if (d.setup) f.live = { setup: d.setup, started: !!d.started, over: !!d.over, score: d.score || [0, 0], minute: d.minute || 0 };
+  if (d.type === 'start') {
+    // a new match was started inside the view (its own setup or New match): it becomes the shared match
+    const s = d.setup, fxId = fixtureOf(s);
+    f.key = keyOf(s); f.sent = null;
+    M.setup = s; M.fixture = fxId;
+    if (view === 'watch' && M.indices) { M.indices = null; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'indices', data: null }); }
+    if (view === 'watch' && M.vision) { M.vision = null; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'vision', report: null }); }   // a new Watch match: the old match's scores no longer apply
+    $('v-' + view).classList.add('ready');
+    if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });
+    if (M.agents) post(view, M.agents);   // a view that (re)loaded learns the viewer's language
+    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); }   // a new match from Watch starts a new agent run
+    prefetchOthers();
+    toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
+    paint(); routeAnalyst();
+  } else if (d.type === 'tick') {
+    if (view === current) $('v-' + view).classList.add('ready');
+    paint();
+  } else if (d.type === 'fulltime') {
+    if (f.sent === 'done') return;
+    f.sent = 'done';
+    const msg = { src: 'matchcast-shell', type: 'import', dataset: d.dataset, recap: LV.enabled && LV.key && view === 'watch' && LV.status !== 'fallback' && LV.status !== 'offline' ? { api: LV.base, session_id: LV.key.session_id, match_id: LV.key.match_id } : null };
+    if (FR.analyst && FR.analyst.ready) post('analyst', msg); else pendingImports.push(msg);
+    toast('Full time: the live match went to the Analyst as a new library entry');
+    paint();
+  }
+});
+
+// once a match is live, fetch the other views' files into the browser cache, in idle time (network only, nothing is parsed)
+let prefetched = false;
+function prefetchOthers() {
+  if (prefetched) return; prefetched = true;
+  const go = () => {
+    const add = (href) => { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = href; document.head.appendChild(l); };
+    add(VIEWS.broadcast); add(VIEWS.analyst); add('shared/players.json'); add('shared/intl.json');
+    add('analyst/data/league.json');
+    for (const fx of FX) add('analyst/data/' + fx.id + '.json');
+  };
+  // wait a few seconds after kick-off so the first view gets the machine; then idle time
+  setTimeout(() => { if ('requestIdleCallback' in window) requestIdleCallback(go, { timeout: 15000 }); else go(); }, 8000);
+}
+
+// ---------------------------------------------------------------- start up
+function init(list) {
+  FX = list;
+  for (const fx of FX) STADIUM[fx.stIndex] = STADIUM[fx.stIndex] || { stadium: fx.setup.stadium, city: fx.setup.city };
+  const sel = $('fx');
+  const md = {};
+  for (const fx of FX) (md[fx.matchday] = md[fx.matchday] || []).push(fx);
+  for (const m of Object.keys(md)) {
+    const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
+    for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
+      o.textContent = fx.home.club + ' ' + fx.score.join('–') + ' ' + fx.away.club; g.appendChild(o); }
+    sel.appendChild(g);
+  }
+  sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
+  // default: the season's most open fixture, so the first view has goals to watch
+  const best = FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
+  M.setup = setupOf(best); M.fixture = best.id;
+  // filming URL (?seed=2026&speed=4&seedBadClaim=1): the same match, pace and demo claim on every take
+  const Q = new URLSearchParams(location.search);
+  if (/^\d{1,10}$/.test(Q.get('seed') || '') && +Q.get('seed') <= 4294967295) { M.setup = Object.assign({}, M.setup, { seed: +Q.get('seed') }); M.fixture = fixtureOf(M.setup); }
+  if (+Q.get('speed') > 0) M.speed = Math.min(8, Math.max(0.25, +Q.get('speed')));
+  for (const b of document.querySelectorAll('.switch [data-view]')) b.onclick = () => { if (location.hash.slice(1) !== b.dataset.view) location.hash = b.dataset.view; else show(b.dataset.view); };
+  // arrow keys, Home and End move between the dashboard tabs (WAI-ARIA tabs pattern)
+  document.querySelector('.switch').addEventListener('keydown', (e) => {
+    const tabs = [...document.querySelectorAll('.switch [data-view]')], i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const to = e.key === 'ArrowRight' ? (i + 1) % tabs.length : e.key === 'ArrowLeft' ? (i + tabs.length - 1) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+    if (to < 0) return;
+    e.preventDefault(); location.hash = tabs[to].dataset.view; tabs[to].focus();
+  });
+  // keys 1 to 4: the shell hears them itself, and from the views too (once a view has focus the shell never sees the key)
+  const shortcut = (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if ($('tour').open) return;
+    if (e.target.closest && e.target.closest('input,select,textarea,dialog,[role=dialog],[contenteditable]')) return;
+    const map = { '1': 'watch', '2': 'analyst', '3': 'broadcast', '4': 'agents' };
+    if (map[e.key]) location.hash = map[e.key];
+  };
+  document.addEventListener('keydown', shortcut);
+  window.mcHookKeys = (el) => el.addEventListener('load', () => { try { el.contentWindow.document.addEventListener('keydown', shortcut); } catch (e) { /* cross-origin: no shortcuts from inside */ } });
+  window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'watch'));
+  $('ag-prov').onclick = (e) => { const b = e.target.closest('.ag-how'); if (b) TP.open(b.dataset.id); };
+  for (const id of ['lg-verdict', 'lg-agent', 'lg-metric']) $(id).onchange = renderAgents;
+  $('lg-export').onclick = exportLedger;
+  $('ag-claims').onclick = (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) { picked = tr.dataset.id; renderAgents(); } };
+  $('ag-verify').onclick = async () => {
+    let pre = '';
+    if (LV.enabled) {   // with an api, check the server's records; if it cannot answer, say so and fall back to the in-page chain
+      try {
+        const recs = await LV.audit(), v = await LV.verifyChain(recs);
+        $('ag-verify-out').textContent = v.valid ? 'Chain intact · ' + v.count + ' records · server' : 'Chain broken at sequence ' + v.first_broken_sequence + ' (' + v.reason + ') · server';
+        $('ag-recs').innerHTML = recs.slice(-6).reverse().map((x) => '<li>#' + x.sequence + ' ' + esc(x.actor_id) + ' ' + esc(x.action) + ' ' + esc(x.subject_id) + ' · ' + esc(String(x.hash).slice(0, 16)) + '</li>').join('') || '<li class="empty">No records yet</li>';
+        return;
+      } catch (err) { pre = 'Server records not available (' + err.message + '); '; }
+    }
+    const v = await MCC.verify();
+    $('ag-verify-out').textContent = pre + (v.ok ? 'Chain intact: ' + v.count + ' records, head ' + v.head.slice(0, 16) + '… · in-page (simulated)' : 'Chain broken at record ' + v.brokenAt + ' of ' + v.count + ' · in-page (simulated)');
+  };
+  // the in-page Verifier gets the wrong number at once (Simulated); the api's Verifier gets it with the match (POST /v1/matches seed_bad_claim, minute 12)
+  const badNote = () => {
+    const b = LV.badState, on = $('ag-bad').checked || b === 'sent';
+    $('ag-bad-note').textContent = !on ? '' : !LV.enabled ? 'In-page Verifier only (Simulated): no agent api.'
+      : b === 'sent' ? 'Sent to the server Verifier with this match (it corrupts one claim from minute 12).'
+      : b === 'late' ? 'In-page now. This match was already created, so the server Verifier gets it at the next match start.' : 'Will go to the server Verifier with the match (from minute 12) and happens in-page now.';
+  };
+  $('ag-bad').onchange = (e) => { AG.seedBad(e.target.checked); LV.seedBad(e.target.checked); badNote(); };
+  setInterval(badNote, 2000);
+  // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
+  M.lang = 'en'; M.persona = M.persona || 'fan';
+  const LANGS = ['en', 'es', 'hi'];
+  window.setLang = (l, from) => {
+    if (!LANGS.includes(l) || (l === M.lang && from)) return;   // the selector's own click always re-syncs the views
+    M.lang = l; try { localStorage.setItem('mc-lang', l); } catch (e) { /* storage may be blocked */ }
+    for (const b of document.querySelectorAll('#lang-sel button')) b.setAttribute('aria-pressed', String(b.dataset.lang === l));
+    for (const v of ['watch', 'broadcast']) if (v !== from) post(v, { src: 'matchcast-shell', type: 'lang', lang: l });
+    if (LV.enabled && from !== 'watch') LV.persona(M.persona, l);   // the api translates for the language the stream asks for
+  };
+  for (const b of document.querySelectorAll('#lang-sel button')) b.onclick = () => window.setLang(b.dataset.lang, null);
+  try { const sv = localStorage.getItem('mc-lang'); if (LANGS.includes(sv) && sv !== 'en') setTimeout(() => window.setLang(sv, null), 0); } catch (e) { /* storage may be blocked */ }
+  const vb = $('voice-btn'), vshow = () => {
+    vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
+    $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') : '';
+    vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
+  };
+  const vd = $('voice-demo'), vdShow = () => { vd.hidden = !(LV.enabled && LV.status === 'live'); };
+  let demo = null;   // the playing sample; clicking again stops it
+  const demoEnd = (msg) => { clearTimeout(demoEnd.t); demo = null; vd.setAttribute('aria-pressed', 'false'); vd.textContent = 'Voice sample'; if (msg) { $('voice-src').textContent = msg; setTimeout(vshow, 4000); } };
+  vd.onclick = () => {   // the Voice lane's fixed audition clip; plays on a click even when Voice is off
+    if (demo) { demo.pause(); demoEnd(); return; }
+    const a = demo = new Audio(LV.auditionUrl); vd.setAttribute('aria-pressed', 'true'); vd.textContent = 'Stop sample';
+    demoEnd.t = setTimeout(() => { if (demo === a) { a.pause(); demoEnd('Voice sample unavailable'); } }, 60000);
+    a.onended = () => demoEnd(); a.onerror = () => demoEnd('Voice sample unavailable'); a.play().catch(() => demoEnd('Voice sample unavailable'));
+  };
+  setInterval(vdShow, 2000); vdShow();
+  VC.onChange(vshow); VC.load().then(vshow); vshow(); vb.onclick = () => { VC.set(!VC.on); vshow(); };
+  AG.onAir((l) => post('broadcast', { src: 'matchcast-shell', type: 'air', line: l }));
+  $('aq-mode').onchange = (e) => AG.setMode(e.target.value);
+  $('aq-list').onclick = (e) => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const id = b.closest('li').dataset.id, c = AG.run.claims.find((x) => x.id === id);
+    let res;
+    if (b.dataset.act === 'approve') res = AG.approve(id, PRODUCER);
+    else if (b.dataset.act === 'kill') res = AG.kill(id, PRODUCER, 'killed by producer');
+    else { const t = prompt('Edit the line (numbers must already be in it)', c.text); if (t == null) return; res = AG.edit(id, PRODUCER, t); }
+    $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
+  };
+  AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); });
+  const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
+    warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
+  const paintPill = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
+  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });
+  if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
+  paintPill(LV.status);
+  $('status-btn').onclick = () => { const dlg = $('status-dlg'); STX.draw($('status-box')); if (dlg.showModal) dlg.showModal(); };
+  show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'watch');
+}
+
+// first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
+const TOUR = [
+  ['Watch', 'watch', 'A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Try the Copilot Ask tab: it answers only what the match data can prove.'],
+  ['Agents', 'agents', 'Four agents write lines about the match and a Verifier recounts every number from the event log before anything is shown. Switch the approval mode to Producer to approve, edit or kill a line yourself. Provenance on any row shows its source events and audit records.'],
+  ['Broadcast', 'broadcast', 'The broadcaster desk: lower-thirds and a teleprompter fed only by approved lines, instant replay, odds with the reasons on screen, and Ask the producer.'],
+  ['Analyst', 'analyst', 'The enterprise workspace for the same match: pre-match, live and post-match pages, players, reports and a data-science section.'],
+  ['Prove it', 'agents', 'The audit chain is tamper-evident: use Verify chain on the Agents tab and it recomputes every hash. Anything not really connected yet is labelled Simulated or Planned.']];
+let tourAt = 0;
+function tourShow(i) {
+  tourAt = Math.max(0, Math.min(TOUR.length - 1, i));
+  const [title, view, text] = TOUR[tourAt];
+  $('tour-n').textContent = 'Step ' + (tourAt + 1) + ' of ' + TOUR.length;
+  $('tour-h').textContent = title; $('tour-p').textContent = text;
+  $('tour-back').hidden = tourAt === 0;
+  $('tour-go').textContent = tourAt === TOUR.length - 1 ? 'Done' : 'Next';
+  if (location.hash.slice(1) !== view) location.replace('#' + view);   // the view behind the card is the one it talks about
+}
+function tourOpen() { const d = $('tour'); if (!d.open) d.showModal(); tourShow(0); }
+function tourInit() {
+  $('tour-btn').onclick = tourOpen;
+  $('tour-skip').onclick = () => $('tour').close();
+  $('tour-back').onclick = () => tourShow(tourAt - 1);
+  $('tour-go').onclick = () => {
+    if (tourAt === TOUR.length - 1) { $('tour').close(); return; }
+    tourShow(tourAt + 1);
+  };
+  if (/[?&]tour=1(&|$)/.test(location.search)) tourOpen();
+}
+
+tourInit();
+fetch('shared/fixtures.json').then((r) => r.json()).then(init).catch((err) => {
+  $('meta').textContent = 'Could not load the season fixtures: ' + err.message;
+});
+</script>
+</body>
+</html>
