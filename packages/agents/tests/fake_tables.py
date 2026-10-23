@@ -42,6 +42,12 @@ class FakeTable:
 
     @staticmethod
     def _check(entity: dict[str, Any]) -> None:
+        for key in ("PartitionKey", "RowKey"):  # Table Storage: no / \ # ? or control characters
+            text = entity.get(key, "")
+            if any(c in text for c in "/\\#?") or any(
+                ord(c) < 32 or 127 <= ord(c) < 160 for c in text
+            ):
+                raise ValueError(f"OutOfRangeInput: {key} {text!r}")
         for (
             name,
             value,
