@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 import httpx
 
-A2A_URL = re.compile(r"^https?://[A-Za-z0-9.-]+(:\d+)?/a2a$")
+A2A_URL = re.compile(r"^https://[A-Za-z0-9.-]+(:\d+)?/a2a$")
 TEAM_METRICS = {"goals", "shots", "xg", "passes", "fouls"}
 
 

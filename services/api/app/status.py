@@ -121,7 +121,7 @@ def dependency_status(
             if key == "search" and search_fallbacks:
                 detail = f"{search_fallbacks} answers used the local index after a search problem"
             if key == "content_safety" and getattr(safety, "fallbacks", 0):
-                detail = f"{safety.fallbacks} lines screened locally after a failed call"  # type: ignore[attr-defined]
+                detail = f"{safety.recent_local} of the last screens used the local word list"  # type: ignore[attr-defined]
                 if getattr(safety, "degraded", False):
                     state = UNAVAILABLE
         items.append(_item(key, label, state, detail))

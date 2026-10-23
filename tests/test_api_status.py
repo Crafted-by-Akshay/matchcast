@@ -80,7 +80,7 @@ def test_route_is_public_never_503_and_leaks_no_values(monkeypatch):
 
 def test_content_safety_status_reports_local_screening_and_an_open_circuit():
     class Screen:
-        fallbacks, degraded = 4, False
+        fallbacks, degraded, recent_local = 4, False, 4
 
     env = {"CONTENT_SAFETY_ENDPOINT": "https://cs-x.cognitiveservices.azure.com/"}
 
@@ -88,7 +88,7 @@ def test_content_safety_status_reports_local_screening_and_an_open_circuit():
         deps = dependency_status(env, "cloud", screen)["dependencies"]
         return next(i for i in deps if i["key"] == "content_safety")
 
-    assert item(Screen())["status"] == "live" and "4 lines" in item(Screen())["detail"]
+    assert item(Screen())["status"] == "live" and "4 of the last" in item(Screen())["detail"]
     Screen.degraded = True
     assert item(Screen())["status"] == "unavailable"
 
