@@ -50,7 +50,7 @@ test('data platform: the model card is read through the api, with a fallback to 
   f = await openPage(page);
   await expect(f.locator('#dp-card')).toContainText('copy');
   await expect(f.locator('#dp-mc')).toContainText('a copy shipped with the app');
-  void errs;
+  expect(errs.filter((e: string) => !/127\.0\.0\.9|ERR_CONNECTION|Failed to load resource/.test(e))).toEqual([]);
 });
 
 // QUA-3: audit chain and report generation. Ledger, approval and server audit join when EXP-11/12 land in this view.
