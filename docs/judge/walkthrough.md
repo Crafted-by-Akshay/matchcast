@@ -11,10 +11,12 @@ Open the app URL. The first page load starts Watch, which draws a synthetic matc
 4. **Broadcast (30 s).** The same match as a broadcast desk: lower thirds, teleprompter and voiced lines. The shell's language buttons (EN, ES, HI) apply to every view (Watch has its own longer language list); a line without a Verifier-checked translation stays English and says so.
 5. **Analyst (30 s).** The same match as an analyst workspace: match centre, players, reports, Trust and audit. Roles and sign-in are Planned (simulated).
 
+6. **Ask and Talk (20 s).** In Watch, ask a question in the Ask box (for example "who has the most shots?"). A verified answer shows a source chip: `from the match record`, `from the knowledge base`, `from AI Search` or `Search fallback`; a question the agents cannot confirm gets a refusal and no chip. Typing to a player in the chat also asks the api's player agent; only a reply that passed the Verifier is added, marked `Checked against the match record`.
+
 ## Repeatable runs
 
 `/?seed=2026&speed=4&seedBadClaim=1#watch` plays the same match at 4x with the bad-claim demo switched on.
 
 ## What is real and what is not
 
-Labelled in the app and in `docs/judge/pipeline-audit.md`. In short: the simulator, the in-page agents and the contract checks run in your browser. The agent api, Foundry models, Speech and Translator are used only when the deployment has them; otherwise the UI says Simulated or Planned.
+Labelled in the app and in `docs/judge/pipeline-audit.md`. In short: the simulator, the in-page agents and the contract checks run in your browser. The agent api, Foundry models, Speech and Translator are used only when the deployment has them; otherwise the UI says Simulated or Planned. On the 23 Oct deployment Speech, Translator, Table Storage and Vision are live; the Foundry agents run as rules until model quota is approved, and AI Search, Fabric and Databricks are Planned (`docs/infra.md`, `/v1/status`).
