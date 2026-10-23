@@ -91,6 +91,14 @@ test.describe('Simulator engine', () => {
     expect(out.trim()).toBe('2026\t/watch/index.html?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM');
   });
 
+  test('time spent on the set-up screen does not shift the match clock', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => { (window as any).__mcHeadless = true; (window as any).__mcDt = 0.5; });   // idle frames before kick-off add to S.t
+    await page.goto('/watch/index.html?seed=2026&st=1&month=3&h=NAV&a=LOM&half=15', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => { const mc = (window as any).__mc; if (mc && mc.S.started) { (window as any).__mcDt = 0; return true; } return false; }, null, { timeout: 240_000 });
+    expect(await page.evaluate(() => (window as any).__mc.S.t), 'S.t restarts at kick-off').toBeLessThan(2);
+  });
+
   test('one seed gives the same events at any frame time or playback speed', async ({ browser }) => {
     test.setTimeout(540_000);
     const query = 'seed=2026&st=1&month=3&h=NAV&a=LOM';   // what `run.cjs --seeds 2026 --url` prints

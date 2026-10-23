@@ -1652,7 +1652,7 @@ function dirUpdate(dt) {
   if (DIRC.wipe) { DIRC.wipe.style.opacity = ff ? 1 : 0; if (ff && DIRC.cut) DIRC.wipe.textContent = '⏩ ' + DIRC.cut.from + "' → " + minuteOf() + "'"; }
 }
 function dirStart() {   // at kick-off: condense only full-length matches (half = 45), shorter halves are already compressed; the headless runner scores passages too, to report the watch length
-  Object.assign(DIRC, { longest: {}, bySc: {}, on: SET.half >= 45 && new URLSearchParams(location.search).get('condense') !== '0', ff: false, liveS: 0, ffS: 0, hold: 0, ranges: [], cut: null });
+  Object.assign(DIRC, { cardT: -99, longest: {}, bySc: {}, on: SET.half >= 45 && new URLSearchParams(location.search).get('condense') !== '0', ff: false, liveS: 0, ffS: 0, hold: 0, ranges: [], cut: null });
   if (!DIRC.wipe) { const d = document.createElement('div'); d.id = 'ffwipe'; d.style.cssText = 'position:fixed;top:14%;left:50%;transform:translateX(-50%);padding:6px 18px;background:rgba(10,14,20,.78);color:#fff;font:700 20px system-ui;letter-spacing:.06em;border-radius:6px;opacity:0;transition:opacity .15s;pointer-events:none;z-index:9'; document.body.appendChild(d); DIRC.wipe = d; }
 }
 function stepSim(dt) {
@@ -1711,7 +1711,7 @@ function frame(dt, draw) {
     if (DIRC.on) { let budget = sim + simAcc, guard = 0, cost = STEP; while (!S.over && guard++ < 4000) { cost = DIRC.ff ? STEP / FF_X : STEP; if (budget < cost - 1e-9) break; snapPrev(); stepSim(STEP); budget -= cost; } simAcc = Math.min(budget, cost); alpha = simAcc / cost; }   // fast-forward spends 1/FF_X of the frame's time per simulated second
     else { let acc = sim + simAcc, guard = 0; while (!S.over && acc >= STEP - 1e-9 && guard++ < 4000) { snapPrev(); stepSim(STEP); acc -= STEP; } simAcc = Math.min(acc, STEP); alpha = simAcc / STEP; }
   }
-  const unblend = alpha < 1 ? blendTo(alpha) : null;
+  const unblend = alpha < 1 && !(typeof VIS !== 'undefined' && VIS.on) ? blendTo(alpha) : null;   // Vision scores the pixels against the exact simulated positions, so it draws unblended
   for (const p of players) if (!p.off) animate(p, sim);
   // ball render: roll from displacement
   const bw = W(ball.p.x, ball.p.y, ball.p.z); const mv = bw.clone().sub(ballMesh.position); const hd = Math.hypot(mv.x, mv.z);

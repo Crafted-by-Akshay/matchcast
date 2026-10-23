@@ -138,7 +138,7 @@ function lineUp(team) {
 }
 function kickOff() {
   seed = hash32(SET.seed + ':play'); wordsRnd = subStream(SET.seed, 'words'); initEnv(Object.assign({}, SET)); paintStadium(SET.st, SET.month); S.flip = 0;
-  for (const p of players) { p.off = false; p.model.visible = true; p.yellows = 0; p.act = null; }
+  for (const p of players) { p.off = false; p.model.visible = true; p.yellows = 0; p.act = null; p.oneTwo = null; p.pv = null; }
   rollAuto(); // 'Auto' picks follow the match seed
   simAcc = 0; // the fixed-step remainder starts from zero too
   setupTactics({ tactics: [resolvedTac(0), resolvedTac(1)] });
