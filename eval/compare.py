@@ -130,9 +130,13 @@ def single_prompt(m: dict[str, Any], match: dict[str, Any]) -> str:
     return "Write one commentary line for this moment. FACTS:" + json.dumps(facts)
 
 
-def run_single(match: dict[str, Any], client: ModelClient) -> list[dict[str, Any]]:
+def run_single(
+    match: dict[str, Any], client: ModelClient, only: set[str] | None = None
+) -> list[dict[str, Any]]:
     rows = []
     for m in moments(match):
+        if only is not None and m["event_id"] not in only:
+            continue
         t0 = time.perf_counter()
         text = client(single_prompt(m, match))
         ms = (time.perf_counter() - t0) * 1000
@@ -146,6 +150,7 @@ def run_four(
     match: dict[str, Any],
     agents_factory: Callable[..., Any] = rules_agents,
     stats: dict[str, int] | None = None,
+    only: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     config = WorkflowConfig(approval_mode="auto")
     flow = MatchWorkflow(
@@ -156,7 +161,7 @@ def run_four(
         agents=agents_factory(config.personas),
         config=config,
     )
-    by_id = {m["event_id"]: m for m in moments(match)}
+    by_id = {m["event_id"]: m for m in moments(match) if only is None or m["event_id"] in only}
     t0 = time.perf_counter()
     asyncio.run(flow.ingest(match["events"]))
     total_ms = (time.perf_counter() - t0) * 1000
@@ -232,6 +237,47 @@ def compare(
         "single_model": "FakeModel (offline stand-in)" if client_factory is None else "live",
         "note": "Offline numbers show the harness works, not model quality. "
         "Live run needs gpt-6-luna quota.",
+    }
+
+
+def compare_frozen(runs: int = 3, slip: float = 0.15) -> dict[str, Any]:
+    """Both arms on the 30 frozen moments drawn from the season (eval/frozen-moments.json)."""
+    import frozen
+
+    chosen: dict[str, set[str]] = {}
+    for m in frozen.frozen():
+        chosen.setdefault(m["match"], set()).add(m["event_id"])
+    matches = {mid: frozen.load_season_match(mid) for mid in chosen}
+    n = sum(len(v) for v in chosen.values())
+
+    def arm(one_run: Callable[[dict[str, Any], set[str]], list[dict[str, Any]]]) -> dict[str, Any]:
+        rows = [r for mid, ids in chosen.items() for r in one_run(matches[mid], ids)]
+        return summarise(rows, n)
+
+    four = [arm(lambda m, ids: run_four(m, only=ids)) for _ in range(runs)]
+    single = []
+    for i in range(runs):
+        model = FakeModel(i, slip)
+        single.append(arm(lambda m, ids, c=model: run_single(m, c, only=ids)))
+    return {
+        "arms": {"four_agent_rules": _agg(four), "single_agent": _agg(single)},
+        "runs": runs,
+        "moments": n,
+        "matches": len(chosen),
+        "single_model": "FakeModel (offline stand-in)",
+        "note": "30 frozen moments from the season. Offline numbers show the harness works, "
+        "not model quality. Live run needs gpt-6-luna quota.",
+    }
+
+
+def _agg(rs: list[dict[str, float]]) -> dict[str, dict[str, float]]:
+    return {
+        k: {
+            "mean": round(statistics.mean(r[k] for r in rs), 3),
+            "min": min(r[k] for r in rs),
+            "max": max(r[k] for r in rs),
+        }
+        for k in rs[0]
     }
 
 
@@ -348,6 +394,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=None)
     ap.add_argument("--slip", type=float, default=0.15)
+    ap.add_argument("--frozen", action="store_true", help="the 30 frozen season moments, offline")
     ap.add_argument("--live", action="store_true", help="run on Foundry (needs quota and az login)")
     ap.add_argument("--out", type=Path)
     args = ap.parse_args()
@@ -358,6 +405,8 @@ def main() -> None:
         args.out = args.out or ROOT / "eval" / "results" / "live.json"
         if result["warning"]:
             print(f"WARNING: {result['warning']} - these are not model numbers", file=sys.stderr)
+    elif args.frozen:
+        result = compare_frozen(args.runs or 3, args.slip)
     else:
         result = compare(args.runs or 3, args.slip)
     text = json.dumps(result, indent=2)
