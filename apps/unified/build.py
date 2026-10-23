@@ -128,6 +128,20 @@ def build_watch():
         "<title>MatchCast Watch</title>",
         "watch title",
     )
+    assert main.count("sxg: 'xG',") == 6, "watch xg label: expected 6 language entries"
+    main = main.replace("sxg: 'xG',", "sxg: 'xG (engine)',")   # Watch shows its engine's own per-shot xG; the Verifier uses the shared model, so the two can differ on low-value shots
+    head = sub(   # Watch writes and checks these lines in the page, so the card says so (the API-Verified ones appear as Match Pulse cards)
+        head,
+        "<span>AI COMMENTARY · VERIFIED</span>",
+        "<span>COMMENTARY · CHECKED IN PAGE · SIMULATED</span>",
+        "watch commentary label",
+    )
+    head = sub(   # an aria-label needs a role on a span (axe aria-prohibited-attr)
+        head,
+        '<span class="stam" aria-label="Stamina">',
+        '<span class="stam" role="img" aria-label="Stamina">',
+        "watch stamina role",
+    )
     return (
         head
         + importmap()

@@ -64,9 +64,11 @@
 
   // sparkline panel in Analyst mode, under the Match Pulse cards
   const box = document.createElement('div'); box.id = 'mcx-idx'; box.hidden = true;
-  box.style.cssText = 'position:fixed;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(150px + env(safe-area-inset-bottom,0px));width:min(260px,calc(100% - 28px));z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:11px/1.4 var(--f-mono);color:var(--ink)';
+  box.style.cssText = 'position:static;margin-top:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:11px/1.4 var(--f-mono);color:var(--ink)';
   box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Control, chaos and tempo, each over the last 5 minutes');
-  document.body.appendChild(box);
+  // wide screens: beside the Match Pulse panel (which grows downwards and would otherwise cover the On-the-ball card); narrow screens: inside it
+  const css = document.createElement('style'); css.textContent = '@media (min-width:1100px){#mcx-idx{position:fixed!important;left:304px;top:432px;width:240px;margin:0!important;z-index:30}}'; document.head.appendChild(css);
+  (document.getElementById('px-body') || document.getElementById('pulse') || document.body).appendChild(box);   // inside the Match Pulse panel, so it never overlays the cards
   const spark = (pts, key, max, color) => {
     if (pts.length < 2) return '<span style="color:var(--muted)">too early</span>';
     const W = 120, H = 22, xs = (i) => (i / (pts.length - 1)) * W, ys = (v) => H - clamp(v / max) * (H - 2) - 1;
@@ -78,7 +80,8 @@
     const r = window.mcIndicesNow();
     const row = (label, key, max, color, val, unit) => '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="width:52px">' + label + '</span>' + spark(r.series, key, max, color) + '<b style="width:44px;text-align:right">' + val + unit + '</b></div>';
     box.innerHTML = row('Control', 'control', 100, '#6BD08A', Math.round(r.control), '') + row('Chaos', 'chaos', 100, '#F5B942', Math.round(r.chaos), '') + row('Tempo', 'tempo', 12, '#8CC2FF', r.tempo.toFixed(1), '/m')
-      + '<div style="color:var(--muted);margin-top:4px">Each line is one point a minute for the whole match; the numbers use the last 5 min. Pass completion is inferred (no turnover within 6 s).</div>';
+      + '<div style="color:var(--muted);margin-top:4px">One point a minute; numbers use the last 5 min.</div>';
+    box.title = 'Each line is one point a minute for the whole match; the numbers use the last 5 minutes. Pass completion is inferred (no turnover within 6 s).';
   };
   setInterval(paint, 2000);
   setInterval(() => { if (MCS.framed && S.started) MCS.send({ type: 'indices', data: window.mcIndicesNow() }); }, 5000);
