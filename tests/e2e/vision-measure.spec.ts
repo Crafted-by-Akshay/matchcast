@@ -10,8 +10,9 @@ const LOOP_MS = Number(process.env.MEASURE_TIMEOUT_S || 1800) * 1000;   // wall-
 
 test.describe('vision measurement', () => {
   test.skip(!process.env.MEASURE, 'set MEASURE=1 to run the slow vision measurement');
-  const out: any[] = [];
-  test.afterAll(() => fs.writeFileSync(process.env.MEASURE_OUT || '/tmp/vision-measure.json', JSON.stringify(out, null, 1)));
+  const OUT = process.env.MEASURE_OUT || '/tmp/vision-measure.json';
+  // append per run: Playwright restarts the worker after a failed test, which would drop an in-memory list
+  const record = (row: any) => { let all: any[] = []; try { all = JSON.parse(fs.readFileSync(OUT, 'utf8')); } catch { /* first run */ } all.push(row); fs.writeFileSync(OUT, JSON.stringify(all, null, 1)); };
   for (const [cam, label] of CAMS) for (const seed of SEEDS) {
     test(`${cam} camera, seed ${seed}`, async ({ page }) => {
       test.setTimeout(LOOP_MS + 300_000);
@@ -27,7 +28,7 @@ test.describe('vision measurement', () => {
           if (r && r.captures >= CAPTURES) break;
         }
       } finally {
-        out.push({ camera: cam, seed, wall_s: Math.round((Date.now() - t0) / 1000), reached: !!r && r.captures >= CAPTURES, report: r });   // a short or failed run keeps its partial numbers
+        record({ camera: cam, seed, wall_s: Math.round((Date.now() - t0) / 1000), reached: !!r && r.captures >= CAPTURES, report: r });   // a short or failed run keeps its partial numbers
       }
       expect(r && r.captures, `only ${r && r.captures} of ${CAPTURES} captures in ${LOOP_MS / 1000} s`).toBeGreaterThanOrEqual(CAPTURES);
     });

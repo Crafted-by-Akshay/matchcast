@@ -86,16 +86,20 @@ If the target is missed, we report the measured number. We never round it up.
 
 ## Measurement (task 279)
 
-`MEASURE=1 make e2e E2E_ARGS="tests/e2e/vision-measure.spec.ts"` loads Watch on 3 seeds (`MEASURE_SEEDS`, default 11, 22, 33) on the Broadcast and the Tactical camera, waits for `MEASURE_CAPTURES` tracker captures (default 150, at most `MEASURE_TIMEOUT_S` seconds per run, default 1800; a run that falls short fails and records `reached: false`) and writes the tracker's own report (detection, identity, speed, ball, passes, cost per capture) to `$MEASURE_OUT` (default `/tmp/vision-measure.json`). Targets from §3: identity at least 85% on the Broadcast camera and at least 92% on the Tactical camera; the measured value is reported whatever it is.
+`MEASURE=1 make e2e E2E_ARGS="tests/e2e/vision-measure.spec.ts"` loads Watch on 3 seeds (`MEASURE_SEEDS`, default 11, 22, 33) on the Broadcast and the Tactical camera, waits for `MEASURE_CAPTURES` tracker captures (default 150, at most `MEASURE_TIMEOUT_S` seconds per run, default 1800; a run that falls short fails but still records its numbers with `reached: false`, appended to the file as each run ends) and writes the tracker's own report (detection, identity, speed, ball, passes, cost per capture) to `$MEASURE_OUT` (default `/tmp/vision-measure.json`). Targets from §3: identity at least 85% on the Broadcast camera and at least 92% on the Tactical camera; the measured value is reported whatever it is.
 
-**Status: not measured at full length.** A capture costs about 6.5 s in the sandbox (software WebGL, 6.3 to 6.8 s per capture), so a representative run (the tracker needs the kick-off calibration window and some minutes of play) takes hours. It must run on a machine with a GPU, the Mac mini. Smoke result only, seed 11, 40 captures (about 8 s of match time, so the identity gallery had barely started to learn):
+**Status: measured on short runs, not a full match (23 Oct).** A capture costs 6 to 15 s in the sandbox (software WebGL), so a full match needs a GPU machine such as the Mac mini; runs here were capped at 900 s wall time (a 1800 s run on Tactical seed 22 reached 102 captures). The tracker needs the kick-off calibration window first, so these numbers cover the first minutes of play only. Tracker report, engine truth as the reference:
 
-| Camera | Resolution | Captures | Detection recall | Precision | Position error | Identity | Unknown | Switches |
-|---|---|---|---|---|---|---|---|---|
-| Broadcast | 640x400 | 40 | 96.4% | 79.4% | 0.42 m | 29.2% | 18.9% | 78 |
-| Tactical | 1120x700 | 40 | 95.9% | 69.6% | 0.37 m | 31.8% | 33.4% | 84 |
+| Camera | Seed | Captures | Detection recall | Precision | Position error | Identity | Unknown | Switches | Ball found |
+|---|---|---|---|---|---|---|---|---|---|
+| Broadcast | 11 | 37 | 97.5% | 78.6% | 0.46 m | 94.4% | 5.6% | 0 | 45.9% |
+| Broadcast | 22 | 46 | 99.0% | 77.5% | 0.47 m | 92.1% | 7.9% | 0 | 63.0% |
+| Broadcast | 33 | 40 | 96.6% | 77.2% | 0.45 m | 97.3% | 2.7% | 0 | 60.0% |
+| Tactical | 11 | 40 | 97.9% | 69.4% | 0.37 m | 94.9% | 5.1% | 0 | 57.5% |
+| Tactical | 22 | 102 | 99.0% | 69.3% | 0.36 m | 92.3% | 7.7% | 0 | 75.5% |
+| Tactical | 33 | 40 | 95.4% | 68.8% | 0.37 m | 93.3% | 6.7% | 0 | 57.5% |
 
-These identity figures are far below target and say nothing about a full match; do not quote them as results.
+Reading it honestly: recall (95 to 99%) and position error (under 0.5 m) meet the in-app bar (detection 85%+, position error under 1 m). Identity meets the 85% target on the Broadcast camera in all three seeds but the Tactical camera is at 92.3 to 94.9%, so the 92% target holds with little margin and only on these short windows. Precision is 69 to 79%: about a quarter to a third of reported boxes do not match an engine player (the cause was not analysed). Ball is found in 46 to 76% of captures where it is in view. Pass detection has 0 to 5 passes in the window, too few to score (the only seed with a few, Tactical 22 at 102 captures, got 4 of 5 with 100% precision). Not measured: a full match, long-run identity drift, and the Azure OCR path (the glyph reader works alone here, no Azure call was made). The earlier 40-capture smoke figures (identity about 30%, 78 to 84 switches) came from an earlier build and a shorter window and are superseded; why identity differs so much was not investigated.
 
 ## Vision events on the `.vision` stream (task 277)
 
