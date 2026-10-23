@@ -200,9 +200,23 @@ const LV = (() => {
 
   // the viewer's watch mode (casual, analyst, club:<key>, player:<name>, metric:<name>): the stream is reopened for it
   const setPersona = (p, l) => { l = l || 'en'; if (p === persona && l === lang) return; persona = p; lang = l; if (run) { if (run.es) run.es.close(); open(); } };
+  // the full-time recap for a persona (casual or broadcast): the api writes it after the final whistle, so a 404 means "not yet"
+  const recap = async (p, tries) => {
+    const r = run; if (!r) return null;
+    const path = '/v1/matches/' + r.id + '/recap/' + p;
+    const q = '?' + new URLSearchParams({ session_id: r.key.session_id });
+    for (let i = 0; i < (tries || 40) && run === r; i++) {   // the recap waits on the final event, the function and the Verifier: about two minutes in all
+      let res = null;
+      try { res = await fetch(api() + path + q); } catch (e) { return null; }
+      if (res.ok) { const j = await res.json(); const ok = (j.sentences || []).filter((x) => x.verdict === 'verified'); return ok.length ? { text: ok.map((x) => x.text).join(' '), sentences: ok.length, partial: ok.length < (j.sentences || []).length, mode: j.mode || 'rules', audioUrl: api() + path + '/audio.mp3' + q } : null; }
+      if (res.status !== 404) return null;
+      await new Promise((ok) => setTimeout(ok, i < 10 ? 1500 : 4000));
+    }
+    return null;
+  };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, stop, talk, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, visionEvents, stop, talk, recap, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

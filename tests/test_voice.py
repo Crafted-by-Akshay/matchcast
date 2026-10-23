@@ -266,3 +266,43 @@ def test_a_failed_shared_synthesis_fails_every_waiter_once() -> None:
     results = asyncio.run(both())
     assert all(isinstance(r, VoiceError) for r in results)
     assert svc.used == 0
+
+
+def test_a_recap_is_voiced_only_once_it_exists_and_is_verified() -> None:
+    synth = FakeSynth()
+    client = TestClient(create_app())
+    client.app.state.matches.voice = service(synth)
+    create(client)
+    url = "/v1/matches/match-short/recap/casual/audio.mp3"
+    assert client.get(url, params=Q).status_code == 404  # no full time yet
+    assert synth.calls == []
+    post_all(client)
+    client.post("/internal/v1/recaps", json={"session_id": "short", "match_id": "match-short"})
+    recap = client.get("/v1/matches/match-short/recap/casual", params=Q).json()
+    assert all(row["verdict"] == "verified" for row in recap["sentences"])
+    ok = client.get(url, params=Q)
+    assert ok.status_code == 200 and ok.headers["content-type"] == "audio/mpeg"
+    assert len(synth.calls) == 1
+    assert recap["sentences"][0]["text"].split()[0] in synth.calls[0]
+    assert client.get(url.replace("casual", "fan"), params=Q).status_code == 200  # alias
+    assert len(synth.calls) == 1  # same text and voice: the clip is cached
+
+
+def test_only_verified_recap_sentences_are_spoken() -> None:
+    synth = FakeSynth()
+    client = TestClient(create_app())
+    client.app.state.matches.voice = service(synth)
+    create(client)
+    post_all(client)
+    client.post("/internal/v1/recaps", json={"session_id": "short", "match_id": "match-short"})
+    flow = client.app.state.matches.get("short", "match-short")
+    recap = flow.store.get_recap(flow.sk, "casual")
+    recap["sentences"][0]["verdict"] = "review"
+    flow.store.put_recap(flow.sk, "casual", recap)
+    held = recap["sentences"][0]["text"]
+    assert client.get("/v1/matches/match-short/recap/casual/audio.mp3", params=Q).status_code == 200
+    assert held not in synth.calls[0]
+    for row in recap["sentences"]:
+        row["verdict"] = "review"
+    flow.store.put_recap(flow.sk, "casual", recap)
+    assert client.get("/v1/matches/match-short/recap/casual/audio.mp3", params=Q).status_code == 404
