@@ -50,7 +50,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
 #lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
-@media (max-width:560px){.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
+@media (max-width:560px){.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
@@ -148,7 +148,8 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .top{flex-wrap:wrap;padding:10px var(--gut);gap:10px}
   .switch{margin-left:0;width:100%}
   .switch button{flex:1 0 auto;justify-content:center}
-  .status{display:none}
+  .status{width:100%;flex-wrap:wrap}   /* language, Voice and Status stay reachable on a phone */
+  #voice-src:empty{display:none}
   .matchbar{gap:10px}
   .fx{width:100%}
   .fx select{max-width:none;min-width:0;width:100%}
@@ -724,7 +725,7 @@ function init(list) {
     $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') : '';
     vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
   };
-  const vd = $('voice-demo'), vdShow = () => { vd.hidden = !(LV.enabled && LV.status === 'live'); };
+  const vd = $('voice-demo'), vdShow = () => { vd.hidden = !LV.enabled; };
   let demo = null;   // the playing sample; clicking again stops it
   const demoEnd = (msg) => { clearTimeout(demoEnd.t); demo = null; vd.setAttribute('aria-pressed', 'false'); vd.textContent = 'Voice sample'; if (msg) { $('voice-src').textContent = msg; setTimeout(vshow, 4000); } };
   vd.onclick = () => {   // the Voice lane's fixed audition clip; plays on a click even when Voice is off
