@@ -41,5 +41,11 @@ test('Ask matches the api contract: request body and response mapping', async ({
     expect((await page.evaluate(() => LV.ask('Who will win?'))).verdict).toBe('abstained');
     reply = { answer: 'It is 1-0.', intent: 'score', abstained: false, citations: [], mode: 'live', lang: 'en', variants: { es: 'Va 1-0.' } };
     expect(await page.evaluate(() => LV.ask('Who leads?'))).toMatchObject({ text: 'Va 1-0.', source: 'model' });
+    for (const [retrieval, note] of [['local', 'from the match record'], ['search', 'from search'], ['search_fallback', 'Search fallback']]) {
+      reply = { answer: 'It is 1-0.', intent: 'score', abstained: false, citations: [], mode: 'rules', lang: 'en', retrieval };
+      expect(await page.evaluate(() => LV.ask('Who leads?'))).toMatchObject({ retrieval, note });
+    }
+    reply = { answer: 'It is 1-0.', intent: 'score', abstained: false, citations: [], mode: 'rules', lang: 'en' };
+    expect(await page.evaluate(() => LV.ask('Who leads?'))).toMatchObject({ retrieval: null, note: '' });
   } finally { server.close(); }
 });
