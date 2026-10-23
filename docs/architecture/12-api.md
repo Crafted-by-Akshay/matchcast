@@ -41,6 +41,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `GET /v1/audio/{audio_id}.mp3` | anyone | none | 200 `audio/mpeg` from the api's clip cache | 404 unless the api made the clip (any line, audition or talk reply it has voiced; talk replies are reached through their `audio_url`) |
 | `GET /v1/voice/audition.mp3` | anyone | none | 200 `audio/mpeg`, a fixed 30-second audition script in the commentary voice | 429, 503 `not_ready` |
 | `GET /v1/matches/{match_id}/recap/{persona}` | anyone | `session_id` | 200 recap | 404 not ready |
+| `GET /v1/matches/{match_id}/recap/{persona}/audio.mp3` | anyone | `session_id` | 200 `audio/mpeg`, the stored recap read aloud in the commentary voice (every recap sentence passed the Verifier before it was kept) | 404 until the recap exists, 429 and 503 as for line audio |
 | `POST /v1/matches/{match_id}/exports` | Viewer | `session_id, kind (claims_csv, events_json), verdict?, agent?, metric?` | 201 `{export_id, url, sha256, rows}` | 403 |
 | `POST /internal/v1/recaps` | `fn-recap` identity only | `tenant_id, session_id, match_id` | 202 | 401, 403 |
 

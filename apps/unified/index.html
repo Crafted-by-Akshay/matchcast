@@ -87,6 +87,12 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
 .toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
+.recap{position:fixed;left:var(--gut);bottom:44px;z-index:4;max-width:min(420px,calc(100vw - 2*var(--gut)));background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:13px}
+.recap[hidden]{display:none}
+.recap h2{margin:0 0 4px;font-size:13px}
+.recap p{margin:0 0 8px;line-height:1.45}
+.recap .rm{color:var(--muted);font-size:11px}
+.recap button{min-height:44px;min-width:44px;margin-right:8px}
 
 /* ---- agents: one pipeline for the three views, drawn by the shell (no iframe) ---- */
 #v-agents{overflow:auto;background:var(--bg)}
@@ -269,6 +275,12 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <span>Simulated match, fictional clubs. Each view keeps its own clock; switching does not restart a running match.</span>
   <span><kbd>1</kbd> Watch · <kbd>2</kbd> Analyst · <kbd>3</kbd> Broadcast · <kbd>4</kbd> Agents</span>
 </footer>
+<aside class="recap" id="recap" role="region" aria-label="Full-time recap" hidden>
+  <h2 id="recap-h">Full-time recap</h2>
+  <p id="recap-t"></p>
+  <div class="rm" id="recap-m"></div>
+  <button id="recap-listen" type="button">Listen</button><button id="recap-close" type="button">Close</button>
+</aside>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="contracts.js"></script>
@@ -300,6 +312,28 @@ const fixtureOf = (s) => { const f = FX.find((x) => keyOf(setupOf(x)) === keyOf(
 const byId = (id) => FX.find((x) => x.id === id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const toast = (t) => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+// the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
+let RECAP = { gen: 0, closed: false };
+const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };
+function paintRecap() {
+  const p = RECAP_PERSONA[current], r = p && RECAP[p], el = $('recap');
+  el.hidden = !r || RECAP.closed;
+  if (el.hidden) return;
+  $('recap-h').textContent = 'Full-time recap (' + (p === 'casual' ? 'fan' : 'broadcast') + ')';
+  $('recap-t').textContent = r.text;
+  $('recap-m').textContent = r.sentences + ' verified sentences, ' + (r.mode === 'live' ? 'written by the agents' : 'Rules fallback');
+}
+function loadRecap() {
+  const gen = ++RECAP.gen; RECAP = { gen, closed: false };
+  if (!(LV.enabled && LV.key && LV.status !== 'fallback' && LV.status !== 'offline')) { paintRecap(); return; }
+  for (const p of Object.values(RECAP_PERSONA)) LV.recap(p).then((r) => { if (r && RECAP.gen === gen) { RECAP[p] = r; paintRecap(); } });
+}
+$('recap-close').onclick = () => { RECAP.closed = true; paintRecap(); };
+$('recap-listen').onclick = () => {
+  const r = RECAP[RECAP_PERSONA[current]]; if (!r) return;
+  if (!VC.on) { toast('Turn Voice on to hear the recap'); return; }
+  VC.say(r.text, { role: 'playByPlay', audio: r.audioUrl });
+};
 const frameOf = (view) => FR[view] && FR[view].el;
 
 function url(view) {
@@ -393,6 +427,7 @@ function setMatch(setup, fixtureId) {
 
 function stadiumName(st) { return STADIUM[st] ? STADIUM[st].stadium + ', ' + STADIUM[st].city : 'Stadium ' + st; }
 function paint() {
+  paintRecap();
   const s = M.setup, fx = M.fixture && byId(M.fixture);
   const sel = $('fx');
   if (!fx && !sel.querySelector('option[value="custom"]')) {
@@ -610,7 +645,7 @@ window.addEventListener('message', (e) => {
     $('v-' + view).classList.add('ready');
     if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });
     if (M.agents) post(view, M.agents);   // a view that (re)loaded learns the viewer's language
-    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); }   // a new match from Watch starts a new agent run
+    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
     prefetchOthers();
     toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
     paint(); routeAnalyst();
@@ -623,6 +658,7 @@ window.addEventListener('message', (e) => {
     const msg = { src: 'matchcast-shell', type: 'import', dataset: d.dataset, recap: LV.enabled && LV.key && view === 'watch' && LV.status !== 'fallback' && LV.status !== 'offline' ? { api: LV.base, session_id: LV.key.session_id, match_id: LV.key.match_id } : null };
     if (FR.analyst && FR.analyst.ready) post('analyst', msg); else pendingImports.push(msg);
     toast('Full time: the live match went to the Analyst as a new library entry');
+    loadRecap();
     paint();
   }
 });

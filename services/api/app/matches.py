@@ -876,6 +876,18 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
         return recap
 
+    @router.get("/matches/{match_id}/recap/{persona}/audio.mp3")
+    async def recap_audio(
+        match_id: str, persona: str, session_id: str, request: Request
+    ) -> Response:
+        """The stored recap read aloud; every sentence was Verifier-checked before it was kept."""
+        flow = registry.get(session_id, match_id)
+        recap = flow.store.get_recap(flow.sk, ALIASES.get(persona, persona))
+        words = speakable(recap["text"]) if recap else ""
+        if not words:
+            raise Problem(404, "not_found", f"the {persona} recap is not ready")
+        return await _audio(request, registry, words, registry.voice.voice_for("commentary"))
+
     @router.post("/matches/{match_id}/ask")
     async def ask(match_id: str, body: AskBody) -> dict[str, Any]:
         flow = registry.get(body.session_id, match_id)
