@@ -34,6 +34,25 @@ test('data platform: model card renders escaped, and the Fabric clip notes it is
   expect(errs).toEqual([]);
 });
 
+// EXP-13 task 226: with an api configured the card comes from /v1/models/danger/card (with calibration and limits), and a missing card falls back to the shipped copy.
+test('data platform: the model card is read through the api, with a fallback to the shipped copy', async ({ page }) => {
+  const errs = collectErrors(page);
+  await page.route('**/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="http://127.0.0.1:9";' }));
+  let card: any = { name: 'matchcast.ml.danger', version: '1', label: 'danger = shot within 10 s', training_data: 'synthetic scenes', limits: 'describes the simulator', metrics: { auc: 0.88 }, calibration: [{ bin: '0.0-0.1', n: 508, predicted: 0.0093, observed: 0.0335 }] };
+  await page.route('http://127.0.0.1:9/v1/models/danger/card', (r) => card ? r.fulfill({ json: card, headers: { 'Access-Control-Allow-Origin': '*' } }) : r.fulfill({ status: 404, json: { detail: 'none' }, headers: { 'Access-Control-Allow-Origin': '*' } }));
+  await page.route('**/shared/model-card.json', (r) => r.fulfill({ json: { name: 'copy', version: '9', metrics: { auc: 0.5 } } }));
+  let f = await openPage(page);
+  await expect(f.locator('#dp-card')).toContainText('matchcast.ml.danger');
+  await expect(f.locator('#dp-cal')).toContainText('508');
+  await expect(f.locator('#dp-mc')).toContainText('describes the simulator');
+  await expect(f.locator('#dp-mc')).toContainText('the agent api');
+  card = null;
+  f = await openPage(page);
+  await expect(f.locator('#dp-card')).toContainText('copy');
+  await expect(f.locator('#dp-mc')).toContainText('a copy shipped with the app');
+  void errs;
+});
+
 // QUA-3: audit chain and report generation. Ledger, approval and server audit join when EXP-11/12 land in this view.
 test('audit: Verify chain reports the session chain intact', async ({ page }) => {
   const errs = collectErrors(page);

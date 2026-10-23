@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Callable
 from typing import Any
@@ -97,6 +98,16 @@ def create_app(
         built = default_assistant.cache_info().currsize  # do not load the KB just to poll status
         fallbacks = default_assistant().search_fallbacks if built else 0
         return dependency_status(os.environ, mode, getattr(registry, "safety", None), fallbacks)
+
+    @application.get("/v1/models/danger/card", tags=["models"])
+    async def danger_model_card() -> dict[str, Any]:
+        """The danger model's card (metrics, calibration, limits) for the Analyst page."""
+        from matchcast_mcp.danger import model_dir
+
+        path = model_dir() / "model-card.json"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="no model card for the danger model")
+        return json.loads(path.read_text())
 
     @application.get("/ready", tags=["health"])
     async def readiness(response: Response) -> dict[str, Any]:
