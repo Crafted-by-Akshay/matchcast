@@ -2297,6 +2297,30 @@
         ]
       }
     },
+    "/v1/models/danger/card": {
+      "get": {
+        "description": "The danger model's card (metrics, calibration, limits) for the Analyst page.",
+        "operationId": "danger_model_card_v1_models_danger_card_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Danger Model Card V1 Models Danger Card Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Danger Model Card",
+        "tags": [
+          "models"
+        ]
+      }
+    },
     "/v1/speech/token": {
       "get": {
         "description": "A short-lived Entra token for the browser's Speech SDK; never a key (EXP-16).",

@@ -55,9 +55,19 @@ Four agents with separate jobs: **Producer** (picks moments, routes lines, asks 
 | Azure Container Apps, Event Hubs, Storage, Key Vault, Application Insights | Hosting, event stream, state, secrets, telemetry | [`infra/`](infra/), [`docs/infra.md`](docs/infra.md) |
 | Microsoft Entra ID | Sign-in with Viewer, Producer and Admin roles | [`services/api/app/auth.py`](services/api/app/auth.py) |
 | Azure AI Content Safety | REST client written; local rules do the screening until it is wired in | [`packages/agents/matchcast_agents/safety.py`](packages/agents/matchcast_agents/safety.py) |
-| GitHub Actions + OIDC, azd | CI and deploy | [`.github/workflows/`](.github/workflows/) |
+| azd, Bicep, local CI | Provisioning and deploy run from a laptop with `scripts/deploy_local.sh`; checks run with `scripts/local_ci.sh`. The GitHub Actions workflows are manual-only on purpose (cost) | [`scripts/`](scripts/), [`.github/workflows/`](.github/workflows/) |
 
-Rows above say where a service is written but not live. Planned, not built yet: Speech, Translator, Vision, AI Search, Databricks, Fabric. The architecture docs mark each one; nothing here is claimed as running that does not run.
+Rows above say where a service is written but not live. Provisioned in the `rg-matchcast` resource group (see [`docs/infra.md`](docs/infra.md)): Content Safety, Speech, Translator, Vision and AI Search; Vision and Content Safety are called by the live API, and the others are labelled in the app where they are not yet wired. Planned, not built yet: Databricks, Fabric. The architecture docs mark each one; nothing here is claimed as running that does not run.
+
+## Azure MCP Server and GitHub Copilot
+
+| Item | Status |
+| --- | --- |
+| MatchCast MCP server (`services/mcp`, tools in [`docs/mcp.md`](docs/mcp.md)) | Real, tested, deployed as a Container App |
+| `.vscode/mcp.json` so Copilot Chat (agent mode) calls those tools in VS Code | Real, config checked in |
+| Azure MCP Server inspecting the resource group during the build | **Planned**, not recorded yet (board task 62) |
+| Copilot Agent Mode opening a PR against this repo | **Planned**, not recorded yet (board task 63) |
+| 10-second Copilot clip for the video | **Planned**, recorded by hand once the cloud route is checked |
 
 ## Responsible AI
 
