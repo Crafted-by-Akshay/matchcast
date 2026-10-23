@@ -8,7 +8,7 @@ declare const VC: any;
 test('talk to a player: the api reply with facts is added to the chat, a rejected one is not', async ({ page }) => {
   test.setTimeout(420_000);
   const talks: any[] = [], clips: string[] = [];
-  let verdict = 'verified';
+  let verdict = 'verified', emptyFacts = false;
   const server = await new Promise<ReturnType<typeof createServer>>((resolve) => {
     const s = createServer((q, r) => {
       const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
@@ -19,7 +19,7 @@ test('talk to a player: the api reply with facts is added to the chat, a rejecte
           if (/\/talk/.test(q.url!)) {
             talks.push(JSON.parse(b));
             r.writeHead(200, { 'Content-Type': 'application/json', ...cors });
-            return r.end(JSON.stringify(verdict === 'verified' ? { target: talks[talks.length - 1].target, reply: 'I have made 7 passes so far.', verdict, facts: { passes: 7 }, audio_url: '/v1/audio/abc123.mp3' } : { target: 'x', reply: "I can't confirm that from the match data yet.", verdict: 'rejected', facts: {} }));
+            return r.end(JSON.stringify(verdict === 'verified' ? { target: talks[talks.length - 1].target, reply: 'I have made 7 passes so far.', verdict, facts: emptyFacts ? {} : { passes: 7 }, audio_url: emptyFacts ? '/v1/audio/empty.mp3' : '/v1/audio/abc123.mp3' } : { target: 'x', reply: "I can't confirm that from the match data yet.", verdict: 'rejected', facts: {}, audio_url: '/v1/audio/rejected.mp3' }));
           }
           r.writeHead(/\/events/.test(q.url!) ? 202 : 201, { 'Content-Type': 'application/json', ...cors }); r.end('{}');
         });
@@ -55,9 +55,14 @@ test('talk to a player: the api reply with facts is added to the chat, a rejecte
     verdict = 'rejected';
     await ask('who will win the league');
     await expect.poll(() => talks.length).toBe(2);
-    expect(clips.filter((c) => c.includes('abc123')).length, 'a rejected reply is not spoken').toBe(1);
     await expect.poll(() => f.evaluate(() => (window as any).__mcTalkReplies), { timeout: 15_000 }).toBe(2);   // both replies reached Watch, so the absence below is real
     expect(await log()).not.toContain("can't confirm");
+    expect(clips.filter((c) => c.includes('rejected')), 'a rejected reply is not spoken, even with a clip').toEqual([]);
+    verdict = 'verified'; emptyFacts = true;
+    await ask('say something');
+    await expect.poll(() => f.evaluate(() => (window as any).__mcTalkReplies)).toBe(3);
+    await page.waitForTimeout(500);
+    expect(clips.filter((c) => c.includes('empty')), 'a verified reply without facts is neither shown nor spoken').toEqual([]);
     void name;
   } finally { server.close(); }
 });
