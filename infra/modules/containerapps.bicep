@@ -173,6 +173,8 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'SEARCH_ENDPOINT', value: searchEndpoint }
             { name: 'SEARCH_INDEX', value: 'kb-matchcast-v1' }
             // The browser calls the api from the web origin (apps/unified is built with API_URL), so it needs CORS.
+            // Stats Desk partner agent over A2A on the mcp app's internal ingress (AGT-11)
+            { name: 'STATS_DESK_URL', value: 'https://${mcp.properties.configuration.ingress.fqdn}/a2a' }
             { name: 'CORS_ORIGINS', value: 'https://${web.properties.configuration.ingress.fqdn}' }
             // Easy Auth and the ingress already restrict Host; the FQDN is not known inside its own app
             { name: 'MATCHCAST_MCP_ALLOWED_HOSTS', value: '*' }
@@ -238,7 +240,7 @@ resource mcp 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       scale: {
-        minReplicas: 0
+        minReplicas: 1
         maxReplicas: 2
         rules: [{ name: 'http', http: { metadata: { concurrentRequests: '20' } } }]
       }

@@ -179,3 +179,6 @@ After `scripts/set_search_secrets.sh` has stored the keys and the api has restar
 ## Stats Desk over A2A (AGT-11)
 
 Set `STATS_DESK_URL=https://<mcp internal fqdn>/a2a` on the api (Bicep, Platform). Use https: the internal ingress redirects plain http and the client does not follow redirects. The routes are plain Starlette routes, so the MCP host allow-list does not apply. The Stats Desk call has a 2 s budget, so an mcp replica scaled to zero fails the first call (audited `a2a_failed`, the line still airs); keep `minReplicas: 1` on mcp for the demo window. `/v1/status` shows `stats_desk` live from configuration alone. `GET <mcp>/.well-known/agent-card.json` and one priority-1 moment audited `transport: a2a` verify it. Not verified live from the agent container.
+
+## Stats Desk over A2A (23 Oct)
+The api gets `STATS_DESK_URL=https://<mcp internal fqdn>/a2a` from Bicep, so the partner agent runs over A2A instead of in process, and the mcp app keeps one replica (`minReplicas: 1`) so the first call is not a cold start. Set the mcp min replicas back to 0 with the others after the demo (`docs/runbook-shutdown.md`). `/v1/status` shows `stats_desk` live when the URL is set.
