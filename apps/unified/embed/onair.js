@@ -5,7 +5,7 @@
   const log = [];
   const box = document.createElement('div');
   box.id = 'mc-onair'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'On-air log');
-  box.style.cssText = 'position:absolute;right:10px;bottom:10px;z-index:8;display:flex;gap:8px;align-items:center;padding:6px 8px;background:rgba(10,20,40,.92);border-radius:6px;font:600 12px system-ui,sans-serif;color:#e8eefc';
+  box.style.cssText = 'position:absolute;right:10px;bottom:10px;z-index:40;display:flex;gap:8px;align-items:center;padding:6px 8px;background:rgba(10,20,40,.92);border-radius:6px;font:600 12px system-ui,sans-serif;color:#e8eefc';
   box.innerHTML = '<button type="button" id="mc-onair-export" style="padding:4px 8px;border-radius:4px;border:1px solid #3aa0ff;background:#12294a;color:#fff;font:inherit;cursor:pointer">Export on-air JSON</button><span id="mc-onair-n">0 lines on air</span><span id="mc-onair-hash" style="font:11px ui-monospace,monospace;opacity:.85"></span>';
   (document.getElementById('bc-view') || document.body).append(box);
   const doc = () => JSON.stringify({ schema: 'matchcast.onair/1', simulated: true, source: 'rules agents in the page', lines: log.map((l) => ({ id: l.id, minute: l.minute, text: l.text, alert: l.alert || null, verdict: l.verdict })) }, null, 2);

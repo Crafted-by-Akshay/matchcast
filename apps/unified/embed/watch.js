@@ -71,6 +71,7 @@ MCS.progress('Loading the stadium and players');
   window.addEventListener('message', (e) => { const d = e.data || {}; if (d.src === 'matchcast-shell' && d.type === 'answer' && asks.has(d.id)) { asks.get(d.id)(d.answer); asks.delete(d.id); } });
   // EXP-16: the same words go to the api's player agent through the shell; a reply built from checked facts is added to the chat, anything else is not
   const talks = new Map(); let talkN = 0;
+  if (!document.documentElement.lang) document.documentElement.lang = 'en';   // the source head has no lang (WCAG 3.1.1); Watch's own language list changes the text, not this
   window.__mcTalkLog = (p) => (TK.log.get(p) || []).map((m) => m.text);   // read by tests
   window.mcTalkApi = (p, text) => { const id = ++talkN; talks.set(id, p); MCS.send({ type: 'talk', id, player: p.name, utterance: text }); setTimeout(() => talks.delete(id), 15000); };
   window.addEventListener('message', (e) => {
