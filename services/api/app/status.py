@@ -14,9 +14,6 @@ from typing import Any
 
 LIVE, SIMULATED, PLANNED, UNAVAILABLE = "live", "simulated", "planned", "unavailable"
 
-# Provisioned by Bicep but not called by any app code yet: shown as planned, whatever the settings.
-_NOT_WIRED = (("search", "Azure AI Search"),)
-
 
 def _speech_ok(env: Mapping[str, str]) -> bool:
     from app.speech import SpeechTokenService
@@ -28,6 +25,14 @@ def _safety_ok(env: Mapping[str, str]) -> bool:
     from matchcast_agents.safety import ENDPOINT
 
     return bool(ENDPOINT.match(env.get("CONTENT_SAFETY_ENDPOINT", "").strip().lower()))
+
+
+def _search_ok(env: Mapping[str, str]) -> bool:
+    from matchcast_agents.ask.azure_search import ENDPOINT
+
+    return bool(ENDPOINT.match(env.get("SEARCH_ENDPOINT", "").strip().lower())) and bool(
+        env.get("SEARCH_QUERY_KEY")
+    )
 
 
 def _vision_ok(env: Mapping[str, str]) -> bool:
@@ -79,6 +84,7 @@ def dependency_status(
         ("translator", "Azure AI Translator", "TRANSLATOR_ENDPOINT", lambda e: True),
         ("vision", "Azure AI Vision", "VISION_ENDPOINT", _vision_ok),
         ("content_safety", "Azure AI Content Safety", "CONTENT_SAFETY_ENDPOINT", _safety_ok),
+        ("search", "Azure AI Search", "SEARCH_ENDPOINT", _search_ok),
     )
     for key, label, variable, valid in resources:
         if not env.get(variable):
@@ -91,7 +97,7 @@ def dependency_status(
                 )
             )
         elif not valid(env):
-            state, detail = UNAVAILABLE, f"{variable} is malformed"
+            state, detail = UNAVAILABLE, f"{variable} is malformed or its key is missing"
         else:
             state, detail = LIVE, "resource configured"
             if key == "content_safety" and getattr(safety, "fallbacks", 0):
@@ -99,8 +105,6 @@ def dependency_status(
                 if getattr(safety, "degraded", False):
                     state = UNAVAILABLE
         items.append(_item(key, label, state, detail))
-    for key, label in _NOT_WIRED:
-        items.append(_item(key, label, PLANNED, "provisioned, not called by the app yet"))
 
     if env.get("MATCHCAST_EASY_AUTH") == "1" and env.get("MATCHCAST_REQUIRE_ROLE") == "1":
         items.append(_item("auth", "Entra sign-in", LIVE, "Easy Auth roles enforced"))

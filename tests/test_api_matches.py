@@ -427,6 +427,7 @@ def test_ask_answers_with_citations_and_audits_it(client: TestClient) -> None:
     assert live.json()["citations"][0]["type"] == "claim"
     kb = ask(client, "What is offside?").json()
     assert kb["citations"][0]["type"] == "kb" and not kb["abstained"]
+    assert kb["retrieval"] == "local"  # no SEARCH_ENDPOINT in tests
     audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
     assert [r["action"] for r in audit].count("ask_answered") == 2
     assert verify_chain(audit)["valid"] is True

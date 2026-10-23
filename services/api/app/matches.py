@@ -801,6 +801,7 @@ def build_router(registry: Registry) -> APIRouter:
             "abstained": result.abstained,
             "citations": result.citations,
             "mode": result.mode,
+            "retrieval": result.retrieval,
             "lang": "en",
         }
         if body.lang != "en" and not result.abstained:

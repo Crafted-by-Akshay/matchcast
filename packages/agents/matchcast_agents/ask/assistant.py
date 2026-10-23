@@ -18,7 +18,8 @@ from ..messages import DraftLine
 from ..tools import InProcessTools, ToolError
 from ..verify.checks import extract_numbers, run_checks
 from ..workflow import _stamp
-from .retrieval import ENTITY_CORPORA, Bm25Index, analyse
+from .azure_search import AzureSearchClient, SearchError
+from .retrieval import ENTITY_CORPORA, Bm25Index, Hit, analyse
 
 MAX_QUESTION = 300
 WORD_LIMIT = {"casual": 80, "broadcast": 60, "analyst": 200}
@@ -78,6 +79,7 @@ class AskResult:
     citations: list[dict[str, str]] = field(default_factory=list)
     dropped: int = 0
     mode: str = "rules"
+    retrieval: str = "local"  # local | search | search_fallback (the "Search fallback" chip)
 
 
 @dataclass(frozen=True)
@@ -177,9 +179,9 @@ def _strip_markup(text: str) -> str:
     return re.sub(r"\s+", " ", text.lstrip("…")).strip()
 
 
-def _knowledge_sentences(index: Bm25Index, query: str) -> list[tuple[str, str]]:
+def _knowledge_sentences(hits: list[Hit]) -> list[tuple[str, str]]:
     """(sentence, chunk id) for the first two sentences of the best prose chunk."""
-    for hit in index.search(query, k=5):
+    for hit in hits:
         if hit.score < KB_THRESHOLD:
             break
         prose = [b for b in hit.chunk.text.split("\n\n") if not b.lstrip().startswith("|")]
@@ -259,9 +261,26 @@ def check_citations(
 
 
 class Assistant:
-    def __init__(self, index: Bm25Index) -> None:
+    def __init__(self, index: Bm25Index, remote: AzureSearchClient | None = None) -> None:
         self.index = index
+        self.remote = remote
         self._text = {c.id: c.text for c in index.chunks}
+
+    async def _retrieve(self, query: str) -> tuple[list[Hit], str]:
+        """Best chunks for ``query`` and where they came from.
+
+        With AI Search configured it ranks; the local BM25 score still gates (the threshold is
+        calibrated on it) and the entity-page rule still applies, so the index can only reorder
+        what BM25 would accept. A failed call falls back to BM25 and says so."""
+        local = self.index.search(query, k=50)
+        if self.remote is None:
+            return local[:5], "local"
+        try:
+            ranked = await self.remote.search(query, k=15)
+        except SearchError:
+            return local[:5], "search_fallback"
+        allowed = {h.chunk.id: h for h in local}
+        return [allowed[i] for i, _score in ranked if i in allowed][:5], "search"
 
     async def ask(self, flow: Any, question: str, persona: str = "casual") -> AskResult:
         """Answer from the match in ``flow``; callers hold the workflow lock."""
@@ -269,6 +288,7 @@ class Assistant:
         plan = route(ctx, question, self.index)
         if plan.intent == "out_of_scope":
             return AskResult(OUT_OF_SCOPE, plan.intent, abstained=True)
+        retrieval = "local"
         sentences: list[tuple[str, str | None]] = []  # (text with citations, claim id if live)
         claims: list[dict[str, Any]] = []
         if plan.intent in ("live", "both") and plan.metric:
@@ -292,7 +312,8 @@ class Assistant:
                 )
             sentences.append((_live_sentence(ctx, label, claims), "live"))
         if plan.intent in ("knowledge", "both"):
-            for text, chunk_id in _knowledge_sentences(self.index, plan.kb_query):
+            hits, retrieval = await self._retrieve(plan.kb_query)
+            for text, chunk_id in _knowledge_sentences(hits):
                 sentences.append((f"{text} [kb:{chunk_id}]", None))
         kept, dropped = [], 0
         by_claim = {c["claim_id"]: c for c in claims}
@@ -310,12 +331,14 @@ class Assistant:
             else:
                 dropped += 1
         if not kept:
-            return AskResult(ABSTAIN, plan.intent, abstained=True, dropped=dropped)
+            return AskResult(
+                ABSTAIN, plan.intent, abstained=True, dropped=dropped, retrieval=retrieval
+            )
         answer = _fit(kept, WORD_LIMIT.get(persona, 80))
         citations = [
             {"type": kind, "id": ident} for kind, ident in dict.fromkeys(_CITE.findall(answer))
         ]
-        return AskResult(answer, plan.intent, False, citations, dropped)
+        return AskResult(answer, plan.intent, False, citations, dropped, retrieval=retrieval)
 
 
 def _fit(sentences: list[str], limit: int) -> str:
