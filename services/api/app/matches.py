@@ -13,7 +13,7 @@ import os
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
@@ -26,7 +26,7 @@ from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, normalise
 from matchcast_agents.safety import safety_from_env
-from matchcast_agents.statsdesk import StatsDeskError
+from matchcast_agents.statsdesk import A2A_URL, A2AStatsDesk, StatsDeskError
 from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
@@ -199,6 +199,17 @@ def _local_stats_desk() -> _LocalStatsDesk | None:
         return None
 
 
+def stats_desk_from_env(local: Any, env: Mapping[str, str] | None = None) -> Any:
+    """The partner agent over A2A when ``STATS_DESK_URL`` is an http(s) URL, else in process."""
+    url = (os.environ if env is None else env).get("STATS_DESK_URL", "").strip()
+    if not url:
+        return local
+    if not A2A_URL.match(url):
+        logging.getLogger(__name__).warning("STATS_DESK_URL must end in /a2a; using in process")
+        return local
+    return A2AStatsDesk(url)
+
+
 class Registry:
     """Matches held by this single api replica (ADR-0005), keyed by session and match."""
 
@@ -209,11 +220,12 @@ class Registry:
             build_store()
         )  # MATCHCAST_STORE=table|memory; one store for every match, so the MCP tools see them all
         self.require_role = require_role
-        self.stats_desk = _local_stats_desk()
+        local = _local_stats_desk()
+        self.stats_desk: Any = stats_desk_from_env(local)
         self._model_client: ModelClient | None = None
         self.asked: dict[str, deque[float]] = {}
         self.exports: dict[str, tuple[bytes, str, str]] = {}
-        self.season = self.stats_desk.season if self.stats_desk else None
+        self.season = local.season if local else None
         self.ds_asked: dict[str, deque[float]] = {}
         self.vision = VisionService()
         self.speech = SpeechTokenService()
