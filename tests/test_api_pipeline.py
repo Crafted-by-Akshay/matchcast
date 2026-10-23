@@ -310,3 +310,47 @@ def test_one_failing_match_still_lets_the_others_finish_and_the_batch_retry() ->
     with pytest.raises(RuntimeError):
         asyncio.run(pipeline.handle(batch))
     assert done == ["ok"]
+
+
+def test_a_cancelled_match_fails_the_batch_but_the_consumer_keeps_running() -> None:
+    import asyncio
+
+    from app.pipeline import Pipeline
+
+    done: list[str] = []
+
+    class _Registry:
+        async def flow_for(self, session_id: str, match_id: str):
+            class _Flow:
+                async def ingest(self, events: list[dict]) -> dict:
+                    if match_id == "cancelled":
+                        raise asyncio.CancelledError
+                    done.append(match_id)
+                    return {}
+
+            return _Flow()
+
+    def batch(*matches: str) -> list[dict]:
+        return [
+            {"stream": {"session_id": "s", "match_id": m}, "stream_sequence": 1} for m in matches
+        ]
+
+    pipeline = Pipeline(_Registry(), None, None, None)  # type: ignore[arg-type]
+    with pytest.raises(RuntimeError, match="cancelled"):
+        asyncio.run(pipeline.handle(batch("cancelled", "ok")))
+    assert done == ["ok"]  # the other match in the batch finished
+
+    class _Source:  # a hub that redelivers: the first batch fails, the next one must still run
+        async def run(self, handler):
+            try:
+                await handler(batch("cancelled"))
+            except Exception:  # noqa: BLE001 - what deliver() does
+                pass
+            await handler(batch("later"))
+
+    async def go():
+        supervised = Pipeline(_Registry(), None, _Source(), None)  # type: ignore[arg-type]
+        await supervised._supervise()
+
+    asyncio.run(go())
+    assert done == ["ok", "later"]

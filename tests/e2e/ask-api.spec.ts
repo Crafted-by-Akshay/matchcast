@@ -6,7 +6,7 @@ declare const LV: any;
 
 test('Ask matches the api contract: request body and response mapping', async ({ page }) => {
   const asks: any[] = [];
-  let reply: any = { answer: 'It is 1-0.', intent: 'score', abstained: false, citations: ['c1'], mode: 'rules', lang: 'en' };
+  let reply: any = { answer: 'It is 1-0.', intent: 'score', abstained: false, citations: [{ type: 'claim', id: 'c1' }], mode: 'rules', lang: 'en' };
   const server = await new Promise<ReturnType<typeof createServer>>((resolve) => {
     const s = createServer((q, r) => {
       const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
@@ -33,7 +33,7 @@ test('Ask matches the api contract: request body and response mapping', async ({
     expect(asks[0].persona, 'a club persona is the casual audience').toBe('casual');
     expect(asks[0].lang).toBe('es');
     expect(asks[0].session_id).toMatch(/^demo-/);
-    expect(a).toMatchObject({ text: 'It is 1-0.', verdict: 'verified', source: 'rules', citations: ['c1'] });
+    expect(a).toMatchObject({ text: 'It is 1-0.', verdict: 'verified', source: 'rules', citations: [{ type: 'claim', id: 'c1' }] });
     const before = asks.length;
     expect(await page.evaluate(() => LV.ask('   ').then(() => 'sent', (e: Error) => e.message))).toBe('empty question');
     expect(asks.length, 'a blank question is not sent').toBe(before);
