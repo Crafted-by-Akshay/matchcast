@@ -7,6 +7,7 @@ abstains instead of guessing.
 """
 
 import hashlib
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -25,6 +26,7 @@ MAX_QUESTION = 300
 WORD_LIMIT = {"casual": 80, "broadcast": 60, "analyst": 200}
 OUT_OF_SCOPE = "I can only answer questions about this match and MatchCast."
 ABSTAIN = "I can't confirm that from the match data yet."
+log = logging.getLogger(__name__)
 KB_THRESHOLD = 2.2
 
 # (phrases, metric); the first entry whose phrase is in the question wins, so specific first
@@ -264,6 +266,7 @@ class Assistant:
     def __init__(self, index: Bm25Index, remote: AzureSearchClient | None = None) -> None:
         self.index = index
         self.remote = remote
+        self.search_fallbacks = 0
         self._text = {c.id: c.text for c in index.chunks}
 
     async def _retrieve(self, query: str) -> tuple[list[Hit], str]:
@@ -277,10 +280,17 @@ class Assistant:
             return local[:5], "local"
         try:
             ranked = await self.remote.search(query, k=15)
-        except SearchError:
+        except SearchError as error:
+            self.search_fallbacks += 1
+            log.warning("AI Search failed (%s); using BM25", error)
             return local[:5], "search_fallback"
-        allowed = {h.chunk.id: h for h in local}
-        return [allowed[i] for i, _score in ranked if i in allowed][:5], "search"
+        allowed = {h.chunk.id: h for h in local if h.score >= KB_THRESHOLD}
+        hits = [allowed[i] for i, _score in ranked if i in allowed][:5]
+        if not hits and allowed:  # an empty or unloaded index must not silence Ask
+            self.search_fallbacks += 1
+            log.warning("AI Search returned no usable chunk; using BM25")
+            return local[:5], "search_fallback"
+        return hits, "search"
 
     async def ask(self, flow: Any, question: str, persona: str = "casual") -> AskResult:
         """Answer from the match in ``flow``; callers hold the workflow lock."""

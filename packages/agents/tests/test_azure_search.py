@@ -1,6 +1,7 @@
 """Azure AI Search client and its use by the Assistant (AGT-16); HTTP runs over a fake transport."""
 
 import json
+import re
 from pathlib import Path
 
 import httpx
@@ -10,8 +11,10 @@ from matchcast_agents.ask import Assistant, Bm25Index, load_kb
 from matchcast_agents.ask.azure_search import (
     AzureSearchClient,
     SearchError,
+    doc_key,
     index_definition,
     odata_filter,
+    plain_terms,
     search_from_env,
 )
 
@@ -38,7 +41,7 @@ def test_endpoint_must_be_a_search_host_and_needs_a_key() -> None:
 
 def test_index_schema_matches_the_doc_and_filters_quote_values() -> None:
     names = [f["name"] for f in index_definition()["fields"]]
-    assert names[:3] == ["id", "corpus", "doc_id"] and names[-3:] == [
+    assert names[:4] == ["key", "id", "corpus", "doc_id"] and names[-3:] == [
         "entity_ids",
         "source_path",
         "version",
@@ -82,7 +85,11 @@ def test_upload_sends_every_chunk_and_prune_deletes_only_stale_ids() -> None:
         body = json.loads(request.content)
         calls.append((request.url.path, body))
         if request.url.path.endswith("/docs/search"):
-            return httpx.Response(200, json={"value": [{"id": chunks[0].id}, {"id": "gone"}]})
+            rows = [
+                {"key": doc_key(chunks[0].id), "id": chunks[0].id},
+                {"key": "k-gone", "id": "gone"},
+            ]
+            return httpx.Response(200, json={"value": rows})
         return httpx.Response(200, json={"value": [{"status": True}] * len(body.get("value", []))})
 
     c = client(handler)
@@ -90,9 +97,10 @@ def test_upload_sends_every_chunk_and_prune_deletes_only_stale_ids() -> None:
     assert run(c.prune({chunks[0].id})) == 1
     upload = calls[0][1]["value"]
     assert [r["id"] for r in upload] == [x.id for x in chunks]
+    assert all(re.fullmatch(r"[A-Za-z0-9_=-]+", r["key"]) for r in upload)  # ':' is not a legal key
     assert all(r["@search.action"] == "mergeOrUpload" for r in upload)
     deletes = calls[-1][1]["value"]
-    assert deletes == [{"@search.action": "delete", "id": "gone"}]
+    assert deletes == [{"@search.action": "delete", "key": "k-gone"}]
 
 
 def test_a_failed_batch_item_is_reported() -> None:
@@ -127,7 +135,7 @@ def test_remote_ranks_but_local_score_still_gates(index) -> None:
     none, source = run(
         Assistant(index, FakeRemote(["not-in-the-kb"]))._retrieve("How is xG worked out?")
     )
-    assert none == [] and source == "search"
+    assert source == "search_fallback" and none
 
 
 def test_a_failing_search_falls_back_to_bm25_and_says_so(index, make_workflow, match) -> None:
@@ -140,3 +148,29 @@ def test_a_failing_search_falls_back_to_bm25_and_says_so(index, make_workflow, m
     assert result.citations and result.citations[0]["id"].startswith("metrics:xg")
     plain = run(Assistant(index).ask(flow, "How is xG worked out?", "casual"))
     assert plain.retrieval == "local" and plain.answer == result.answer
+
+
+def test_user_text_cannot_use_search_operators_and_hosts_are_case_insensitive() -> None:
+    assert plain_terms('non-penalty "xG" *') == "non penalty xG"
+    assert AzureSearchClient("https://SRCH-X.search.windows.net", "k")._base == HOST
+
+
+def test_an_empty_index_falls_back_to_bm25_and_is_counted(index) -> None:
+    assistant = Assistant(index, FakeRemote(["not-in-the-kb"]))
+    hits, source = run(assistant._retrieve("How is xG worked out?"))
+    assert source == "search_fallback" and hits and assistant.search_fallbacks == 1
+
+
+def test_a_below_threshold_hit_never_ends_the_list_early(index) -> None:
+    query = "How is xG worked out?"
+    local = index.search(query, k=50)
+    weak = next(h for h in local if h.score < 2.2)
+    best = local[0]
+    hits, _ = run(Assistant(index, FakeRemote([weak.chunk.id, best.chunk.id]))._retrieve(query))
+    assert [h.chunk.id for h in hits] == [best.chunk.id]
+
+
+def test_a_failed_search_is_counted_and_never_leaks_the_key() -> None:
+    with pytest.raises(SearchError) as error:
+        run(client(lambda r: httpx.Response(401)).search("xg"))
+    assert "secret-key" not in str(error.value)

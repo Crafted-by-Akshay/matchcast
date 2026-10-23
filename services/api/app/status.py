@@ -15,6 +15,12 @@ from typing import Any
 LIVE, SIMULATED, PLANNED, UNAVAILABLE = "live", "simulated", "planned", "unavailable"
 
 
+_BAD = {
+    "speech": "SPEECH_ENDPOINT or SPEECH_REGION is malformed",
+    "search": "SEARCH_ENDPOINT is not a search host or SEARCH_QUERY_KEY is missing",
+}
+
+
 def _speech_ok(env: Mapping[str, str]) -> bool:
     from app.speech import SpeechTokenService
 
@@ -50,7 +56,10 @@ def _item(key: str, label: str, state: str, detail: str) -> dict[str, str]:
 
 
 def dependency_status(
-    env: Mapping[str, str], mode: str, safety: object | None = None
+    env: Mapping[str, str],
+    mode: str,
+    safety: object | None = None,
+    search_fallbacks: int = 0,
 ) -> dict[str, Any]:
     """The status document. ``mode`` is ``local`` or ``cloud`` (the settings mode)."""
     cloud = mode == "cloud"
@@ -97,9 +106,11 @@ def dependency_status(
                 )
             )
         elif not valid(env):
-            state, detail = UNAVAILABLE, f"{variable} is malformed or its key is missing"
+            state, detail = UNAVAILABLE, _BAD.get(key, f"{variable} is malformed")
         else:
             state, detail = LIVE, "resource configured"
+            if key == "search" and search_fallbacks:
+                detail = f"{search_fallbacks} answers used the local index after a search problem"
             if key == "content_safety" and getattr(safety, "fallbacks", 0):
                 detail = f"{safety.fallbacks} lines screened locally after a failed call"  # type: ignore[attr-defined]
                 if getattr(safety, "degraded", False):

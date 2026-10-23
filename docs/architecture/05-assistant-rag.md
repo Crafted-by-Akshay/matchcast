@@ -54,7 +54,8 @@ flowchart LR
 
 | Field | Type | Attributes |
 | --- | --- | --- |
-| `id` | Edm.String | key |
+| `key` | Edm.String | key (base64url of `id`: keys allow only letters, digits, `_`, `-`, `=`) |
+| `id` | Edm.String | filterable (the chunk id, which contains colons) |
 | `corpus` | Edm.String | filterable, facetable |
 | `doc_id` | Edm.String | filterable |
 | `title` | Edm.String | searchable |
