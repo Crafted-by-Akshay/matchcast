@@ -165,6 +165,9 @@ class Pipeline:
         for failure in failures:  # deliver() logs only the one re-raised, so log them all here
             log.error("a match in the batch failed: %r", failure)
         if failures:
+            if isinstance(failures[0], asyncio.CancelledError):
+                # nobody cancelled this task, so a bare CancelledError would end the supervisor
+                raise RuntimeError("a match in the batch was cancelled") from failures[0]
             raise failures[0]
 
     def _reduce(self, staged: _Staged, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
