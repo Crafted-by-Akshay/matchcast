@@ -270,26 +270,39 @@ class Assistant:
         self._text = {c.id: c.text for c in index.chunks}
 
     async def _retrieve(self, query: str) -> tuple[list[Hit], str]:
-        """Best chunks for ``query`` and where they came from.
+        """Best chunks for the answer path: only hits BM25 would accept may answer."""
+        return await self.search(query, top=5, min_score=KB_THRESHOLD)
 
-        With AI Search configured it ranks; the local BM25 score still gates (the threshold is
-        calibrated on it) and the entity-page rule still applies, so the index can only reorder
-        what BM25 would accept. A failed call falls back to BM25 and says so."""
-        local = self.index.search(query, k=50)
+    async def search(
+        self,
+        query: str,
+        *,
+        top: int = 5,
+        corpus: str | None = None,
+        min_score: float = 0.0,
+    ) -> tuple[list[Hit], str]:
+        """Chunks for ``query`` and their source: ``local``, ``search`` or ``search_fallback``.
+
+        With AI Search configured it ranks; the local BM25 score still gates (``min_score``) and
+        the entity-page rule still applies, so the index can only reorder what BM25 would accept.
+        A failed call, or one with no usable chunk, falls back to BM25 and says so. Entity pages the
+        rule drops can leave fewer than ``top`` chunks."""
+        corpora = {corpus} if corpus else None
+        local = self.index.search(query, k=50, corpora=corpora)
         if self.remote is None:
-            return local[:5], "local"
+            return local[:top], "local"
         try:
-            ranked = await self.remote.search(query, k=15)
+            ranked = await self.remote.search(query, k=15, corpora=corpora)
         except SearchError as error:
             self.search_fallbacks += 1
             log.warning("AI Search failed (%s); using BM25", error)
-            return local[:5], "search_fallback"
-        allowed = {h.chunk.id: h for h in local if h.score >= KB_THRESHOLD}
-        hits = [allowed[i] for i, _score in ranked if i in allowed][:5]
+            return local[:top], "search_fallback"
+        allowed = {h.chunk.id: h for h in local if h.score >= min_score}
+        hits = [allowed[i] for i, _score in ranked if i in allowed][:top]
         if not hits and allowed:  # an empty or unloaded index must not silence Ask
             self.search_fallbacks += 1
             log.warning("AI Search returned no usable chunk; using BM25")
-            return local[:5], "search_fallback"
+            return local[:top], "search_fallback"
         return hits, "search"
 
     async def ask(self, flow: Any, question: str, persona: str = "casual") -> AskResult:

@@ -108,7 +108,7 @@ All tools are served by `services/mcp` over Streamable HTTP; until a shared stor
 | `predict_danger` | match_id, event_id | probability of a shot within 10 s, model version | **Planned** (needs the danger model, ONNX from Blob `models/danger/`) |
 | `query_season` | sql (SELECT only), limit ≤ 1,000 | rows, columns, sql_hash, elapsed_ms | DuckDB over Blob `season/v1/*.parquet` |
 | `describe_views` | none | allowed views and columns | DuckDB catalogue |
-| `search_kb` | query, corpus?, top ≤ 8 | chunks with ids and scores | BM25 over `kb/` today; AI Search `kb-matchcast-v1` once ingested (**Planned**, needs embeddings) |
+| `search_kb` | query, corpus?, top ≤ 8 | chunks with ids and scores | AI Search `kb-matchcast-v1` ranks in the process that has `SEARCH_ENDPOINT` and `SEARCH_QUERY_KEY` (today the api, which mounts `/mcp`; the standalone mcp container is not given them, so it reports `local`) and the index is loaded (keyword only; embeddings **Planned**); BM25 over `kb/` otherwise or on a failed call. The result's `retrieval` says which (`local`, `search`, `search_fallback`) |
 
 Copilot Agent Mode uses the same server through the external route (Easy Auth), configured in `.vscode/mcp.json` (AGT-10, PLT-11).
 
