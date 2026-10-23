@@ -24,6 +24,7 @@ param speechEndpoint string = ''
 param speechRegion string = ''
 param translatorEndpoint string = ''
 param translatorRegion string = ''
+param visionEndpoint string = ''
 param searchEndpoint string = ''
 
 @allowed(['direct', 'memory', 'eventhubs'])
@@ -165,6 +166,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'SPEECH_REGION', value: speechRegion }
             { name: 'TRANSLATOR_ENDPOINT', value: translatorEndpoint }
             { name: 'TRANSLATOR_REGION', value: translatorRegion }
+            { name: 'VISION_ENDPOINT', value: visionEndpoint }
             { name: 'SEARCH_ENDPOINT', value: searchEndpoint }
             { name: 'SEARCH_INDEX', value: 'kb-matchcast-v1' }
             // Easy Auth and the ingress already restrict Host; the FQDN is not known inside its own app
