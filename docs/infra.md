@@ -182,3 +182,6 @@ Set `STATS_DESK_URL=https://<mcp internal fqdn>/a2a` on the api (Bicep, Platform
 
 ## Stats Desk over A2A (23 Oct)
 The api gets `STATS_DESK_URL=https://<mcp internal fqdn>/a2a` from Bicep, so the partner agent runs over A2A instead of in process, and the mcp app keeps one replica while `KEEP_WARM` is true so the first call is not a cold start. The minimum follows `KEEP_WARM` with the api and web, so it also goes back to 0 with them after the demo (`docs/runbook-shutdown.md`). `/v1/status` shows `stats_desk` live when the URL is set.
+
+## Agent mode (23 Oct)
+`MATCHCAST_AGENT_MODE` on the api comes from the Bicep parameter `agentMode` (`azd env set AGENT_MODE live`, default `rules`). Flip it to `live` only after the `gpt-6-luna` deployment exists and the quota is approved; `/v1/status` then reports the agents as live, and `scripts/smoke_foundry.py` is the check. Set it back to `rules` if the model call fails.

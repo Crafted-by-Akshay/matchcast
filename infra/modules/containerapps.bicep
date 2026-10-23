@@ -33,6 +33,10 @@ param pipelineMode string = 'direct'
 @description('True when Key Vault already holds srch-query-key; a Key Vault secret reference to a missing secret fails the revision.')
 param searchKeysInVault bool = false
 
+@allowed(['rules', 'live'])
+@description('rules = deterministic agents; live = Foundry agents (needs the gpt-6-luna deployment and quota).')
+param agentMode string = 'rules'
+
 @description('Keep one api and one web replica running (no scale to zero), so the first load is not a 17 to 22 s cold start. Costs a little idle compute; turn it on for the demo window.')
 param keepWarm bool = false
 
@@ -150,7 +154,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
           image: apiImage
           resources: { cpu: json('0.5'), memory: '1Gi' }
           env: concat(commonEnv, authEnv, [
-            { name: 'MATCHCAST_AGENT_MODE', value: 'rules' }
+            { name: 'MATCHCAST_AGENT_MODE', value: agentMode }
             { name: 'MATCHCAST_PIPELINE', value: pipelineMode }
             // ADR-0017: one writer of matchstate per mode; the reducer owns it whenever events go through the hub
             { name: 'MATCHCAST_STATE_WRITER', value: pipelineMode == 'direct' ? 'workflow' : 'reducer' }
