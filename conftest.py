@@ -31,6 +31,7 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def no_azure(request, monkeypatch):
+    monkeypatch.delenv("SPEECH_ENDPOINT", raising=False)  # no real voice from a developer shell
     if request.node.get_closest_marker("live"):
         return
 

@@ -897,6 +897,46 @@
         ]
       }
     },
+    "/v1/audio/{audio_id}.mp3": {
+      "get": {
+        "operationId": "audio_by_id_v1_audio__audio_id__mp3_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "audio_id",
+            "required": true,
+            "schema": {
+              "title": "Audio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audio By Id",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/ds/ask": {
       "post": {
         "description": "Data Scientist: a season question, answered from one verified SELECT (F10).",
@@ -1865,6 +1905,64 @@
         ]
       }
     },
+    "/v1/matches/{match_id}/lines/{line_id}/audio.mp3": {
+      "get": {
+        "operationId": "line_audio_v1_matches__match_id__lines__line_id__audio_mp3_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_id",
+            "required": true,
+            "schema": {
+              "title": "Line Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Line Audio",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/matches/{match_id}/recap/{persona}": {
       "get": {
         "operationId": "get_recap_v1_matches__match_id__recap__persona__get",
@@ -2244,6 +2342,25 @@
         "summary": "Dependency States",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/voice/audition.mp3": {
+      "get": {
+        "operationId": "audition_v1_voice_audition_mp3_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Audition",
+        "tags": [
+          "matches"
         ]
       }
     }
