@@ -144,3 +144,23 @@ Findings: the create-match 500 seen on `sha-3d627d1` (23 Oct 00:38 UTC) shows th
 Load (`tests/e2e/load.spec.ts`, chromium, against the live web): passed in 46.5 s. Marks: picker 2.4 s, Watch started 12.8 s, Analyst ready 18.2 s, Broadcast ready 41.5 s. The webkit project was not run (browser not installed here).
 
 Not done: identity setup (Entra app, GitHub OIDC, production environment, repo variables), the mcp image, and any teardown.
+
+## Identity, Vision and mcp (23 Oct, after the first deploy)
+
+Created by Akshay in his terminal, following the One-time setup steps above. The ids are not secrets; no secret value is recorded here.
+- Entra app `matchcast-web`, appId `7a4b552b-5539-4e13-bd5a-1202e71691f2`, sign-in audience `AzureADMyOrg`, app roles Viewer, Producer and Admin, redirect URIs for the web and api callbacks. Its client secret is stored in `kv-matchcast-dev` as `entra-client-secret`. Repo variable `ENTRA_CLIENT_ID` is set to the appId.
+- Entra app `matchcast-github` (OIDC), appId `c5dd7826-befc-4314-b333-ef03030553f2`. Federated credential `matchcast-production` for subject `repo:Crafted-by-Akshay/matchcast:environment:production` only. Contributor and the conditioned RBAC Administrator grant, both scoped to `rg-matchcast`. GitHub environment `production` created.
+- Repo variables set: `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_ENV_NAME`, `AZURE_LOCATION`, `ENTRA_CLIENT_ID`, `ALERT_EMAIL`, `PIPELINE_MODE`. Not set on purpose: `AZURE_CLIENT_ID`, which keeps `deploy.yml` off until Akshay enables deploy. `FOUNDRY_PROJECT_ENDPOINT` is not set as a repo variable.
+- Key Vault Secrets Officer on `kv-matchcast-dev` for axp219@outlook.com.
+
+Vision: `cv-matchcast-dev-hno67` (Computer Vision, East US 2) is live, and `id-matchcast` holds Cognitive Services User on it. `/v1/status` lists Vision as live.
+
+Finding: `azd provision -e dev` reset all three Container Apps to the Microsoft quickstart image, because `API_IMAGE`, `WEB_IMAGE` and `MCP_IMAGE` were not in the azd environment. The api and web images were put back with `az containerapp update`. Set the three image variables in the azd environment before every `azd provision`, or the apps go back to the placeholder.
+
+After the sign-in run:
+- `/health` 200, `/ready` 200, `/v1/status` 200, overall `simulated`. Vision, Table Storage, Speech, Translator and Easy Auth are live.
+- The web app serves anonymously (200), which is the design: viewing stays open.
+- `POST /v1/lines/{id}/approve` without sign-in returns 401 `unauthenticated`, so the producer gate on approve, edit and kill works.
+- Match create and the events POST are open without sign-in. The code applies the role gate only to the line routes, so smoke passes without a token: 137 events accepted, 45 verified claims.
+
+mcp: `services/mcp/Dockerfile` did not copy the workspace members `services/api`, `services/worker` and `services/recap`, so `uv sync --locked` failed the same way the api image did. It now copies them. The image `ghcr.io/crafted-by-akshay/matchcast-mcp:sha-f348755` is pushed for linux/amd64. The GHCR package is still private, so `ca-mcp-matchcast-dev` stays on the placeholder until the package is made public, and then its image is set to this tag.
