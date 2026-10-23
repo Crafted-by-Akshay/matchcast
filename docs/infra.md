@@ -118,3 +118,27 @@ Not verified: no live provision yet (`az bicep build` passes with no warnings on
 ## Replaying a match into the hub
 
 `uv run python scripts/replay_match.py --match M001 --speed 4 --sink eventhub --url https://<api-fqdn> --session-id demo` creates the match through the api, then publishes the converted events to `match-events` with the stream key as partition key (needs `EVENTHUB_FQDN` and an Entra login with Azure Event Hubs Data Sender; the api must run with `PIPELINE_MODE=eventhubs` to consume them). Tested with a stub api and a fake publisher; **not run against a real hub**.
+
+## First deploy on the Mac mini (PLT-7, 23 Oct)
+
+Environment `dev` in `rg-matchcast` (East US 2 for the apps; AI Search in East US, because East US 2 had no free-tier capacity when Search was created). Provisioned by `azd provision -e dev` run by Akshay on the Mac mini. The first attempts stopped on the Search region and on a Key Vault role id typo (fixed here and in `infra/modules/roles.bicep`). Images were built for linux/amd64 (the Mac mini is arm64).
+
+URLs:
+- api: https://ca-api-matchcast-dev.calmbay-045566e2.eastus2.azurecontainerapps.io
+- web: https://ca-web-matchcast-dev.calmbay-045566e2.eastus2.azurecontainerapps.io
+- mcp: `ca-mcp-matchcast-dev`, internal ingress, still on the quickstart placeholder (no `services/mcp/Dockerfile` yet)
+- recap function: `fn-matchcast-dev-recap-hno67`
+
+Images: `ghcr.io/crafted-by-akshay/matchcast-api` and `matchcast-web` at `sha-3d627d1`. Both GHCR packages were made public by Akshay, so their source is public.
+
+Checks against the live api (23 Oct, after the image switch):
+- `/health` 200 (0.82 s); `/ready` 200 (0.74 s): configuration valid, model credential obtained (model call not probed), session store `local_mock`.
+- `/v1/status` 200 (0.89 s): overall `unavailable`. Live: Table Storage, Speech, Translator. Simulated: Foundry agents (rules agents), Event Hubs (in-process stream), Entra sign-in. Planned: Content Safety, AI Search, Fabric, Databricks. Unavailable: Vision, because `VISION_ENDPOINT` is not set (Vision is not in Bicep yet).
+- Web 200 (1.25 s).
+- `scripts/health_check.sh` reports UNHEALTHY only for the Vision dependency.
+
+Smoke (`scripts/smoke_pipeline.py`): FAILED. The match was created in rules mode, then the events POST returned 500. The api logs show Table Storage `OutOfRangeInput` on the marker row in the `events` table, partition key `<stream>#ids` (`packages/agents/matchcast_agents/tables.py`, `add_event`). Azure Table Storage rejects `#` in PartitionKey and RowKey. A later probe's match-create call also returned 500 and was not traced. Not fixed in this PR; the events and load path needs a code fix first.
+
+Load (`tests/e2e/load.spec.ts`, chromium, against the live web): passed in 46.5 s. Marks: picker 2.4 s, Watch started 12.8 s, Analyst ready 18.2 s, Broadcast ready 41.5 s. The webkit project was not run (browser not installed here).
+
+Not done: identity setup (Entra app, GitHub OIDC, production environment, repo variables), the mcp image, and any teardown.
