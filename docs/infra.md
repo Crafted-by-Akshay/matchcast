@@ -175,3 +175,7 @@ The browser calls the api from the web origin (`apps/unified` is built with `API
 ## AI Search index (AGT-16)
 
 After `scripts/set_search_secrets.sh` has stored the keys and the api has restarted with `SEARCH_QUERY_KEY`, load the index once from the Mac mini: `SEARCH_ENDPOINT=<output> SEARCH_ADMIN_KEY=$(az keyvault secret show --vault-name <kv> -n srch-admin-key --query value -o tsv) uv run --locked --all-packages python scripts/build_kb.py --upload` (do not echo the key). `/v1/status` shows `search` live once the endpoint and query key are set; an empty index means Ask answers fall back to abstaining, so run the upload before filming. Ask replies carry `retrieval: search_fallback` when a search call fails. Not verified live from the agent container.
+
+## Stats Desk over A2A (AGT-11)
+
+Set `STATS_DESK_URL=http://<mcp internal fqdn>/a2a` on the api (Bicep, Platform) and let the mcp app accept that Host (`MATCHCAST_MCP_ALLOWED_HOSTS`, or `*` behind the internal ingress). The Stats Desk call has a 2 s budget, so an mcp replica scaled to zero fails the first call (audited `a2a_failed`, the line still airs); keep `minReplicas: 1` on mcp for the demo window. `GET <mcp>/.well-known/agent-card.json` and one priority-1 moment audited `transport: a2a` verify it. Not verified live from the agent container.

@@ -101,3 +101,19 @@ def test_the_registry_screens_with_azure_when_the_endpoint_is_set(monkeypatch):
     assert isinstance(Registry(False).safety, FallbackSafety)
     monkeypatch.delenv("CONTENT_SAFETY_ENDPOINT")
     assert isinstance(Registry(False).safety, LocalSafetyScreen)
+
+
+def test_stats_desk_is_live_only_with_an_a2a_url_and_the_registry_follows_it(monkeypatch):
+    from app.matches import Registry
+    from matchcast_agents.statsdesk import A2AStatsDesk
+
+    url = "http://ca-mcp-x.internal.example.eastus2.azurecontainerapps.io/a2a"
+    assert states({"STATS_DESK_URL": url}, "cloud")["stats_desk"] == "live"
+    assert states({"STATS_DESK_URL": "https://evil.example/other"}, "cloud")["stats_desk"] == (
+        "simulated"
+    )
+    monkeypatch.setenv("STATS_DESK_URL", url)
+    desk = Registry(False).stats_desk
+    assert isinstance(desk, A2AStatsDesk) and desk.transport == "a2a"
+    monkeypatch.setenv("STATS_DESK_URL", "https://evil.example/other")
+    assert getattr(Registry(False).stats_desk, "transport", "") == "in_process"
