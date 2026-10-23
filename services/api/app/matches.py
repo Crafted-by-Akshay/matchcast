@@ -451,10 +451,11 @@ async def _audio(request: Request, registry: Registry, text: str, voice_name: st
 
 
 def pack(sentences: list[str], limit: int = MAX_CHARS - 100) -> list[str]:
-    """Sentences joined into the fewest parts that each fit one clip (a longer sentence is cut)."""
+    """Sentences joined into the fewest clip-sized parts; empty or over-long ones are skipped."""
     parts: list[str] = []
     for sentence in sentences:
-        sentence = sentence[:limit]
+        if not sentence or len(sentence) > limit:
+            continue  # never cut a checked sentence: what is spoken is what was verified
         if parts and len(parts[-1]) + 1 + len(sentence) <= limit:
             parts[-1] += " " + sentence
         else:
@@ -462,20 +463,24 @@ def pack(sentences: list[str], limit: int = MAX_CHARS - 100) -> list[str]:
     return parts
 
 
+MAX_PARTS = 6  # a recap voiced in more clips than this is not read aloud
+
+
 async def _audio_parts(
     request: Request, registry: Registry, texts: list[str], voice_name: str
 ) -> Response:
-    """One mp3 from one or more clips (MP3 frames join end to end); one allowance per request."""
+    """One mp3 from several clips (frames join end to end); each new clip uses an allowance."""
     voice = registry.voice
-    if any(voice.get(clip_key(t, voice_name)) is None for t in texts) and not voice.allow(
-        client_ip(request)
-    ):
-        raise Problem(
-            429,
-            "rate_limited",
-            f"at most {VOICE_PER_MINUTE} new voice clips a minute",
-            retry_after=60,
-        )
+    if len(texts) > MAX_PARTS:
+        raise Problem(503, "not_ready", "this text is too long to read aloud")
+    for text in texts:
+        if voice.get(clip_key(text, voice_name)) is None and not voice.allow(client_ip(request)):
+            raise Problem(
+                429,
+                "rate_limited",
+                f"at most {VOICE_PER_MINUTE} new voice clips a minute",
+                retry_after=60,
+            )
     try:
         audio = b"".join([await voice.clip(t, voice_name) for t in texts])
     except VoiceError as error:
@@ -915,13 +920,11 @@ def build_router(registry: Registry) -> APIRouter:
         """The stored recap read aloud: only sentences the Verifier marked verified are spoken."""
         flow = registry.get(session_id, match_id)
         recap = flow.store.get_recap(flow.sk, ALIASES.get(persona, persona))
-        checked = (
-            [r["text"] for r in recap["sentences"] if r["verdict"] == "verified"] if recap else []
-        )
-        words = speakable(" ".join(checked))
-        if not words:
+        rows = recap["sentences"] if recap else []
+        parts = pack([speakable(r["text"]) for r in rows if r["verdict"] == "verified"])
+        if not parts:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
-        return await _audio(request, registry, words, registry.voice.voice_for("commentary"))
+        return await _audio_parts(request, registry, parts, registry.voice.voice_for("commentary"))
 
     @router.post("/matches/{match_id}/ask")
     async def ask(match_id: str, body: AskBody) -> dict[str, Any]:

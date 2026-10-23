@@ -317,7 +317,7 @@ def test_a_long_recap_is_voiced_in_parts_that_each_fit_one_clip() -> None:
     parts = pack(sentences)
     assert len(parts) > 1 and all(len(p) < voice_module.MAX_CHARS for p in parts)
     assert " ".join(parts) == " ".join(sentences)  # nothing lost, order kept
-    assert len(pack(["x" * 5000])[0]) < voice_module.MAX_CHARS  # one runaway sentence is cut
+    assert pack(["x" * 5000, "", "Kept."]) == ["Kept."]  # never cut mid-sentence; empties dropped
 
 
 def test_published_lines_carry_the_voice_route_only_when_speech_is_ready() -> None:
@@ -334,3 +334,19 @@ def test_published_lines_carry_the_voice_route_only_when_speech_is_ready() -> No
     on = audio_urls(service())
     assert on and "/lines/" in on[0] and "audio.mp3?session_id=short" in on[0]
     assert audio_urls(VoiceService()) == []  # no Speech resource: no url offered
+
+
+def test_a_recap_over_one_clip_is_voiced_through_the_route() -> None:
+    synth = FakeSynth()
+    client = TestClient(create_app())
+    client.app.state.matches.voice = service(synth)
+    create(client)
+    post_all(client)
+    client.post("/internal/v1/recaps", json={"session_id": "short", "match_id": "match-short"})
+    flow = client.app.state.matches.get("short", "match-short")
+    recap = flow.store.get_recap(flow.sk, "casual")
+    row = recap["sentences"][0]
+    recap["sentences"] = [{**row, "text": f"Sentence {n} " + "ok " * 100} for n in range(6)]
+    flow.store.put_recap(flow.sk, "casual", recap)
+    ok = client.get("/v1/matches/match-short/recap/casual/audio.mp3", params=Q)
+    assert ok.status_code == 200 and len(synth.calls) > 1  # several clips, one mp3
