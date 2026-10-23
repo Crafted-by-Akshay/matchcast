@@ -19,11 +19,11 @@ Run: `uv run --all-packages python eval/compare.py --runs 3 --out eval/results/o
 The short fixture has one match, so the harness also runs on 30 moments (10 goals, 20 shots) drawn with a
 fixed seed from the 28 season matches, at most 3 per match (19 matches here). Each moment stores its true
 score, shots and shots on target. `uv run --all-packages python eval/frozen.py` checks the file against the
-season and the event converter; `--write` re-draws it, and a test fails until that diff is reviewed.
+season and the event converter; `--write` re-draws it; a test fails when the file and the draw differ, so a change to the season or converter cannot slip by unnoticed (the diff of `frozen-moments.json` is what gets reviewed). The season files are read by code only, as `scripts/replay_match.py` does.
 Run both arms on it offline: `python eval/compare.py --frozen --runs 3 --out eval/results/frozen-offline.json`
 (about 6 minutes: the workflow plays 19 matches per run). The four-agent arm airs only the moments the
 Producer picks (coverage 0.47 of the 30), none of them wrong; the offline single-agent stand-in covers all 30
-and slips 13% of lines at a 15% slip rate. Those numbers show the harness, not a model.
+and slips 13% of lines at a 15% slip rate. Those numbers show the harness, not a model. The judge accepts any number true for the moment (minute, either score, either shot count), so it can miss a reversed score; it is independent of the Verifier but lenient, so "none wrong" means none the judge could catch.
 
 ## Per-agent eval (`agents_eval.py`)
 
