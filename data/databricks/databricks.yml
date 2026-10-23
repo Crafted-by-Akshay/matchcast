@@ -7,9 +7,7 @@
 #   databricks bundle deploy   -t dev
 #   databricks bundle run train_danger -t dev
 # Status: written, not validated against a workspace yet (the workspace is created by PLT-3).
-# Open point for the first run: train_danger.py starts with the "# Databricks notebook source" header, which
-# the workspace imports as a notebook; spark_python_task wants a plain file. If `bundle run` rejects it,
-# either drop that header line or switch the task to notebook_task with widgets for the arguments.
+# train_danger.py is a plain Python file (no notebook header), as spark_python_task requires.
 bundle:
   name: matchcast
 
@@ -47,7 +45,7 @@ resources:
           libraries:
             # skl2onnx writes model.onnx; the ML runtime already has scikit-learn and MLflow
             - pypi:
-                package: skl2onnx==1.17.0
+                package: skl2onnx>=1.17,<2
       job_clusters:
         - job_cluster_key: single_node
           new_cluster:
