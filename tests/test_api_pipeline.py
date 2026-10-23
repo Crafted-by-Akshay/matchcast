@@ -256,3 +256,57 @@ def test_a_replayed_batch_reaches_the_workflow_again_so_it_can_dedupe() -> None:
     _handle(pipeline, flow, events)
     _handle(pipeline, flow, events)  # the hub replays after a restart
     assert flow.seen == [1, 2, 3, 4, 1, 2, 3, 4]  # the real workflow drops these in add_event
+
+
+def test_a_slow_match_does_not_hold_up_another_match_in_the_same_batch() -> None:
+    import asyncio
+
+    from app.pipeline import Pipeline
+
+    done: list[str] = []
+
+    class _Registry:
+        async def flow_for(self, session_id: str, match_id: str):
+            class _Flow:
+                async def ingest(self, events: list[dict]) -> dict:
+                    if match_id == "slow":
+                        await asyncio.sleep(0.3)
+                    done.append(match_id)
+                    return {}
+
+            return _Flow()
+
+    pipeline = Pipeline(_Registry(), None, None, None)  # type: ignore[arg-type]
+
+    def event(match_id: str, sequence: int) -> dict:
+        return {"stream": {"session_id": "s", "match_id": match_id}, "stream_sequence": sequence}
+
+    asyncio.run(pipeline.handle([event("slow", 1), event("fast", 1)]))
+    assert done == ["fast", "slow"]  # the fast match finished first, so it did not wait
+
+
+def test_one_failing_match_still_lets_the_others_finish_and_the_batch_retry() -> None:
+    import asyncio
+
+    from app.pipeline import Pipeline
+
+    done: list[str] = []
+
+    class _Registry:
+        async def flow_for(self, session_id: str, match_id: str):
+            class _Flow:
+                async def ingest(self, events: list[dict]) -> dict:
+                    if match_id == "bad":
+                        raise RuntimeError("boom")
+                    done.append(match_id)
+                    return {}
+
+            return _Flow()
+
+    pipeline = Pipeline(_Registry(), None, None, None)  # type: ignore[arg-type]
+    batch = [
+        {"stream": {"session_id": "s", "match_id": m}, "stream_sequence": 1} for m in ("bad", "ok")
+    ]
+    with pytest.raises(RuntimeError):
+        asyncio.run(pipeline.handle(batch))
+    assert done == ["ok"]
