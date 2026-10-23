@@ -1,10 +1,9 @@
 name: ci
 
+# Manual only (Akshay, 23 Oct: Actions minutes cost money). The gate is scripts/local_ci.sh; run this by hand
+# with workflow_dispatch only when a hosted run is wanted.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 # Pull request runs cancel superseded pushes; every run on main finishes so each merge has a verdict.
 concurrency:
