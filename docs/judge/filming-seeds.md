@@ -1,18 +1,31 @@
-# Filming seeds: which seed shows a goal early
+# Filming seeds: when does a goal arrive?
 
-Measured 23 Oct 2026 on a software-GL machine, so the **viewing times are not real GPU times**. Match minutes are exact for a given seed. Method: open `/index.html?seed=<n>&speed=4#watch` headless (`__mcHeadless`, a fixed frame budget), run the Watch frame loop to match minute 46 and list the `goal` events. The headless check ran seeds 2026, 8, 3, 5, 11, 13, 17, 21, 31, 64, 77, 100, 2024, 2028 and 4242 in the standalone Watch page, then 8 and 2026 in the shell, which plays its own fixture (the minutes differ between the two).
+Measured 23 Oct 2026. Two methods, which disagree, so the video needs one dry run on the filming machine.
 
-| Seed | Goals before minute 46 (shell, the filming path) |
+## 1. The deterministic runner (fixed 0.02 s step, no rendering)
+
+Command: `node services/simulation/run.cjs --seeds 2026,8,13,1 --half 45 --workers 4 --events --out <dir>` (full density, 90 match minutes; about 100 s a match on this machine). One seed always gives the same events here. The runner picks the two clubs from the seed.
+
+| Seed | Goals, match minute (club) |
 | --- | --- |
-| 2026 | none |
-| 8 | minute 17 (Harbor City, P. Hirahara) and minute 30 (Thames Rovers, G. Zorlav) |
-| standalone Watch only, not shell | seed 8: minutes 2 and 40; seed 13: minute 24; every other seed in the list: none |
+| 2026 | 18.4 (LOM), 22.4 (LOM), 36.3 (NAV), 37.1 (NAV), 54.3 (LOM), 68.7 (LOM); final 2-4 |
+| 1 | 7.4 (HAR), 92.6 (HAR), 94.0 (HAR); final 3-0 |
+| 13 | 10.2 (MON), 66.7 (GUA), 76.3 (GUA); final 1-2 |
+| 8 | 51.3, 64.1, 66.9, 70.7, 76.5; final 2-3 (first shot at 14.0) |
 
-What this means for the video (`docs/judge/storyboard.md`, `docs/video-script.md`, `docs/submission/shot-list.md`):
+Across seeds 1 to 200 (`data/calibration/results/seeds-1-200/summary.json`) the mean is 2.90 goals a match and 19 of 200 matches are goalless.
 
-- **The documented filming seed 2026 has no goal in the first half**, so beat 2 ("a goal arrives") cannot be filmed on it. Seed 8 has goals at minutes 17 and 30 and is the better filming seed. Goals are rare in this engine (about 0.1 to 0.2 a half in this scan, against the 2.66 a match calibration target), so any seed needs a dry run.
-- Beat 2 can use the first Match Pulse card instead of a goal: a shot already produces a card with its evidence.
-- The api's seeded bad claim starts at match minute 12 (`seed_bad_claim_at_ms=720_000`), so a goal at minute 17 is a claim the api Verifier can reject after the switch is on.
-- **Do the timing dry run on the filming machine (a real GPU), once, with the chosen seed**, and write the real wall-clock seconds of the first card, first goal and minute 12 into the beat sheet. A real-time run here reached match minute 1.6 after 6 minutes of wall time, so no wall-clock figure from this machine is usable.
+## 2. The live app path (frame loop with a viewing-time budget)
 
-Not changed: the filming URL in other docs still says `seed=2026`. Quality owns those files; switching to seed 8 is a one-line change in each once the dry run confirms it.
+A headless drive of the shell (`/index.html?seed=<n>&speed=4#watch`, `__mcHeadless`, `__mcDt = 0.1`, `mc.frame(0.05)` until `S.mclock` passed 46 match minutes, then the `goal` events of `ENV.events`) gave **different matches for the same seed**:
+
+- seed 2026: no goal before minute 46 (the runner gives goals at 18.4 and 22.4);
+- seed 8: goals at minutes 17 and 30 (the runner gives its first goal at 51.3).
+
+So the live path is not step-identical to the runner. Likely reasons: `speed=4` and the frame time change the step the engine integrates with, and the shell plays its own fixture clubs rather than the runner's seed-picked pair. This was not isolated here, and the scan used a software-GL machine, so treat it as a warning, not a finding about a GPU. It is a Data-lane question: whether a seed should give the same match at any speed and frame rate.
+
+## What to do for the video
+
+- **Do not rely on a goal at a fixed time.** Beat 2 of `docs/judge/storyboard.md` uses the first Match Pulse card, which a shot already produces.
+- **Dry run once on the filming machine** (a real GPU) with the exact filming URL, and write down the wall-clock seconds of the first card, the first goal and match minute 12 (the api's seeded bad claim starts at `seed_bad_claim_at_ms=720_000` and corrupts the first claim at or after that time, which may or may not be a goal).
+- If the dry run shows no early goal on seed 2026, try seeds 1 (goal at minute 7.4 in the runner) or 13 (10.2) with the same URL shape and keep whichever repeats on two takes. Other docs (`docs/video-script.md`, `docs/submission/shot-list.md`, `docs/judge/walkthrough.md`) still say `seed=2026`; Quality owns them and changes them after the dry run.
