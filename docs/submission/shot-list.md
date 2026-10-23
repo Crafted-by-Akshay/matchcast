@@ -6,7 +6,7 @@ Status: **Draft**. Companion to `docs/video-script.md` (the scenes, timing and n
 
 1. `make judge-path` on the filming machine. It must end `Judge path OK`. Keep the terminal output for shot 9.
 2. Deployed run (preferred, rules §4.4 wants footage of the Project on its platform): `scripts/health_check.sh <api-url> <web-url>` prints `HEALTHY`; `make e2e-live E2E_BASE_URL=<web-url>` passes.
-3. Fixed seed and speed so every take is identical: `?seed=2026&speed=4`, `&seedBadClaim=1` for shot 3.
+3. Fixed seed and speed so every take is identical: `?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM&speed=4`, `&seedBadClaim=1` for shot 3. In the runner this match has goals at minutes 18.4 and 22.4; confirm on the filming machine (docs/judge/filming-seeds.md).
 4. Browser at 1440 × 900, fresh profile, logged out, captions on, voice on for shot 2.
 5. Run `docs/release-check.md` and write the commit in its run log.
 

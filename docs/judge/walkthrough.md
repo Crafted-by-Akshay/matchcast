@@ -14,7 +14,7 @@ Open the app URL. The first page load starts Watch, which draws a synthetic matc
 
 ## Repeatable runs
 
-`/?seed=2026&speed=4&seedBadClaim=1#watch` plays the same match at 4x with the bad-claim demo switched on.
+`/?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM&speed=4&seedBadClaim=1#watch` plays the same match at 4x with the bad-claim demo switched on.
 
 ## What is real and what is not
 
