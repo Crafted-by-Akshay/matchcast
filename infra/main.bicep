@@ -33,6 +33,10 @@ param searchKeysInVault string = 'false'
 @description('How the api reaches the workflow: direct, or through the Event Hubs match-events hub (docs/infra.md, Event stream). Flip to eventhubs after scripts/smoke_pipeline.py passes.')
 param pipelineMode string = 'direct'
 
+@allowed(['rules', 'live'])
+@description('rules = deterministic agents; live = Foundry agents once the gpt-6-luna quota lands (azd env set AGENT_MODE live).')
+param agentMode string = 'rules'
+
 @description('Keep one api and one web replica running (no scale to zero); azd env set KEEP_WARM true for the demo window.')
 param keepWarm string = 'false'
 
@@ -104,6 +108,7 @@ module containerapps 'modules/containerapps.bicep' = {
     searchKeysInVault: searchKeysInVault == 'true'
     pipelineMode: pipelineMode
     keepWarm: keepWarm == 'true'
+    agentMode: agentMode
   }
 }
 
