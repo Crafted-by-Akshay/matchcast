@@ -9,7 +9,6 @@ orchestrators and keeps its own shape.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -78,8 +77,10 @@ def dependency_status(
     else:
         items.append(_item("agents", "Foundry agents", SIMULATED, "rules agents, no model call"))
 
-    if re.match(r"^https?://[A-Za-z0-9.-]+(:\d+)?/a2a$", env.get("STATS_DESK_URL", "").strip()):
-        items.append(_item("stats_desk", "Stats Desk (A2A)", LIVE, "partner agent in the mcp app"))
+    from matchcast_agents.statsdesk import A2A_URL
+
+    if A2A_URL.match(env.get("STATS_DESK_URL", "").strip()):
+        items.append(_item("stats_desk", "Stats Desk (A2A)", LIVE, "STATS_DESK_URL is configured"))
     else:
         items.append(
             _item("stats_desk", "Stats Desk (A2A)", SIMULATED, "same skill, called in the api")

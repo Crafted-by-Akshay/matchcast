@@ -10,11 +10,10 @@ import ipaddress
 import json
 import logging
 import os
-import re
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
@@ -27,7 +26,7 @@ from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, normalise
 from matchcast_agents.safety import safety_from_env
-from matchcast_agents.statsdesk import A2AStatsDesk, StatsDeskError
+from matchcast_agents.statsdesk import A2A_URL, A2AStatsDesk, StatsDeskError
 from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
@@ -200,12 +199,12 @@ def _local_stats_desk() -> _LocalStatsDesk | None:
         return None
 
 
-def stats_desk_from_env(local: _LocalStatsDesk | None) -> Any:
+def stats_desk_from_env(local: Any, env: Mapping[str, str] | None = None) -> Any:
     """The partner agent over A2A when ``STATS_DESK_URL`` is an http(s) URL, else in process."""
-    url = os.environ.get("STATS_DESK_URL", "").strip()
+    url = (os.environ if env is None else env).get("STATS_DESK_URL", "").strip()
     if not url:
         return local
-    if not re.match(r"^https?://[A-Za-z0-9.-]+(:\d+)?/a2a$", url):
+    if not A2A_URL.match(url):
         logging.getLogger(__name__).warning("STATS_DESK_URL must end in /a2a; using in process")
         return local
     return A2AStatsDesk(url)

@@ -1,10 +1,12 @@
 """Client for the Stats Desk partner agent (A2A JSON-RPC ``message/send``, AGT-11)."""
 
+import re
 import uuid
 from typing import Any, Protocol
 
 import httpx
 
+A2A_URL = re.compile(r"^https?://[A-Za-z0-9.-]+(:\d+)?/a2a$")
 TEAM_METRICS = {"goals", "shots", "xg", "passes", "fouls"}
 
 

@@ -103,17 +103,20 @@ def test_the_registry_screens_with_azure_when_the_endpoint_is_set(monkeypatch):
     assert isinstance(Registry(False).safety, LocalSafetyScreen)
 
 
-def test_stats_desk_is_live_only_with_an_a2a_url_and_the_registry_follows_it(monkeypatch):
-    from app.matches import Registry
+def test_stats_desk_url_picks_the_a2a_client_and_keeps_the_local_season(monkeypatch):
+    from app.matches import Registry, stats_desk_from_env
     from matchcast_agents.statsdesk import A2AStatsDesk
 
-    url = "http://ca-mcp-x.internal.example.eastus2.azurecontainerapps.io/a2a"
+    url = "https://ca-mcp-x.internal.example.eastus2.azurecontainerapps.io/a2a"
     assert states({"STATS_DESK_URL": url}, "cloud")["stats_desk"] == "live"
     assert states({"STATS_DESK_URL": "https://evil.example/other"}, "cloud")["stats_desk"] == (
         "simulated"
     )
+    local = object()
+    assert stats_desk_from_env(local, {}) is local
+    assert stats_desk_from_env(local, {"STATS_DESK_URL": "https://evil.example/x"}) is local
+    assert stats_desk_from_env(local, {"STATS_DESK_URL": "https://u:p@h/a2a"}) is local
+    assert isinstance(stats_desk_from_env(local, {"STATS_DESK_URL": url}), A2AStatsDesk)
     monkeypatch.setenv("STATS_DESK_URL", url)
-    desk = Registry(False).stats_desk
-    assert isinstance(desk, A2AStatsDesk) and desk.transport == "a2a"
-    monkeypatch.setenv("STATS_DESK_URL", "https://evil.example/other")
-    assert getattr(Registry(False).stats_desk, "transport", "") == "in_process"
+    registry = Registry(False)
+    assert isinstance(registry.stats_desk, A2AStatsDesk) and registry.season is not None
