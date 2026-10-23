@@ -48,6 +48,10 @@ def test_lists_the_tools_with_schemas(store) -> None:
     assert all(t.description for t in tools.values())
     assert all(t.input_schema["properties"] for n, t in tools.items() if n != "describe_views")
     assert {"describe_views", "query_season", "search_kb"} <= set(tools)
+    assert set(tools) == {  # AGT-10: the nine tools of doc 04 §5, no more, no fewer
+        "get_state", "get_events", "get_metrics", "predict_danger", "get_evidence",
+        "get_replay_clip", "describe_views", "query_season", "search_kb",
+    }  # fmt: skip
 
 
 def test_get_metrics_matches_the_workflow_state(store) -> None:
