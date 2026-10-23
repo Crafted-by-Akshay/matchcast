@@ -1,4 +1,4 @@
-# First-time judge walkthrough (about 3 minutes)
+# First-time judge walkthrough (about 3 to 4 minutes)
 
 Open the app URL. The first page load starts Watch, which draws a synthetic match in 3D; on a laptop GPU it takes a few seconds. All clubs, players and events are synthetic.
 
@@ -9,7 +9,8 @@ Open the app URL. The first page load starts Watch, which draws a synthetic matc
    Press **Why?** for the evidence and **How was this made?** for the agent steps. The top-bar pill says `Live agents`, `Rules fallback` or `Offline (simulated)`; **Status** lists what is live, simulated or planned.
 3. **Agents (40 s).** Open the Agents tab. It shows the claim ledger, the audit chain (**Verify chain** recomputes the hashes) and the Producer approval queue. Turn on **Seed a bad claim** to see the Verifier reject a wrong score and repair it from the event log. With a live api the same switch makes the server Verifier do it from minute 12; the note next to the switch says which pipeline you are seeing.
 4. **Broadcast (30 s).** The same match as a broadcast desk: lower thirds, teleprompter and voiced lines. The shell's language buttons (EN, ES, HI) apply to every view (Watch has its own longer language list); a line without a Verifier-checked translation stays English and says so.
-5. **Analyst (30 s).** The same match as an analyst workspace: match centre, players, reports, Trust and audit. Roles and sign-in are Planned (simulated).
+5. **Analyst (30 s).** The same match as an analyst workspace: match centre, players, reports, Trust and audit. Roles in the workspace are Planned (simulated); Entra sign-in is enforced only on the Producer line routes of the api.
+6. **Ask and Talk (20 s).** In the Copilot Ask tab, ask a team question such as "how many shots on target does Thames Rovers have?". A verified answer from the api shows a source chip: `from the match record`, `from the knowledge base`, `from AI Search` or `Search fallback`. A per-player ranking such as "who has the most shots?" is refused by the api (no tool for it); the in-page rules then answer it from the event log without a chip. A question nobody can confirm gets a refusal. Typing to a player in the chat also asks the api's player agent; only a reply that passed the Verifier is added, marked `Checked against the match record`.
 
 ## Repeatable runs
 
@@ -17,4 +18,4 @@ Open the app URL. The first page load starts Watch, which draws a synthetic matc
 
 ## What is real and what is not
 
-Labelled in the app and in `docs/judge/pipeline-audit.md`. In short: the simulator, the in-page agents and the contract checks run in your browser. The agent api, Foundry models, Speech and Translator are used only when the deployment has them; otherwise the UI says Simulated or Planned.
+Labelled in the app and in `docs/judge/pipeline-audit.md`. In short: the simulator, the in-page agents and the contract checks run in your browser. The agent api, Foundry models, Speech and Translator are used only when the deployment has them; otherwise the UI says Simulated or Planned. Per `docs/infra.md` (23 Oct), Speech, Translator, Table Storage and Vision are live and the Foundry agents run as rules until model quota is approved. AI Search, Fabric and Databricks are Planned. `/v1/status` is the current truth, including Content Safety.
