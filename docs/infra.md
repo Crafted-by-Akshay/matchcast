@@ -54,7 +54,7 @@ The deploy job runs in the GitHub environment `production` (create it under Sett
 
 These are variables, not secrets (client, tenant and subscription IDs are not credentials). After the first workflow run pushes the images, make each GHCR package public (GitHub > Packages > matchcast-api, -web > Package settings > Change visibility) so Container Apps can pull without a registry secret. Until they are public, the deploy job warns and provisions with the placeholder image, so the first run is safe; re-run it after the switch.
 
-Not verified yet: the workflow has not run, the Dockerfiles were checked by running their steps by hand (no Docker daemon in the build session), and the `mcp` image waits for `services/mcp`.
+Not verified yet: the workflow has not run, the Dockerfiles were checked by running their steps by hand (no Docker daemon in the build session), and the `mcp` image (`services/mcp/Dockerfile`, entrypoint `matchcast_mcp.app:create_app` via `uvicorn --factory`, port 8001) has not been built yet.
 ## Event stream (DAT-1, DAT-2)
 `MATCHCAST_PIPELINE` (Bicep param `pipelineMode`, azd variable `PIPELINE_MODE`, repo variable `PIPELINE_MODE`, default `direct`) picks how `POST /v1/matches/{id}/events` reaches the workflow. `eventhubs` follows F1 in `03-runtime-flows.md`: the api validates the batch, publishes it to hub `match-events` with the stream key as partition key (`services/worker/matchcast_worker/eventhubs.py`), and answers 202 only after the hub has it (a publish failure is `503 publish_failed` and the browser resends the same batch). A consumer task inside the same api process reads the hub on `$Default` with checkpoints in Blob `eh-checkpoints` (managed identity, so the existing Event Hubs Data Sender/Receiver and Blob roles apply) and runs the workflow; a batch whose handler fails 3 times is logged and skipped so the single partition keeps moving. If the api restarted, the consumer rebuilds the match's workflow from the stored roster (`Registry.flow_for`), which needs `MATCHCAST_STORE=table`. `memory` runs the same code over an in-process queue (local runs, tests).
 
@@ -126,7 +126,7 @@ Environment `dev` in `rg-matchcast` (East US 2 for the apps; AI Search in East U
 URLs:
 - api: https://ca-api-matchcast-dev.calmbay-045566e2.eastus2.azurecontainerapps.io
 - web: https://ca-web-matchcast-dev.calmbay-045566e2.eastus2.azurecontainerapps.io
-- mcp: `ca-mcp-matchcast-dev`, internal ingress, still on the quickstart placeholder (no `services/mcp/Dockerfile` yet)
+- mcp: `ca-mcp-matchcast-dev`, internal ingress, still on the quickstart placeholder until its first image is built (`services/mcp/Dockerfile` now exists)
 - recap function: `fn-matchcast-dev-recap-hno67`
 
 Images: `ghcr.io/crafted-by-akshay/matchcast-api` at `sha-5e2cc56` (current) and `matchcast-web` at `sha-3d627d1`. Both GHCR packages were made public by Akshay, so their source is public.

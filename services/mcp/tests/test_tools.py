@@ -294,3 +294,12 @@ def test_a_missing_model_is_a_refusal_not_a_crash(store, monkeypatch, tmp_path) 
     )
     assert result.is_error
     danger._load.cache_clear()
+
+
+def test_create_app_serves_health_with_the_memory_store(monkeypatch):
+    from matchcast_mcp.app import create_app
+    from starlette.testclient import TestClient
+
+    monkeypatch.setenv("MATCHCAST_STORE", "memory")
+    with TestClient(create_app()) as client:
+        assert client.get("/health").json()["service"] == "matchcast-mcp"
