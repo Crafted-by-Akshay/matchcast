@@ -13,6 +13,6 @@ What this means for the video (`docs/judge/storyboard.md`, `docs/video-script.md
 - **The documented filming seed 2026 has no goal in the first half**, so beat 2 ("a goal arrives") cannot be filmed on it. Seed 8 has goals at minutes 17 and 30 and is the better filming seed. Goals are rare in this engine (about 0.1 to 0.2 a half in this scan, against the 2.66 a match calibration target), so any seed needs a dry run.
 - Beat 2 can use the first Match Pulse card instead of a goal: a shot already produces a card with its evidence.
 - The api's seeded bad claim starts at match minute 12 (`seed_bad_claim_at_ms=720_000`), so a goal at minute 17 is a claim the api Verifier can reject after the switch is on.
-- **Do the timing dry run on the filming machine (a real GPU), once, with the chosen seed**, and write the real wall-clock seconds of the first card, first goal and minute 12 into the beat sheet. This machine renders about 0.1 match minutes a second in the real loop, which is far slower than a laptop GPU.
+- **Do the timing dry run on the filming machine (a real GPU), once, with the chosen seed**, and write the real wall-clock seconds of the first card, first goal and minute 12 into the beat sheet. A real-time run here reached match minute 1.6 after 6 minutes of wall time, so no wall-clock figure from this machine is usable.
 
 Not changed: the filming URL in other docs still says `seed=2026`. Quality owns those files; switching to seed 8 is a one-line change in each once the dry run confirms it.
