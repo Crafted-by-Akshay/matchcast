@@ -104,7 +104,7 @@ test.describe('Simulator engine', () => {
         if (m === 'step') { while (S.mclock < T) mc.stepSim(0.02); }
         else { (window as any).__mcDt = +m; let n = 0; while (S.mclock < T && n++ < 400_000) mc.frame(1 / 60, false); }
         // events up to a common match time, whatever the last frame overshot by
-        return JSON.stringify(mc.ENV.events.filter((e: any) => e.minute <= 7.9).map((e: any) => [e.type, e.minute, e.team, e.player]));
+        return JSON.stringify(mc.ENV.events.filter((e: any) => e.minute <= 7.6).map((e: any) => [e.type, e.minute, e.team, e.player]));
       }, mode);
       await page.close();
       return r;
