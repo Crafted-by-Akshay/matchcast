@@ -101,8 +101,7 @@ class NarratorRules:
             }
         elif kind == "shot_on_target":
             texts = {
-                "casual": f"{who} tests the keeper for {club}. That is "
-                f"{v[f'shots_on_target:{team}']} on target for them so far.",
+                "casual": f"{who} tests the keeper for {club}, and the pressure is on the defence.",
                 "analyst": f"{who} ({club}) shot on target. {club} shots: {v[f'shots:{team}']}, "
                 f"on target: {v[f'shots_on_target:{team}']}, xG: {v[f'xg:{team}']:.2f}.",
                 "broadcast": f"{who} forces a save for {club}, and the pressure is building.",
@@ -116,7 +115,7 @@ class NarratorRules:
             }
         elif kind == "red_card":
             texts = {
-                "casual": f"Red card! {who} is sent off for {club}, who must play on with ten.",
+                "casual": f"Red card! {who} is sent off for {club}, a player short now.",
                 "analyst": f"{who} ({club}) sent off. {club} red cards: {v[f'red_cards:{team}']}.",
                 "broadcast": f"{who} is sent off. {club} are a player short.",
             }
