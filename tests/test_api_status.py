@@ -42,10 +42,15 @@ def test_speech_needs_its_region_and_vision_a_valid_host():
     )
 
 
-def test_content_safety_and_search_are_planned_even_when_configured():
-    env = {"CONTENT_SAFETY_ENDPOINT": "https://x", "SEARCH_ENDPOINT": "https://y"}
-    got = states(env, "cloud")
-    assert got["content_safety"] == got["search"] == "planned"
+def test_search_is_planned_even_when_configured_and_content_safety_is_live_with_its_host():
+    env = {
+        "CONTENT_SAFETY_ENDPOINT": "https://cs-x.cognitiveservices.azure.com/",
+        "SEARCH_ENDPOINT": "https://y",
+    }
+    assert states(env, "cloud")["content_safety"] == "live"
+    bad = {"CONTENT_SAFETY_ENDPOINT": "https://evil.example"}
+    assert states(bad, "cloud")["content_safety"] == "unavailable"
+    assert states(env, "cloud")["search"] == "planned"
 
 
 def test_easy_auth_without_required_roles_is_not_live():
@@ -68,3 +73,28 @@ def test_route_is_public_never_503_and_leaks_no_values(monkeypatch):
     assert response.status_code == 200
     assert "secret-name" not in response.text
     assert {"mode", "overall", "counts", "dependencies"} <= response.json().keys()
+
+
+def test_content_safety_status_reports_local_screening_and_an_open_circuit():
+    class Screen:
+        fallbacks, degraded = 4, False
+
+    env = {"CONTENT_SAFETY_ENDPOINT": "https://cs-x.cognitiveservices.azure.com/"}
+
+    def item(screen):
+        deps = dependency_status(env, "cloud", screen)["dependencies"]
+        return next(i for i in deps if i["key"] == "content_safety")
+
+    assert item(Screen())["status"] == "live" and "4 lines" in item(Screen())["detail"]
+    Screen.degraded = True
+    assert item(Screen())["status"] == "unavailable"
+
+
+def test_the_registry_screens_with_azure_when_the_endpoint_is_set(monkeypatch):
+    from app.matches import Registry
+    from matchcast_agents.safety import FallbackSafety, LocalSafetyScreen
+
+    monkeypatch.setenv("CONTENT_SAFETY_ENDPOINT", "https://cs-x.cognitiveservices.azure.com")
+    assert isinstance(Registry(False).safety, FallbackSafety)
+    monkeypatch.delenv("CONTENT_SAFETY_ENDPOINT")
+    assert isinstance(Registry(False).safety, LocalSafetyScreen)

@@ -1,51 +1,50 @@
-import { test, expect, type Page } from './fixtures';
+import { test, expect } from './fixtures';
 import { openShell } from './helpers';
 
-// Live run (E2E_BASE_URL, `make e2e-live`): the shell talks to the deployed api, Translator and Speech from a real browser.
-// Skipped in PR checks, which never call Azure. Matches use fresh ids, so runs do not collide.
-declare const AG: any, LV: any;
-// E2E_BASE_URL runs against the deployed web; E2E_API runs the local build against the deployed api (to test a change before it is deployed)
-const api = process.env.E2E_API;
-test.skip(!process.env.E2E_BASE_URL && !api, 'live runs only (E2E_BASE_URL or E2E_API)');
-test.beforeEach(({ page }) => api ? page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api) + ';' })) : undefined);
-test.setTimeout(240_000);
+// QUA-9 task 313: read-only checks of the deployed web and api. They run only with E2E_BASE_URL (make e2e-live) and create nothing:
+// no match, no event, no model call. The release check (docs/release-check.md) covers the rest by hand.
+test.describe('@live deployed web and api', () => {
+  test.skip(!process.env.E2E_BASE_URL, 'needs the deployed URL: make e2e-live E2E_BASE_URL=https://...');
 
-const begin = (page: Page, lang: string) => page.evaluate(async (l) => {
-  const key = 'live-' + Math.random().toString(36).slice(2, 8);
-  const names = { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' };
-  AG.reset(key, names);
-  LV.persona('fan', l);
-  LV.begin(key, { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }, { name: 'C One', team: 'cco' }] });
-  const batch = [{ minute: 12.3, type: 'shot', team: 'thr', player: 'A One', x: 92, y: 33, xg: 0.3, kind: 'open play', fate: 'goal', data: {} },
-    { minute: 12.4, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }];
-  AG.onWatch(key, batch, []); LV.events(batch);
-}, lang);
+  const apiOf = async (request: import('@playwright/test').APIRequestContext) => {
+    const cfg = await (await request.get('/config.js')).text();
+    const m = /MATCHCAST_API\s*=\s*"([^"]+)"/.exec(cfg);
+    expect(m, 'config.js names the api').not.toBeNull();
+    return m![1];
+  };
 
-test('@live events reach the api and an API-Verified claim comes back', async ({ page }) => {
-  await openShell(page, 'agents');
-  await begin(page, 'en');
-  await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.api && c.verdict === 'verified')), { timeout: 120_000, intervals: [1000] }).toBe(true);
-  expect(await page.evaluate(() => (window as any).cardOf(AG.run.claims.find((c: any) => c.api)).api)).toBe(true);
-});
+  test('the shell loads cold and lists the season', async ({ page }) => {
+    await openShell(page, 'watch');
+    await expect(page.locator('#fx option')).not.toHaveCount(0);
+    expect(await page.locator('#fx option').count()).toBeGreaterThan(20);
+  });
 
-test('@live Spanish variants come from Azure AI Translator and pass the re-check', async ({ page }) => {
-  await openShell(page, 'agents');
-  await begin(page, 'es');
-  await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.tr && c.tr.es && c.tr.es.api && c.tr.es.ok)), { timeout: 120_000, intervals: [1000], message: 'no api Spanish variant arrived' }).toBe(true);
-});
+  test('the api is healthy and ready', async ({ request }) => {
+    const api = await apiOf(request);
+    expect((await (await request.get(api + '/health')).json()).status).toBe('healthy');
+    const ready = await (await request.get(api + '/ready')).json();
+    expect(ready.status).toBe('ready');
+    expect(ready.configuration.errors).toEqual([]);
+  });
 
-test('@live Ask is answered by the api with a verdict', async ({ page }) => {
-  await openShell(page, 'agents');
-  await begin(page, 'en');
-  await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.api)), { timeout: 120_000, intervals: [1000] }).toBe(true);
-  const a = await page.evaluate(() => LV.ask('Who scored?'));
-  expect(typeof a.text).toBe('string');
-  expect(['verified', 'abstained']).toContain(a.verdict);
-});
+  test('/v1/status labels every dependency honestly', async ({ request }) => {
+    const api = await apiOf(request);
+    const res = await request.get(api + '/v1/status');
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    const deps: { key: string; status: string }[] = body.dependencies;
+    expect(deps.length).toBeGreaterThan(8);
+    for (const d of deps) expect(['live', 'simulated', 'planned', 'unavailable'], d.key).toContain(d.status);
+    const by = Object.fromEntries(deps.map((d) => [d.key, d.status]));
+    // Not connected, so never shown as live (CLAUDE.md: anything not really working is Simulated or Planned)
+    for (const k of ['fabric', 'databricks']) if (k in by) expect(['simulated', 'planned'], k).toContain(by[k]);
+    expect(body.counts.live + body.counts.simulated + body.counts.planned + body.counts.unavailable).toBe(deps.length);
+    expect(body.counts.unavailable, 'no dependency is unavailable on the demo').toBe(0);
+  });
 
-test('@live the Speech token endpoint answers a browser (CORS) with a token or a clear 503', async ({ page }) => {
-  await openShell(page, 'agents');
-  const r = await page.evaluate(async () => { const x = await fetch(LV.base + '/v1/speech/token'); return { status: x.status, body: x.ok ? await x.json() : null }; });
-  expect([200, 503]).toContain(r.status);
-  if (r.status === 200) { expect(typeof r.body.token).toBe('string'); expect(r.body.region).toBeTruthy(); }
+  test('the producer gate holds without sign-in', async ({ request }) => {
+    const api = await apiOf(request);
+    const res = await request.post(api + '/v1/lines/none/approve', { data: {} });
+    expect(res.status()).toBe(401);
+  });
 });
