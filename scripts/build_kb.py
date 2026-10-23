@@ -17,7 +17,7 @@ from pathlib import Path
 
 import httpx
 from matchcast_agents.ask import load_kb
-from matchcast_agents.ask.azure_search import AzureSearchClient
+from matchcast_agents.ask.azure_search import AzureSearchClient, index_definition
 
 
 def main() -> None:
@@ -62,7 +62,8 @@ MAX_BATCH_BYTES = 16 * 1024 * 1024  # AI Search limit for one indexing request
 
 
 async def dry_run(chunks: list) -> dict:
-    """Run ``upload`` against a stand-in service that enforces the rules the real one does."""
+    """Run ``upload`` against a stand-in that checks key characters, known fields and size."""
+    fields = {f["name"] for f in index_definition()["fields"]}
     seen: dict[str, int] = {"requests": 0, "documents": 0, "largest_request_bytes": 0}
     index: dict[str, dict] = {}
 
@@ -73,12 +74,14 @@ async def dry_run(chunks: list) -> dict:
             return httpx.Response(413)
         path = request.url.path
         if path.endswith("/docs/search"):
-            rows = [{"key": k, "id": d["id"]} for k, d in sorted(index.items())]
-            return httpx.Response(200, json={"value": rows})
+            asked = json.loads(request.content)
+            page = sorted(index.items())[asked.get("skip", 0) :][: asked.get("top", 50)]
+            return httpx.Response(200, json={"value": [{"key": k, "id": d["id"]} for k, d in page]})
         if path.endswith("/docs/index"):
             out = []
             for doc in json.loads(request.content)["value"]:
-                ok = bool(KEY.match(doc["key"]))
+                known = set(doc) - {"@search.action"} <= fields
+                ok = bool(KEY.match(doc["key"])) and known
                 if ok and doc["@search.action"] == "delete":
                     index.pop(doc["key"], None)
                 elif ok:
