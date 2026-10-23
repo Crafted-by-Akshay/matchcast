@@ -582,6 +582,12 @@ window.addEventListener('message', (e) => {
   if (d.type === 'lang' && LANGS_OK.includes(d.lang)) { window.setLang(d.lang, view); return; }   // the Broadcast desk's own language buttons
   if (d.type === 'audit' && view === 'broadcast' && d.action === 'translation_rejected') { if (LANGS_OK.includes(d.lang) && d.lang !== 'en' && Number.isFinite(+d.minute)) AG.note('verifier', 'translation_rejected', String(d.id).slice(0, 60), { lang: d.lang, reason: String(d.reason).slice(0, 120) }, +d.minute); return; }
   if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
+  if (d.type === 'talk' && view === 'watch') {   // EXP-16: the api's player agent, when there is a match on the api
+    const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply });
+    if (!LV.enabled || !LV.key) { back(null); return; }
+    LV.talk(d.player, d.utterance).then(back, () => back(null));
+    return;
+  }
   if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
    // the viewer's watch mode changed (EXP-4)
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
