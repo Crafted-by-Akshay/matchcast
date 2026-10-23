@@ -39,3 +39,10 @@ def build_app(store: Store) -> Starlette:
     except (SeasonError, duckdb.Error):  # no season Parquet in this image: serve MCP without A2A
         logging.getLogger(__name__).warning("season data missing; Stats Desk disabled")
     return app
+
+
+def create_app() -> Starlette:
+    """Container entrypoint (``uvicorn --factory``): the store comes from ``MATCHCAST_STORE``."""
+    from matchcast_agents.tables import build_store
+
+    return build_app(build_store())
