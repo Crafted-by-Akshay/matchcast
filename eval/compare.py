@@ -6,6 +6,7 @@ four-agent arm is not graded by its own checker.
 
     uv run --all-packages python eval/compare.py            # offline: rules arm vs fake model
     uv run --all-packages python eval/compare.py --runs 3 --out eval/results/offline.json
+    uv run --all-packages python eval/compare.py --live        # Foundry, once the quota exists
 
 The single-agent arm takes any `ModelClient` (prompt -> text). Offline it is `FakeModel`, a
 seeded stand-in with a configurable slip rate. Live runs pass a Foundry client once the
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import random
 import re
 import statistics
@@ -139,14 +141,16 @@ def run_single(match: dict[str, Any], client: ModelClient) -> list[dict[str, Any
     return rows
 
 
-def run_four(match: dict[str, Any]) -> list[dict[str, Any]]:
+def run_four(
+    match: dict[str, Any], agents_factory: Callable[..., Any] = rules_agents
+) -> list[dict[str, Any]]:
     config = WorkflowConfig(approval_mode="auto")
     flow = MatchWorkflow(
         stream=match["roster"]["stream"],
         roster=match["roster"],
         names=match["names"],
         clubs=match["teams"],
-        agents=rules_agents(config.personas),
+        agents=agents_factory(config.personas),
         config=config,
     )
     by_id = {m["event_id"]: m for m in moments(match)}
@@ -222,13 +226,101 @@ def compare(
     }
 
 
+class LiveSingle:
+    """The single-agent arm on the Foundry deployment: one prompt in, one line out.
+
+    All calls share one event loop (an async HTTP client cannot move between loops)."""
+
+    def __init__(self, client: Any) -> None:
+        self.client = client
+        self._runner = asyncio.Runner()
+
+    def __call__(self, prompt: str) -> str:
+        schema = {
+            "type": "object",
+            "properties": {"line": {"type": "string"}},
+            "required": ["line"],
+            "additionalProperties": False,
+        }
+        system = "You write one short football commentary line. Use only the facts you are given."
+        answer = self._runner.run(self.client.complete(system, prompt, schema, max_tokens=120))
+        return str(answer.get("line", ""))
+
+    def close(self) -> None:
+        self._runner.close()
+
+
+def compare_live(runs: int = 1) -> dict[str, Any]:
+    """Rules four-agent, live four-agent and a live single agent on the same frozen moments.
+
+    Needs FOUNDRY_PROJECT_ENDPOINT (and FOUNDRY_MODEL_DEPLOYMENT, default gpt-6-luna) and an
+    `az login`. Each run plays the match once per live arm, so check the cost caps first."""
+    from matchcast_agents.live import live_agents
+    from matchcast_agents.live.client import FoundryModelClient
+
+    match = load_match()
+    n = len(moments(match))
+    rules = [summarise(run_four(match), n) for _ in range(runs)]
+    live_four, single, usage = [], [], {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
+
+    def add(client: Any) -> None:
+        for k in usage:
+            usage[k] += getattr(client.usage, k)
+
+    for _ in range(runs):
+        client = FoundryModelClient()
+        live_four.append(
+            summarise(
+                run_four(match, lambda personas, **kw: live_agents(client, personas, **kw)), n
+            )
+        )
+        add(client)
+        client = FoundryModelClient()
+        one = LiveSingle(client)
+        try:
+            single.append(summarise(run_single(match, one), n))
+        finally:
+            one.close()
+        add(client)
+
+    def agg(rs: list[dict[str, float]]) -> dict[str, dict[str, float]]:
+        return {
+            k: {
+                "mean": round(statistics.mean(r[k] for r in rs), 3),
+                "min": min(r[k] for r in rs),
+                "max": max(r[k] for r in rs),
+            }
+            for k in rs[0]
+        }
+
+    return {
+        "arms": {
+            "four_agent_rules": agg(rules),
+            "four_agent_live": agg(live_four),
+            "single_agent_live": agg(single),
+        },
+        "runs": runs,
+        "single_model": os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-6-luna"),
+        "usage": usage,
+        "note": "Live four-agent lines that fail the Verifier fall back to the rules twin, so "
+        "coverage and clean rate show the whole system; wrong_line_rate is the judge's count.",
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--runs", type=int, default=None)
     ap.add_argument("--slip", type=float, default=0.15)
+    ap.add_argument("--live", action="store_true", help="run on Foundry (needs quota and az login)")
     ap.add_argument("--out", type=Path)
     args = ap.parse_args()
-    result = compare(args.runs, args.slip)
+    if args.live:
+        if not os.environ.get("FOUNDRY_PROJECT_ENDPOINT"):
+            raise SystemExit("--live needs FOUNDRY_PROJECT_ENDPOINT (and az login)")
+        result = compare_live(args.runs or 1)
+        args.out = args.out or ROOT / "eval" / "results" / "live.json"
+    else:
+        result = compare(args.runs or 3, args.slip)
     text = json.dumps(result, indent=2)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
