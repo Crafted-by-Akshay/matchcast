@@ -111,7 +111,7 @@ const LV = (() => {
     const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300) });
     if (!res.ok) throw Object.assign(new Error('talk ' + res.status), { status: res.status });
     const j = await res.json();
-    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, api: true };
+    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, api: true, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // the api's Azure Speech clip of a verified reply (Voice lane)
   };
 
   // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one
@@ -204,5 +204,5 @@ const LV = (() => {
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
     begin, events, visionEvents, stop, talk, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
-     toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
+     toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();
