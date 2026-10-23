@@ -6,6 +6,9 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 COPY pyproject.toml uv.lock ./
 COPY packages packages
+COPY services/api services/api
+COPY services/worker services/worker
+COPY services/recap services/recap
 COPY services/mcp services/mcp
 COPY data/season data/season
 COPY data/models data/models
