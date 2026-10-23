@@ -96,6 +96,7 @@ module containerapps 'modules/containerapps.bicep' = {
     speechRegion: ai.outputs.speechRegion
     translatorEndpoint: ai.outputs.translatorEndpoint
     translatorRegion: ai.outputs.translatorRegion
+    visionEndpoint: ai.outputs.visionEndpoint
     searchEndpoint: ai.outputs.searchEndpoint
     searchKeysInVault: searchKeysInVault == 'true'
     pipelineMode: pipelineMode
@@ -161,3 +162,4 @@ output SPEECH_ENDPOINT string = ai.outputs.speechEndpoint
 output SPEECH_REGION string = ai.outputs.speechRegion
 output TRANSLATOR_ENDPOINT string = ai.outputs.translatorEndpoint
 output TRANSLATOR_REGION string = ai.outputs.translatorRegion
+output VISION_ENDPOINT string = ai.outputs.visionEndpoint
