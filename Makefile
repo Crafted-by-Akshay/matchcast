@@ -1,4 +1,4 @@
-.PHONY: realism judge-path openapi-generate smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
+.PHONY: live-eval realism judge-path openapi-generate smoke-foundry install lint typecheck test build contracts-generate contracts-check serve-e2e e2e e2e-webkit e2e-live
 
 install:
 	npm ci
@@ -47,7 +47,13 @@ e2e-live:
 	npm run e2e-live
 
 smoke-foundry:
-	uv run --locked --group smoke python scripts/smoke_foundry.py
+	uv run --locked --all-packages --group smoke python scripts/smoke_foundry.py
+
+# One command once the gpt-6-luna quota lands: smoke the deployment, then the live comparison and
+# the per-agent eval. Needs FOUNDRY_PROJECT_ENDPOINT and az login; costs tokens (eval/README.md).
+live-eval: smoke-foundry
+	uv run --locked --all-packages python eval/compare.py --live
+	uv run --locked --all-packages python eval/agents_eval.py --live
 
 judge-path:
 	uv sync --locked --all-packages

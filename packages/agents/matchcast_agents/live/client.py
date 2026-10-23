@@ -6,6 +6,7 @@ slow, throttled or malformed answer falls back to the rules twin. ``ScriptedMode
 recorded answers for tests and for running without quota.
 """
 
+import asyncio
 import json
 import os
 from collections.abc import Callable
@@ -59,7 +60,10 @@ class FoundryModelClient:
     ) -> None:
         self.deployment = deployment or os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-6-luna")
         self.usage = Usage()
-        self._client = client or self._build(endpoint or os.environ["FOUNDRY_PROJECT_ENDPOINT"])
+        self._endpoint = endpoint or os.environ.get("FOUNDRY_PROJECT_ENDPOINT", "")
+        self._injected = client is not None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._client = client or self._build(self._endpoint)
 
     @staticmethod
     def _build(endpoint: str) -> Any:
@@ -71,6 +75,8 @@ class FoundryModelClient:
             azure_endpoint=endpoint.split("/api/projects")[0],
             api_version=API_VERSION,
             azure_ad_token_provider=get_bearer_token_provider(credential(), COGNITIVE_SCOPE),
+            timeout=25.0,
+            max_retries=1,
         )
 
     async def complete(
@@ -82,6 +88,13 @@ class FoundryModelClient:
         temperature: float = 0.1,
         max_tokens: int = 400,
     ) -> dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        if not self._injected and self._loop is not loop:
+            # an async HTTP client is tied to the loop it first ran on; the eval harness calls
+            # asyncio.run many times, and a stale client would fail and hide behind the fallback
+            if self._loop is not None:
+                self._client = self._build(self._endpoint)
+            self._loop = loop
         try:
             response = await self._client.chat.completions.create(
                 model=self.deployment,
