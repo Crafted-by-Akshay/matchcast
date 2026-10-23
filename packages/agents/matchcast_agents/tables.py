@@ -140,14 +140,14 @@ class TableStore:
 
         Rows are keyed by ``stream_sequence`` and ``revision``, so a correction that keeps its
         sequence is a second row (as in MemoryStore). A marker row per (event_id, revision) in the
-        partition ``<sk>#ids`` catches a re-send under another sequence, as MemoryStore does.
+        partition ``<sk>~ids`` catches a re-send under another sequence, as MemoryStore does.
         """
         marker = f"{event['event_id']}:{int(event['revision']):04d}"
-        if self._get("events", f"{sk}#ids", marker) is not None:
+        if self._get("events", f"{sk}~ids", marker) is not None:
             return False
         rk = self._event_key(event["stream_sequence"], event["revision"])
         self._put("events", sk, rk, event, event_id=event["event_id"], revision=event["revision"])
-        self._put("events", f"{sk}#ids", marker, {"sequence": event["stream_sequence"]})
+        self._put("events", f"{sk}~ids", marker, {"sequence": event["stream_sequence"]})
         return True
 
     def events(self, sk: str, up_to_sequence: int | None = None) -> list[dict[str, Any]]:
