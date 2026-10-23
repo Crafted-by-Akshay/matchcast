@@ -54,7 +54,7 @@ The deploy job runs in the GitHub environment `production` (create it under Sett
 
 These are variables, not secrets (client, tenant and subscription IDs are not credentials). After the first workflow run pushes the images, make each GHCR package public (GitHub > Packages > matchcast-api, -web > Package settings > Change visibility) so Container Apps can pull without a registry secret. Until they are public, the deploy job warns and provisions with the placeholder image, so the first run is safe; re-run it after the switch.
 
-Not verified yet: the workflow has not run, the Dockerfiles were checked by running their steps by hand (no Docker daemon in the build session), and the `mcp` image (`services/mcp/Dockerfile`, entrypoint `matchcast_mcp.app:create_app` via `uvicorn --factory`, port 8001) has not been built yet.
+Not verified yet: the workflow has not run, the Dockerfiles were checked by running their steps by hand (no Docker daemon in the build session), (the `mcp` image was built later, see the 23 Oct section below).
 ## Event stream (DAT-1, DAT-2)
 `MATCHCAST_PIPELINE` (Bicep param `pipelineMode`, azd variable `PIPELINE_MODE`, repo variable `PIPELINE_MODE`, default `direct`) picks how `POST /v1/matches/{id}/events` reaches the workflow. `eventhubs` follows F1 in `03-runtime-flows.md`: the api validates the batch, publishes it to hub `match-events` with the stream key as partition key (`services/worker/matchcast_worker/eventhubs.py`), and answers 202 only after the hub has it (a publish failure is `503 publish_failed` and the browser resends the same batch). A consumer task inside the same api process reads the hub on `$Default` with checkpoints in Blob `eh-checkpoints` (managed identity, so the existing Event Hubs Data Sender/Receiver and Blob roles apply) and runs the workflow; a batch whose handler fails 3 times is logged and skipped so the single partition keeps moving. If the api restarted, the consumer rebuilds the match's workflow from the stored roster (`Registry.flow_for`), which needs `MATCHCAST_STORE=table`. `memory` runs the same code over an in-process queue (local runs, tests).
 
@@ -126,10 +126,10 @@ Environment `dev` in `rg-matchcast` (East US 2 for the apps; AI Search in East U
 URLs:
 - api: https://ca-api-matchcast-dev.calmbay-045566e2.eastus2.azurecontainerapps.io
 - web: https://ca-web-matchcast-dev.calmbay-045566e2.eastus2.azurecontainerapps.io
-- mcp: `ca-mcp-matchcast-dev`, internal ingress, runs the image built by `scripts/deploy_local.sh` (`services/mcp/Dockerfile`)
+- mcp: `ca-mcp-matchcast-dev`, internal ingress, runs `matchcast-mcp:sha-e7cdd45` (checked 23 Oct with api and web), built by `scripts/deploy_local.sh` from `services/mcp/Dockerfile`
 - recap function: `fn-matchcast-dev-recap-hno67`
 
-Images: `ghcr.io/crafted-by-akshay/matchcast-api` at `sha-5e2cc56` (current) and `matchcast-web` at `sha-3d627d1`. Both GHCR packages were made public by Akshay, so their source is public.
+Images (at the first deploy): `ghcr.io/crafted-by-akshay/matchcast-api` at `sha-5e2cc56` and `matchcast-web` at `sha-3d627d1`; later deploys moved api, web and mcp to `sha-e7cdd45`. Both GHCR packages were made public by Akshay, so their source is public.
 
 Checks against the live api (23 Oct, after the image switch):
 - `/health` 200 (0.82 s); `/ready` 200 (0.74 s): configuration valid, model credential obtained (model call not probed), session store `local_mock`.
@@ -143,7 +143,7 @@ Findings: the create-match 500 seen on `sha-3d627d1` (23 Oct 00:38 UTC) shows th
 
 Load (`tests/e2e/load.spec.ts`, chromium, against the live web): passed in 46.5 s. Marks: picker 2.4 s, Watch started 12.8 s, Analyst ready 18.2 s, Broadcast ready 41.5 s. The webkit project was not run (browser not installed here).
 
-Not done: identity setup (Entra app, GitHub OIDC, production environment, repo variables), the mcp image, and any teardown.
+Not done: identity setup (Entra app, GitHub OIDC, production environment, repo variables), and any teardown.
 
 ## Identity, Vision and mcp (23 Oct, after the first deploy)
 
@@ -163,7 +163,7 @@ After the sign-in run:
 - `POST /v1/lines/{id}/approve` without sign-in returns 401 `unauthenticated`, so the producer gate on approve, edit and kill works.
 - Match create and the events POST are open without sign-in. The code applies the role gate only to the line routes, so smoke passes without a token: 137 events accepted, 45 verified claims.
 
-mcp: `services/mcp/Dockerfile` did not copy the workspace members `services/api`, `services/worker` and `services/recap`, so `uv sync --locked` failed the same way the api image did. It now copies them. The image `ghcr.io/crafted-by-akshay/matchcast-mcp:sha-f348755` is pushed for linux/amd64. The GHCR package is still private, so `ca-mcp-matchcast-dev` stays on the placeholder until the package is made public, and then its image is set to this tag.
+mcp: `services/mcp/Dockerfile` did not copy the workspace members `services/api`, `services/worker` and `services/recap`, so `uv sync --locked` failed the same way the api image did. It now copies them. The image `ghcr.io/crafted-by-akshay/matchcast-mcp:sha-f348755` is pushed for linux/amd64. At that point the GHCR package was still private and the app stayed on the placeholder; it has since been deployed with the others.
 
 ## Content Safety wiring (AGT-12)
 
