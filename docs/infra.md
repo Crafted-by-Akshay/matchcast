@@ -129,7 +129,7 @@ URLs:
 - mcp: `ca-mcp-matchcast-dev`, internal ingress, still on the quickstart placeholder (no `services/mcp/Dockerfile` yet)
 - recap function: `fn-matchcast-dev-recap-hno67`
 
-Images: `ghcr.io/crafted-by-akshay/matchcast-api` and `matchcast-web` at `sha-3d627d1`. Both GHCR packages were made public by Akshay, so their source is public.
+Images: `ghcr.io/crafted-by-akshay/matchcast-api` at `sha-5e2cc56` (current) and `matchcast-web` at `sha-3d627d1`. Both GHCR packages were made public by Akshay, so their source is public.
 
 Checks against the live api (23 Oct, after the image switch):
 - `/health` 200 (0.82 s); `/ready` 200 (0.74 s): configuration valid, model credential obtained (model call not probed), session store `local_mock`.
@@ -137,7 +137,9 @@ Checks against the live api (23 Oct, after the image switch):
 - Web 200 (1.25 s).
 - `scripts/health_check.sh` reports UNHEALTHY only for the Vision dependency.
 
-Smoke (`scripts/smoke_pipeline.py`): FAILED. The match was created in rules mode, then the events POST returned 500. The api logs show Table Storage `OutOfRangeInput` on the marker row in the `events` table, partition key `<stream>#ids` (`packages/agents/matchcast_agents/tables.py`, `add_event`). Azure Table Storage rejects `#` in PartitionKey and RowKey. A later probe's match-create call also returned 500 and was not traced. Not fixed in this PR; the events and load path needs a code fix first.
+Smoke (`scripts/smoke_pipeline.py`, 23 Oct, api `sha-5e2cc56`, after PR #180 moved the event marker partition to `<sk>~ids`): PASS. Created `smoke-6400324f` in rules mode, 137 events accepted in 17.8 s, 45 verified claims in 18.8 s. The earlier failure was the `#` in the marker partition key: Azure Table Storage rejects `#` in keys and returns `OutOfRangeInput`.
+
+Findings: the create-match 500 seen on `sha-3d627d1` (23 Oct 00:38 UTC) shows the same storage error (`OutOfRangeInput`, RequestId `ba3f382d-d002-0030-1e86-62f365000000`) as the events 500. It was raised while `MatchWorkflow` ran `store.put_match` (`packages/agents/matchcast_agents/workflow.py`, constructor). On `sha-5e2cc56` three match creates in a row returned 201. The api's status and health checks after the switch: `/health` 200 (0.83 s), `/ready` 200 (0.73 s), `/v1/status` 200 (0.69 s), overall `unavailable` because of Vision only.
 
 Load (`tests/e2e/load.spec.ts`, chromium, against the live web): passed in 46.5 s. Marks: picker 2.4 s, Watch started 12.8 s, Analyst ready 18.2 s, Broadcast ready 41.5 s. The webkit project was not run (browser not installed here).
 
