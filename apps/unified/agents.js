@@ -221,14 +221,28 @@ const AG = (() => {
   const ingest = (d, status) => {
     if (!run || !d) return;
     const src = status === 'live' ? 'model' : 'rules', last = run.events.length ? run.events[run.events.length - 1].minute : 0;
-    const id = d.claim_id || (d.claim_ids && d.claim_ids[0]) || d.publication_id || d.line_id;
+    // The api's stream (docs/architecture/12-api.md): `claim` events are the evidence (metric, value, approval_status);
+    // `line` events walk one drafted line through drafted, verified, approved, published (or rejected, killed) for every audience;
+    // `publication` events are the line a viewer of this stream's audience sees, published after the server Verifier and approval.
+    // Only a claim or a publication becomes a card; a line event updates the publication it belongs to.
+    const isLine = !!d.line_id && !d.publication_id && !d.claim_id;
+    const id = d.claim_id || d.publication_id || (isLine ? 'pub-' + d.line_id : null) || (d.claim_ids && d.claim_ids[0]);
     if (!id) return;
     let c = run.claims.find((x) => x.id === id);
+    if (!c && isLine) return;
     if (!c) {
       c = MCC.claim({ id, kind: d.metric || 'line', minute: last, agent: 'analyst', evidence: [], inputs: d.metric ? { metric: d.metric, value: d.value, units: d.units } : {}, source: src, api: true });
-      run.claims.push(c); run.stat.claims++;
+      if (d.publication_id) c.pub = true; else run.stat.claims++;   // a publication is the viewer-facing line, not evidence: it stays out of the claims ledger
+      run.claims.push(c);
     }
     if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; }
+    if (d.publication_id) { c.verdict = 'verified'; c.reason = 'api: published after the server Verifier'; c.apiClaims = d.claim_ids || [];
+      for (const cid of c.apiClaims) { const e = run.claims.find((x) => x.id === cid); if (e && e.api) { e.verdict = 'verified'; e.reason = 'api: published in ' + c.id; } } }   // the evidence behind a published line was approved
+    if (isLine) {
+      if (['abstained', 'rejected', 'killed'].includes(d.status)) { c.verdict = 'abstained'; c.reason = 'api: line ' + d.status; }
+      if (Array.isArray(d.checks) && d.checks.length) c.apiChecks = d.checks;
+      changed(); return;
+    }
     if (d.audio_url) c.audioUrl = new URL(d.audio_url, LV.base || location.href).href;   // the api's Azure Speech mp3 for this line (EXP-8)
     if (d.text && d.text !== c.text) c.tr = {};   // the shown English line changed, so older translations no longer match it
     if (d.variants && typeof d.variants === 'object') {   // the api's translate-then-verify (PR 118): only checked translations arrive; a missing language keeps the rules fallback

@@ -114,6 +114,14 @@ def build_watch():
         " team: p.T.key, player: p.name, to: q.name, kind:",
         "watch pass positions",
     )
+    # EXP-16: a typed order also asks the api's player agent, which answers from the stored events (or says nothing)
+    main = sub(
+        main,
+        "talkLine(p, 'pl', r); speak(p, r); renderTalk(); return; }",
+        "talkLine(p, 'pl', r); speak(p, r); renderTalk();"
+        " if (!quick && window.mcTalkApi) window.mcTalkApi(p, text); return; }",
+        "watch talk api",
+    )
     head = sub(
         r(W + "head.html"),
         "<title>MatchCast 3D</title>",

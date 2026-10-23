@@ -102,6 +102,16 @@ const LV = (() => {
     return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true };
   };
 
+  // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply
+  const talk = async (target, utterance) => {
+    if (!run) throw new Error('no match yet');
+    if (!String(utterance).trim()) throw new Error('empty utterance');
+    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300) });
+    if (!res.ok) throw Object.assign(new Error('talk ' + res.status), { status: res.status });
+    const j = await res.json();
+    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, api: true };
+  };
+
   // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one
   const identify = async (trackId, team, crop) => {
     if (!run) throw Object.assign(new Error('no match yet'), { status: 0 });
@@ -190,7 +200,7 @@ const LV = (() => {
   const setPersona = (p, l) => { l = l || 'en'; if (p === persona && l === lang) return; persona = p; lang = l; if (run) { if (run.es) run.es.close(); open(); } };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, stop, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, visionEvents, stop, talk, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

@@ -51,7 +51,7 @@ test('live: pill, contract events and the api claim', async ({ page }) => {
   await expect(pill(page)).toHaveText('Live agents', { timeout: 15_000 });
   await expect.poll(() => api.seen.matches >= 1 && api.seen.events.length > 0).toBe(true);
   expect(api.seen.events.every((e) => e.kind === 'event' && ['goal', 'shot'].includes(e.payload.type))).toBe(true);
-  await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.id === 'api-1' && c.source === 'model' && c.text === 'Goal from the api.'))).toBe(true);
+  await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.id === 'pub-1' && c.api && c.verdict === 'verified' && c.source === 'model' && c.text === 'Goal from the api.'))).toBe(true);
   expect(errs).toEqual([]); api.server.close();
 });
 

@@ -444,7 +444,7 @@ const valueOf = (c) => c.kind === 'score' ? c.inputs.score.join('–') : c.kind 
   : c.inputs && c.inputs.value != null ? String(c.inputs.value) : '';
 function ledgerRows(claims) {
   const f = { verdict: $('lg-verdict').value, agent: $('lg-agent').value, metric: $('lg-metric').value };
-  return claims.slice().reverse().map((c) => ({ id: c.id, time: mins(c.minute), metric: (METRIC[c.kind] || [c.inputs && c.inputs.metric ? c.inputs.metric : c.kind])[0], value: valueOf(c), units: (METRIC[c.kind] || [null, c.inputs && c.inputs.units || ''])[1],
+  return claims.filter((c) => !c.pub).reverse().map((c) => ({ id: c.id, time: mins(c.minute), metric: (METRIC[c.kind] || [c.inputs && c.inputs.metric ? c.inputs.metric : c.kind])[0], value: valueOf(c), units: (METRIC[c.kind] || [null, c.inputs && c.inputs.units || ''])[1],
     agent: c.agent, source: c.source === 'model' ? 'model' : 'rules', verdict: c.verdict, repaired: c.repaired, reason: c.reason || '', approval: c.approval || (c.verdict === 'verified' ? 'approved' : c.verdict === 'pending' ? 'pending' : 'held') }))
     .filter((x) => (!f.verdict || x.verdict === f.verdict) && (!f.agent || x.agent === f.agent) && (!f.metric || x.metric === f.metric));
 }
@@ -485,7 +485,7 @@ function renderAgents() {
   $('ag-feed').innerHTML = r && r.feed.length
     ? r.feed.slice(-40).reverse().map((f) => '<li class="' + f.tone + '"><span class="m">' + mins(f.minute) + '</span><b>' + esc(f.who) + '</b> ' + esc(f.text) + '</li>').join('')
     : '<li class="empty">Waiting for the kick-off in Watch. Events and claims appear here as the match runs.</li>';
-  $('ag-n').textContent = r ? r.claims.length + ' claims' : '';
+  $('ag-n').textContent = r ? r.claims.filter((c) => !c.pub).length + ' claims' : '';
   const rows = ledgerRows(r ? r.claims : []);
   $('ag-claims').innerHTML = rows.length
     ? rows.slice(0, 40).map((x) => '<tr data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td>' + esc(x.time) + '</td><td>' + esc(x.metric) + '</td><td>' + esc(x.value) + '</td><td>' + esc(x.units) + '</td><td>' + esc(x.agent) + '</td><td>' + esc(x.source) + '</td><td class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td>' + esc(x.reason) + '</td><td>' + esc(x.approval) + '</td></tr>').join('')
@@ -582,6 +582,12 @@ window.addEventListener('message', (e) => {
   if (d.type === 'lang' && LANGS_OK.includes(d.lang)) { window.setLang(d.lang, view); return; }   // the Broadcast desk's own language buttons
   if (d.type === 'audit' && view === 'broadcast' && d.action === 'translation_rejected') { if (LANGS_OK.includes(d.lang) && d.lang !== 'en' && Number.isFinite(+d.minute)) AG.note('verifier', 'translation_rejected', String(d.id).slice(0, 60), { lang: d.lang, reason: String(d.reason).slice(0, 120) }, +d.minute); return; }
   if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
+  if (d.type === 'talk' && view === 'watch') {   // EXP-16: the api's player agent, when there is a match on the api
+    const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply });
+    if (!LV.enabled || !LV.key) { back(null); return; }
+    LV.talk(d.player, d.utterance).then(back, () => back(null));
+    return;
+  }
   if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
    // the viewer's watch mode changed (EXP-4)
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
