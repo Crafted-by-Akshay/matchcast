@@ -89,7 +89,8 @@ const LV = (() => {
     r.sending = false;
   };
 
-  const RETRIEVAL = { local: 'from the match record', search: 'from search', search_fallback: 'Search fallback' };   // the api's `retrieval` value as the chip text Watch and Broadcast show next to a verified answer
+  // the chip next to a verified answer, from the api's `intent` and `retrieval`: `local` is the match record for a live question and the built-in knowledge base for a knowledge one
+  const chipOf = (j) => j.abstained ? '' : j.retrieval === 'search_fallback' ? 'Search fallback' : j.retrieval === 'search' ? 'from AI Search' : j.retrieval === 'local' ? (j.intent === 'live' ? 'from the match record' : j.intent === 'knowledge' || j.intent === 'both' ? 'from the knowledge base' : '') : '';
   // a question to the agents (EXP-5): the api's Ask router answers with citations and a verdict; throws when it cannot
   // the api's Ask takes one of three audiences and answers {answer, abstained, citations, mode, variants?}
   const audience = () => (persona === 'analyst' || persona === 'broadcast' ? persona : 'casual');
@@ -100,7 +101,7 @@ const LV = (() => {
     if (!res.ok) throw new Error('ask ' + res.status);
     const j = await res.json();
     const t = j.variants && j.variants[lang];
-    return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: RETRIEVAL[j.retrieval] || '' };
+    return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j) };
   };
 
   // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply
