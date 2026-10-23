@@ -1,6 +1,7 @@
 // Headless MatchCast runner. Builds the unified app, serves it on localhost and drives the Watch engine in
 // Chromium with stepSim() on a fixed 0.02 s step (no rendering), so one seed always gives the same events.
 //   node run.cjs --seeds 1-40 --half 45 --workers 4 --out out/ [--events] [--dt 0.02]
+//   node run.cjs --seeds 2026 --url   prints the Watch URL query that plays the runner's match for each seed in the live app
 // Prints one JSON line per finished match and writes <out>/summary.json (and <out>/<seed>.json with --events).
 // --half is real minutes per half in the engine's own clock: 45 is full density (90 match minutes, option A), 5 is the old prototype.
 'use strict';
@@ -78,6 +79,12 @@ function setupFor(seed) {
   const R = mulberry(hash32(seed + ':fixture')), n = CLUBS.length;
   const h = Math.floor(R() * n); let a = Math.floor(R() * (n - 1)); if (a >= h) a++;
   const q = { seed, half, st: Math.floor(R() * 5), month: Math.floor(R() * 12), h: CLUBS[h].key, a: CLUBS[a].key }; if (tune) q.tune = tune; return new URLSearchParams(q).toString();
+}
+
+if (args.url) {   // the live app plays the same match as the runner only with the runner's fixture in the query
+  CLUBS = JSON.parse(fs.readFileSync(path.join(REPO, 'apps/unified/shared/clubs.json'), 'utf8')).clubs;
+  for (const seed of seeds) console.log(seed + '\t/watch/index.html?' + setupFor(seed));
+  process.exit(0);
 }
 
 (async () => {

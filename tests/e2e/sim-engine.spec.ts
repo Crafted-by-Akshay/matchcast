@@ -82,4 +82,45 @@ test.describe('Simulator engine', () => {
     expect(r.ok, 'the setup card names the rolled formations').toBe(true);
     expect(r.distinct, 'each re-roll changes the draw').toBeGreaterThan(1);
   });
+
+  // "Same seed, same take": the match must not depend on the frame time or the playback speed. frame() is driven with
+  // different viewing-time budgets per call (what dt x speed gives live), with and without the condensed director, and
+  // compared with the runner's fixed 0.02 s loop.
+  test('run.cjs --url prints the fixture query the live app needs for the runner\'s match', async () => {
+    const out = execFileSync('node', ['services/simulation/run.cjs', '--seeds', '2026', '--url'], { encoding: 'utf8' });
+    expect(out.trim()).toBe('2026\t/watch/index.html?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM');
+  });
+
+  test('time spent on the set-up screen does not shift the match clock', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => { (window as any).__mcHeadless = true; (window as any).__mcDt = 0.5; });   // idle frames before kick-off add to S.t
+    await page.goto('/watch/index.html?seed=2026&st=1&month=3&h=NAV&a=LOM&half=15', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => { const mc = (window as any).__mc; if (mc && mc.S.started) { (window as any).__mcDt = 0; return true; } return false; }, null, { timeout: 240_000 });
+    expect(await page.evaluate(() => (window as any).__mc.S.t), 'S.t restarts at kick-off').toBeLessThan(2);
+  });
+
+  test('one seed gives the same events at any frame time or playback speed', async ({ browser }) => {
+    test.setTimeout(540_000);
+    const query = 'seed=2026&st=1&month=3&h=NAV&a=LOM';   // what `run.cjs --seeds 2026 --url` prints
+    const run = async (half: number, mode: string) => {
+      const page = await browser.newPage();
+      await page.addInitScript(() => { (window as any).__mcHeadless = true; });
+      await page.goto(`/watch/index.html?${query}&half=${half}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => (window as any).__mc && (window as any).__mc.players.length && (window as any).__mc.S.started, null, { timeout: 240_000 });
+      const r = await page.evaluate((m) => {
+        const mc = (window as any).__mc, S = mc.S, T = 480;
+        if (m === 'step') { while (S.mclock < T) mc.stepSim(0.02); }
+        else { (window as any).__mcDt = +m; let n = 0; while (S.mclock < T && n++ < 400_000) mc.frame(1 / 60, false); }
+        // events up to a common match time, whatever the last frame overshot by
+        return JSON.stringify(mc.ENV.events.filter((e: any) => e.minute <= 7.6).map((e: any) => [e.type, e.minute, e.team, e.player]));
+      }, mode);
+      await page.close();
+      return r;
+    };
+    for (const half of [15, 45]) {
+      const ref = await run(half, 'step');
+      expect(JSON.parse(ref).length, 'the reference match produced events').toBeGreaterThan(20);
+      for (const dt of ['0.013', '0.1', '0.37']) expect(await run(half, dt), `half=${half}, ${dt} s of viewing time per frame`).toBe(ref);
+    }
+  });
 });

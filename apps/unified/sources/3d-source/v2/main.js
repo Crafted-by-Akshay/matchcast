@@ -15,6 +15,9 @@ const ease = (u) => u * u * (3 - 2 * u);
 const wrapA = (a) => ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
 let seed = 48213;
 const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+// visual-only randomness (head scans): its own stream, so drawing a frame never changes what the match does
+let vseed = 90210;
+const vrnd = () => { vseed |= 0; vseed = vseed + 0x6D2B79F5 | 0; let t = Math.imul(vseed ^ vseed >>> 15, 1 | vseed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const gauss = () => { let u = 0, v = 0; while (u === 0) u = rnd(); v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 const V2 = (x, z) => new THREE.Vector2(x, z);
 
@@ -1121,7 +1124,7 @@ function animate(p, dt) {
   // torso and head track the ball
   if (p.lookAt) {
     const la = Math.atan2(p.lookAt.x - p.pos2.x, p.lookAt.y - p.pos2.y); let d = wrapA(la - p.yaw);
-    p.scanT -= dt; if (p.scanT < 0) { p.scanT = 2 + rnd() * 4; p.scan = 0.6; }
+    p.scanT -= dt; if (p.scanT < 0) { p.scanT = 2 + vrnd() * 4; p.scan = 0.6; }
     if (p.scan > 0) { p.scan -= dt; d += Math.sin((0.6 - p.scan) / 0.6 * Math.PI) * 1.2 * (p.i % 2 ? 1 : -1) * p.scanF; }
     const tw = clamp(d, -1.0, 1.0); rot(B.Spine1, 0, tw * 0.35, 0); rot(B.Spine2, 0, tw * 0.25, 0); rot(B.Neck, 0, clamp(d - tw * 0.6, -0.8, 0.8) * 0.5, 0); rot(B.Head, p.headUp + (ball.p.y > 3 ? -0.25 : 0.08), clamp(d - tw * 0.6, -0.8, 0.8) * 0.5, 0);
   }
@@ -1649,7 +1652,7 @@ function dirUpdate(dt) {
   if (DIRC.wipe) { DIRC.wipe.style.opacity = ff ? 1 : 0; if (ff && DIRC.cut) DIRC.wipe.textContent = '⏩ ' + DIRC.cut.from + "' → " + minuteOf() + "'"; }
 }
 function dirStart() {   // at kick-off: condense only full-length matches (half = 45), shorter halves are already compressed; the headless runner scores passages too, to report the watch length
-  Object.assign(DIRC, { longest: {}, bySc: {}, on: SET.half >= 45 && new URLSearchParams(location.search).get('condense') !== '0', ff: false, liveS: 0, ffS: 0, hold: 0, ranges: [], cut: null });
+  Object.assign(DIRC, { cardT: -99, longest: {}, bySc: {}, on: SET.half >= 45 && new URLSearchParams(location.search).get('condense') !== '0', ff: false, liveS: 0, ffS: 0, hold: 0, ranges: [], cut: null });
   if (!DIRC.wipe) { const d = document.createElement('div'); d.id = 'ffwipe'; d.style.cssText = 'position:fixed;top:14%;left:50%;transform:translateX(-50%);padding:6px 18px;background:rgba(10,14,20,.78);color:#fff;font:700 20px system-ui;letter-spacing:.06em;border-radius:6px;opacity:0;transition:opacity .15s;pointer-events:none;z-index:9'; document.body.appendChild(d); DIRC.wipe = d; }
 }
 function stepSim(dt) {
@@ -1686,14 +1689,29 @@ function stepSim(dt) {
 const clk = new THREE.Clock();
 let ledAcc = 0;
 function loop() { frame(Math.min(clk.getDelta(), 0.05), true); }
+// The engine always integrates in fixed STEP-second steps, whatever the frame time or playback speed, and carries the
+// remainder to the next frame (simAcc), so one seed plays the same match at any speed and on any machine.
+const STEP = 0.02; let simAcc = 0;
+// Rendering shows the state between the last two fixed steps (alpha = how far the leftover time is into the next step),
+// so slow playback does not judder. The blend is visual only: the simulated state is restored right after the draw.
+const prevBall = new THREE.Vector3();
+function snapPrev() { for (const p of players) { if (p.pv) p.pv.copy(p.pos2); else p.pv = p.pos2.clone(); } prevBall.copy(ball.p); }
+function blendTo(alpha) {
+  const saved = [];
+  for (const p of players) { if (!p.pv || p.pv.distanceToSquared(p.pos2) > 9) continue; saved.push([p, p.pos2.clone()]); p.pos2.lerpVectors(p.pv, saved[saved.length - 1][1], alpha); }
+  const ballNow = ball.p.clone(); if (prevBall.distanceToSquared(ballNow) < 25) ball.p.lerpVectors(prevBall, ballNow, alpha);
+  return () => { for (const [p, v] of saved) p.pos2.copy(v); ball.p.copy(ballNow); };
+}
 function frame(dt, draw) {
   const sim = S.paused ? 0 : window.__mcHeadless ? (window.__mcDt || 0) : dt * S.speed; // headless: the runner steps the engine itself, and a test may drive frame() with a fixed budget through __mcDt
   if (!S.started && sim > 0) S.t += sim;
   applyWorldVisuals(sim);
+  let alpha = 1;
   if (S.started && !S.over && players.length && sim > 0) {
-    if (DIRC.on) { let budget = sim, guard = 0; while (budget > 0 && !S.over && guard++ < 4000) { const st = Math.min(0.02, budget * (DIRC.ff ? FF_X : 1)); stepSim(st); budget -= DIRC.ff ? st / FF_X : st; } }   // fast-forward spends 1/FF_X of the frame's time per simulated second
-    else { const n = Math.ceil(sim / 0.02); for (let i = 0; i < n; i++) stepSim(sim / n); }
+    if (DIRC.on) { let budget = sim + simAcc, guard = 0, cost = STEP; while (!S.over && guard++ < 4000) { cost = DIRC.ff ? STEP / FF_X : STEP; if (budget < cost - 1e-9) break; snapPrev(); stepSim(STEP); budget -= cost; } simAcc = Math.min(budget, cost); alpha = simAcc / cost; }   // fast-forward spends 1/FF_X of the frame's time per simulated second
+    else { let acc = sim + simAcc, guard = 0; while (!S.over && acc >= STEP - 1e-9 && guard++ < 4000) { snapPrev(); stepSim(STEP); acc -= STEP; } simAcc = Math.min(acc, STEP); alpha = simAcc / STEP; }
   }
+  const unblend = alpha < 1 && !(typeof VIS !== 'undefined' && VIS.on) ? blendTo(alpha) : null;   // Vision scores the pixels against the exact simulated positions, so it draws unblended
   for (const p of players) if (!p.off) animate(p, sim);
   // ball render: roll from displacement
   const bw = W(ball.p.x, ball.p.y, ball.p.z); const mv = bw.clone().sub(ballMesh.position); const hd = Math.hypot(mv.x, mv.z);
@@ -1705,6 +1723,7 @@ function frame(dt, draw) {
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   if (players.length) hud();
   if (draw) { composer.render(); labelRenderer.domElement.style.visibility = S.started ? 'visible' : 'hidden'; labelRenderer.render(scene, camera); }
+  if (unblend) unblend();
 }
 function start() {
   setRestart('kickoff', 0, V2(52.5, 34));

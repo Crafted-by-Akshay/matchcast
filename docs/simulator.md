@@ -24,10 +24,11 @@ Source of truth is the engine in `apps/unified/sources/3d-source/v2` (Watch) and
 | --- | --- |
 | Match seed | The only unseeded draw is `newSeed()` in `setup.js` (a new match). Rain drops (`worldvis.js`) and animation phase (`main.js`) stay unseeded because they change no event, number or sentence |
 | `play` stream | `mulberry32(hash32(seed + ":play"))`: every decision, error, duel and foul in the engine |
+| `visual` (`vrnd`) | fixed seed in `main.js`; animation phase only (head-scans), so rendering never consumes `play` |
 | `weather` | its own `mulberry(seed)` in `initEnv` (`world.js`), separate from every sub-stream |
 | `words` | Player replies in `talk.js` |
 | `tactics`, `setup` | "Auto" formation and style picks, stadium, month, kick-off in the surprise handler |
-| Step | Fixed 0.02 s in the headless runner. The browser steps with the frame time, so a browser replay is statistically the same match, not byte-identical |
+| Step | Fixed 0.02 s everywhere. The browser's `frame()` steps exactly 0.02 s and carries the remainder to the next frame, so a browser replay (any speed, any frame rate, condensed or not) gives the same event stream as the runner (tested for the first 7.6 minutes of a 15- and a 45-minute-half match at three frame times, first match after page load) when it is opened with the runner's fixture query (`run.cjs --url`). Head-scan animation uses its own visual stream, not the match's |
 | Clubs in calibration runs | `run.cjs` draws two different season clubs, a stadium and a month from the seed |
 
 `services/simulation/tests/checks.cjs` fails if `Math.random` appears anywhere else, if the engine's xG constants differ from `data/calibration/xg.json`, or if the same seed does not give byte-identical event JSON.

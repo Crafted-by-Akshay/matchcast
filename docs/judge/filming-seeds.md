@@ -22,7 +22,12 @@ A headless drive of the shell (`/index.html?seed=<n>&speed=4#watch`, `__mcHeadle
 - seed 2026: no goal before minute 46 (the runner gives goals at 18.4 and 22.4);
 - seed 8: goals at minutes 17 and 30 (the runner gives its first goal at 51.3).
 
-So the live path is not step-identical to the runner. Likely reasons: `speed=4` and the frame time change the step the engine integrates with, and the shell plays its own fixture clubs rather than the runner's seed-picked pair. This was not isolated here, and the scan used a software-GL machine, so treat it as a warning, not a finding about a GPU. It is a Data-lane question: whether a seed should give the same match at any speed and frame rate.
+**Cause found and fixed (Data lane, 23 Oct).** Two separate things:
+
+1. **The URL.** The runner picks the two clubs, the stadium and the month from the seed and puts them in the query (`h=`, `a=`, `st=`, `month=`). `?seed=2026&speed=4` alone gives the shell's own fixture, so it is a different match. Get the exact URL with `node services/simulation/run.cjs --seeds 2026 --url`: seed 2026 is `/watch/index.html?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM`.
+2. **The engine.** `frame()` stepped the engine in `ceil(dt x speed / 0.02)` equal pieces, so the step size changed with frame time and speed, and `animate()` (the head-scan animation, frame-only) drew from the match's random stream, so the number of frames changed the match. Now the engine always steps exactly 0.02 s and carries the remainder to the next frame, and the head-scan uses its own stream. Test: `tests/e2e/sim-engine.spec.ts` ("one seed gives the same events at any frame time or playback speed") compares 0.013, 0.1 and 0.37 s of viewing time per frame, with and without the condensed director, against the runner's fixed-step loop. Checked by hand on an earlier build (re-check once before filming): with the URL above the live frame loop reproduced the runner's goals for seed 2026 at minutes 18.4 and 22.4 (LOM).
+
+The speed control and the condensed fast-forward therefore change only how fast you watch, never what happens. The first section's table is valid for the live app when it is opened with the URL from `--url`.
 
 ## What to do for the video
 
