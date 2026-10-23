@@ -33,6 +33,9 @@ param searchKeysInVault string = 'false'
 @description('How the api reaches the workflow: direct, or through the Event Hubs match-events hub (docs/infra.md, Event stream). Flip to eventhubs after scripts/smoke_pipeline.py passes.')
 param pipelineMode string = 'direct'
 
+@description('Keep one api and one web replica running (no scale to zero); azd env set KEEP_WARM true for the demo window.')
+param keepWarm string = 'false'
+
 var name = 'matchcast-${environmentName}'
 var tags = {
   project: 'matchcast'
@@ -100,6 +103,7 @@ module containerapps 'modules/containerapps.bicep' = {
     searchEndpoint: ai.outputs.searchEndpoint
     searchKeysInVault: searchKeysInVault == 'true'
     pipelineMode: pipelineMode
+    keepWarm: keepWarm == 'true'
   }
 }
 

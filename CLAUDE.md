@@ -47,7 +47,7 @@ Source of truth: docs/architecture/README.md. If code and docs disagree, stop an
 
 ## Git and merging
 - Branch `<lane>/<AB id>-<slug>`; commit and PR titles carry `AB#<id>`; squash merge; small PRs. Doc 19 §2 sets merge windows 13:00 and 21:00 local; Akshay's Oct 22 "everything autonomous" rule means merge when green, so treat the windows as a batching preference.
-- GitHub Actions is down. The local-check merge rule: run `scripts/local_ci.sh` for the affected jobs,
+- GitHub Actions is off on purpose (it costs money; both workflows are manual-only). The local-check merge rule: run `scripts/local_ci.sh` for the affected jobs,
   paste the summary block into the PR as a comment, get the reviewer agent's verdict on a fresh
   context, resolve its findings in a PR comment, then merge your own PR.
 - Update the matching `docs/architecture/` file in the same PR as the behaviour.

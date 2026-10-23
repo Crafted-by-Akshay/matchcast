@@ -8,7 +8,7 @@ Automated cover: `make e2e` (Chromium) and `make e2e-live E2E_BASE_URL=<deployed
 
 | # | Step | Pass when | Automated by |
 | --- | --- | --- | --- |
-| 1 | Open the web URL cold | Shell loads, season picker has 28 fixtures, Watch kicks off within 4 s of the engine loading | `load.spec.ts`, `timing.spec.ts @live` (QUA-9) |
+| 1 | Open the web URL cold | Shell loads, season picker has 28 fixtures, Watch kicks off within 4 s of the engine loading | `load.spec.ts`, `live.spec.ts @live` (shell, `/health`, `/ready`, `/v1/status` labels, producer gate returns 401) |
 | 2 | Watch for one goal | A Match Pulse card appears with a green tick; Casual and Analyst modes read differently | `pulse.spec.ts` |
 | 3 | Open "Why?" and the trace panel | Cited events and each agent's step are listed | `watch.spec.ts` (EXP-6) |
 | 4 | Switch to Spanish | Numbers and names are unchanged | `language.spec.ts` (QUA-9) |
@@ -33,6 +33,7 @@ Automated cover: `make e2e` (Chromium) and `make e2e-live E2E_BASE_URL=<deployed
 | Date | Commit | Run by | Result | Notes |
 | --- | --- | --- | --- | --- |
 | 22 Oct | b914ad0 | Quality lane (local, Actions down) | checks, openapi, full e2e pass | gitleaks and az not installed on this machine, so secrets and bicep not run |
+| 23 Oct | main 98879f5 | Quality lane, `make e2e-live` | `live.spec.ts` 4 passed against the deployed web and api | `/v1/status` on the deployed api: 5 live, 2 simulated (Foundry agents, Event Hubs), 4 planned (Content Safety, AI Search, Fabric, Databricks), 0 unavailable |
 
 ## Broadcast coverage (QUA-2)
 

@@ -1,4 +1,3 @@
-# Databricks notebook source
 """Train the danger-moment model (DAT-6).
 
 Reads the scene Parquet written by scripts/generate_scenes.py (DAT-5), trains a gradient-boosted
@@ -13,7 +12,6 @@ Validation is by match, never by event: every event of a match seed lands on the
 split, so the score is not inflated by near-duplicate neighbours.
 """
 
-# COMMAND ----------
 from __future__ import annotations
 
 import argparse

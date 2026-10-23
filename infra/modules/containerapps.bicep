@@ -33,6 +33,9 @@ param pipelineMode string = 'direct'
 @description('True when Key Vault already holds srch-query-key; a Key Vault secret reference to a missing secret fails the revision.')
 param searchKeysInVault bool = false
 
+@description('Keep one api and one web replica running (no scale to zero), so the first load is not a 17 to 22 s cold start. Costs a little idle compute; turn it on for the demo window.')
+param keepWarm bool = false
+
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsName
 }
@@ -120,7 +123,7 @@ resource web 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       scale: {
-        minReplicas: 0
+        minReplicas: keepWarm ? 1 : 0
         maxReplicas: 1
         rules: [{ name: 'http', http: { metadata: { concurrentRequests: '50' } } }]
       }
@@ -169,6 +172,8 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'VISION_ENDPOINT', value: visionEndpoint }
             { name: 'SEARCH_ENDPOINT', value: searchEndpoint }
             { name: 'SEARCH_INDEX', value: 'kb-matchcast-v1' }
+            // The browser calls the api from the web origin (apps/unified is built with API_URL), so it needs CORS.
+            { name: 'CORS_ORIGINS', value: 'https://${web.properties.configuration.ingress.fqdn}' }
             // Easy Auth and the ingress already restrict Host; the FQDN is not known inside its own app
             { name: 'MATCHCAST_MCP_ALLOWED_HOSTS', value: '*' }
           ], searchEnv)
@@ -179,7 +184,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       scale: {
-        minReplicas: 0
+        minReplicas: keepWarm ? 1 : 0
         maxReplicas: 1
         rules: [
           { name: 'http', http: { metadata: { concurrentRequests: '20' } } }
