@@ -2027,7 +2027,7 @@
     },
     "/v1/matches/{match_id}/recap/{persona}/audio.mp3": {
       "get": {
-        "description": "The stored recap read aloud: only the sentences the Verifier marked verified are spoken.",
+        "description": "The stored recap read aloud: only sentences the Verifier marked verified are spoken.",
         "operationId": "recap_audio_v1_matches__match_id__recap__persona__audio_mp3_get",
         "parameters": [
           {

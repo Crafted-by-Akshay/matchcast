@@ -16,6 +16,7 @@ from collections import deque
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from typing import Any, Literal
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -45,6 +46,7 @@ from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
 from app.voice import (
     AUDITION_SCRIPT,
+    MAX_CHARS,
     VoiceError,
     VoiceService,
     clip_key,
@@ -445,8 +447,29 @@ ON_AIR = ("approved", "published")  # the lines a viewer can hear
 
 async def _audio(request: Request, registry: Registry, text: str, voice_name: str) -> Response:
     """A clip from the cache, or made now: a new clip is rate limited per client address."""
+    return await _audio_parts(request, registry, [text], voice_name)
+
+
+def pack(sentences: list[str], limit: int = MAX_CHARS - 100) -> list[str]:
+    """Sentences joined into the fewest parts that each fit one clip (a longer sentence is cut)."""
+    parts: list[str] = []
+    for sentence in sentences:
+        sentence = sentence[:limit]
+        if parts and len(parts[-1]) + 1 + len(sentence) <= limit:
+            parts[-1] += " " + sentence
+        else:
+            parts.append(sentence)
+    return parts
+
+
+async def _audio_parts(
+    request: Request, registry: Registry, texts: list[str], voice_name: str
+) -> Response:
+    """One mp3 from one or more clips (MP3 frames join end to end); one allowance per request."""
     voice = registry.voice
-    if voice.get(clip_key(text, voice_name)) is None and not voice.allow(client_ip(request)):
+    if any(voice.get(clip_key(t, voice_name)) is None for t in texts) and not voice.allow(
+        client_ip(request)
+    ):
         raise Problem(
             429,
             "rate_limited",
@@ -454,7 +477,7 @@ async def _audio(request: Request, registry: Registry, text: str, voice_name: st
             retry_after=60,
         )
     try:
-        audio = await voice.clip(text, voice_name)
+        audio = b"".join([await voice.clip(t, voice_name) for t in texts])
     except VoiceError as error:
         raise Problem(503, "not_ready", str(error)) from error
     return Response(audio, media_type="audio/mpeg", headers=CLIP_HEADERS)
@@ -574,9 +597,18 @@ def build_router(registry: Registry) -> APIRouter:
 
         async def localised(item: StreamEvent) -> StreamEvent:
             """The publication with a checked `variants[lang]`, or untouched (English)."""
-            if lang == "en" or item.event != "publication":
+            if item.event != "publication":
                 return item
             data = item.data
+            if (
+                lang == "en"
+            ):  # the line's voice route; it makes the clip only when a viewer plays it
+                if not registry.voice.ready:
+                    return item
+                line_id = data["publication_id"].removeprefix("pub-")
+                path = f"/v1/matches/{match_id}/lines/{line_id}/audio.mp3"
+                url = f"{path}?{urlencode({'session_id': session_id})}"
+                return StreamEvent(item.event, item.id, {**data, "audio_url": url})
             pub_id = data["publication_id"]
             variant = await registry.translation.variant(
                 f"{session_id}/{match_id}",
@@ -847,7 +879,7 @@ def build_router(registry: Registry) -> APIRouter:
     async def audio_by_id(audio_id: str) -> Response:
         audio = registry.voice.get(audio_id)
         if audio is None:
-            raise Problem(404, "not_found", "no clip with that id; no clip with that id")
+            raise Problem(404, "not_found", "no clip with that id")
         return Response(audio, media_type="audio/mpeg", headers=CLIP_HEADERS)
 
     @router.get("/matches/{match_id}/lines/{line_id}/audio.mp3")

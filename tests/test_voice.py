@@ -306,3 +306,31 @@ def test_only_verified_recap_sentences_are_spoken() -> None:
         row["verdict"] = "review"
     flow.store.put_recap(flow.sk, "casual", recap)
     assert client.get("/v1/matches/match-short/recap/casual/audio.mp3", params=Q).status_code == 404
+
+
+def test_a_long_recap_is_voiced_in_parts_that_each_fit_one_clip() -> None:
+    from app.matches import pack
+
+    sentences = [
+        f"Sentence number {n} of a long full time recap about the match." for n in range(40)
+    ]
+    parts = pack(sentences)
+    assert len(parts) > 1 and all(len(p) < voice_module.MAX_CHARS for p in parts)
+    assert " ".join(parts) == " ".join(sentences)  # nothing lost, order kept
+    assert len(pack(["x" * 5000])[0]) < voice_module.MAX_CHARS  # one runaway sentence is cut
+
+
+def test_published_lines_carry_the_voice_route_only_when_speech_is_ready() -> None:
+    def audio_urls(voice) -> list:
+        client = TestClient(create_app())
+        client.app.state.matches.voice = voice
+        create(client)
+        post_all(client)
+        text = client.get(
+            "/v1/matches/match-short/stream", params={**Q, "persona": "casual", "follow": "false"}
+        ).text
+        return [ln for ln in text.splitlines() if ln.startswith("data:") and "audio_url" in ln]
+
+    on = audio_urls(service())
+    assert on and "/lines/" in on[0] and "audio.mp3?session_id=short" in on[0]
+    assert audio_urls(VoiceService()) == []  # no Speech resource: no url offered
