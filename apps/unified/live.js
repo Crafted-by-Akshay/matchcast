@@ -94,6 +94,7 @@ const LV = (() => {
   const audience = () => (persona === 'analyst' || persona === 'broadcast' ? persona : 'casual');
   const ask = async (question) => {
     if (!run) throw new Error('no match yet');
+    if (!String(question).trim()) throw new Error('empty question');   // the api needs at least one character
     const res = await post('/v1/matches/' + run.id + '/ask', { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' });
     if (!res.ok) throw new Error('ask ' + res.status);
     const j = await res.json();

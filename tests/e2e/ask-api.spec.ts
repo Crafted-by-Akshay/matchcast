@@ -34,6 +34,9 @@ test('Ask matches the api contract: request body and response mapping', async ({
     expect(asks[0].lang).toBe('es');
     expect(asks[0].session_id).toMatch(/^demo-/);
     expect(a).toMatchObject({ text: 'It is 1-0.', verdict: 'verified', source: 'rules', citations: ['c1'] });
+    const before = asks.length;
+    expect(await page.evaluate(() => LV.ask('   ').then(() => 'sent', (e: Error) => e.message))).toBe('empty question');
+    expect(asks.length, 'a blank question is not sent').toBe(before);
     reply = { answer: 'I cannot confirm that.', intent: 'x', abstained: true, citations: [], mode: 'rules', lang: 'en' };
     expect((await page.evaluate(() => LV.ask('Who will win?'))).verdict).toBe('abstained');
     reply = { answer: 'It is 1-0.', intent: 'score', abstained: false, citations: [], mode: 'live', lang: 'en', variants: { es: 'Va 1-0.' } };

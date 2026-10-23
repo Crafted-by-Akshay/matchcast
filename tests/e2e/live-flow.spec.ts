@@ -39,13 +39,15 @@ test('@live Ask is answered by the api with a verdict', async ({ page }) => {
   await begin(page, 'en');
   await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.api)), { timeout: 120_000, intervals: [1000] }).toBe(true);
   const a = await page.evaluate(() => LV.ask('Who scored?'));
-  expect(typeof a.text).toBe('string');
+  expect(a.api).toBe(true);
+  expect(a.text.length).toBeGreaterThan(0);
   expect(['verified', 'abstained']).toContain(a.verdict);
 });
 
 test('@live the Speech token endpoint answers a browser (CORS) with a token or a clear 503', async ({ page }) => {
   await openShell(page, 'agents');
-  const r = await page.evaluate(async () => { const x = await fetch(LV.base + '/v1/speech/token'); return { status: x.status, body: x.ok ? await x.json() : null }; });
+  // only booleans leave the page, so the short-lived token never reaches a trace or report
+  const r = await page.evaluate(async () => { const x = await fetch(LV.base + '/v1/speech/token'); const j = x.ok ? await x.json() : null; return { status: x.status, token: !!(j && typeof j.token === 'string' && j.token), region: !!(j && j.region) }; });
   expect([200, 503]).toContain(r.status);
-  if (r.status === 200) { expect(typeof r.body.token).toBe('string'); expect(r.body.region).toBeTruthy(); }
+  if (r.status === 200) { expect(r.token).toBe(true); expect(r.region).toBe(true); }
 });
