@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import time
+from collections import deque
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
@@ -69,7 +70,7 @@ class AzureContentSafety:
     ) -> None:
         self._endpoint = endpoint.rstrip("/")
         self._token = token_provider
-        self._client = client or httpx.AsyncClient(timeout=5.0)
+        self._client = client or httpx.AsyncClient(timeout=3.0)
 
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         # the credential may call the identity endpoint; a hung chain must not hold the workflow
@@ -105,7 +106,8 @@ class AzureContentSafety:
 log = logging.getLogger(__name__)
 ENDPOINT = re.compile(r"^https://[a-z0-9-]+\.cognitiveservices\.azure\.com/?$")
 SCOPE = "https://cognitiveservices.azure.com/.default"
-TOKEN_TIMEOUT = 5.0
+TOKEN_TIMEOUT = 3.0
+WINDOW, DEGRADED_AT, WINDOW_S = 10, 5, 120.0  # 5 of the last 10 line screens in 2 min = degraded
 OPEN_AFTER, OPEN_FOR = 3, 60.0  # consecutive failures, then seconds to skip Azure
 
 
@@ -132,10 +134,23 @@ class FallbackSafety:
         self._open_until = 0.0
         self.fallbacks = 0
         self.last_error = ""
+        self._recent: deque[tuple[float, bool]] = deque(maxlen=WINDOW)  # (when, local decided)
+
+    @property
+    def circuit_open(self) -> bool:
+        return self._clock() < self._open_until
 
     @property
     def degraded(self) -> bool:
-        return self._clock() < self._open_until
+        """Azure is not really screening: circuit open, or half the recent screens fell back."""
+        return self.circuit_open or self.recent_local >= DEGRADED_AT
+
+    @property
+    def recent_local(self) -> int:
+        """Line screens in the last two minutes that the local word list decided; old ones expire,
+        so an idle app recovers on its own. Prompt Shields calls are not counted."""
+        now = self._clock()
+        return sum(local for at, local in self._recent if now - at <= WINDOW_S)
 
     def _failed(self, what: str, error: Exception) -> None:
         self.fallbacks += 1
@@ -146,19 +161,21 @@ class FallbackSafety:
         log.warning("%s failed (%s); using the local screen", what, self.last_error)
 
     async def analyze(self, text: str) -> SafetyResult:
-        if not self.degraded:
+        if not self.circuit_open:
             try:
                 result = await self._primary.analyze(text)
                 self._failures = 0
+                self._recent.append((self._clock(), False))
                 return result
             except Exception as error:  # noqa: BLE001 - transport, auth, quota or a bad body
                 self._failed("Content Safety analyze", error)
         else:
             self.fallbacks += 1
+        self._recent.append((self._clock(), True))
         return await self._fallback.analyze(text)
 
     async def shield(self, user_prompt: str) -> ShieldResult:
-        if not self.degraded:
+        if not self.circuit_open:
             try:
                 result = await self._primary.shield(user_prompt)
                 self._failures = 0

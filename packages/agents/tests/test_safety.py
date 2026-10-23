@@ -180,9 +180,9 @@ def test_the_circuit_opens_after_three_failures_and_closes_later() -> None:
     screen = FallbackSafety(_azure(boom), clock=lambda: now[0])
     for _ in range(OPEN_AFTER + 2):
         run(screen.analyze("x"))
-    assert len(calls) == OPEN_AFTER and screen.degraded and screen.fallbacks == OPEN_AFTER + 2
+    assert len(calls) == OPEN_AFTER and screen.circuit_open and screen.fallbacks == OPEN_AFTER + 2
     now[0] = OPEN_FOR + 1
-    assert not screen.degraded
+    assert not screen.circuit_open
     run(screen.analyze("x"))
     assert len(calls) == OPEN_AFTER + 1
 
@@ -215,3 +215,26 @@ def test_a_local_fallback_is_audited_as_fallback_used(match) -> None:
     records = flow.store.audit_records(flow.sk)
     used = [r for r in records if r["action"] == "fallback_used"]
     assert used and used[0]["details"]["fallback_reason"] == "content_safety"
+
+
+def test_half_the_recent_screens_on_the_local_word_list_is_degraded_and_recovers() -> None:
+    from matchcast_agents.safety import DEGRADED_AT, WINDOW, FallbackSafety
+
+    ok = [False]  # Azure answers 503 while False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if not ok[0]:
+            return httpx.Response(503)
+        rows = [{"category": "Hate", "severity": 0}]
+        return httpx.Response(200, json={"categoriesAnalysis": rows})
+
+    now = [0.0]
+    screen = FallbackSafety(_azure(handler), clock=lambda: now[0])
+    for _ in range(DEGRADED_AT):
+        run(screen.analyze("x"))
+    now[0] = 100.0  # the circuit has closed again, the window still remembers
+    assert not screen.circuit_open and screen.degraded
+    ok[0] = True
+    for _ in range(WINDOW):
+        run(screen.analyze("x"))
+    assert not screen.degraded and screen.recent_local == 0
