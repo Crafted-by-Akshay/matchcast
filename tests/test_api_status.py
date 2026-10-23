@@ -113,6 +113,7 @@ def test_stats_desk_url_picks_the_a2a_client_and_keeps_the_local_season(monkeypa
         "simulated"
     )
     local = object()
+    assert stats_desk_from_env(local, {"STATS_DESK_URL": url.replace("https", "http")}) is local
     assert stats_desk_from_env(local, {}) is local
     assert stats_desk_from_env(local, {"STATS_DESK_URL": "https://evil.example/x"}) is local
     assert stats_desk_from_env(local, {"STATS_DESK_URL": "https://u:p@h/a2a"}) is local
@@ -120,3 +121,32 @@ def test_stats_desk_url_picks_the_a2a_client_and_keeps_the_local_season(monkeypa
     monkeypatch.setenv("STATS_DESK_URL", url)
     registry = Registry(False)
     assert isinstance(registry.stats_desk, A2AStatsDesk) and registry.season is not None
+
+
+def test_status_reads_a_real_fallback_screen_and_recovers_when_the_window_ages():
+    import httpx
+    from conftest import run
+    from matchcast_agents.safety import DEGRADED_AT, WINDOW_S, AzureContentSafety, FallbackSafety
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(503)))
+    now = [0.0]
+    screen = FallbackSafety(
+        AzureContentSafety("https://cs.cognitiveservices.azure.com", lambda: "t", client),
+        clock=lambda: now[0],
+    )
+    env = {"CONTENT_SAFETY_ENDPOINT": "https://cs-x.cognitiveservices.azure.com/"}
+
+    def item():
+        deps = dependency_status(env, "cloud", screen)["dependencies"]
+        return next(i for i in deps if i["key"] == "content_safety")
+
+    for _ in range(DEGRADED_AT - 1):
+        run(screen.analyze("x"))
+    now[0] = 70.0  # the circuit (60 s) has closed, the window still holds 4 local screens
+    assert item()["status"] == "live" and "4 of the last 10" in item()["detail"]
+    run(screen.shield("x"))  # Prompt Shields is not part of the window
+    assert screen.recent_local == DEGRADED_AT - 1
+    run(screen.analyze("x"))
+    assert item()["status"] == "unavailable"
+    now[0] = 70.0 + WINDOW_S + 1
+    assert item()["status"] == "live" and item()["detail"] == "resource configured"

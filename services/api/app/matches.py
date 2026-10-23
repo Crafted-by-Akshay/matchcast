@@ -200,12 +200,14 @@ def _local_stats_desk() -> _LocalStatsDesk | None:
 
 
 def stats_desk_from_env(local: Any, env: Mapping[str, str] | None = None) -> Any:
-    """The partner agent over A2A when ``STATS_DESK_URL`` is an http(s) URL, else in process."""
+    """The partner agent over A2A when ``STATS_DESK_URL`` is an https URL, else in process."""
     url = (os.environ if env is None else env).get("STATS_DESK_URL", "").strip()
     if not url:
         return local
     if not A2A_URL.match(url):
-        logging.getLogger(__name__).warning("STATS_DESK_URL must end in /a2a; using in process")
+        logging.getLogger(__name__).warning(
+            "STATS_DESK_URL must be https://<host>/a2a; using in process"
+        )
         return local
     return A2AStatsDesk(url)
 

@@ -120,8 +120,10 @@ def dependency_status(
             state, detail = LIVE, "resource configured"
             if key == "search" and search_fallbacks:
                 detail = f"{search_fallbacks} answers used the local index after a search problem"
-            if key == "content_safety" and getattr(safety, "fallbacks", 0):
-                detail = f"{safety.recent_local} of the last screens used the local word list"  # type: ignore[attr-defined]
+            if key == "content_safety" and getattr(safety, "recent_local", 0):
+                from matchcast_agents.safety import WINDOW
+
+                detail = f"{safety.recent_local} of the last {WINDOW} line screens used the local word list"  # type: ignore[attr-defined]  # noqa: E501
                 if getattr(safety, "degraded", False):
                     state = UNAVAILABLE
         items.append(_item(key, label, state, detail))

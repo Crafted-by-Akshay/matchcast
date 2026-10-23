@@ -232,7 +232,7 @@ def test_half_the_recent_screens_on_the_local_word_list_is_degraded_and_recovers
     screen = FallbackSafety(_azure(handler), clock=lambda: now[0])
     for _ in range(DEGRADED_AT):
         run(screen.analyze("x"))
-    now[0] = 1000.0  # the circuit has closed again, the window still remembers
+    now[0] = 100.0  # the circuit has closed again, the window still remembers
     assert not screen.circuit_open and screen.degraded
     ok[0] = True
     for _ in range(WINDOW):

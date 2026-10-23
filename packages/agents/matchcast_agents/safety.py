@@ -107,7 +107,7 @@ log = logging.getLogger(__name__)
 ENDPOINT = re.compile(r"^https://[a-z0-9-]+\.cognitiveservices\.azure\.com/?$")
 SCOPE = "https://cognitiveservices.azure.com/.default"
 TOKEN_TIMEOUT = 3.0
-WINDOW, DEGRADED_AT = 10, 5  # of the last 10 screens, 5 or more on the local screen = degraded
+WINDOW, DEGRADED_AT, WINDOW_S = 10, 5, 120.0  # 5 of the last 10 line screens in 2 min = degraded
 OPEN_AFTER, OPEN_FOR = 3, 60.0  # consecutive failures, then seconds to skip Azure
 
 
@@ -134,7 +134,7 @@ class FallbackSafety:
         self._open_until = 0.0
         self.fallbacks = 0
         self.last_error = ""
-        self._recent: deque[bool] = deque(maxlen=WINDOW)  # True = the local screen decided
+        self._recent: deque[tuple[float, bool]] = deque(maxlen=WINDOW)  # (when, local decided)
 
     @property
     def circuit_open(self) -> bool:
@@ -143,11 +143,14 @@ class FallbackSafety:
     @property
     def degraded(self) -> bool:
         """Azure is not really screening: circuit open, or half the recent screens fell back."""
-        return self.circuit_open or sum(self._recent) >= DEGRADED_AT
+        return self.circuit_open or self.recent_local >= DEGRADED_AT
 
     @property
     def recent_local(self) -> int:
-        return sum(self._recent)
+        """Line screens in the last two minutes that the local word list decided; old ones expire,
+        so an idle app recovers on its own. Prompt Shields calls are not counted."""
+        now = self._clock()
+        return sum(local for at, local in self._recent if now - at <= WINDOW_S)
 
     def _failed(self, what: str, error: Exception) -> None:
         self.fallbacks += 1
@@ -162,13 +165,13 @@ class FallbackSafety:
             try:
                 result = await self._primary.analyze(text)
                 self._failures = 0
-                self._recent.append(False)
+                self._recent.append((self._clock(), False))
                 return result
             except Exception as error:  # noqa: BLE001 - transport, auth, quota or a bad body
                 self._failed("Content Safety analyze", error)
         else:
             self.fallbacks += 1
-        self._recent.append(True)
+        self._recent.append((self._clock(), True))
         return await self._fallback.analyze(text)
 
     async def shield(self, user_prompt: str) -> ShieldResult:
@@ -176,13 +179,11 @@ class FallbackSafety:
             try:
                 result = await self._primary.shield(user_prompt)
                 self._failures = 0
-                self._recent.append(False)
                 return result
             except Exception as error:  # noqa: BLE001
                 self._failed("Prompt Shields", error)
         else:
             self.fallbacks += 1
-        self._recent.append(True)
         return await self._fallback.shield(user_prompt)
 
 
