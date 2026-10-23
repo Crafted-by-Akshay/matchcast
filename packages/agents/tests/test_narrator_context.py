@@ -57,3 +57,29 @@ def test_an_old_checkpoint_without_the_new_keys_still_counts() -> None:
 
     old = MatchState.model_validate({"counts": {"shots": {"home": 2}}})
     assert old.count("passes", "home") == 0 and old.count("shots", "home") == 2
+
+
+def test_shot_and_card_lines_say_why_the_moment_matters(match) -> None:
+    from conftest import fixed_clock
+    from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+
+    config = WorkflowConfig(approval_mode="auto", personas=("casual", "analyst", "broadcast"))
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], agents=rules_agents(config.personas), config=config,
+        clock=fixed_clock(),
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    published = [ln for ln in flow.store.lines(flow.sk) if ln.status == "published"]
+
+    def texts(persona: str, needle: str) -> list[str]:
+        return [ln.text for ln in published if ln.persona == persona and needle in ln.text]
+
+    shots = texts("casual", "tests the keeper")
+    assert shots and all("pressure is on the defence" in t for t in shots)
+    assert not any(ch.isdigit() for t in shots for ch in t)  # no number the Verifier cannot tie
+    forced = texts("broadcast", "forces a save")
+    assert forced and all("pressure is building" in t for t in forced)
+    reds = texts("casual", "Red card")
+    assert reds and all("a player short" in t for t in reds)
+    assert not any(" ten" in t for t in reds)  # a spelled-out number would escape the recount

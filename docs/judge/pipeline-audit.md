@@ -34,7 +34,7 @@ Audit date 22 Oct 2026, Agents lane. Method: `make judge-path` locally, then a r
 - **Where:** the on-air line, the approval queue, the Broadcast teleprompter.
 - **Code path:** `rules/narrator.py` `goal_context()` reads only the two goal claims, so it adds no new number to verify. The model-mode prompt (`prompts/narrator.md` rule 6) asks for the same clause.
 - **Test:** `packages/agents/tests/test_narrator_context.py`.
-- **Weakest point (fixed):** before this change a goal line only restated the score. Known remaining limit: non-goal moments (shots, tackles) still explain by metric only.
+- **Weakest point (fixed):** before this change a goal line only restated the score. Shots on target, yellow cards and red cards now carry a consequence clause too (words only, no number the Verifier would have to tie to a claim); tackles and fouls still explain by metric only.
 
 ## (d) Render insight on screen alongside the match
 
