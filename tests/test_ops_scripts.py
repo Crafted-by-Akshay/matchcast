@@ -81,3 +81,19 @@ def test_pause_fabric_none_and_wrong_confirmation():
     )
     wrong = run("scripts/shutdown.sh", "teardown", "--execute", env={"CONFIRM_DESTROY": "other"})
     assert wrong.returncode == 2
+
+
+def test_scale_down_covers_api_web_and_mcp() -> None:
+    import os
+    import subprocess
+
+    out = subprocess.run(
+        ["bash", "scripts/shutdown.sh", "scale-down"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "DRY_RUN": "1"},
+    ).stdout
+    for app in ("ca-api-matchcast", "ca-web-matchcast", "ca-mcp-matchcast"):
+        assert f"--name {app}" in out
+        assert "--min-replicas 0" in out
