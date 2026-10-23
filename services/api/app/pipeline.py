@@ -135,15 +135,15 @@ class Pipeline:
             ).append(event)
         from app.matches import Problem
 
-        for (session_id, match_id), batch in groups.items():
+        async def one(session_id: str, match_id: str, batch: list[dict[str, Any]]) -> None:
             try:
                 flow = await self.registry.flow_for(session_id, match_id)
             except (Problem, LookupError):
                 log.warning("dropping %d events of unknown match %s", len(batch), match_id)
-                continue
+                return
             if self.state_repo is not None:
                 await self._handle_reduced(flow, match_id, batch)
-                continue
+                return
             try:
                 await flow.ingest(batch)
             except ContractError as error:
@@ -155,6 +155,17 @@ class Pipeline:
                         await flow.ingest([event])
                     except ContractError as single:
                         log.warning("dropping event of %s: %s", match_id, single)
+
+        # Matches are independent (one lock per stream in _handle_reduced), so a slow match must not
+        # hold up the others on the single partition; order inside a match is kept.
+        results = await asyncio.gather(
+            *(one(sid, mid, batch) for (sid, mid), batch in groups.items()), return_exceptions=True
+        )
+        failures = [r for r in results if isinstance(r, Exception)]
+        for failure in failures:  # deliver() logs only the one re-raised, so log them all here
+            log.error("a match in the batch failed: %r", failure)
+        if failures:
+            raise failures[0]
 
     def _reduce(self, staged: _Staged, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Run valid events through the reducer; return what the workflow should see, in order."""
