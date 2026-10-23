@@ -2,7 +2,7 @@
 
 Status: **Draft for Akshay's review** (AB#338, SUB-1). Rules: public, under 2 minutes, narration in English. The Spanish switch is shown for a few seconds only.
 
-Film from the deployed unified app with a fixed seed so every take is the same: `?seed=2026&speed=4` (add `&seedBadClaim=1` for scene 3). Every scene depends on stories that are P0 or P1 and scheduled before 26 Oct.
+Film from the deployed unified app with a fixed seed so every take is the same: `?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM&speed=4` (add `&seedBadClaim=1` for scene 3). Every scene depends on stories that are P0 or P1 and scheduled before 26 Oct.
 
 | # | Scene | Start | Seconds | Shows | URL or state to film | Depends on (story, sprint) |
 | --- | --- | --- | --- | --- | --- | --- |
