@@ -55,6 +55,7 @@ Built (22 Oct, `matchcast_agents/translate.py`): `GET /stream?lang=es|hi` adds `
 - The Broadcast desk (`apps/unified/embed/bclang.js`) writes Spanish and Hindi lines from fixed rules templates, not from Azure AI Translator (**Planned**, section 4). Each line passes the same numbers/names/order re-check as the shell; a failing line stays English and the script list shows the reason. The desk does not yet write `translation_rejected` to the audit chain, which only the shell does. The check does not judge meaning, so the Translator path must add a semantic check before it replaces the templates.
 - The desk's Speak button uses the browser's `speechSynthesis` (es-ES, hi-IN) and is labelled as a simulated voice. This is the one exception to "synthesis runs in api"; it goes away when the Speech SDK path is wired.
 - Tamil is out of the desk until a native speaker reviews it.
+- The Broadcast Spanish and Hindi rules templates (`embed/bclang.js`) were reviewed by Claude on 23 Oct for idiom (weather, lightning, own goal), not by a native speaker. Numbers and names are checked by the Verifier after translation either way; a native review stays Planned.
 
 ## 6. Built in the browser (22 Oct)
 `apps/unified/speech.js` implements the token fetch (section 3) and both directions: synthesis and push-to-talk recognition in Broadcast. It has only been tested against a fake api and a fake SDK until the Speech resource is deployed. The browser voice remains the labelled fallback.

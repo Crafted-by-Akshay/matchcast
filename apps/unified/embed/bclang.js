@@ -3,7 +3,7 @@
 // re-checks it: the same names and numbers in the same order, and no name that is not in the English line. A rejected or missing translation keeps the English line.
 const BCL_WX = {
   es: { clear: 'cielo despejado', partly: 'parcialmente nublado', overcast: 'nublado', drizzle: 'llovizna', rain: 'lluvia', storm: 'tormenta', fog: 'niebla', snow: 'nieve' },
-  hi: { clear: 'साफ़ आसमान', partly: 'आंशिक बादल', overcast: 'बादल छाए', drizzle: 'बूंदाबांदी', rain: 'बारिश', storm: 'तूफ़ान', fog: 'कोहरा', snow: 'बर्फ़बारी' }
+  hi: { clear: 'साफ़ आसमान', partly: 'आंशिक रूप से बादल छाए', overcast: 'बादल छाए', drizzle: 'बूंदाबांदी', rain: 'बारिश', storm: 'तूफ़ान', fog: 'कोहरा', snow: 'बर्फ़बारी' }
 };
 // rules translator: [es, hi] per event type, from the event's own fields (the names and numbers are copied, never rewritten)
 function bcTranslate(ev, c) {
@@ -11,7 +11,7 @@ function bcTranslate(ev, c) {
   switch (ev.type) {
     case 'kickoff': return [`Saque inicial en ${SET.st.name}. Árbitro ${OFFICIALS.ref} de ${OFFICIALS.nat}.`, `किक-ऑफ, ${SET.st.name}। रेफरी ${OFFICIALS.ref}, ${OFFICIALS.nat}।`];
     case 'goal': return ev.ownGoal
-      ? [`Autogol. ${ev.player} marca en su propia portería. ${score}.`, `आत्मघाती गोल! ${ev.player} ने अपनी ही जाली में गेंद डाल दी। ${score}।`]
+      ? [`Autogol. ${ev.player} marca en su propia portería. ${score}.`, `आत्मघाती गोल! ${ev.player} ने अपने ही गोल में गेंद डाल दी। ${score}।`]
       : [`Gol. ${ev.player} marca para ${c(ev.team)}. ${score}.`, `गोल! ${ev.player} ने ${c(ev.team)} के लिए गोल किया। ${score}।`];
     case 'shot': return [`Disparo de ${ev.player} para ${c(ev.team)}. xG ${bcRound(ev.xg, 2)}.`, `${ev.player} (${c(ev.team)}) का शॉट। xG ${bcRound(ev.xg, 2)}।`];
     case 'yellow_card': return [`Tarjeta amarilla para ${ev.player}.`, `${ev.player} को पीला कार्ड।`];
@@ -19,7 +19,7 @@ function bcTranslate(ev, c) {
     case 'half_time': return [`Descanso. ${score}.`, `हाफ़-टाइम। ${score}।`];
     case 'full_time': return [`Final del partido. ${score}.`, `फ़ुल-टाइम। ${score}।`];
     case 'weather_change': return [`El tiempo cambia: ${BCL_WX.es[ev.to] || ev.to}.`, `मौसम बदल रहा है: ${BCL_WX.hi[ev.to] || ev.to}।`];
-    case 'lightning': return ['Rayos en la zona. Se detiene el juego.', 'इलाके में बिजली। खेल रोका गया।'];
+    case 'lightning': return ['Tormenta eléctrica en la zona. Se suspende el juego.', 'इलाके में आकाशीय बिजली। खेल रोका गया।'];
     case 'tactical_change': return [`${c(ev.team)} cambia a ${ev.formation}.`, `${c(ev.team)} ने ${ev.formation} में बदलाव किया।`];
     default: return null;
   }
