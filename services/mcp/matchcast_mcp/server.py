@@ -197,10 +197,13 @@ def create_server(store: Store, season: Season | None = None) -> MCPServer:
     @server.tool()
     async def search_kb(
         query: Annotated[str, Field(max_length=300)],
-        corpus: str | None = None,
+        corpus: Annotated[str | None, Field(max_length=40)] = None,
         top: Annotated[int, Field(ge=1, le=8)] = 5,
     ) -> dict[str, Any]:
-        """Search the football knowledge base (laws, metrics, tactics); chunks carry citable ids."""
+        """Search the football knowledge base (laws, metrics, tactics); chunks carry citable ids.
+
+        Chunks are in rank order; ``score`` is the local BM25 value and need not descend when
+        ``retrieval`` is ``search`` (AI Search ranked them)."""
         hits, retrieval = await default_assistant().search(query, top=top, corpus=corpus)
         return _cap(
             {

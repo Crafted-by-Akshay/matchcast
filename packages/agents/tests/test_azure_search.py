@@ -191,3 +191,31 @@ def test_search_honours_corpus_and_top_and_reports_the_source(index) -> None:
     assert all(h.chunk.corpus == "laws" for h in hits)
     hits, source = run(Assistant(index, None).search("offside", top=2, corpus="laws"))
     assert source == "local" and len(hits) == 2
+
+
+def test_a_non_http_error_from_the_client_still_falls_back_to_bm25(index) -> None:
+    class Stale:
+        async def request(self, *a, **kw):
+            raise RuntimeError("Event loop is closed")
+
+    remote = AzureSearchClient(HOST, "k", client=Stale())  # type: ignore[arg-type]
+    hits, source = run(Assistant(index, remote).search("offside", top=3))
+    assert source == "search_fallback" and hits
+
+
+def test_the_search_client_starts_a_fresh_connection_pool_for_each_event_loop() -> None:
+    import asyncio
+
+    c = AzureSearchClient(HOST, "k")
+    first = c._client
+
+    async def touch() -> None:
+        try:
+            await c._call("GET", "/x")
+        except SearchError:
+            pass  # no network in tests; only the pool handover matters
+
+    asyncio.run(touch())
+    assert c._client is first  # first loop adopts the initial client
+    asyncio.run(touch())
+    assert c._client is not first

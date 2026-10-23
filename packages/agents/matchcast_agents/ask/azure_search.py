@@ -6,6 +6,7 @@ returned. The vector field and hybrid query need an embeddings deployment and st
 until then the index is keyword-only, which 05 §7 documents as the no-quota behaviour.
 """
 
+import asyncio
 import base64
 import logging
 import os
@@ -100,9 +101,18 @@ class AzureSearchClient:
         self._base = endpoint.rstrip("/")
         self._key = key
         self.index = index
+        self._injected = client is not None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._client = client or httpx.AsyncClient(timeout=2.0)
 
     async def _call(self, method: str, path: str, body: Any = None) -> dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        if not self._injected and self._loop is not loop:
+            # a pooled connection belongs to the loop it was opened on (tests and the eval harness
+            # call asyncio.run repeatedly); start a fresh client rather than reuse a stale one
+            if self._loop is not None:
+                self._client = httpx.AsyncClient(timeout=2.0)
+            self._loop = loop
         try:
             response = await self._client.request(
                 method,
@@ -111,7 +121,7 @@ class AzureSearchClient:
                 headers={"api-key": self._key},
                 json=body,
             )
-        except httpx.HTTPError as error:
+        except (httpx.HTTPError, RuntimeError) as error:
             raise SearchError(f"search call failed: {type(error).__name__}") from error
         if response.status_code >= 400:
             raise SearchError(f"search answered {response.status_code}")

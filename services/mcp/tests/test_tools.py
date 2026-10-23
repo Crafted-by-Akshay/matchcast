@@ -303,3 +303,15 @@ def test_create_app_serves_health_with_the_memory_store(monkeypatch):
     monkeypatch.setenv("MATCHCAST_STORE", "memory")
     with TestClient(create_app()) as client:
         assert client.get("/health").json()["service"] == "matchcast-mcp"
+
+
+@pytest.fixture(autouse=True)
+def _no_live_search(monkeypatch):
+    """PR checks make no Azure call: a developer's SEARCH_* settings must not reach the tests."""
+    from matchcast_agents.ask import default_assistant
+
+    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
+    monkeypatch.delenv("SEARCH_QUERY_KEY", raising=False)
+    default_assistant.cache_clear()
+    yield
+    default_assistant.cache_clear()

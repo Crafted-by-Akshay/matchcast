@@ -285,7 +285,8 @@ class Assistant:
 
         With AI Search configured it ranks; the local BM25 score still gates (``min_score``) and
         the entity-page rule still applies, so the index can only reorder what BM25 would accept.
-        A failed call, or one with no usable chunk, falls back to BM25 and says so."""
+        A failed call, or one with no usable chunk, falls back to BM25 and says so. Entity pages the
+        rule drops can leave fewer than ``top`` chunks."""
         corpora = {corpus} if corpus else None
         local = self.index.search(query, k=50, corpora=corpora)
         if self.remote is None:
