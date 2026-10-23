@@ -22,6 +22,7 @@ import os
 import random
 import re
 import statistics
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -142,7 +143,9 @@ def run_single(match: dict[str, Any], client: ModelClient) -> list[dict[str, Any
 
 
 def run_four(
-    match: dict[str, Any], agents_factory: Callable[..., Any] = rules_agents
+    match: dict[str, Any],
+    agents_factory: Callable[..., Any] = rules_agents,
+    stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     config = WorkflowConfig(approval_mode="auto")
     flow = MatchWorkflow(
@@ -158,6 +161,12 @@ def run_four(
     asyncio.run(flow.ingest(match["events"]))
     total_ms = (time.perf_counter() - t0) * 1000
     lines = flow.store.lines(flow.sk)
+    if stats is not None:
+        audit = flow.store.audit_records(flow.sk)
+        stats["fallbacks"] = stats.get("fallbacks", 0) + sum(
+            r["action"] == "fallback_used" for r in audit
+        )
+        stats["lines"] = stats.get("lines", 0) + len(lines)
     per_line = total_ms / max(len(lines), 1)
     rows = []
     for line in lines:
@@ -234,8 +243,10 @@ class LiveSingle:
     def __init__(self, client: Any) -> None:
         self.client = client
         self._runner = asyncio.Runner()
+        self.errors = 0
 
     def __call__(self, prompt: str) -> str:
+        """The line, or an empty string when the call fails (counted in ``errors``)."""
         schema = {
             "type": "object",
             "properties": {"line": {"type": "string"}},
@@ -243,7 +254,11 @@ class LiveSingle:
             "additionalProperties": False,
         }
         system = "You write one short football commentary line. Use only the facts you are given."
-        answer = self._runner.run(self.client.complete(system, prompt, schema, max_tokens=120))
+        try:
+            answer = self._runner.run(self.client.complete(system, prompt, schema, max_tokens=300))
+        except Exception:  # noqa: BLE001 - a throttled or filtered call must not end the run
+            self.errors += 1
+            return ""
         return str(answer.get("line", ""))
 
     def close(self) -> None:
@@ -261,27 +276,33 @@ def compare_live(runs: int = 1) -> dict[str, Any]:
     match = load_match()
     n = len(moments(match))
     rules = [summarise(run_four(match), n) for _ in range(runs)]
-    live_four, single, usage = [], [], {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
+    live_four, single = [], []
+    four_usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
+    single_usage = dict(four_usage)
+    stats: dict[str, int] = {}
+    errors = 0
 
-    def add(client: Any) -> None:
-        for k in usage:
-            usage[k] += getattr(client.usage, k)
+    def add(into: dict[str, int], client: Any) -> None:
+        for k in into:
+            into[k] += getattr(client.usage, k)
 
     for _ in range(runs):
-        client = FoundryModelClient()
+        client = FoundryModelClient()  # re-binds itself to each event loop it runs on
         live_four.append(
             summarise(
-                run_four(match, lambda personas, **kw: live_agents(client, personas, **kw)), n
+                run_four(match, lambda personas, **kw: live_agents(client, personas, **kw), stats),
+                n,
             )
         )
-        add(client)
+        add(four_usage, client)
         client = FoundryModelClient()
         one = LiveSingle(client)
         try:
             single.append(summarise(run_single(match, one), n))
         finally:
+            errors += one.errors
             one.close()
-        add(client)
+        add(single_usage, client)
 
     def agg(rs: list[dict[str, float]]) -> dict[str, dict[str, float]]:
         return {
@@ -301,10 +322,26 @@ def compare_live(runs: int = 1) -> dict[str, Any]:
         },
         "runs": runs,
         "single_model": os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-6-luna"),
-        "usage": usage,
+        "usage": {"four_agent_live": four_usage, "single_agent_live": single_usage},
+        "four_agent_live_fallbacks": stats.get("fallbacks", 0),
+        "four_agent_live_lines": stats.get("lines", 0),
+        "single_agent_errors": errors,
+        "warning": warning(stats, errors, n * runs),
         "note": "Live four-agent lines that fail the Verifier fall back to the rules twin, so "
-        "coverage and clean rate show the whole system; wrong_line_rate is the judge's count.",
+        "coverage and clean rate show the whole system; wrong_line_rate is the judge's count. "
+        "Read four_agent_live_fallbacks first: a high count means the model calls failed.",
     }
+
+
+def warning(stats: dict[str, int], errors: int, single_calls: int) -> str | None:
+    """Say so when the live arms mostly fell back or failed: their numbers are then the rules'."""
+    lines, fallbacks = stats.get("lines", 0), stats.get("fallbacks", 0)
+    problems = []
+    if fallbacks * 2 >= max(lines, 1):
+        problems.append(f"{fallbacks} fallbacks for {lines} live four-agent lines")
+    if errors * 2 >= max(single_calls, 1):
+        problems.append(f"{errors} of {single_calls} single-agent calls failed")
+    return "; ".join(problems) or None
 
 
 def main() -> None:
@@ -319,6 +356,8 @@ def main() -> None:
             raise SystemExit("--live needs FOUNDRY_PROJECT_ENDPOINT (and az login)")
         result = compare_live(args.runs or 1)
         args.out = args.out or ROOT / "eval" / "results" / "live.json"
+        if result["warning"]:
+            print(f"WARNING: {result['warning']} - these are not model numbers", file=sys.stderr)
     else:
         result = compare(args.runs or 3, args.slip)
     text = json.dumps(result, indent=2)

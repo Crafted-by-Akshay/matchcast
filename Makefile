@@ -47,7 +47,7 @@ e2e-live:
 	npm run e2e-live
 
 smoke-foundry:
-	uv run --locked --group smoke python scripts/smoke_foundry.py
+	uv run --locked --all-packages --group smoke python scripts/smoke_foundry.py
 
 # One command once the gpt-6-luna quota lands: smoke the deployment, then the live comparison and
 # the per-agent eval. Needs FOUNDRY_PROJECT_ENDPOINT and az login; costs tokens (eval/README.md).

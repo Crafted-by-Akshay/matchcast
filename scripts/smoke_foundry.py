@@ -37,6 +37,34 @@ def main() -> int:
     print(f"prompt_tokens: {usage.prompt_tokens if usage else 'n/a'}")
     print(f"completion_tokens: {usage.completion_tokens if usage else 'n/a'}")
     print(f"latency_ms: {latency_ms}")
+    return structured_check()
+
+
+def structured_check() -> int:
+    """The path the agents use: FoundryModelClient, max_tokens, temperature and a strict schema."""
+    import asyncio
+
+    from matchcast_agents.live.client import FoundryModelClient
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "line": {"type": "string"},
+            "numbers": {"type": "array", "maxItems": 3, "items": {"type": "integer"}},
+        },
+        "required": ["line", "numbers"],
+        "additionalProperties": False,
+    }
+    try:
+        answer = asyncio.run(
+            FoundryModelClient().complete(
+                "Answer in JSON.", "Say hello and list the numbers 1 2 3.", schema, max_tokens=120
+            )
+        )
+    except Exception as error:  # noqa: BLE001
+        print(f"structured call FAILED: {type(error).__name__}: {error}", file=sys.stderr)
+        return 1
+    print(f"structured call ok: {sorted(answer)}")
     return 0
 
 

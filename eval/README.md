@@ -32,16 +32,18 @@ report is stale. Known gaps are in the report, for example numbers written in th
 2. `compare.py --live` (`--runs N`, default 1): three arms on the same frozen shots and goals,
    `four_agent_rules`, `four_agent_live` (Analyst, Narrator and Verifier on the model; a line the
    Verifier rejects falls back to the rules twin, so coverage shows the whole system) and
-   `single_agent_live` (one model, no checker). Writes `eval/results/live.json` with a `usage`
-   block (calls, prompt and completion tokens) to price the run against the caps.
+   `single_agent_live` (one model, no checker). Writes `eval/results/live.json` with per-arm `usage`
+   (calls, prompt and completion tokens), `four_agent_live_fallbacks` and `single_agent_errors`, and a
+   `warning` (also printed to stderr) when most live lines fell back or failed. Token counts exclude
+   the SDK's one retry and timed-out requests, so treat them as a floor.
 3. `agents_eval.py --live`: the per-agent golden sets on Foundry; writes `docs/eval/agents-eval-live.md`
    (it plays the match nine times, so it costs the most; run it last).
 
 What to expect: `four_agent_rules` and `four_agent_live` keep `wrong_line_rate` near 0 because the
 Verifier gates both; `single_agent_live` is where wrong numbers and names show up; the live
-four-agent arm has higher latency (p50 in seconds, not milliseconds). If `four_agent_live`
-matches `four_agent_rules` exactly, the model calls are failing and falling back: check
-`/v1/status` and the `fallback_used` audit entries. Copy the real numbers into the elevator pitch only
+four-agent arm has higher latency (p50 in seconds, not milliseconds). If `four_agent_live_fallbacks`
+is close to `four_agent_live_lines`, the model calls are failing and falling back: read the smoke
+output first (it now exercises the same strict-schema path the agents use). Copy the real numbers into the elevator pitch only
 after reading `live.json`; the offline numbers must not be quoted as model quality.
 
 Turning the api itself live is a separate switch: `MATCHCAST_AGENT_MODE=live` (Bicep currently
