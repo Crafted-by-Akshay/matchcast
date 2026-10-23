@@ -4,7 +4,7 @@ Status: **Agreed design** (ADR-0009 accepted by Akshay, 22 Oct 2026). Last revie
 
 ## 0. What is built (22 Oct)
 
-Built: the markdown knowledge base and chunker, in-memory BM25 retrieval (the "Search fallback" path), the rules router (which also declines tool or data actions, creative writing, personal details and any capitalised name that is not a club or player of the match or a KB club or player page, before it searches the KB; "story" is declined only as a writing request), Prompt Shields on the question (local screen, Azure client ready), answers with `[kb:…]`/`[claim:…]` citations checked by the Verifier, word limits per persona, the out-of-scope and abstain texts, and 5 questions a minute per match session. **Planned (needs Azure or later work):** the model router, embeddings and the AI Search index with hybrid search, Prompt Shields on retrieved documents, conversation memory (`conversations` table), the "Search fallback" and "Rules fallback" chips, and the CI quality gate described in §8.
+Built: the markdown knowledge base and chunker, in-memory BM25 retrieval (the "Search fallback" path), the rules router (which also declines tool or data actions, creative writing, personal details and any capitalised name that is not a club or player of the match or a KB club or player page, before it searches the KB; "story" is declined only as a writing request), Prompt Shields on the question (local screen, Azure client ready), answers with `[kb:…]`/`[claim:…]` citations checked by the Verifier, word limits per persona, the out-of-scope and abstain texts, and 5 questions a minute per match session. **Built, awaiting the live index:** the AI Search client (`ask/azure_search.py`: keyword index `kb-matchcast-v1`, upload, prune, query) used by Ask when `SEARCH_ENDPOINT` and `SEARCH_QUERY_KEY` are set; the answer carries `retrieval` (`local`, `search` or `search_fallback`). **Planned (needs Azure or later work):** the model router, embeddings and the vector half of hybrid search, Prompt Shields on retrieved documents, conversation memory (`conversations` table), the "Search fallback" and "Rules fallback" chips, and the CI quality gate described in §8.
 
 ## 1. What it is
 
@@ -45,7 +45,7 @@ flowchart LR
   em --> js[(Blob kb/v1/chunks.jsonl<br/>text + vectors, fallback copy)]
 ```
 
-- Script: `scripts/build_kb.py --version v1` writes the chunk file (`kb/build/v1/chunks.jsonl`); it works offline. Embedding and the AI Search upload are **Planned** (they need the Azure resources) and will run in CI on every merge that changes `kb/`, and by hand on the Mac mini. The club, player and match pages are regenerated first with `scripts/build_profiles.py`.
+- Script: `scripts/build_kb.py --version v1` writes the chunk file (`kb/build/v1/chunks.jsonl`); it works offline. `scripts/build_kb.py --version v1 --upload` creates the index and uploads the chunks (keyword fields only; it needs `SEARCH_ENDPOINT` and `SEARCH_ADMIN_KEY` from Key Vault and runs by hand on the Mac mini; **a CI step and embeddings are Planned**). AI Search ranks the candidates; the local BM25 score still gates which hits may answer, so the index can reorder what BM25 accepts but not add answers. The club, player and match pages are regenerated first with `scripts/build_profiles.py`.
 - Chunk ID: `<corpus>:<doc_slug>:<chunk_no>`, for example `metrics:xg:2`. This is stable, so re-ingestion updates in place.
 - Deleted files are removed from the index by comparing IDs.
 - Size check: about 700 chunks × (6 KB vector + 2 KB text) ≈ 6 MB, inside the Free tier's 50 MB.
@@ -54,7 +54,8 @@ flowchart LR
 
 | Field | Type | Attributes |
 | --- | --- | --- |
-| `id` | Edm.String | key |
+| `key` | Edm.String | key (base64url of `id`: keys allow only letters, digits, `_`, `-`, `=`) |
+| `id` | Edm.String | filterable (the chunk id, which contains colons) |
 | `corpus` | Edm.String | filterable, facetable |
 | `doc_id` | Edm.String | filterable |
 | `title` | Edm.String | searchable |

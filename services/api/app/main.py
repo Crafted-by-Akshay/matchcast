@@ -92,7 +92,11 @@ def create_app(
         result: SettingsResult = application.state.settings_result
         mode = result.settings.mode if result.settings is not None else "local"
         registry = getattr(application.state, "matches", None)
-        return dependency_status(os.environ, mode, getattr(registry, "safety", None))
+        from matchcast_agents.ask import default_assistant
+
+        built = default_assistant.cache_info().currsize  # do not load the KB just to poll status
+        fallbacks = default_assistant().search_fallbacks if built else 0
+        return dependency_status(os.environ, mode, getattr(registry, "safety", None), fallbacks)
 
     @application.get("/ready", tags=["health"])
     async def readiness(response: Response) -> dict[str, Any]:

@@ -171,3 +171,7 @@ mcp: `services/mcp/Dockerfile` did not copy the workspace members `services/api`
 
 ## CORS and keeping warm (23 Oct)
 The browser calls the api from the web origin (`apps/unified` is built with `API_URL`), so the api app gets `CORS_ORIGINS=https://<web fqdn>` from Bicep; without it a preflight to `/v1/matches` returned 405 with no `access-control-allow-origin`. Both apps scale to zero by default and a cold start takes 17 to 22 s; `azd env set KEEP_WARM true` and `azd provision` keeps one api and one web replica running for the demo window (a small idle compute cost, set it back to `false` afterwards).
+
+## AI Search index (AGT-16)
+
+After `scripts/set_search_secrets.sh` has stored the keys and the api has restarted with `SEARCH_QUERY_KEY`, load the index once from the Mac mini: `SEARCH_ENDPOINT=<output> SEARCH_ADMIN_KEY=$(az keyvault secret show --vault-name <kv> -n srch-admin-key --query value -o tsv) uv run --locked --all-packages python scripts/build_kb.py --upload` (do not echo the key). `/v1/status` shows `search` live once the endpoint and query key are set; an empty index means Ask answers fall back to abstaining, so run the upload before filming. Ask replies carry `retrieval: search_fallback` when a search call fails. Not verified live from the agent container.
