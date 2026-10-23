@@ -126,7 +126,7 @@ Environment `dev` in `rg-matchcast` (East US 2 for the apps; AI Search in East U
 URLs:
 - api: https://ca-api-matchcast-dev.calmbay-045566e2.eastus2.azurecontainerapps.io
 - web: https://ca-web-matchcast-dev.calmbay-045566e2.eastus2.azurecontainerapps.io
-- mcp: `ca-mcp-matchcast-dev`, internal ingress, still on the quickstart placeholder until its first image is built (`services/mcp/Dockerfile` now exists)
+- mcp: `ca-mcp-matchcast-dev`, internal ingress, runs the image built by `scripts/deploy_local.sh` (`services/mcp/Dockerfile`)
 - recap function: `fn-matchcast-dev-recap-hno67`
 
 Images: `ghcr.io/crafted-by-akshay/matchcast-api` at `sha-5e2cc56` (current) and `matchcast-web` at `sha-3d627d1`. Both GHCR packages were made public by Akshay, so their source is public.
