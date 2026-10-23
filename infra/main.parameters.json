@@ -13,6 +13,7 @@
     "searchKeysInVault": { "value": "${SEARCH_KEYS_IN_VAULT=false}" },
     "pipelineMode": { "value": "${PIPELINE_MODE=direct}" },
     "keepWarm": { "value": "${KEEP_WARM=false}" },
+    "agentMode": { "value": "${AGENT_MODE=rules}" },
     "mcpImage": { "value": "${MCP_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}" }
   }
 }
