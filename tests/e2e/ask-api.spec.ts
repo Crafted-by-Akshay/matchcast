@@ -41,5 +41,13 @@ test('Ask matches the api contract: request body and response mapping', async ({
     expect((await page.evaluate(() => LV.ask('Who will win?'))).verdict).toBe('abstained');
     reply = { answer: 'It is 1-0.', intent: 'score', abstained: false, citations: [], mode: 'live', lang: 'en', variants: { es: 'Va 1-0.' } };
     expect(await page.evaluate(() => LV.ask('Who leads?'))).toMatchObject({ text: 'Va 1-0.', source: 'model' });
+    const chip = async (r: any) => { reply = { answer: 'It is 1-0.', intent: 'live', abstained: false, citations: [], mode: 'rules', lang: 'en', ...r }; return (await page.evaluate(() => LV.ask('Who leads?'))).note; };
+    expect(await chip({ intent: 'live', retrieval: 'local' })).toBe('from the match record');
+    expect(await chip({ intent: 'knowledge', retrieval: 'local' }), 'knowledge answers are not the match record').toBe('from the knowledge base');
+    expect(await chip({ intent: 'knowledge', retrieval: 'search' })).toBe('from AI Search');
+    expect(await chip({ intent: 'knowledge', retrieval: 'search_fallback' })).toBe('Search fallback');
+    expect(await chip({ intent: 'abstain', retrieval: 'local', abstained: true }), 'a refusal has no source chip').toBe('');
+    expect(await chip({ intent: 'out_of_scope', retrieval: 'local' })).toBe('');
+    expect(await chip({ retrieval: undefined })).toBe('');
   } finally { server.close(); }
 });
