@@ -33,6 +33,9 @@ param pipelineMode string = 'direct'
 @description('True when Key Vault already holds srch-query-key; a Key Vault secret reference to a missing secret fails the revision.')
 param searchKeysInVault bool = false
 
+@description('Name of the Foundry chat model deployment the agents call (the deployment name, not the model).')
+param foundryModelDeployment string = 'gpt-6-luna'
+
 @allowed(['rules', 'live'])
 @description('rules = deterministic agents; live = Foundry agents (needs the gpt-6-luna deployment and quota).')
 param agentMode string = 'rules'
@@ -161,7 +164,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             // The ingress is the only way in and appends the caller to X-Forwarded-For
             { name: 'MATCHCAST_BEHIND_INGRESS', value: 'true' }
             { name: 'FOUNDRY_PROJECT_ENDPOINT', value: foundryProjectEndpoint }
-            { name: 'FOUNDRY_MODEL_DEPLOYMENT', value: 'gpt-6-luna' }
+            { name: 'FOUNDRY_MODEL_DEPLOYMENT', value: foundryModelDeployment }
             { name: 'FOUNDRY_EMBEDDING_DEPLOYMENT', value: 'text-embedding-3-small' }
             { name: 'STORAGE_TABLE_URL', value: storageTableUrl }
             { name: 'STORAGE_BLOB_URL', value: storageBlobUrl }

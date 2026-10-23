@@ -33,6 +33,9 @@ param searchKeysInVault string = 'false'
 @description('How the api reaches the workflow: direct, or through the Event Hubs match-events hub (docs/infra.md, Event stream). Flip to eventhubs after scripts/smoke_pipeline.py passes.')
 param pipelineMode string = 'direct'
 
+@description('Foundry chat model deployment name; azd env set FOUNDRY_MODEL_DEPLOYMENT <name> if a different model than gpt-6-luna is deployed.')
+param foundryModelDeployment string = 'gpt-6-luna'
+
 @allowed(['rules', 'live'])
 @description('rules = deterministic agents; live = Foundry agents once the gpt-6-luna quota lands (azd env set AGENT_MODE live).')
 param agentMode string = 'rules'
@@ -109,6 +112,7 @@ module containerapps 'modules/containerapps.bicep' = {
     pipelineMode: pipelineMode
     keepWarm: keepWarm == 'true'
     agentMode: agentMode
+    foundryModelDeployment: foundryModelDeployment
   }
 }
 
