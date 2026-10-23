@@ -57,3 +57,16 @@ def test_an_old_checkpoint_without_the_new_keys_still_counts() -> None:
 
     old = MatchState.model_validate({"counts": {"shots": {"home": 2}}})
     assert old.count("passes", "home") == 0 and old.count("shots", "home") == 2
+
+
+def test_shot_and_card_lines_say_why_the_moment_matters(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    published = [ln for ln in flow.store.lines(flow.sk) if ln.status == "published"]
+    casual = [ln.text for ln in published if ln.persona == "casual"]
+    shots = [t for t in casual if "tests the keeper" in t]
+    assert shots and all("on target for them so far" in t for t in shots)
+    cards = [t for t in casual if "yellow card" in t]
+    assert all("must be careful now" in t for t in cards)
+    broadcast = [ln.text for ln in published if ln.persona == "broadcast"]
+    assert all("pressure is building" in t for t in broadcast if "forces a save" in t)

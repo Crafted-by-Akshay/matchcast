@@ -29,8 +29,8 @@
     "pairs_replayed": 34,
     "honest_lines_checked": 34,
     "false_reject_rate_on_clean": 0.0,
-    "content_mutations_tried": 151,
-    "catch_rate": 0.993,
+    "content_mutations_tried": 162,
+    "catch_rate": 0.988,
     "by_mutation": {
       "claim_stale": {
         "tried": 34,
@@ -57,9 +57,9 @@
         "by_construction": true
       },
       "number_in_text_changed": {
-        "tried": 19,
-        "caught": 18,
-        "rate": 0.947,
+        "tried": 30,
+        "caught": 28,
+        "rate": 0.933,
         "by_construction": false
       },
       "player_from_other_club": {
