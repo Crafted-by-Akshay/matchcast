@@ -221,6 +221,20 @@ def test_a_ranking_of_goals_by_player_or_team_abstains(match) -> None:
     for question in (
         "Which player has the most goals?",
         "Who has the most goals?",
+        "Who have more goals?",
         "Which team has the most goals in football?",
     ):
         assert rules_answer(match, question).abstained, question
+
+
+def test_which_club_has_more_shots_on_target_is_the_club_comparison(match) -> None:
+    result = rules_answer(match, "Which club has more shots on target?")
+    assert result.intent == "leader"
+    assert result.answer.startswith("Northgate FC have the most shots on target")
+
+
+def test_a_ranking_with_a_definition_after_it_is_not_a_club_comparison(match) -> None:
+    result = rules_answer(
+        match, "Which team has the most shots on target, and what does that mean?"
+    )
+    assert result.intent != "leader"

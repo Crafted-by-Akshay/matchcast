@@ -100,7 +100,13 @@ LEADER_ASK = re.compile(
     r"(?:shots|shots on target)\s*\??\s*$",
     re.IGNORECASE,
 )
-LEADER_START = re.compile(r"^\s*(who|which (?:player|team|club))\b", re.IGNORECASE)
+# a who-or-which question that ranks by a count ("who has the most ...", "which player has more
+# ...", "who have more ..."): a ranking, not a definition, whatever words follow
+RANKING_Q = re.compile(
+    r"^\s*(?:who|which)\b.*\b(?:most|more|fewest|least|best|top)\b"
+    r"|^\s*(?:who|which)\s+(?:has|have|had)\b",
+    re.IGNORECASE,
+)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _SCORE_PAIR = re.compile(r"\b\d+\s*(?:[-–—:]|to|vs\.?)\s*\d+\b", re.IGNORECASE)
 _CITE = re.compile(r"\[(kb|claim|event):([^\]]+)\]")
@@ -196,19 +202,13 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
         top = max((h.score for h in index.search(query, k=1)), default=0.0) if query else 0.0
         return top >= KB_THRESHOLD
 
-    asks_now = (
-        bool(STRONG_LIVE.search(clauses[0]))
-        or not DEFINITIONAL.match(clauses[0])
-        or bool(
-            PLAYER_Q.search(clauses[0]) and LEADER_START.match(clauses[0])
-        )  # "which player has most"
-    )
+    if RANKING_Q.search(question) and metric is not None:
+        if LEADER_ASK.match(question):
+            return Route("leader", metric, (), "")  # the plain club shot comparison
+        return Route("abstain", None, teams, "")  # a ranking by player or team: no tool
+    asks_now = bool(STRONG_LIVE.search(clauses[0])) or not DEFINITIONAL.match(clauses[0])
     if metric is not None and cue and asks_now:
-        if PLAYER_Q.search(
-            question
-        ):  # a who-has-the-most question is a ranking: only the club shot count answers it
-            if LEADER_ASK.match(question):
-                return Route("leader", metric, (), "")  # which club leads on this count
+        if PLAYER_Q.search(question):
             return Route("abstain", None, teams, "")  # per-player rankings have no tool
         live_at = next(i for i, c in enumerate(clauses) if _metric_in(c))
         others = " ".join(c for i, c in enumerate(clauses) if i != live_at)
