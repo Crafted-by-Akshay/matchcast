@@ -327,10 +327,14 @@ class Registry:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
             config = WorkflowConfig(approval_mode=info.get("approval_mode", "auto"))
             seeds: dict[str, Any] = {}
-            if info.get("seed_bad_claim"):
+            # the seeded wrong claim fires once; a match rebuilt past its cue has already had it
+            cue = info.get("seed_bad_claim_at_ms", 720_000)
+            state = self.store.get_state(sk)
+            unfired = state.revision == 0 or state.event_time_ms < cue
+            if info.get("seed_bad_claim") and unfired:
                 seeds = {
                     "seed_bad_claim": True,
-                    "seed_bad_claim_at_ms": info.get("seed_bad_claim_at_ms", 720_000),
+                    "seed_bad_claim_at_ms": cue,
                 }
             flow = MatchWorkflow(
                 stream=stream,
