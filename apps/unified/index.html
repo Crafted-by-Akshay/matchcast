@@ -199,11 +199,12 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .status{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:4px 2px;position:relative}
   .status .more{display:flex;position:sticky;right:0;align-items:center;padding:0 4px 0 22px;margin-left:-22px;background:linear-gradient(90deg,transparent,var(--bg) 55%);color:var(--text);font-size:22px;line-height:1;pointer-events:none}   /* a visible cue that the row scrolls */
   .status::-webkit-scrollbar{display:none}
+  .status.end .more{display:none}   /* the cue goes once the row is scrolled to its end */
   .status>*{flex:none}
   #api-pill{order:-1}
   .matchbar .chips{display:none}
   .matchbar .meta:not(.err){display:none}   /* the first screen belongs to the match: fixture, score, then the view; a load error still shows */
-  .toast{bottom:8px}   /* below the pitch controls and clear of the brand; it is short-lived and repeats what the page says */
+  .toast{bottom:auto;top:var(--toast-top,150px)}   /* just under the story row (toast() sets --toast-top): clear of the brand and of the pitch controls at the bottom of the view */
   #src{display:none}   /* the engine chip repeats what the view itself shows; the sync chip stays */
   .fx label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .brand small{display:block}
@@ -373,7 +374,8 @@ const setupOf = (fx) => ({ h: fx.home.key, a: fx.away.key, seed: fx.setup.seed, 
 const fixtureOf = (s) => { const f = FX.find((x) => keyOf(setupOf(x)) === keyOf(s)); return f ? f.id : null; };
 const byId = (id) => FX.find((x) => x.id === id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const toast = (t) => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+{ const st = document.querySelector('.status'); if (st) { const edge = () => st.classList.toggle('end', st.scrollLeft + st.clientWidth >= st.scrollWidth - 2); st.addEventListener('scroll', edge, { passive: true }); addEventListener('resize', edge); edge(); } }
+const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) el.style.setProperty('--toast-top', Math.round(sb.getBoundingClientRect().bottom + 8) + 'px'); el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 // the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
 let RECAP = { gen: 0, closed: false };
 const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };

@@ -14,10 +14,12 @@ test('Watch at 1440 px: the Match Pulse control line does not overlap its label 
   const m = await f.evaluate(() => {
     const k = document.querySelector('#px-body .px-k')!.getBoundingClientRect(), v = document.getElementById('px-ctlv')!.getBoundingClientRect();
     const overlap = k.left < v.right && v.left < k.right && k.top < v.bottom && v.top < k.bottom;
-    const alpha = Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(getComputedStyle(document.documentElement).getPropertyValue('--panel'))?.[1] ?? 1);
-    return { overlap, alpha };
+    const alphas = ['pulse', 'visp', 'datap'].map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el)
+      .map((el) => { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(getComputedStyle(el).backgroundColor); return m ? Number(m[1]) : 1; });
+    return { overlap, alphas };
   });
   expect(m.overlap, 'CONTROL · CHAOS and the control value share no pixels').toBe(false);
-  expect(m.alpha).toBeGreaterThanOrEqual(0.95);
+  expect(m.alphas.length, 'the HUD panels exist').toBeGreaterThan(0);
+  for (const a of m.alphas) expect(a).toBeGreaterThanOrEqual(0.95);
   expect(errs).toEqual([]);
 });
