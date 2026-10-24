@@ -23,6 +23,8 @@ test('persona chosen before kick-off opens the stream with it; a later choice re
     await page.evaluate(() => {
       LV.persona('club:ars', 'es');   // chosen in Watch before the kick-off
       LV.begin('k1', { teams: ['ars', 'che'], players: [{ name: 'A One', team: 'ars' }, { name: 'C One', team: 'che' }] });
+      // the api creates the match with the first batch of events (#234), and the stream opens once it exists; Watch's first events send that batch
+      LV.events([{ minute: 12.3, type: 'shot', team: 'ars', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'open play', data: {} }]);
     });
     await expect.poll(() => streams.length).toBeGreaterThan(0);
     const first = new URL('http://x' + streams[0]).searchParams;
