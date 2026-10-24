@@ -12,6 +12,7 @@ K1, B = 1.5, 0.75
 # defines the term gets a lift over one that merely mentions it more often
 DEFINING_SECTION = re.compile(r"definition|in plain words|what it is", re.IGNORECASE)
 DEFINITION_BOOST = 1.3
+TITLE_WORD_BONUS = 1.0  # a rare term such as "xG" scores low by frequency; naming the page lifts it
 _WORD = re.compile(r"[a-z0-9]+")
 STOP = frozenset(
     "a an and are as at be by do does for from how in is it of on or that the this to was what "
@@ -96,6 +97,8 @@ class Bm25Index:
                 score *= DEFINITION_BOOST
                 if named and set(analyse(chunk.title)) == named:
                     score *= DEFINITION_BOOST  # the page is named for exactly what was asked
+            if score > 0:
+                score += TITLE_WORD_BONUS * len(named & set(analyse(chunk.title)))
             if score > 0:
                 hits.append(Hit(chunk, score))
         hits.sort(key=lambda h: (-h.score, h.chunk.id))

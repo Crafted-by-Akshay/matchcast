@@ -162,7 +162,7 @@ def test_an_empty_index_falls_back_to_bm25_and_is_counted(index) -> None:
 
 
 def test_a_below_threshold_hit_never_ends_the_list_early(index) -> None:
-    query = "How is xG worked out?"
+    query = "What are shots on target?"
     local = index.search(query, k=50)
     weak = next(h for h in local if h.score < 2.2)
     best = local[0]
