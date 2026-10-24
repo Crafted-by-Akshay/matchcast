@@ -429,7 +429,8 @@ def _goal_lines(ctx: MatchContext) -> list[tuple[str, str]]:
         score[team] = score.get(team, 0) + 1
         club = ctx.club_name(team)
         verb = "scored an own goal for" if payload.get("own_goal") else "scored for"
-        who = f"{ctx.player_name(payload['player_id'])} {verb} {club}" if payload.get("player_id") else f"a goal for {club}"  # fmt: skip
+        scorer = payload.get("player_id")
+        who = f"{ctx.player_name(scorer)} {verb} {club}" if scorer else f"a goal for {club}"
         minute = int(event["event_time_ms"] // 60_000)
         text = (
             f"{who} at minute {minute}; the score went from "
