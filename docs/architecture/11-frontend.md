@@ -33,6 +33,7 @@ flowchart TB
 ```
 
 - Three views, each an iframe built from its source folder by `apps/unified/build.py`, plus the shell.
+- **Broadcast pane (ADR-0019):** on a window at least 900 px wide, Watch and Broadcast share the stage with a draggable divider (arrow keys too), kept per viewer. The app opens there on the live match. On a phone one view shows at a time. The Broadcast desk's production strip shows the agents' trace for the last aired line, and its Copilot asks the api for highlights, a camera focus and a production plan.
 - **Watch is the only engine** (EXP-2). Broadcast and Analyst run in consumer mode and render from bus messages.
 - `live.js` is the only code that talks to the network. Views never call the API directly. The one exception is the vision crop upload, which goes through a `live.js` helper too.
 
@@ -48,7 +49,8 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | `state` | shell → all views | score, clock, possession |
 | `status` | shell → all views | `live`, `rules_fallback`, `offline`, `warming_up` |
 | `persona`, `language` | any view → shell | viewer's choice, sent upstream as SSE query parameters |
-| `ask`, `talk` | any view → shell | request; reply arrives as `ask_reply`, `talk_reply` |
+| `ask`, `talk` | any view → shell | request; reply arrives as `ask_reply`, `talk_reply`. An `ask` from Broadcast with `surface: "broadcast"` asks for the Copilot's picks (ADR-0019); the answer carries them as `broadcast` |
+| `focus` | Broadcast → shell → Watch | a camera focus suggestion (`player_id`, `reason`). Watch shows it; the camera move is **Planned** |
 | `approve`, `edit`, `kill` | Broadcast or Analyst → shell | line ID (ADR-0013) |
 
 **Stream start.** `live.js` opens the SSE stream only after the match exists (`POST /v1/matches` answered 201 or 409), so the first connection cannot 404; if an events call answers 404 (the api lost the match), the next batch creates it again and reopens the stream.

@@ -29,4 +29,5 @@ Option 2, with code ranking.
 - Broadcast cues are narrow (a question must say highlights, camera, focus, production plan, strategy, rundown or what next), so a broadcast question never reaches the router's declines by accident. Plain questions on the same surface take the Ask path.
 - The audit action stays `ask_answered`, with a `surface` field, so the closed list in 04 §4 does not change.
 - Model-written wording for highlights and plans is a later step. Until then, the reasons are templates over event data.
-- Phase 1 (the resizable pane) and the front end for Phase 4 are not in this ADR's first merge.
+- The front end is in the same PR: the split pane, the production strip (the agents' trace per aired line, from the shell's `air` message) and the Copilot panel in Broadcast, and the focus suggestion in Watch. See [11-frontend.md](../11-frontend.md).
+- The camera does not move yet. The 3D engine has no focus call that the view hooks can reach, so Watch's "Go to it" stays disabled and labelled **Planned** until the engine exposes one.

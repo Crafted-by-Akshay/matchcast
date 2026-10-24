@@ -97,14 +97,16 @@ const LV = (() => {
   // a question to the agents (EXP-5): the api's Ask router answers with citations and a verdict; throws when it cannot
   // the api's Ask takes one of three audiences and answers {answer, abstained, citations, mode, variants?}
   const audience = () => (persona === 'analyst' || persona === 'broadcast' ? persona : 'casual');
-  const ask = async (question) => {
+  const ask = async (question, surface = 'ask') => {
     if (!run) throw new Error('no match yet');
     if (!String(question).trim()) throw new Error('empty question');   // the api needs at least one character
-    const res = await post('/v1/matches/' + run.id + '/ask', { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' });
+    const body = { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' };
+    if (surface === 'broadcast') body.surface = surface;   // the Copilot's picks; a plain question sends exactly what it always did
+    const res = await post('/v1/matches/' + run.id + '/ask', body);
     if (!res.ok) throw new Error('ask ' + res.status);
     const j = await res.json();
     const t = j.variants && j.variants[lang];
-    return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j) };
+    return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j), broadcast: j.broadcast || null };
   };
 
   // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply

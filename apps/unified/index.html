@@ -83,6 +83,15 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
 .view.ready .wait{opacity:0}
 .view.gone .wait{display:none}
+/* Broadcast pane: Watch and Broadcast side by side on a wide screen, with a divider the viewer can drag (or move with the arrow keys) */
+.stage.split{display:flex;flex-direction:row}
+.stage.split .view{position:relative;inset:auto;flex:0 0 auto;height:100%;min-width:0}
+.stage.split #v-watch{order:1;flex-basis:var(--split,58%)}
+.stage.split #v-broadcast{order:3;flex:1 1 0}
+.split-bar{display:none;order:2;flex:0 0 8px;cursor:col-resize;background:var(--line);touch-action:none;outline-offset:-2px}
+.stage.split .split-bar{display:block}
+.split-bar:focus-visible{outline:2px solid var(--accent)}
+.stage.dragging iframe{pointer-events:none}
 .foot{flex:none;padding:6px var(--gut);font-size:11px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
 .foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
 .toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
@@ -228,6 +237,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <section class="view" id="v-watch" data-view="watch" aria-label="Watch: fan 3D match">
     <div class="wait" role="status"><div><b>Starting Watch</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div></div>
   </section>
+  <div class="split-bar" id="split-bar" role="separator" aria-orientation="vertical" aria-label="Resize the Broadcast pane" aria-valuemin="25" aria-valuemax="80" tabindex="0" hidden></div>
   <section class="view gone" id="v-analyst" data-view="analyst" aria-label="Analyst: enterprise console" hidden>
     <div class="wait" role="status"><div><b>Opening the Analyst</b><span class="wt">Loading the season</span><i class="bar"></i></div></div>
   </section>
@@ -403,16 +413,42 @@ function routeAnalyst() {
 
 function post(view, msg) { const f = frameOf(view); if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); }
 
+// Watch and Broadcast share the screen on a wide window (the live match beside its desk); a phone shows one at a time.
+const SPLIT_VIEWS = ['watch', 'broadcast'];
+const wide = window.matchMedia('(min-width: 900px)');
+function shownViews(view) { return SPLIT_VIEWS.includes(view) && wide.matches ? SPLIT_VIEWS : [view]; }
+const SPLIT_KEY = 'mc.split', SPLIT_MIN = 0.25, SPLIT_MAX = 0.8;
+let splitFrac = 0.58;
+function applySplit(frac) {
+  splitFrac = Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, frac));
+  $('stage').style.setProperty('--split', (splitFrac * 100).toFixed(1) + '%');
+  $('split-bar').setAttribute('aria-valuenow', String(Math.round(splitFrac * 100)));
+  try { localStorage.setItem(SPLIT_KEY, String(splitFrac)); } catch (e) { /* a private window keeps the default */ }
+}
+try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applySplit(0.58); }
+(() => {
+  const bar = $('split-bar'); let drag = false;
+  bar.addEventListener('pointerdown', (e) => { drag = true; bar.setPointerCapture(e.pointerId); $('stage').classList.add('dragging'); });
+  bar.addEventListener('pointermove', (e) => { if (!drag) return; const r = $('stage').getBoundingClientRect(); applySplit((e.clientX - r.left) / r.width); });
+  const end = () => { drag = false; $('stage').classList.remove('dragging'); };
+  bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
+  bar.addEventListener('keydown', (e) => { const step = e.key === 'ArrowLeft' ? -0.02 : e.key === 'ArrowRight' ? 0.02 : 0; if (step) { e.preventDefault(); applySplit(splitFrac + step); } });
+  wide.addEventListener('change', () => show(current));
+})();
+
 function show(view) {
   if (!PANES.includes(view)) view = 'watch';
   current = view;
+  const on = shownViews(view);
   for (const v of PANES) {
-    const on = v === view;
-    $('v-' + v).hidden = !on; $('v-' + v).classList.toggle('gone', !on);
-    const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-selected', String(on));
-    tab.tabIndex = on ? 0 : -1;
+    const shown = on.includes(v);
+    $('v-' + v).hidden = !shown; $('v-' + v).classList.toggle('gone', !shown);
+    const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-selected', String(v === view));
+    tab.tabIndex = v === view ? 0 : -1;
   }
-  ensure(view);
+  $('stage').classList.toggle('split', on.length > 1);
+  $('split-bar').hidden = on.length < 2;
+  for (const v of on) ensure(v);
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   paint();
 }
@@ -561,14 +597,14 @@ const LANGS_OK = ['en', 'es', 'hi'];
 const ANSWER_WAIT_MS = 20000;   // the api's model call is given 15 s (packages/agents live/answers.py); Watch waits longer than this
 const askTimes = { watch: [], broadcast: [] };   // one budget per view
 const ASK_LIMIT = 10;   // questions a minute per view; the api has its own limit of the same size per session
-async function answerAsk(id, q, to = 'watch') {
+async function answerAsk(id, q, to = 'watch', surface = 'ask') {
   const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
   const times = askTimes[to] || (askTimes[to] = []), now = Date.now(); while (times.length && now - times[0] > 60000) times.shift();
   if (times.length >= ASK_LIMIT) { reply({ text: 'You can ask ' + ASK_LIMIT + ' questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
   times.push(now);
   // the api answers whenever a match is on it (live or rules), so a viewer does not wait for the warm-up; it is given ANSWER_WAIT_MS before the rules answer
-  if (LV.enabled && LV.key) { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ANSWER_WAIT_MS))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
+  if (LV.enabled && LV.key) { try { reply(await Promise.race([LV.ask(q, surface), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ANSWER_WAIT_MS))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
   const a = AG.ask(q);
   reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
 }
@@ -599,7 +635,8 @@ window.addEventListener('message', (e) => {
     return;
   }
   if (d.type === 'vision-events' && view === 'watch') { LV.visionEvents(d.batch); return; }   // the tracker's derived passes, on the separate .vision stream (DAT-11)
-  if (d.type === 'ask' && (view === 'watch' || view === 'broadcast')) { answerAsk(d.id, d.q, view); return; }
+  if (d.type === 'ask' && (view === 'watch' || view === 'broadcast')) { answerAsk(d.id, d.q, view, view === 'broadcast' && d.surface === 'broadcast' ? 'broadcast' : 'ask'); return; }
+  if (d.type === 'focus' && view === 'broadcast') { post('watch', { src: 'matchcast-shell', type: 'focus', player_id: String(d.player_id || ''), reason: String(d.reason || '').slice(0, 200) }); return; }   // the Broadcast copilot suggests a camera focus; Watch decides
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
   if (d.type === 'indices' && view === 'watch') {   // control, chaos and tempo from Watch's events (DAT-4); the Analyst's match page shows them
     M.indices = d.data; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'indices', data: d.data }); return;
