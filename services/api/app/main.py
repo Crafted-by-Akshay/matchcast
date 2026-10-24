@@ -127,7 +127,10 @@ def create_app(
                 "configuration": {"status": "invalid", "errors": list(result.errors)},
                 "dependencies": {
                     "model": {"status": "unavailable", "detail": "configuration is invalid"},
-                    "session_store": {"status": "local_mock", "detail": "process-local memory"},
+                    "session_store": {
+                        "status": "local_mock",
+                        "detail": "demo /sessions store in memory; matches: see /v1/status",
+                    },
                 },
             }
 
@@ -139,7 +142,10 @@ def create_app(
                 "configuration": {"status": "valid", "errors": []},
                 "dependencies": {
                     "model": {"status": "local_mock", "detail": "no model connection is attempted"},
-                    "session_store": {"status": "local_mock", "detail": "process-local memory"},
+                    "session_store": {
+                        "status": "local_mock",
+                        "detail": "demo /sessions store in memory; matches: see /v1/status",
+                    },
                 },
             }
 
@@ -156,7 +162,10 @@ def create_app(
                         "status": "unavailable",
                         "detail": "no Entra credential could be obtained for Azure AI",
                     },
-                    "session_store": {"status": "local_mock", "detail": "process-local memory"},
+                    "session_store": {
+                        "status": "local_mock",
+                        "detail": "demo /sessions store in memory; matches: see /v1/status",
+                    },
                 },
             }
         return {
@@ -168,7 +177,10 @@ def create_app(
                     "status": "ready",
                     "detail": "Entra credential obtained; model call not probed",
                 },
-                "session_store": {"status": "local_mock", "detail": "process-local memory"},
+                "session_store": {
+                    "status": "local_mock",
+                    "detail": "demo /sessions store in memory; matches: see /v1/status",
+                },
             },
         }
 
