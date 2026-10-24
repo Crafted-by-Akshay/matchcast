@@ -141,7 +141,7 @@ sequenceDiagram
   A-->>U: answer, citations, claim IDs, trace ID
 ```
 
-Rules: out-of-scope questions get "I can only answer questions about this match and MatchCast." Abstain text: "I can't confirm that from the match data yet." 5 questions a minute per browser session. Full design in [05-assistant-rag.md](05-assistant-rag.md).
+Rules: out-of-scope questions get "I can only answer questions about this match and MatchCast." Abstain text: "I can't confirm that from the match data yet." 10 questions a minute per browser session. In live mode the model answers from a fact sheet and the answer is checked before it is shown (ADR-0018); the question does not wait for the ingest lock. Full design in [05-assistant-rag.md](05-assistant-rag.md).
 
 ## F5 Talk to a player by voice
 

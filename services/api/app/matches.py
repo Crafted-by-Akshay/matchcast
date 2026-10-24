@@ -58,7 +58,8 @@ from app.voice import (
 
 TENANT = "demo"
 HEARTBEAT_S = 15
-ASK_PER_MINUTE = 5
+ASK_PER_MINUTE = 10  # Copilot questions per browser session
+TALK_PER_MINUTE = 10  # player and producer replies per browser session, a budget of their own
 DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 STATUS = {
@@ -238,6 +239,7 @@ class Registry:
         self.stats_desk: Any = stats_desk_from_env(local)
         self._model_client: ModelClient | None = None
         self.asked: dict[str, deque[float]] = {}
+        self.talked: dict[str, deque[float]] = {}
         self.exports: dict[str, tuple[bytes, str, str]] = {}
         self.season = local.season if local else None
         self.ds_asked: dict[str, deque[float]] = {}
@@ -250,16 +252,11 @@ class Registry:
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
-        now = time.monotonic() if now is None else now
-        for key in [k for k, w in self.asked.items() if not w or now - w[-1] >= 60]:
-            del self.asked[key]  # idle sessions leave no entry behind
-        window = self.asked.setdefault(session_id, deque())
-        while window and now - window[0] >= 60:
-            window.popleft()
-        if len(window) >= ASK_PER_MINUTE:
-            return False
-        window.append(now)
-        return True
+        return _within(self.asked, session_id, ASK_PER_MINUTE, now)
+
+    def allow_talk(self, session_id: str, now: float | None = None) -> bool:
+        """At most TALK_PER_MINUTE talks per browser session per rolling minute."""
+        return _within(self.talked, session_id, TALK_PER_MINUTE, now)
 
     def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
         """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
@@ -339,6 +336,7 @@ class Registry:
                 store=self.store,
                 stats_desk=self.stats_desk,
                 safety=self.safety,
+                answer_model=self.model_client(),  # Ask and talk answer on the model when live
             )
             self.flows[key] = flow
             return flow
@@ -360,6 +358,22 @@ def _bare_ip(entry: str) -> str | None:
         return str(ipaddress.ip_address(entry))
     except ValueError:
         return None
+
+
+def _within(
+    windows: dict[str, deque[float]], session_id: str, limit: int, now: float | None
+) -> bool:
+    """A rolling one-minute window per session: False when the session has used its ``limit``."""
+    now = time.monotonic() if now is None else now
+    for key in [k for k, w in windows.items() if not w or now - w[-1] >= 60]:
+        del windows[key]  # idle sessions leave no entry behind
+    window = windows.setdefault(session_id, deque())
+    while window and now - window[0] >= 60:
+        window.popleft()
+    if len(window) >= limit:
+        return False
+    window.append(now)
+    return True
 
 
 def client_ip(request: Request) -> str:
@@ -539,6 +553,7 @@ def build_router(registry: Registry) -> APIRouter:
                     store=registry.store,
                     stats_desk=registry.stats_desk,
                     safety=registry.safety,
+                    answer_model=registry.model_client(),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
@@ -851,9 +866,9 @@ def build_router(registry: Registry) -> APIRouter:
     @router.post("/matches/{match_id}/talk")
     async def talk(match_id: str, body: TalkBody, request: Request) -> dict[str, Any]:
         flow = await registry.flow_for(body.session_id, match_id)
-        if not registry.allow_ask(body.session_id):  # /ask and /talk share one budget
+        if not registry.allow_talk(body.session_id):
             raise Problem(
-                429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
+                429, "rate_limited", f"at most {TALK_PER_MINUTE} talks a minute", retry_after=60
             )
         try:
             result = await flow.talk(body.target, body.utterance)

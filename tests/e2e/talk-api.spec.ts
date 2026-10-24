@@ -50,7 +50,7 @@ test('talk to a player: the api reply with facts is added to the chat, a rejecte
     expect(talks[0].target).toMatch(/^[a-z0-9-]+$/);
     expect(Object.keys(talks[0]).sort()).toEqual(['session_id', 'target', 'utterance']);
     const log = () => f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).join('|'));
-    await expect.poll(log, { timeout: 15_000 }).toContain('Checked against the match record: I have made 7 passes so far.');
+    await expect.poll(log, { timeout: 15_000 }).toContain('I have made 7 passes so far.');
     await expect.poll(() => clips.some((c) => c === '/v1/audio/abc123.mp3'), { timeout: 15_000 }).toBe(true);   // the verified reply's clip was fetched
     verdict = 'rejected';
     await ask('who will win the league');

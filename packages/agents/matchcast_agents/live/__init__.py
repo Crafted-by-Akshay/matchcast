@@ -6,6 +6,7 @@ from ..rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from ..tools import ToolCall
 from ..workflow import AgentSet
 from .analyst import LiveAnalyst
+from .answers import LiveAnswers
 from .client import FoundryModelClient, ModelClient, ScriptedModelClient, model_priority
 from .narrator import LiveNarrator
 from .verifier import LiveVerifier
@@ -13,6 +14,7 @@ from .verifier import LiveVerifier
 __all__ = [
     "FoundryModelClient",
     "LiveAnalyst",
+    "LiveAnswers",
     "LiveNarrator",
     "LiveVerifier",
     "ModelClient",
