@@ -45,6 +45,7 @@
   const go = setInterval(() => {
     if (!window.__mc || !window.__mc.vis || !$('load') || !$('load').hidden) return;
     clearInterval(go);
+    if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
     if (!window.__mc.vis.VIS.on) window.__mc.vis.toggle(true);
     if (narrow()) { $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false'); }   // phone: the tracker runs, the panel stays closed until asked for (UX review, finding 1)
   }, 300);
