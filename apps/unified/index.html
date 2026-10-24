@@ -667,9 +667,18 @@ async function answerAsk(id, q, to = 'watch') {
 }
 // the continuous feed goes to both views, at most every 200 ms: Watch and Broadcast draw the newest line and the list
 let linesT = 0;
+// the booth: each feed line is voiced once, when it arrives (VC drops a line older than 5 s). Play-by-play is the first voice; summaries and the agents' lines are the analyst's colour.
+const voiced = new Set();
+function voiceFeed(items) {
+  for (const x of items) {
+    if (voiced.has(x.id)) continue;
+    voiced.add(x.id);
+    if (VC.on) VC.say(x.text, { id: 'feed-' + x.id, at: x.t, role: x.source === 'live' || x.kind === 'summary' ? 'analyst' : 'playByPlay', tone: x.tone });
+  }
+}
 function pushLines() {
   if (linesT) return;
-  linesT = setTimeout(() => { linesT = 0; const msg = { src: 'matchcast-shell', type: 'feed-lines', items: CM.view(40) }; post('watch', msg); post('broadcast', msg); }, 200);
+  linesT = setTimeout(() => { linesT = 0; const items = CM.view(40); voiceFeed(items); const msg = { src: 'matchcast-shell', type: 'feed-lines', items }; post('watch', msg); post('broadcast', msg); }, 200);
 }
 CM.onChange(pushLines);
 function pushCards() {
@@ -862,7 +871,7 @@ function init(list) {
   try { const sv = localStorage.getItem('mc-lang'); if (LANGS.includes(sv) && sv !== 'en') setTimeout(() => window.setLang(sv, null), 0); } catch (e) { /* storage may be blocked */ }
   const vb = $('voice-btn'), vshow = () => {
     vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
-    $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') : '';
+    $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') + (VC.crowd ? ' · crowd bed (simulated)' : '') : '';
     vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
   };
   const vd = $('voice-demo'), vdShow = () => { vd.hidden = !LV.enabled; };
