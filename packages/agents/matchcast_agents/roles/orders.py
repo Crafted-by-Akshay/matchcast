@@ -64,7 +64,10 @@ REFUSAL = {
     "fullback": "I can't go that far forward, boss. I'd leave the back door open.",
     "midfield": "Not from the middle, boss. I'll keep the shape.",
     "forward": "Not from the front, boss. I'm the one who finishes, not the one who marks.",
-    "unknown": "Not from my spot, boss. Keep it simple and I'm with you.",
+    "unknown": (
+        "I don't know my role in this match, boss, so I won't take that. "
+        "I can hold my shape, keep it simple or rest."
+    ),
 }
 
 # The rules-mode reading of a typed or spoken instruction, the same words the sim's parser hears.

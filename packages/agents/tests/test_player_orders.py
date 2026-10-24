@@ -86,3 +86,9 @@ def test_every_order_key_is_one_of_the_sims_keys() -> None:
 )
 def test_rules_mode_hears_the_same_orders_as_the_sim(text: str, key: str) -> None:
     assert keyword_order(text) == key
+
+
+def test_a_refusal_with_no_position_says_why_and_what_he_can_do() -> None:
+    line = decide(None, "press").line
+    assert "don't know my role" in line
+    assert "hold my shape" in line and "simple" in line and "rest" in line
