@@ -68,8 +68,8 @@ test('Broadcast draws the same feed', async ({ page }) => {
 test('a talk order always gets a reply in the chat, checked or not', async ({ page }) => {
   test.setTimeout(300_000);
   const f = await openWatch(page);
-  const name = await f.evaluate(() => (window as any).__mc.players[0].name);
-  await f.evaluate((p) => (window as any).mcTalkApi({ name: p }, 'press higher'), name);
-  // no agent api in this test: the reply is the honest one, not silence
-  await expect.poll(() => f.evaluate(() => document.documentElement.textContent!.includes('No checked answer yet')), { timeout: 20_000 }).toBe(true);
+  await f.evaluate(() => { const w = window as any; w.__tp = w.__mc.players[0]; w.mcTalkApi(w.__tp, 'press higher'); });
+  // no agent api in this test: the rules fallback answers in the chat, inside the role bounds, rather than staying silent
+  await expect.poll(() => f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).length), { timeout: 20_000 }).toBeGreaterThan(0);
+  await expect(f.locator('#tk-note')).toContainText('Rules fallback', { timeout: 20_000 });
 });

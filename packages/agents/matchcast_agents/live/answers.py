@@ -13,6 +13,7 @@ from typing import Any
 from ..ask.assistant import WORD_LIMIT, AskResult
 from ..context import MatchContext
 from ..resilience import ModelError, ModelRateLimited, ModelTimeout
+from ..roles.orders import NONE, ORDER_KEYS, allowed_orders
 from ..roles.player import player_stats
 from ..verify import extract_numbers
 from ..verify.checks import recompute
@@ -59,8 +60,11 @@ ASK_SCHEMA = {
 TALK_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["reply"],
-    "properties": {"reply": {"type": "string"}},
+    "required": ["reply", "order"],
+    "properties": {
+        "reply": {"type": "string"},
+        "order": {"type": "string", "enum": sorted(ORDER_KEYS | {NONE})},
+    },
 }
 RESILIENCE_ERRORS = (ModelError, ModelTimeout, ModelRateLimited, TimeoutError)
 
@@ -222,8 +226,14 @@ class LiveAnswers:
         citations = [{"type": "fact", "id": c} for c in dict.fromkeys(cites)]
         return AskResult(text, "live", False, citations, mode="live", retrieval="local")
 
-    async def talk(self, ctx: MatchContext, target: str, utterance: str) -> tuple[str, dict] | None:
-        """(reply, facts) in the player's voice, or None when the model gave no checked reply."""
+    async def talk(
+        self, ctx: MatchContext, target: str, utterance: str, position: str | None
+    ) -> tuple[str, dict, str] | None:
+        """(reply, facts, order) in the player's voice, or None when no checked reply came back.
+
+        The order is the one he says he heard, from the list his role allows; the role guard in the
+        workflow still decides whether it reaches the sim.
+        """
         stats = player_stats(ctx, target)
         if stats is None:
             return None
@@ -236,6 +246,8 @@ class LiveAnswers:
             "you": {
                 "name": ctx.player_name(target),
                 "club": ctx.club_name(stats.team_id) if stats.team_id else None,
+                "position": position,
+                "allowed_orders": sorted(allowed_orders(position)),
                 "counts": _counts({m: getattr(stats, m) for m in PLAYER_METRICS}),
                 "recent_events": recent,
             },
@@ -246,8 +258,9 @@ class LiveAnswers:
             "instruction_from_the_manager": utterance,
         }
         answer = await self._call(prompt("player"), facts, TALK_SCHEMA)
-        reply = (answer or {}).get("reply")
+        reply, order = (answer or {}).get("reply"), (answer or {}).get("order", NONE)
         if not isinstance(reply, str) or not talk_fits(ctx, target, reply.strip()):
             return None
-        reply = reply.strip()
-        return reply, stats.as_dict()
+        if order not in ORDER_KEYS | {NONE}:
+            return None
+        return reply.strip(), stats.as_dict(), order

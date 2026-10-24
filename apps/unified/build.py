@@ -114,12 +114,11 @@ def build_watch():
         " team: p.T.key, player: p.name, to: q.name, kind:",
         "watch pass positions",
     )
-    # EXP-16: a typed order also asks the api's player agent, which answers from the stored events (or says nothing)
+    # EXP-16: in Watch every quick order and typed line goes through embed/watch.js (mcTalk), which applies the role guard; the sim's own in-page order paths are not reached
     main = sub(
         main,
-        "talkLine(p, 'pl', r); speak(p, r); renderTalk(); return; }",
-        "talkLine(p, 'pl', r); speak(p, r); renderTalk();"
-        " if (!quick && window.mcTalkApi) window.mcTalkApi(p, text); return; }",
+        "if (quick || !SAMPLE) { const k = quick || keywordOrder(text); setOrder(p, k, text); const r = ruleReply(p, k); talkLine(p, 'pl', r); speak(p, r); renderTalk(); return; }",
+        "window.mcTalk(p, text, quick); return;",
         "watch talk api",
     )
     head = sub(
