@@ -22,10 +22,19 @@
       el.dataset.last = JSON.stringify(msg.last || []);
     }
   };
+  // Ask the match: the shell answers from the api or the rules, and the Ask page waits for the answer
+  const asks = new Map(); let askN = 0;
+  window.mcAskShell = (q) => new Promise((res) => {
+    if (!framed) { res({ text: 'Ask works in the MatchCast shell.', verdict: 'abstained' }); return; }
+    const id = ++askN; asks.set(id, res);
+    send({ type: 'ask', id, q });
+    setTimeout(() => { if (asks.delete(id)) res({ text: 'The agents did not answer in time. Try again.', verdict: 'abstained', note: 'timeout' }); }, 15000);
+  });
   window.addEventListener('message', (e) => {
     const d = e.data || {};
     if (d.src !== 'matchcast-shell') return;
-    if (d.type === 'feed') { livePill(d); return; }
+    if (d.type === 'answer') { const res = asks.get(d.id); if (res) { asks.delete(d.id); res(d.answer || {}); } return; }
+    if (d.type === 'feed') { livePill(d); window.MC_FEED = d; if (window.mcLiveRefresh) window.mcLiveRefresh(); return; }
     if (d.type === 'indices') { window.MC_INDICES = d.data; if (typeof idxRefresh === 'function') idxRefresh(); return; }
     if (d.type === 'vision') { window.MC_VISION = d.report; if (typeof visRefresh === 'function') visRefresh(); return; }
     if (!D.matches.length) return;
