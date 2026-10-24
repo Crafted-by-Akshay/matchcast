@@ -87,6 +87,20 @@ test('analyst focus: a live feed for a custom setup shows only the live score an
   });
   await expect(f.locator('h1')).toHaveText('Live match');
   await expect(f.locator('#live-stats')).toHaveCount(0);
+  await expect(f.locator('#pg')).toContainText('2–1');
+  await expect(f.locator('#pg')).toContainText('Last five events');
+  await expect(f.locator('#pg')).not.toContainText('Expected goals');
   await expect(f.locator('#live-source')).toContainText('Live from Watch');
+  expect(errs).toEqual([]);
+});
+
+test('analyst focus: a partial stats object shows the stats Watch sent and dashes for the rest', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await openPage(page, 'live');
+  await f.evaluate((fx) => {
+    (window as any).MC_FEED = { on: true, fixture: fx, score: [1, 0], minute: 12, over: false, last: [], stats: { xg: [1.2, 0.4] } };
+    (window as any).mcLiveRefresh();
+  }, await f.evaluate(() => D.matches[0].id));
+  expect(await f.locator('#live-stats dt b').allTextContents()).toEqual(['1.20 – 0.40', '– – –', '– – –', '– – –', '–']);
   expect(errs).toEqual([]);
 });

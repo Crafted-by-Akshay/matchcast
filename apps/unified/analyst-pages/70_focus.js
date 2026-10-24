@@ -32,7 +32,7 @@ function drawCustomLive(el, f) {
 function drawLive(el, arg) {
   const f = focusLive();
   if (f && !focusFeedMatch(f)) { drawCustomLive(el, f); return; }
-  const m = focusMatch(arg), H = m.ts[m.home], A = m.ts[m.away];
+  const m = f ? focusFeedMatch(f) : focusMatch(arg), H = m.ts[m.home], A = m.ts[m.away];   // a feed always shows its own fixture, never a route argument
   // Live numbers come from Watch only: with the feed on, a stat Watch has not sent yet shows a dash, never the season run's figure
   const st = f ? f.stats || null : null;
   const sv = (k, i) => (st && st[k] ? st[k][i] : null);
