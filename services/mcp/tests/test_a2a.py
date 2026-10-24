@@ -85,5 +85,5 @@ def test_malformed_requests_get_errors_not_a_500(client) -> None:
 
 
 def test_an_unknown_team_is_an_error_not_an_empty_success() -> None:
-    with pytest.raises(SeasonError):
+    with pytest.raises(SeasonError, match="no team rows"):  # the workflow retries on this wording
         Season().compare("shots", "team", 5, "ZZZ")

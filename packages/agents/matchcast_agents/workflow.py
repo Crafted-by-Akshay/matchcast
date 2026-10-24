@@ -728,7 +728,9 @@ class MatchWorkflow:
                 if "no team rows" not in str(error):
                     raise
                 # a club the season has no rows for: compare with every team, and say so
-                details.update(team_id=None, compared_with="all season teams")
+                details.update(
+                    team_id=None, requested_team_id=team_id, compared_with="all season teams"
+                )
                 result = await self.stats_desk.compare(  # type: ignore[union-attr]
                     metric, "team", claim["value"], None
                 )
