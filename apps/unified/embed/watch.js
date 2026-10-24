@@ -150,6 +150,13 @@ MCS.progress('Loading the stadium and players');
   }, 300);
 })();
 
+// ---- the shell's Fan / Analyst switch (UX review, finding 10) sets Watch's mode; every other mode (club, player, metric) stays in Watch's own picker.
+window.addEventListener('message', (e) => {
+  const d = e.data || {};
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'persona-set' || !['casual', 'analyst'].includes(d.mode)) return;
+  if (FAN.mode !== d.mode) fanSet({ mode: d.mode }, 'shell');
+});
+
 // ---- EXP-2: Watch is the only engine. Four times a second it sends the pitch state (22 players, the ball, score, clock, stats) for the shell to hand to Broadcast.
 (() => {
   const r2 = (x) => Math.round(x * 100) / 100;
