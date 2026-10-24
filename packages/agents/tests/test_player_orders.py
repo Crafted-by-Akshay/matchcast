@@ -79,6 +79,8 @@ def test_every_order_key_is_one_of_the_sims_keys() -> None:
         ("save your legs", "rest"),
         ("how are you feeling", "none"),
         ("how many shots have you had?", "none"),
+        ("take the shot when you can", "shoot"),
+        ("have a go at goal", "none"),
         ("don't shoot from range", "none"),
         ("stop pressing", "none"),
         ("no need to push higher", "none"),

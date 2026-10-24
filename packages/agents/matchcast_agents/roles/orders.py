@@ -74,7 +74,10 @@ REFUSAL = {
 _RULES = (
     (CLEAR, re.compile(r"forget|as you were|cancel|\bnormal\b|\breset\b")),
     ("rest", re.compile(r"\brest\b|\blegs\b|breath|\btired\b|\beasy\b|conserve")),
-    ("shoot", re.compile(r"\bshoot|shot on sight|\bstrike\b|hit it|\brange\b")),
+    (
+        "shoot",
+        re.compile(r"\bshoot|shot on sight|take (a |the |your )?shot|\bstrike\b|hit it|\brange\b"),
+    ),
     ("mark", re.compile(r"\bmark|\bfollow\b|\btrack\b|shadow|man.?to.?man")),
     ("press", re.compile(r"\bpress|\bhunt\b|close down|harass|win (it|the ball) back")),
     ("runs", re.compile(r"\brun|behind|channel|over the top|\bspace\b")),
