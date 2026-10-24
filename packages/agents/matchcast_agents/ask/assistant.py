@@ -101,7 +101,8 @@ LEADER_METRICS = ("shots", "shots_on_target")
 LEADER_ASK = re.compile(r"^\s*(who|which (?:player|team|club))\b", re.IGNORECASE)
 # words that narrow a count to a zone, a period or a condition: the club totals do not answer those
 QUALIFIER = re.compile(
-    r"\b(from|in|during|after|before|outside|inside|within|by|at|with|against|for|of)\b",
+    r"\b(from|during|after|before|outside|inside|within|against|at|by|with"
+    r"|in (?:the )?(?:first|second|last)|of (?:the )?(?:box|area|half))\b",
     re.IGNORECASE,
 )
 PLAYER_NOUN = re.compile(
@@ -182,10 +183,11 @@ def names_outside_the_match(ctx: MatchContext, question: str, index: Bm25Index) 
 
 
 def _names_a_player(ctx: MatchContext, question: str) -> bool:
-    return any(
-        re.search(rf"\b{re.escape(name)}\b", question, re.IGNORECASE)
-        for name in ctx.names.values() if name
-    )  # fmt: skip
+    """A word of the question is a first or last name of a player in this match."""
+    names = {
+        part.casefold() for name in ctx.names.values() for part in name.split() if len(part) >= 3
+    }
+    return any(word.casefold() in names for word in re.findall(r"[A-Za-z][\w'’-]*", question))
 
 
 def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
