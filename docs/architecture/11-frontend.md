@@ -120,6 +120,7 @@ The top bar has a Status button beside the api pill. It opens a dialog built by 
 
 ## Continuous commentary feed (live commentary)
 - `apps/unified/feed.js` (`CM`) keeps one ordered feed for Watch and Broadcast: every Watch moment and key event, plus a recounted summary for any two-minute quiet stretch, so the feed never goes silent during a match.
+- Play-by-play (`CM`'s `callPlay`): the booth calls the newest pass, tackle, interception or foul every 0.2 match minutes (about 12 s of match time). The line names the player and club from the event, and a run of three or more passes is counted from the events in that stretch (`Rules · recounted`). Play lines keep the feed moving between key events, so the two-minute summary rarely fires.
 - The api's checked line (`publication`) replaces the rules line for the same match minute or joins the feed, labelled `Live agents · verified`; rules lines are labelled `Rules · recounted`. Each line lists the agents that made it.
 - The shell posts `feed-lines` to Watch and Broadcast (at most every 200 ms); `embed/feed.js` draws the newest line and the list. Voice reads big moments with SSML (`speech.js`).
 - Limit: the api narrates only the moments its Producer scores at 60 or more (goals, red cards, shots on target, half time, periodic summaries), so most lines in the feed come from the in-page rules until the live model keeps pace.

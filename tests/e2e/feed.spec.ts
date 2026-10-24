@@ -73,3 +73,19 @@ test('a talk order always gets a reply in the chat, checked or not', async ({ pa
   // no agent api in this test: the reply is the honest one, not silence
   await expect.poll(() => f.evaluate(() => document.documentElement.textContent!.includes('No checked answer yet')), { timeout: 20_000 }).toBe(true);
 });
+
+test('the booth calls the play between the key events, counted from the actions', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const lines = await page.evaluate(() => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('booth', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([pass(1, 'H', 'Ana'), pass(1.1, 'H', 'Ben'), pass(1.2, 'H', 'Cal'), pass(1.3, 'H', 'Ana'), pass(1.4, 'H', 'Ben'), { minute: 1.6, type: 'slide_tackle', team: 'A', player: 'Dev' }], []);
+    CM.fromWatch([pass(1.7, 'A', 'Eli')], []);   // inside the gap after the last call: no new line yet
+    CM.fromWatch([pass(2.2, 'A', 'Eli'), pass(2.3, 'A', 'Fay')], []);
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => ({ minute: l.minute, text: l.text, label: l.label }));
+  });
+  expect(lines).toEqual([
+    { minute: 1.6, text: 'Dev wins it back for Thames Rovers.', label: 'Rules · recounted' },
+    { minute: 2.3, text: 'Thames Rovers keep the ball: 3 passes, last from Fay.', label: 'Rules · recounted' },
+  ]);
+});

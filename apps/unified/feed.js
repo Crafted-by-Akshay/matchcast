@@ -5,11 +5,12 @@
 const CM = (() => {
   const KEEP = 120, QUIET_MIN = 2, WINDOW_MIN = 2, CHAIN = ['Producer', 'Analyst', 'Narrator', 'Verifier'];
   const SKIP_UPGRADE = ['summary', 'set_piece', 'period', 'tactics'];   // lines an api line about a moment must not overwrite
+  const PBP_GAP = 0.2, PLAY = new Set(['pass', 'slide_tackle', 'tackle', 'interception', 'foul']);   // the booth calls the play every 0.2 match minutes (about 12 s)
   const LABEL = { rules: 'Rules · recounted', live: 'Live agents · verified' };
   const f2 = (x) => (+x || 0).toFixed(2);
   const trim = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
   const seenApi = new Set();
-  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, changed = () => {};
+  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playFrom = 0, changed = () => {};
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
   const club = (ti) => (ti === 0 ? names.home : names.away);
@@ -50,6 +51,23 @@ const CM = (() => {
     return { minute: at, kind: 'summary', text: 'Minutes ' + Math.max(0, Math.floor(from)) + ' to ' + Math.floor(at) + ': ' + names.home + ' ' + passes[0] + ' passes, ' + names.away + ' ' + passes[1] + ' passes; shots ' + shots[0] + '–' + shots[1] + '. ' + names.home + ' ' + score[0] + '–' + score[1] + ' ' + names.away + '.' + busy };
   };
 
+  // play-by-play: the booth calls the newest action since its last call, and says how many passes a side made in that stretch.
+  // The words come from the events, so the line is checked in page like the rest of the rules lines.
+  const callPlay = (at) => {
+    if (at - playAt < PBP_GAP) return;
+    const fresh = events.slice(playFrom).filter((e) => e.ti >= 0 && e.player && PLAY.has(e.type));
+    if (!fresh.length) return;
+    const act = fresh[fresh.length - 1], side = fresh.filter((e) => e.type === 'pass' && e.ti === act.ti);
+    const tc = club(act.ti);
+    const text = act.type === 'pass'
+      ? (side.length >= 3 ? tc + ' keep the ball: ' + side.length + ' passes, last from ' + act.player + '.' : act.player + ' plays it on for ' + tc + '.')
+      : act.type === 'foul' ? act.player + ' gives away a foul for ' + tc + '.'
+      : act.type === 'interception' ? act.player + ' reads it and intercepts for ' + tc + '.'
+      : act.player + ' wins it back for ' + tc + '.';
+    playAt = at; playFrom = events.length;
+    push({ minute: act.minute, kind: 'play', text });
+  };
+
   // Watch's batch: the events first (so the score and the window are current), then the moments, then a summary if the feed has gone quiet
   const fromWatch = (batch, moments) => {
     if (!names) return;
@@ -70,6 +88,7 @@ const CM = (() => {
       push({ minute: m.minute, kind: m.type, tone: ['goal', 'red_card', 'turning_point'].includes(m.type) ? 'big' : '', text: (m.title || m.type) + '.' + why, chain: CHAIN.slice() });
       last = Math.max(last == null ? -1 : last, +m.minute);
     }
+    if (last != null) callPlay(last);
     if (last != null && last - lastLine >= QUIET_MIN && events.length) push(summary(Math.floor(last)));
   };
 
@@ -82,7 +101,7 @@ const CM = (() => {
     push({ minute: at, kind: kind || 'line', text: String(text), source: 'live', chain: CHAIN.concat('Live agents') });
   };
 
-  const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; n = 0; changed(); if (names) push({ minute: 0, kind: 'period', text: 'Players are out. ' + names.home + ' v ' + names.away + ' is about to start.' }); };
+  const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playFrom = 0; n = 0; changed(); if (names) push({ minute: 0, kind: 'period', text: 'Players are out. ' + names.home + ' v ' + names.away + ' is about to start.' }); };
   // the feed the views draw: newest last, each with its label
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain }));
   return { fromWatch, api, reset, view, onChange: (fn) => { changed = fn; }, get count() { return items.length; } };
