@@ -14,20 +14,22 @@ NAV.splice(0, NAV.length,
 MC_RENDER.pat = (m) => MC_RENDER.pass(m) + '<div style="height:14px"></div>' + MC_RENDER.shape(m);
 MC_TABS.splice(0, MC_TABS.length, ['ov', 'Overview'], ['shots', 'Shots'], ['pat', 'Patterns'], ['ply', 'Players'], ['trust', 'Verifier']);
 
-const focusMatch = (arg) => D.match(arg) || D.matches[D.matches.length - 1];
 const focusLive = () => (window.MC_FEED && window.MC_FEED.on ? window.MC_FEED : null);
+const focusMatch = (arg) => D.match(arg || (focusLive() || {}).fixture) || D.matches[D.matches.length - 1];
 
 function drawLive(el, arg) {
   const m = focusMatch(arg), f = focusLive(), H = m.ts[m.home], A = m.ts[m.away];
-  const st = f && f.stats;
+  // Live numbers come from Watch only: with the feed on, a stat Watch has not sent yet shows a dash, never the season run's figure
+  const st = f ? f.stats || null : null;
+  const liveOr = (live, season) => (f ? live : season);
   const pair = (a, b, fn) => fn(a) + ' – ' + fn(b);
   const n = (v) => (v == null ? '–' : v);
   const rows = [
-    ['Expected goals (xG)', 'Chance quality. Each shot counts for the share of goals it would be expected to score, summed.', pair(st ? st.xg[0] : H.xg, st ? st.xg[1] : A.xg, (v) => fmt(v, 2))],
-    ['Shots', 'Attempts at goal, home – away.', pair(st ? st.shots[0] : H.shots, st ? st.shots[1] : A.shots, n)],
-    ['Possession', 'Share of the match with the ball.', pair(st ? st.poss[0] : H.poss, st ? st.poss[1] : A.poss, (v) => (v == null ? '–' : v + '%'))],
-    ['Passes completed', 'Completed passes, home – away.', pair(st ? st.done[0] : H.done, st ? st.done[1] : A.done, n)],
-    ['PPDA', 'Passes allowed per defensive action. Lower means a higher press. Shown at full time.', f && !f.over ? '–' : pair(H.ppda, A.ppda, n)],
+    ['Expected goals (xG)', 'Chance quality. Each shot counts for the share of goals it would be expected to score, summed.', pair(liveOr(st && st.xg[0], H.xg), liveOr(st && st.xg[1], A.xg), (v) => (v == null ? '–' : fmt(v, 2)))],
+    ['Shots', 'Attempts at goal, home – away.', pair(liveOr(st && st.shots[0], H.shots), liveOr(st && st.shots[1], A.shots), n)],
+    ['Possession', 'Share of the match with the ball.', pair(liveOr(st && st.poss[0], H.poss), liveOr(st && st.poss[1], A.poss), (v) => (v == null ? '–' : v + '%'))],
+    ['Passes completed', 'Completed passes, home – away.', pair(liveOr(st && st.done[0], H.done), liveOr(st && st.done[1], A.done), n)],
+    ['PPDA', 'Passes allowed per defensive action. Lower means a higher press. Season run figure, shown at full time.', f && !f.over ? '–' : pair(H.ppda, A.ppda, n)],
   ];
   const score = f ? f.score.join('–') : m.score.join('–');
   const when = f ? (f.over ? 'Full time' : Math.floor(f.minute) + '′') : (m.sum.ended || 'Full time');
@@ -48,7 +50,7 @@ window.mcLiveRefresh = () => { const el = document.getElementById('pg'); if (R.p
 
 page({
   id: 'ask', title: 'Ask the match', render(el) {
-    el.innerHTML = pgHead('Ask the match', 'Ask about the shared match. The agents answer from its event log, and each answer says who checked it.') +
+    el.innerHTML = pgHead('Ask the match', 'Ask about the shared match. The answer comes from the agent api when it is live, or from the in-page rules (Simulated) when it is not. Each answer says whether the Verifier checked it.') +
       '<div class="card"><label for="ask-q"><b>Your question</b></label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
       '<input id="ask-q" maxlength="300" placeholder="e.g. Who had the most shots?" style="flex:1;min-width:220px;min-height:44px">' +
       '<button class="btn pri" id="ask-go">Ask</button></div>' +
@@ -56,7 +58,7 @@ page({
     const out = el.querySelector('#ask-out');
     const run = async () => {
       const q = el.querySelector('#ask-q').value.trim();
-      if (!q) return;
+      if (!q || out.dataset.state === 'asking') return;   // one question at a time, so an older answer cannot overwrite a newer one
       out.dataset.state = 'asking'; out.textContent = 'Checking with the agents…';
       const a = window.mcAskShell ? await window.mcAskShell(q) : { text: 'Ask is not connected in this view.', verdict: 'abstained' };
       out.dataset.state = 'answered';
@@ -70,9 +72,9 @@ page({
 page({
   id: 'trace', title: 'How was this made?', render(el, arg) {
     const m = focusMatch(arg), ins = m.events.filter((e) => e.type === 'insight');
-    el.innerHTML = pgHead('How was this made?', 'Each agent line in ' + esc(m.title) + ', with the steps that made it. The rules agents wrote them, and the Verifier recounts each one from the event log.') +
+    el.innerHTML = pgHead('How was this made?', 'Each agent line in ' + esc(m.title) + ' (recorded run, Simulated), with the steps that made it. The in-page rules agents wrote them, and the Verifier recounts each one from the event log.') +
       '<div class="card" id="trace-list">' + (ins.length
-        ? '<div class="list">' + ins.map((e) => '<div class="li"><span class="chip ' + (e.status === 'verified' ? 'good' : e.status === 'rejected' ? 'bad' : 'warn') + '">' + esc(e.status) + '</span><div><div class="t">' + esc(e.text) + '</div><div class="s">' + minLbl(e.minute) + ' · Analyst (' + esc(e.agent || 'rules') + ') made the claim · Narrator wrote the line · Verifier ' + esc(e.status) + ' it against the event log</div></div></div>').join('') + '</div>'
+        ? '<div class="list">' + ins.map((e) => '<div class="li"><span class="chip ' + (e.status === 'verified' ? 'good' : e.status === 'rejected' ? 'bad' : 'warn') + '">' + esc(e.status) + '</span><div><div class="t">' + esc(e.text) + '</div><div class="s">' + minLbl(e.minute) + ' · Analyst (' + esc(e.agent || 'rules') + ') made the claim · Narrator wrote the line · Verifier ' + esc(e.status) + ' it against the event log (Simulated)</div></div></div>').join('') + '</div>'
         : '<div class="empty">No agent lines in this match.</div>') + '</div>';
   },
 });

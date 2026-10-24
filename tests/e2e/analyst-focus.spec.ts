@@ -62,3 +62,17 @@ test('analyst focus: How was this made lists each agent insight with its Verifie
   await expect(f.locator('#trace-list')).toBeVisible();
   expect(errs).toEqual([]);
 });
+
+test('analyst focus: with the live feed on, a stat Watch has not sent shows a dash, not a season figure', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await openPage(page, 'live');
+  await f.evaluate(() => {
+    (window as any).MC_FEED = { on: true, score: [1, 0], minute: 12, over: false, last: [], stats: null };
+    (window as any).mcLiveRefresh();
+  });
+  await expect(f.locator('#live-source')).toContainText('Live from Watch');
+  await expect(f.locator('#live-stats')).toContainText('Expected goals (xG)');
+  const xg = await f.locator('#live-stats dt').first().textContent();
+  expect(xg).toContain('– – –'.slice(0, 1));
+  expect(errs).toEqual([]);
+});

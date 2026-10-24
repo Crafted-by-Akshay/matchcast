@@ -469,7 +469,7 @@ function pushFeed() {
   const last = on && AG.run ? AG.run.events.slice(-5).map((e) => ({ minute: e.minute, type: e.type, player: e.player })) : [];
   const st = on && FR.watch.stats;
   const stats = st ? { xg: st.xg, shots: st.shots, poss: st.poss, passes: st.passes, done: st.done } : null;
-  const msg = { src: 'matchcast-shell', type: 'feed', on, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over), last, stats };
+  const msg = { src: 'matchcast-shell', type: 'feed', on, fixture: M.fixture, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over), last, stats };
   post('broadcast', msg); post('analyst', msg);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
