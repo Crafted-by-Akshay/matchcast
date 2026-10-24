@@ -11,7 +11,8 @@
     + '#mcf .src{display:inline-block;margin-left:6px;font:600 10px ui-monospace,monospace;color:#c9d6f0;border:1px solid rgba(140,194,255,.35);border-radius:4px;padding:0 4px}'
     + '#mcf .chain{display:block;margin-top:2px;font:10px ui-monospace,monospace;color:#8793ad}'
     + '#mcf-top:not(.big) b{color:#fff}#mcf-top.big b{color:#F5B942}'
-    + '@media (max-width:560px){#mcf-tog{min-height:44px;min-width:44px}}';
+    + '@media (min-width:561px){#bc-view #mcf{left:auto;right:calc(14px + env(safe-area-inset-right,0px));width:min(360px,calc(100% - 28px));max-height:30vh;overflow:auto}}'
+    + '@media (max-width:560px){#mcf{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:auto}#mcf-head{padding:4px 8px}#mcf-top{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px 6px}#mcf-tog{min-height:44px;min-width:44px}}';
   document.head.appendChild(st);
   const box = document.createElement('section');
   box.id = 'mcf'; box.setAttribute('aria-label', 'Live commentary');
