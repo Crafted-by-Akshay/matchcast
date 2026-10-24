@@ -116,7 +116,7 @@ flowchart LR
     d1[build 3 images, tag sha-short]
     d2[push to GHCR, public]
     d3[azd deploy via OIDC]
-    d4[smoke: /ready 200, one event round-trip]
+    d4[smoke: /ready 200, scripts/smoke_pipeline.py full fixture to settled claims]
     d5[on failure: previous revision keeps traffic]
   end
   dep --> dep_steps
