@@ -561,7 +561,7 @@ function cardOf(c) {
 const LANGS_OK = ['en', 'es', 'hi'];
 const ANSWER_WAIT_MS = 20000;   // the api's model call is given 15 s (packages/agents live/answers.py); Watch waits longer than this
 const askTimes = { watch: [], broadcast: [] };   // one budget per view
-const ASK_LIMIT = 10;   // questions a minute per view; the api has its own limit of the same size per session
+const ASK_LIMIT = 20;   // questions a minute per view; the api has its own limit of the same size per session
 async function answerAsk(id, q, to = 'watch') {
   const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
@@ -569,7 +569,7 @@ async function answerAsk(id, q, to = 'watch') {
   if (times.length >= ASK_LIMIT) { reply({ text: 'You can ask ' + ASK_LIMIT + ' questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
   times.push(now);
   // the api answers whenever a match is on it (live or rules), so a viewer does not wait for the warm-up; it is given ANSWER_WAIT_MS before the rules answer
-  if (LV.enabled && LV.key) { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ANSWER_WAIT_MS))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
+  if (LV.enabled && LV.key) { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ANSWER_WAIT_MS))])); return; } catch (e) { if (e.status === 429) { reply({ text: 'So many questions at once. Ask again in a minute.', verdict: 'abstained', note: 'rate limit' }); return; } /* the api could not answer: the rules below do */ } }
   const a = AG.ask(q);
   reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
 }

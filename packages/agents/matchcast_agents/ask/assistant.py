@@ -38,7 +38,8 @@ LIVE_METRICS: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("fouls", "foul"), "fouls", "Fouls"),
     (("tackles", "tackle"), "tackles_won", "Tackles won"),
     (
-        ("score", "winning", "losing", "leading", "ahead", "behind", "result", "goals", "goal"),
+        ("score", "winning", "losing", "leading", "ahead", "behind", "result", "goals", "goal",
+         "scored", "scorer", "scorers"),
         "goals",
         "Score",
     ),
@@ -66,10 +67,11 @@ DEFINITIONAL = re.compile(
     r"^\s*(what|why|when|which|explain|define|how (?:is|are|does|do|can))\b", re.IGNORECASE
 )
 STRONG_LIVE = re.compile(
-    r"\b(so far|right now|currently|at the moment|how many|now)\b", re.IGNORECASE
+    r"\b(so far|right now|currently|at the moment|how many|now|the score)\b", re.IGNORECASE
 )
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
+_SCORE_PAIR = re.compile(r"\b\d+\s*(?:[-–—:]|to|vs\.?)\s*\d+\b", re.IGNORECASE)
 _CITE = re.compile(r"\[(kb|claim):([^\]]+)\]")
 
 
@@ -186,6 +188,8 @@ def _knowledge_sentences(hits: list[Hit]) -> list[tuple[str, str]]:
     for hit in hits:
         if hit.score < KB_THRESHOLD:
             break
+        if hit.chunk.section.casefold() == "worked example" and _SCORE_PAIR.search(hit.chunk.text):
+            continue  # an example that states a score is an illustration, never this match's score
         prose = [b for b in hit.chunk.text.split("\n\n") if not b.lstrip().startswith("|")]
         sentences = [s for s in _SENTENCE.split(_strip_markup(" ".join(prose))) if s]
         if sentences:

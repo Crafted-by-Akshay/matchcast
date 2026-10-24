@@ -101,7 +101,7 @@ const LV = (() => {
     if (!run) throw new Error('no match yet');
     if (!String(question).trim()) throw new Error('empty question');   // the api needs at least one character
     const res = await post('/v1/matches/' + run.id + '/ask', { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' });
-    if (!res.ok) throw new Error('ask ' + res.status);
+    if (!res.ok) throw Object.assign(new Error('ask ' + res.status), { status: res.status });
     const j = await res.json();
     const t = j.variants && j.variants[lang];
     return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j) };
