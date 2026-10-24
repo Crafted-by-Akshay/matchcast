@@ -10,6 +10,8 @@ test('the story strip names the five stages in order and starts waiting for kick
   expect(heads).toEqual(['1 Ingest', '2 Interpret', '3 Explain', '4 Render', '5 Personalise']);
   await expect(page.locator('#st-1 span')).toHaveText('waiting for kick-off');
   await expect(page.locator('#st-4 span')).toHaveText('Analyst: console');
+  await expect(page.locator('#st-demo')).toBeVisible();   // the strip offers the quick-pace demo
+  await expect(page.locator('#st-demo')).toHaveAttribute('href', /seed=2026&speed=4#watch$/);
   await page.locator('#st-2 button').click();
   await expect(page).toHaveURL(/#agents$/);
   await expect(page.locator('#st-4 span')).toHaveText('3D in Watch and Broadcast');
@@ -40,4 +42,17 @@ test('the strip is hidden on a phone, where the match gets the screen', async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await openShell(page, 'analyst');
   await expect(page.locator('#story')).toBeHidden();
+});
+
+test('Demo at 4x reloads Watch at four times speed and the strip then drops the button', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openShell(page, 'watch');
+  await page.locator('#st-demo').click();
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  await f.waitForFunction(() => (window as any).__mc.S.started === true, null, { timeout: 60_000 });
+  expect(await f.evaluate(() => (window as any).__mc.S.speed)).toBe(4);
+  await expect(page.locator('#st-demo')).toBeHidden();
+  await expect.poll(() => page.locator('#st-1 span').textContent(), { timeout: 60_000 }).toMatch(/\d+ events/);
 });
