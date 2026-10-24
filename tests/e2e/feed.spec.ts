@@ -85,7 +85,49 @@ test('the booth calls the play between the key events, counted from the actions'
     return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => ({ minute: l.minute, text: l.text, label: l.label }));
   });
   expect(lines).toEqual([
-    { minute: 1.6, text: 'Dev wins it back for Thames Rovers.', label: 'Rules · recounted' },
+    { minute: 1.6, text: 'Dev challenges for Thames Rovers.', label: 'Rules · recounted' },
     { minute: 2.3, text: 'Thames Rovers keep the ball: 3 passes, last from Fay.', label: 'Rules · recounted' },
   ]);
+});
+
+test('each feed line keeps the persona it was written under', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026');
+  const personas = await page.evaluate(() => {
+    CM.reset('lens', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.setPersona('analyst');
+    CM.api('Sharp shot from the edge.', 3, 'shot', 'lens-1');
+    CM.setPersona('club:ridgeview');
+    CM.api('Ridgeview push forward.', 4, 'shot', 'lens-2');
+    CM.setPersona('fan');   // the casual default, the name the Watch chip sends
+    CM.api('Quiet spell.', 5, 'summary', 'lens-3');
+    return CM.view().filter((l: any) => l.source === 'live').map((l: any) => [l.text, l.persona]);
+  });
+  expect(personas).toEqual([
+    ['Sharp shot from the edge.', 'analyst'],
+    ['Ridgeview push forward.', 'club:ridgeview'],
+    ['Quiet spell.', 'casual'],
+  ]);
+});
+
+test('a play line is never overwritten by an api line, and a run of passes stops at the other side', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const names = { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' };
+  const upgrade = await page.evaluate((nm) => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('upgrade', nm);
+    CM.fromWatch([pass(34, 'H', 'Ana')], [{ id: 'g34', minute: 34, type: 'goal', title: 'Goal for Ridgeview', why: '' }]);
+    CM.api('Ana scores for Ridgeview, a sweeping finish.', 34, 'goal', 'g34-api');
+    return CM.view().filter((l: any) => l.kind === 'goal' || l.kind === 'play').map((l: any) => [l.kind, l.source, l.text]);
+  }, names);
+  expect(upgrade).toEqual([
+    ['goal', 'live', 'Ana scores for Ridgeview, a sweeping finish.'],
+    ['play', 'rules', 'Ana plays it on for Ridgeview.'],
+  ]);
+  const run = await page.evaluate((nm) => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('run', nm);
+    CM.fromWatch([pass(10, 'H', 'Ana'), { minute: 10.05, type: 'interception', team: 'A', player: 'Eli' }, pass(10.1, 'H', 'Ben'), pass(10.2, 'H', 'Cal')], []);
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
+  }, names);
+  expect(run).toEqual(['Cal plays it on for Ridgeview.']);   // the interception ended Ana's run, so Ben and Cal are two passes, not three
 });
