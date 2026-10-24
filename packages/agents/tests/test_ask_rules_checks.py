@@ -223,6 +223,11 @@ def test_a_ranking_of_goals_by_player_or_team_abstains(match) -> None:
         "Who has the most goals?",
         "Who have more goals?",
         "Which team has the most goals in football?",
+        "Who scored the most goals?",
+        "Who scored the most?",
+        "Who committed the most offsides?",
+        "Who made the most interceptions?",
+        "Which player made the most runs?",
     ):
         assert rules_answer(match, question).abstained, question
 

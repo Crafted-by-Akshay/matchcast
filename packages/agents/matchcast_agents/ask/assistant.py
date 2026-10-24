@@ -100,11 +100,12 @@ LEADER_ASK = re.compile(
     r"(?:shots|shots on target)\s*\??\s*$",
     re.IGNORECASE,
 )
-# a who-or-which question that ranks by a count ("who has the most ...", "which player has more
-# ...", "who have more ..."): a ranking, not a definition, whatever words follow
+# a who, or which player/team/club, question that ranks ("who has the most ...", "who scored the
+# most ...", "which player has more ...", "who is the best ..."): a ranking by a person or a club,
+# which no tool answers. "which formation ..." is a definition and is not caught.
 RANKING_Q = re.compile(
-    r"^\s*(?:who|which)\b.*\b(?:most|more|fewest|least|best|top)\b"
-    r"|^\s*(?:who|which)\s+(?:has|have|had)\b",
+    r"^\s*(?:who|which (?:player|team|club))\b.*\b(?:most|more|fewest|least|best|top)\b"
+    r"|^\s*(?:who|which (?:player|team|club))\s+(?:has|have|had)\b",
     re.IGNORECASE,
 )
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
@@ -190,6 +191,14 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     clauses = [c for c in CLAUSE.split(question) if c and c.strip()]
     metric = _metric_in(question)
     cue = bool(LIVE_CUE.search(question))
+    if RANKING_Q.search(question):
+        if metric is None:
+            return Route(
+                "out_of_scope", None, teams, ""
+            )  # a ranking of people or clubs, not counts
+        if LEADER_ASK.match(question):
+            return Route("leader", metric, (), "")  # the plain club shot comparison
+        return Route("abstain", None, teams, "")  # a ranking by a player or club: no tool
     if (SCORER_Q.search(question) or WHAT_GOALS_Q.search(question)) and (
         metric is None or metric[0] == "goals"
     ):
@@ -202,10 +211,6 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
         top = max((h.score for h in index.search(query, k=1)), default=0.0) if query else 0.0
         return top >= KB_THRESHOLD
 
-    if RANKING_Q.search(question) and metric is not None:
-        if LEADER_ASK.match(question):
-            return Route("leader", metric, (), "")  # the plain club shot comparison
-        return Route("abstain", None, teams, "")  # a ranking by player or team: no tool
     asks_now = bool(STRONG_LIVE.search(clauses[0])) or not DEFINITIONAL.match(clauses[0])
     if metric is not None and cue and asks_now:
         if PLAYER_Q.search(question):
