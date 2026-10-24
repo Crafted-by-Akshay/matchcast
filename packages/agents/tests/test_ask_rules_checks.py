@@ -186,11 +186,20 @@ def test_who_has_the_most_with_a_player_by_surname_or_first_name_abstains(match)
         assert rules_answer(match, f"Who has the most shots, {name}?").abstained, name
 
 
-def test_who_has_the_most_in_this_match_is_still_the_club_comparison(match) -> None:
-    result = rules_answer(match, "Who has the most shots in this match?")
+def test_only_the_plain_shots_question_is_the_club_comparison(match) -> None:
+    result = rules_answer(match, "which team has the most shots?")
     assert result.intent == "leader" and result.answer.startswith(
         "Northgate FC have the most shots"
     )
+    for question in (
+        "Who has the most shots in the first half?",
+        "Who has the most shots in this match?",
+        "Who has the most shots in football?",
+        "Who has the most shots, Foss's?",
+        "Who has the most shots, Li?",
+        "Who has the most shots from outside the box?",
+    ):
+        assert rules_answer(match, question).intent != "leader", question
 
 
 def test_who_has_the_most_with_a_qualifier_abstains(match) -> None:

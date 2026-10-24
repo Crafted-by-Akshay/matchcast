@@ -92,24 +92,15 @@ STRONG_LIVE = re.compile(
     re.IGNORECASE,
 )
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
-# "who has the most shots?" with no player named compares the two clubs; no tool ranks players.
-# Only the shot counts are club totals the question can mean; "who has won the most tackles" is a
-# player ranking.
-LEADER_Q = re.compile(r"\b(most|more)\b", re.IGNORECASE)
-LEADER_METRICS = ("shots", "shots_on_target")
-# only a question asked as "who or which team/club/player has ..." is a count to answer
-LEADER_ASK = re.compile(r"^\s*(who|which (?:player|team|club))\b", re.IGNORECASE)
-# words that narrow a count to a zone, a period or a condition: the club totals do not answer those
-QUALIFIER = re.compile(
-    r"\b(from|during|after|before|outside|inside|within|against|at|by|with"
-    r"|in (?:the )?(?:first|second|last)|of (?:the )?(?:box|area|half))\b",
+# "who has the most shots?" (or shots on target) compares the two clubs. Only that exact question
+# is answered; a club, a player, a zone or a period named in it abstains, since the club totals
+# cannot answer those.
+LEADER_ASK = re.compile(
+    r"^\s*(?:who|which (?:team|club)) (?:has|had|have) (?:the most|more) "
+    r"(?:shots|shots on target)\s*\??\s*$",
     re.IGNORECASE,
 )
-PLAYER_NOUN = re.compile(
-    r"\b(players?|midfielders?|strikers?|forwards?|defend\w*|goalkeepers?|keepers?|wingers?"
-    r"|captains?|scorers?)\b",
-    re.IGNORECASE,
-)
+LEADER_START = re.compile(r"^\s*(who|which (?:player|team|club))\b", re.IGNORECASE)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _SCORE_PAIR = re.compile(r"\b\d+\s*(?:[-–—:]|to|vs\.?)\s*\d+\b", re.IGNORECASE)
 _CITE = re.compile(r"\[(kb|claim|event):([^\]]+)\]")
@@ -182,14 +173,6 @@ def names_outside_the_match(ctx: MatchContext, question: str, index: Bm25Index) 
     return False
 
 
-def _names_a_player(ctx: MatchContext, question: str) -> bool:
-    """A word of the question is a first or last name of a player in this match."""
-    names = {
-        part.casefold() for name in ctx.names.values() for part in name.split() if len(part) >= 3
-    }
-    return any(word.casefold() in names for word in re.findall(r"[A-Za-z][\w'’-]*", question))
-
-
 def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     """Rules router (the model-free fallback of the one-call router)."""
     lowered = question.casefold()
@@ -217,16 +200,12 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
         bool(STRONG_LIVE.search(clauses[0]))
         or not DEFINITIONAL.match(clauses[0])
         or bool(
-            PLAYER_Q.search(clauses[0]) and LEADER_ASK.match(clauses[0])
+            PLAYER_Q.search(clauses[0]) and LEADER_START.match(clauses[0])
         )  # "which player has most"
     )
     if metric is not None and cue and asks_now:
         if PLAYER_Q.search(question) and metric[0] != "goals":
-            if (
-                LEADER_Q.search(question) and metric[0] in LEADER_METRICS
-                and not PLAYER_NOUN.search(question) and not QUALIFIER.search(question)
-                and not _names_a_player(ctx, question) and len(teams) != 1
-            ):  # fmt: skip
+            if LEADER_ASK.match(question):
                 return Route("leader", metric, (), "")  # which club leads on this count
             return Route("abstain", None, teams, "")  # per-player rankings have no tool
         live_at = next(i for i, c in enumerate(clauses) if _metric_in(c))
