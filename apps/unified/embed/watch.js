@@ -27,7 +27,7 @@ MCS.progress('Loading the stadium and players');
     + '#mcx-log{max-height:190px;overflow:auto;display:flex;flex-direction:column;gap:6px}#mcx-log[hidden]{display:none}'
     + '.fm-planned{font-size:9px;opacity:.7}.mcx-w{margin-top:6px;border-top:1px solid var(--line);padding-top:6px;font:11px/1.4 var(--f-mono);color:var(--muted)}.mcx-w b{color:var(--ink)}';
   st.textContent += '@media (max-width:560px){button:not(.sw):not(.dk-grab),select,input:not([type=checkbox]),textarea,#px-head{min-height:44px !important;min-width:44px !important}input[type=checkbox]{width:24px;height:24px}label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}';   // phone: 44 px tap targets
-  st.textContent += '#pulse,#visp,#datap,#fan-strip{--panel:rgba(9,13,19,.96)}#px-body .px-row{flex-wrap:wrap;gap:0 8px}#px-ctlv{margin-left:auto}';   // panels opaque enough that player labels do not show through; the control line wraps instead of running into its label (UX review pass 3)
+  st.textContent += '#pulse,#visp,#datap,#fan-strip{--panel:rgb(9,13,19)}#px-body .px-row{flex-wrap:wrap;gap:0 8px}#px-ctlv{margin-left:auto}';   // panels fully opaque so player labels do not show through (pass 4; 96 percent in pass 3 still showed a ghost); the control line wraps instead of running into its label (UX review pass 3)
   st.textContent += '@media (max-width:640px){#fan-strip,#fan-metric{display:none !important}}';   // phone: the live stats strip sat under the Match Pulse bar; Match data holds the numbers (UX review, finding 14)
   document.head.appendChild(st);
   const box = document.createElement('div'); box.id = 'mcx-box';
