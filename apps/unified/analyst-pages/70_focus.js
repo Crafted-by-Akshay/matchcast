@@ -16,20 +16,35 @@ MC_TABS.splice(0, MC_TABS.length, ['ov', 'Overview'], ['shots', 'Shots'], ['pat'
 
 const focusLive = () => (window.MC_FEED && window.MC_FEED.on ? window.MC_FEED : null);
 const focusMatch = (arg) => D.match(arg || (focusLive() || {}).fixture) || D.matches[D.matches.length - 1];
+// the season match a feed belongs to, or null for a custom setup (no season fixture to compare with)
+const focusFeedMatch = (f) => (f && f.fixture ? D.match(f.fixture) : null);
+
+function drawCustomLive(el, f) {
+  const last = f.last && f.last.length
+    ? '<ol class="list">' + f.last.map((e) => '<li>' + minLbl(e.minute) + ' ' + esc(String(e.type).replace(/_/g, ' ')) + (e.player ? ' · ' + esc(e.player) : '') + '</li>').join('') + '</ol>'
+    : '<div class="empty">No events yet.</div>';
+  el.innerHTML = pgHead('Live match', 'Custom setup · no season fixture to compare with') +
+    '<p id="live-source" class="note">Live from Watch · the simulated match engine. Only the live score, time and events show for a custom setup.</p>' +
+    '<div class="kpis">' + kpi('Score', esc(f.score.join('–')), 'Watch') + kpi('Time', f.over ? 'Full time' : Math.floor(f.minute) + '′', 'Watch clock') + '</div>' +
+    card('Last five events', 'From the live match, newest last', last);
+}
 
 function drawLive(el, arg) {
-  const m = focusMatch(arg), f = focusLive(), H = m.ts[m.home], A = m.ts[m.away];
+  const f = focusLive();
+  if (f && !focusFeedMatch(f)) { drawCustomLive(el, f); return; }
+  const m = focusMatch(arg), H = m.ts[m.home], A = m.ts[m.away];
   // Live numbers come from Watch only: with the feed on, a stat Watch has not sent yet shows a dash, never the season run's figure
   const st = f ? f.stats || null : null;
+  const sv = (k, i) => (st && st[k] ? st[k][i] : null);
   const liveOr = (live, season) => (f ? live : season);
   const pair = (a, b, fn) => fn(a) + ' – ' + fn(b);
   const n = (v) => (v == null ? '–' : v);
   const rows = [
-    ['Expected goals (xG)', 'Chance quality. Each shot counts for the share of goals it would be expected to score, summed.', pair(liveOr(st && st.xg[0], H.xg), liveOr(st && st.xg[1], A.xg), (v) => (v == null ? '–' : fmt(v, 2)))],
-    ['Shots', 'Attempts at goal, home – away.', pair(liveOr(st && st.shots[0], H.shots), liveOr(st && st.shots[1], A.shots), n)],
-    ['Possession', 'Share of the match with the ball.', pair(liveOr(st && st.poss[0], H.poss), liveOr(st && st.poss[1], A.poss), (v) => (v == null ? '–' : v + '%'))],
-    ['Passes completed', 'Completed passes, home – away.', pair(liveOr(st && st.done[0], H.done), liveOr(st && st.done[1], A.done), n)],
-    ['PPDA', 'Passes allowed per defensive action. Lower means a higher press. Season run figure, shown at full time.', f && !f.over ? '–' : pair(H.ppda, A.ppda, n)],
+    ['Expected goals (xG)', 'Chance quality. Each shot counts for the share of goals it would be expected to score, summed.', pair(liveOr(sv('xg', 0), H.xg), liveOr(sv('xg', 1), A.xg), (v) => (v == null ? '–' : fmt(v, 2)))],
+    ['Shots', 'Attempts at goal, home – away.', pair(liveOr(sv('shots', 0), H.shots), liveOr(sv('shots', 1), A.shots), n)],
+    ['Possession', 'Share of the match with the ball.', pair(liveOr(sv('poss', 0), H.poss), liveOr(sv('poss', 1), A.poss), (v) => (v == null ? '–' : v + '%'))],
+    ['Passes completed', 'Completed passes, home – away.', pair(liveOr(sv('done', 0), H.done), liveOr(sv('done', 1), A.done), n)],
+    ['PPDA', 'Passes allowed per defensive action. Lower means a higher press. Only in the recorded run, so a dash while Watch is live.', f ? '–' : pair(H.ppda, A.ppda, n)],
   ];
   const score = f ? f.score.join('–') : m.score.join('–');
   const when = f ? (f.over ? 'Full time' : Math.floor(f.minute) + '′') : (m.sum.ended || 'Full time');

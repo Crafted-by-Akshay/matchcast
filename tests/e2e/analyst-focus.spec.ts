@@ -63,16 +63,30 @@ test('analyst focus: How was this made lists each agent insight with its Verifie
   expect(errs).toEqual([]);
 });
 
-test('analyst focus: with the live feed on, a stat Watch has not sent shows a dash, not a season figure', async ({ page }) => {
+test('analyst focus: with the live feed on, a stat Watch has not sent shows a dash, never a season figure', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await openPage(page, 'live');
+  await f.evaluate((fx) => {
+    (window as any).MC_FEED = { on: true, fixture: fx, score: [1, 0], minute: 12, over: false, last: [], stats: null };
+    (window as any).mcLiveRefresh();
+  }, await f.evaluate(() => D.matches[0].id));
+  await expect(f.locator('#live-source')).toContainText('Live from Watch');
+  expect(await f.locator('#live-stats dt b').allTextContents()).toEqual(['– – –', '– – –', '– – –', '– – –', '–']);
+  // full time: PPDA is still the recorded run's figure, so it stays a dash while the feed is on
+  await f.evaluate(() => { (window as any).MC_FEED.over = true; (window as any).mcLiveRefresh(); });
+  expect(await f.locator('#live-stats dt b').last().textContent()).toBe('–');
+  expect(errs).toEqual([]);
+});
+
+test('analyst focus: a live feed for a custom setup shows only the live score and events', async ({ page }) => {
   const errs = collectErrors(page);
   const f = await openPage(page, 'live');
   await f.evaluate(() => {
-    (window as any).MC_FEED = { on: true, score: [1, 0], minute: 12, over: false, last: [], stats: null };
+    (window as any).MC_FEED = { on: true, score: [2, 1], minute: 30, over: false, last: [], stats: null };
     (window as any).mcLiveRefresh();
   });
+  await expect(f.locator('h1')).toHaveText('Live match');
+  await expect(f.locator('#live-stats')).toHaveCount(0);
   await expect(f.locator('#live-source')).toContainText('Live from Watch');
-  await expect(f.locator('#live-stats')).toContainText('Expected goals (xG)');
-  const xg = await f.locator('#live-stats dt').first().textContent();
-  expect(xg).toContain('– – –'.slice(0, 1));
   expect(errs).toEqual([]);
 });
