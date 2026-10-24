@@ -27,6 +27,10 @@ test('the live pill sits bottom right, shows on the match page and hides on the 
   await expect(f.locator('#mc-live')).toBeVisible();
   const b = await f.locator('#mc-live').boundingBox();
   expect(b!.x + b!.width, 'right aligned, clear of the nav').toBeGreaterThan(1440 - 30);
+  await f.locator('#copbtn').click();
+  await expect(f.locator('#mc-live'), 'hidden while the Copilot drawer is open').toBeHidden({ timeout: 3000 });
+  await f.locator('#cop-x').click();
+  await expect(f.locator('#mc-live')).toBeVisible({ timeout: 3000 });
   await f.evaluate(() => (window as any).go('live'));
   await expect(f.locator('#mc-live')).toBeHidden();
 });
@@ -37,9 +41,11 @@ test('on a phone the pill is hidden, the Copilot button has its name and the ind
   await feed(page);
   await expect(f.locator('#mc-live')).toBeHidden();
   await expect(f.locator('#copbtn span')).toBeVisible();
+  await expect(f.locator('#copbtn')).toHaveAccessibleName('Ask Copilot');
   await f.evaluate(() => { (window as any).MC_INDICES = { control: 61, chaos: 22, tempo: 7.5, passes: 40, series: [{ control: 50, chaos: 20, tempo: 6 }, { control: 61, chaos: 22, tempo: 7.5 }] }; (window as any).idxRefresh(); });
-  const m = await f.evaluate(() => { const row = document.querySelector('#idx-panel tr')!; const th = row.querySelector('th')!.getBoundingClientRect(), svg = row.querySelectorAll('td')[1].getBoundingClientRect(); return { thH: th.height, svgW: svg.width, hint: row.querySelectorAll('td')[2].getBoundingClientRect().width }; });
+  const m = await f.evaluate(() => { const row = document.querySelector('#idx-panel tr')!; const th = row.querySelector('th')!.getBoundingClientRect(), svg = row.querySelector('svg')!.getBoundingClientRect(); return { thH: th.height, svgW: svg.width, hint: row.querySelectorAll('td')[2].getBoundingClientRect().width }; });
   expect(m.hint, 'the explanation spans the row instead of a narrow column').toBeGreaterThan(250);
   expect(m.thH).toBeLessThan(40);
+  expect(m.svgW, 'the sparkline keeps its own width and stays inside the row').toBeLessThanOrEqual(200);
   expect(await f.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });

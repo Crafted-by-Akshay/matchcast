@@ -13,7 +13,8 @@
   const placePill = () => {
     const el = document.getElementById('mc-live'); if (!el) return;
     const onLive = typeof R !== 'undefined' && R.page === 'live';
-    el.hidden = !el.dataset.on || onLive || window.innerWidth <= 820;
+    const cop = document.getElementById('copbtn'), copOpen = !!cop && cop.getAttribute('aria-expanded') === 'true';   // the Copilot drawer owns the bottom right corner while it is open
+    el.hidden = !el.dataset.on || onLive || copOpen || window.innerWidth <= 820;
   };
   setInterval(placePill, 700);
   const livePill = (msg) => {
