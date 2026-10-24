@@ -79,6 +79,11 @@ module ai 'modules/ai.bicep' = {
   params: { name: name, location: location, searchLocation: searchLocation, tags: tags }
 }
 
+module registry 'modules/registry.bicep' = {
+  name: 'registry'
+  params: { location: location, tags: tags }
+}
+
 module containerapps 'modules/containerapps.bicep' = {
   name: 'containerapps'
   params: {
@@ -99,6 +104,7 @@ module containerapps 'modules/containerapps.bicep' = {
     webImage: webImage
     apiImage: apiImage
     mcpImage: mcpImage
+    registryServer: registry.outputs.loginServer
     entraClientId: entraClientId
     keyVaultUri: keyvault.outputs.uri
     contentSafetyEndpoint: ai.outputs.contentSafetyEndpoint
@@ -158,9 +164,12 @@ module roles 'modules/roles.bicep' = {
     keyVaultName: keyvault.outputs.name
     foundryAccountName: foundryAccountName
     cognitiveNames: ai.outputs.cognitiveNames
+    registryName: registry.outputs.name
   }
 }
 
+output REGISTRY_NAME string = registry.outputs.name
+output REGISTRY_SERVER string = registry.outputs.loginServer
 output AZURE_CLIENT_ID string = identity.outputs.clientId
 output WEB_URI string = 'https://${containerapps.outputs.webFqdn}'
 output API_URI string = 'https://${containerapps.outputs.apiFqdn}'

@@ -655,6 +655,20 @@ def test_talk_route_answers_and_validates(client: TestClient) -> None:
     )
 
 
+def test_talk_route_applies_the_role_guard_to_orders(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    url = "/v1/matches/match-short/talk"
+    body = {"session_id": "short", "target": "home1", "position": "GK"}
+    refused = client.post(url, json={**body, "utterance": "shoot from range"}).json()
+    assert refused["order"] == {"key": "shoot", "accepted": False}
+    assert refused["verdict"] == "verified" and refused["facts"]
+    kept = client.post(url, json={**body, "utterance": "keep it simple"}).json()
+    assert kept["order"] == {"key": "simple", "accepted": True}
+    lower = client.post(url, json={**body, "utterance": "rest", "position": "gk"})
+    assert lower.status_code == 422
+
+
 def test_talk_is_rate_limited_on_its_own_budget_and_refuses_attacks_and_unknown_targets(
     client: TestClient,
 ) -> None:

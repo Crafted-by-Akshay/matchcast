@@ -102,6 +102,8 @@ AI Search Free does not support managed identity (Microsoft Learn, "Try Azure AI
 
 ## 7. Fallbacks
 
+Ranking note: question filler (mean, explain, tell, define...) is a stop word, and a chunk whose section defines the term (Definition, "in plain words") is lifted x1.3, x1.3 more when its title is exactly the asked term, plus 1.0 for a title word. So "what is offside?" cites the rule before its exceptions. With AI Search on, the index ranks, except that the definition of the very term asked is moved first. The 2.2 gate is unchanged; generic words such as "won" still pass it (known, tracked in 17-risks-and-debt).
+
 | Failure | Behaviour | UI label |
 | --- | --- | --- |
 | Search service unreachable or deleted (the Free tier can be removed after long inactivity) | `api` loads `kb/v1/chunks.jsonl` from Blob at start and runs in-memory BM25 + cosine | "Search fallback" chip |

@@ -8,11 +8,25 @@ from dataclasses import dataclass
 from .chunking import Chunk
 
 K1, B = 1.5, 0.75
+# "what is offside?" wants the definition before the exceptions, so a chunk whose section says it
+# defines the term gets a lift over one that merely mentions it more often
+DEFINING_SECTION = re.compile(r"definition|in plain words|what it is", re.IGNORECASE)
+DEFINITION_BOOST = 1.3
+TITLE_WORD_BONUS = 1.0  # a rare term such as "xG" scores low by frequency; naming the page lifts it
 _WORD = re.compile(r"[a-z0-9]+")
 STOP = frozenset(
     "a an and are as at be by do does for from how in is it of on or that the this to was what "
-    "when where which who why with".split()
+    "when where which who why with mean means meaning explain tell me about can you define".split()
 )
+
+
+def defines(chunk: Chunk, named: set[str]) -> bool:
+    """The chunk is the definition section of a page titled for exactly the asked term."""
+    return (
+        bool(named)
+        and bool(DEFINING_SECTION.search(chunk.section))
+        and set(analyse(chunk.title)) == named
+    )
 
 
 def analyse(text: str) -> list[str]:
@@ -88,6 +102,11 @@ class Bm25Index:
                 if tf:
                     norm = tf + K1 * (1 - B + B * length / self._avg)
                     score += self._idf.get(word, 0.0) * tf * (K1 + 1) / norm
+            if score > 0 and DEFINING_SECTION.search(chunk.section):
+                score *= DEFINITION_BOOST
+                if defines(chunk, named):
+                    score *= DEFINITION_BOOST  # the page is named for exactly what was asked
+                score += TITLE_WORD_BONUS * min(1, len(named & set(analyse(chunk.title))))
             if score > 0:
                 hits.append(Hit(chunk, score))
         hits.sort(key=lambda h: (-h.score, h.chunk.id))

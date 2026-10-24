@@ -632,10 +632,10 @@ window.addEventListener('message', (e) => {
   if (d.type === 'talk' && view === 'watch') {   // EXP-16: the api's player agent, when there is a match on the api
     const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply });
     if (!LV.enabled || !LV.key) { back(null); return; }
-    LV.talk(d.player, d.utterance).then((r) => { back(r); if (r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
+    LV.talk(d.player, d.utterance, d.position).then((r) => { back(r); if (r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
     return;
   }
-  if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
+  if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); CM.setPersona(d.persona); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
    // the viewer's watch mode changed (EXP-4)
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
@@ -757,7 +757,7 @@ function init(list) {
   $('ag-bad').onchange = (e) => { AG.seedBad(e.target.checked); LV.seedBad(e.target.checked); badNote(); };
   setInterval(badNote, 2000);
   // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
-  M.lang = 'en'; M.persona = M.persona || 'fan';
+  M.lang = 'en'; M.persona = M.persona || 'fan'; CM.setPersona(M.persona);
   const LANGS = ['en', 'es', 'hi'];
   window.setLang = (l, from) => {
     if (!LANGS.includes(l) || (l === M.lang && from)) return;   // the selector's own click always re-syncs the views

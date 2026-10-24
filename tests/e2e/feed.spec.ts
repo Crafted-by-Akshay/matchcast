@@ -68,8 +68,79 @@ test('Broadcast draws the same feed', async ({ page }) => {
 test('a talk order always gets a reply in the chat, checked or not', async ({ page }) => {
   test.setTimeout(300_000);
   const f = await openWatch(page);
-  const name = await f.evaluate(() => (window as any).__mc.players[0].name);
-  await f.evaluate((p) => (window as any).mcTalkApi({ name: p }, 'press higher'), name);
-  // no agent api in this test: the reply is the honest one, not silence
-  await expect.poll(() => f.evaluate(() => document.documentElement.textContent!.includes('No checked answer yet')), { timeout: 20_000 }).toBe(true);
+  await f.evaluate(() => { const w = window as any; w.__tp = w.__mc.players[0]; w.mcTalkApi(w.__tp, 'press higher'); });
+  // no agent api in this test: the rules fallback answers in the chat, inside the role bounds, rather than staying silent
+  await expect.poll(() => f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).length), { timeout: 20_000 }).toBeGreaterThan(0);
+  await expect(f.locator('#tk-note')).toContainText('Rules fallback', { timeout: 20_000 });
+});
+
+test('the booth calls the play between the key events, counted from the actions', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const lines = await page.evaluate(() => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('booth', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([pass(1, 'H', 'Ana'), pass(1.1, 'H', 'Ben'), pass(1.2, 'H', 'Cal'), pass(1.3, 'H', 'Ana'), pass(1.4, 'H', 'Ben'), { minute: 1.6, type: 'slide_tackle', team: 'A', player: 'Dev' }], []);
+    CM.fromWatch([pass(1.7, 'A', 'Eli')], []);   // inside the gap after the last call: no new line yet
+    CM.fromWatch([pass(2.2, 'A', 'Eli'), pass(2.3, 'A', 'Fay')], []);
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => ({ minute: l.minute, text: l.text, label: l.label }));
+  });
+  expect(lines).toEqual([
+    { minute: 1.6, text: 'Dev challenges for Thames Rovers.', label: 'Rules · recounted' },
+    { minute: 2.3, text: 'Thames Rovers keep the ball: 3 passes, last from Fay.', label: 'Rules · recounted' },
+  ]);
+});
+
+test('each feed line keeps the persona it was written under', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026');
+  const personas = await page.evaluate(() => {
+    CM.reset('lens', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.setPersona('analyst');
+    CM.api('Sharp shot from the edge.', 3, 'shot', 'lens-1');
+    CM.setPersona('club:ridgeview');
+    CM.api('Ridgeview push forward.', 4, 'shot', 'lens-2');
+    CM.setPersona('fan');   // the casual default, the name the Watch chip sends
+    CM.api('Quiet spell.', 5, 'summary', 'lens-3');
+    return CM.view().filter((l: any) => l.source === 'live').map((l: any) => [l.text, l.persona]);
+  });
+  expect(personas).toEqual([
+    ['Sharp shot from the edge.', 'analyst'],
+    ['Ridgeview push forward.', 'club:ridgeview'],
+    ['Quiet spell.', 'casual'],
+  ]);
+});
+
+test('a play line is never overwritten by an api line, and a run of passes stops at the other side', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const names = { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' };
+  const upgrade = await page.evaluate((nm) => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('upgrade', nm);
+    CM.fromWatch([pass(34, 'H', 'Ana')], [{ id: 'g34', minute: 34, type: 'goal', title: 'Goal for Ridgeview', why: '' }]);
+    CM.api('Ana scores for Ridgeview, a sweeping finish.', 34, 'goal', 'g34-api');
+    return CM.view().filter((l: any) => l.kind === 'goal' || l.kind === 'play').map((l: any) => [l.kind, l.source, l.text]);
+  }, names);
+  expect(upgrade).toEqual([
+    ['goal', 'live', 'Ana scores for Ridgeview, a sweeping finish.'],
+    ['play', 'rules', 'Ana plays it on for Ridgeview.'],
+  ]);
+  const run = await page.evaluate((nm) => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('run', nm);
+    CM.fromWatch([pass(10, 'H', 'Ana'), { minute: 10.05, type: 'interception', team: 'A', player: 'Eli' }, pass(10.1, 'H', 'Ben'), pass(10.2, 'H', 'Cal')], []);
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
+  }, names);
+  expect(run).toEqual(['Cal plays it on for Ridgeview.']);   // the interception ended Ana's run, so Ben and Cal are two passes, not three
+});
+
+test('a run of passes is counted across calls, within one minute', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const text = await page.evaluate(() => {
+    const names = ['Ana', 'Ben', 'Cal'];
+    const pass = (i: number) => ({ minute: 5 + i * 0.05, type: 'pass', team: 'H', player: names[i % 3] });
+    CM.reset('span', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([0, 1, 2, 3, 4].map(pass), []);     // one call at 5.20, after five passes (the newest pass is at 5.20)
+    CM.fromWatch([5, 6, 7, 8].map(pass), []);        // 5.25 to 5.40: the call at 5.40 is exactly 0.2 minutes after the first, and counts all nine passes from 5.00
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
+  });
+  expect(text.at(-1)).toBe('Ridgeview keep the ball: 9 passes, last from Cal.');
 });
