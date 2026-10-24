@@ -131,3 +131,16 @@ test('a play line is never overwritten by an api line, and a run of passes stops
   }, names);
   expect(run).toEqual(['Cal plays it on for Ridgeview.']);   // the interception ended Ana's run, so Ben and Cal are two passes, not three
 });
+
+test('a run of passes is counted across calls, within one minute', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const text = await page.evaluate(() => {
+    const names = ['Ana', 'Ben', 'Cal'];
+    const pass = (i: number) => ({ minute: 5 + i * 0.05, type: 'pass', team: 'H', player: names[i % 3] });
+    CM.reset('span', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([0, 1, 2, 3, 4].map(pass), []);     // calls at 5.00 (one pass) and then at 5.20 (the gap is 0.2 minutes)
+    CM.fromWatch([5, 6, 7, 8].map(pass), []);        // 5.25 to 5.40: the call at 5.40 counts the nine passes since 5.00
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
+  });
+  expect(text.at(-1)).toBe('Ridgeview keep the ball: 9 passes, last from Cal.');
+});

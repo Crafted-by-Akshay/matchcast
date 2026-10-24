@@ -55,12 +55,16 @@ const CM = (() => {
   // The words come from the events, so the line is checked in page like the rest of the rules lines.
   const callPlay = (at) => {
     if (playAt >= 0 && at >= playAt && at - playAt < PBP_GAP) return;
-    const span = events.slice(playFrom).filter((e) => e.ti >= 0);   // every action since the last call, so the other side's shot or pass ends a run
-    const fresh = span.filter((e) => e.player && PLAY.has(e.type));
+    const fresh = events.slice(playFrom).filter((e) => e.ti >= 0 && e.player && PLAY.has(e.type));
     if (!fresh.length) return;
     const act = fresh[fresh.length - 1], tc = club(act.ti);
-    let run = 0;   // the passes this side has made in a row, up to the newest action, within RUN_MIN minutes
-    for (let i = span.length - 1; i >= 0 && span[i].ti === act.ti && span[i].type === 'pass' && act.minute - span[i].minute <= RUN_MIN; i--) run++;
+    let run = 0;   // the passes this side has made in a row up to the newest action, within RUN_MIN minutes, across earlier calls too; any action by the other side ends it
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i];
+      if (e.ti < 0) continue;
+      if (e.ti !== act.ti || e.type !== 'pass' || act.minute - e.minute > RUN_MIN) break;
+      run++;
+    }
     const text = act.type === 'pass'
       ? (run >= 3 ? tc + ' keep the ball: ' + run + ' passes, last from ' + act.player + '.' : act.player + ' plays it on for ' + tc + '.')
       : act.type === 'foul' ? act.player + ' commits a foul (' + tc + ').'
@@ -99,7 +103,7 @@ const CM = (() => {
     if (!names || !String(text || '').trim()) return;
     if (key) { if (seenApi.has(key)) return; seenApi.add(key); }   // a reconnect replays the stream's publications: each one joins the feed once
     const at = +minute || 0, prior = [...items].reverse().find((x) => x.source === 'rules' && !SKIP_UPGRADE.includes(x.kind) && Math.abs(x.minute - at) < 0.5);
-    if (prior) { prior.text = trim(String(text), 240); prior.source = 'live'; prior.chain = CHAIN.concat('Live agents'); changed(); return; }
+    if (prior) { prior.text = trim(String(text), 240); prior.source = 'live'; prior.chain = CHAIN.concat('Live agents'); prior.persona = persona; changed(); return; }
     push({ minute: at, kind: kind || 'line', text: String(text), source: 'live', chain: CHAIN.concat('Live agents') });
   };
 
