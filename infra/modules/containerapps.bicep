@@ -16,6 +16,9 @@ param webImage string
 param apiImage string
 param mcpImage string
 
+@description('Login server of the cloud-build registry; an image under it is pulled with the managed identity.')
+param registryServer string = ''
+
 @description('Client ID of the Entra app registration matchcast-web (PLT-5). Empty leaves Easy Auth off.')
 param entraClientId string = ''
 param keyVaultUri string = ''
@@ -65,6 +68,12 @@ resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
     }
   }
 }
+
+// Images built by scripts/deploy_cloud.sh live in ACR and need the identity to pull; GHCR images are public.
+var acrPull = [{ server: registryServer, identity: identityId }]
+var apiRegistries = !empty(registryServer) && startsWith(apiImage, registryServer) ? acrPull : []
+var webRegistries = !empty(registryServer) && startsWith(webImage, registryServer) ? acrPull : []
+var mcpRegistries = !empty(registryServer) && startsWith(mcpImage, registryServer) ? acrPull : []
 
 var identity = {
   type: 'UserAssigned'
@@ -117,6 +126,7 @@ resource web 'Microsoft.App/containerApps@2025-01-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      registries: webRegistries
       secrets: appInsightsSecrets
       ingress: { external: true, targetPort: 8080, transport: 'auto' }
     }
@@ -147,6 +157,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      registries: apiRegistries
       secrets: concat(appInsightsSecrets, searchSecrets)
       ingress: { external: true, targetPort: 8000, transport: 'auto' }
     }
@@ -228,6 +239,7 @@ resource mcp 'Microsoft.App/containerApps@2025-01-01' = {
     managedEnvironmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      registries: mcpRegistries
       secrets: appInsightsSecrets
       ingress: { external: false, targetPort: 8001, transport: 'auto' }
     }

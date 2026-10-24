@@ -83,7 +83,7 @@ Key Vault secrets (the only ones): `srch-query-key`, `srch-admin-key`. Each is d
 
 | Setting | `api` | `mcp` | `web` |
 | --- | --- | --- | --- |
-| Image | `ghcr.io/crafted-by-akshay/matchcast-api:sha-<sha>` | `…-mcp:sha-<sha>` | `…-web:sha-<sha>` |
+| Image | `acrmatchcast<suffix>.azurecr.io/matchcast-api:sha-<sha>` (cloud build, ADR-0019) or `ghcr.io/crafted-by-akshay/matchcast-api:sha-<sha>` | `…-mcp:sha-<sha>` | `…-web:sha-<sha>` |
 | CPU / memory | 0.5 vCPU / 1 GiB | 0.5 / 1 GiB | 0.25 / 0.5 GiB |
 | Replicas | min 0, max 1 | min 0, max 2 | min 0, max 1 |
 | Scale rules | HTTP 20 concurrent; KEDA `azure-eventhub` on `match-events`, `$Default`, threshold 50 | HTTP 20 concurrent | HTTP 50 concurrent |
@@ -114,7 +114,7 @@ flowchart LR
   main --> dep[deploy.yml]
   subgraph dep_steps[deploy.yml]
     d1[build 3 images, tag sha-short]
-    d2[push to GHCR, public]
+    d2[az acr build into ACR, or push to GHCR]
     d3[azd deploy via OIDC]
     d4[smoke: /ready 200, scripts/smoke_pipeline.py full fixture to settled claims]
     d5[on failure: previous revision keeps traffic]
