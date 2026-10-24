@@ -10,12 +10,22 @@
     if (a && framed) { e.preventDefault(); send({ type: 'open', view: 'watch' }); }
   });
   // the live score from Watch, while Watch runs the shared match (a small pill, so the console shows one match everywhere)
+  const placePill = () => {
+    const el = document.getElementById('mc-live'); if (!el) return;
+    const onLive = typeof R !== 'undefined' && R.page === 'live';
+    const cop = document.getElementById('copbtn'), copOpen = !!cop && cop.getAttribute('aria-expanded') === 'true';   // the Copilot drawer owns the bottom right corner while it is open
+    el.hidden = !el.dataset.on || onLive || copOpen || window.innerWidth <= 820;
+  };
+  setInterval(placePill, 700);
   const livePill = (msg) => {
     let el = document.getElementById('mc-live');
     if (!el) { el = document.createElement('div'); el.id = 'mc-live'; el.setAttribute('role', 'status');
-      el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:50;padding:6px 10px;border-radius:999px;background:#17283F;border:1px solid #FF7A2E;color:#E8EEF7;font:600 12px Inter,system-ui,sans-serif';
+      // bottom right, clear of the nav; it hides on the Live match page (which shows the same score) and on phones (the shell's match bar shows it)
+      el.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:50;padding:6px 10px;border-radius:999px;background:#17283F;border:1px solid #FF7A2E;color:#E8EEF7;font:600 12px Inter,system-ui,sans-serif';
       document.body.appendChild(el); }
     el.hidden = !msg.on;
+    el.dataset.on = msg.on ? '1' : '';
+    placePill();
     if (msg.on) {
       el.textContent = 'Live from Watch · ' + msg.score.join('–') + ' · ' + (msg.over ? 'full time' : msg.minute + "'");
       el.title = 'Last five events: ' + (msg.last || []).map((x) => Math.floor(x.minute) + "' " + x.type + (x.player ? ' ' + x.player : '')).join(' | ');
