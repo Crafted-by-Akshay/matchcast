@@ -27,6 +27,7 @@ def prompt(name: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.startswith("version:")).strip()
 
 
+REASONING_EFFORT = "low"  # keeps a call well inside the 20 s wait
 REASONING_HEADROOM = 1500  # completion tokens on top of the answer, spent on reasoning first
 
 
@@ -105,6 +106,7 @@ class FoundryModelClient:
                 # Reasoning models (gpt-5-mini) reject max_tokens and any non-default temperature,
                 # and count their hidden reasoning against the completion budget.
                 max_completion_tokens=max_tokens + REASONING_HEADROOM,
+                reasoning_effort=REASONING_EFFORT,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {"name": "answer", "schema": schema, "strict": True},
@@ -116,6 +118,8 @@ class FoundryModelClient:
         if response.usage:
             self.usage.prompt_tokens += response.usage.prompt_tokens
             self.usage.completion_tokens += response.usage.completion_tokens
+        if response.choices and getattr(response.choices[0], "finish_reason", None) == "length":
+            raise ModelError("the reasoning used up the completion budget")
         try:
             data = json.loads(response.choices[0].message.content)
         except (ValueError, TypeError, IndexError, AttributeError) as error:
