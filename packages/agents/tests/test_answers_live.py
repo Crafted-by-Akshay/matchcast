@@ -303,3 +303,44 @@ def test_a_rejected_model_answer_records_why_in_the_audit(match) -> None:
     wrong = refusal(match, "Northgate FC have 99 shots so far.", ["team:home"], "How many?")
     assert wrong == "number"
     assert refusal(match, f"Northgate FC have {shots} shots.", ["team:home"], "How many?") is None
+
+
+def test_a_scoreline_written_with_a_colon_the_record_does_not_hold_goes_to_the_rules(match) -> None:
+    home, away = scoreline(match)
+    text = f"The score is {away}:{home} so far."
+    assert refusal(match, text, ["score", "team:home", "team:away"]) == "scoreline"
+
+
+def test_a_win_the_record_does_not_hold_goes_to_the_rules(match) -> None:
+    # "tackles won" is in every team fact; it must not make "won the match" look grounded
+    assert refusal(match, "Northgate FC have won the match.", ["team:home"]) == "state"
+
+
+def test_a_second_half_under_way_is_in_play_not_half_time(match) -> None:
+    last = match["events"][-1]  # the first half ended; the second half has started since
+    second = json.loads(json.dumps(last))
+    second.update(
+        event_id="e-second-half",
+        stream_sequence=last["stream_sequence"] + 1,
+        clock={"period": 2, "period_elapsed_ms": 0},
+        payload={"type": "period_boundary", "boundary": "started"},
+    )
+    later = {**match, "events": [*match["events"], second]}
+    home, away = scoreline(later)
+    assert refusal(later, f"It is half time, {home}-{away}.", ["score", "status"]) == "state"
+    assert refusal(later, f"It is in play, {home}-{away}.", ["score", "status"]) is None
+
+
+def test_a_count_in_a_sentence_naming_one_club_must_be_that_clubs(match) -> None:
+    home, away = scoreline(match)
+    assert home != away
+    # both team facts are cited, so the union holds "goals 2"; the sentence names Northgate FC
+    text = f"Northgate FC have {away} goals."
+    assert refusal(match, text, ["team:home", "team:away"]) == "count"
+
+
+def test_a_club_then_a_number_must_be_that_clubs_score(match) -> None:
+    home, away = scoreline(match)
+    assert home != away
+    assert refusal(match, f"Northgate FC {away}, Harbour United {home}.", ["score"]) == "scoreline"
+    assert refusal(match, f"Northgate FC {home}, Harbour United {away}.", ["score"]) is None

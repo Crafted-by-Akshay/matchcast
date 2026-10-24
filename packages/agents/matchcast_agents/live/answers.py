@@ -41,12 +41,12 @@ COUNT_PHRASE = re.compile(
     re.IGNORECASE,
 )
 # "1-2": a scoreline must be the one the score fact writes, home first
-SCORELINE = re.compile(r"\b(\d+)\s*[-–]\s*(\d+)\b")
+SCORELINE = re.compile(r"\b(\d+)\s*(?:[-–—:]|to|vs\.?)\s*(\d+)\b", re.IGNORECASE)
 # words that claim the state of the match: each must be in a cited fact, or it is not shown
 STATE_CLAIMS = (
     "full time", "full-time", "half time", "half-time", "in play", "final", "at the end",
     "winning", "losing", "leading", "drawing", "level", "ahead", "behind", "won", "lost", "draw",
-    "beat",
+    "beat", "win", "wins", "lead", "leads", "trail", "trailing", "ended",
 )  # fmt: skip
 # capitalised words an answer may use without them being a name of the cited facts
 COMMON_WORDS = frozenset({
@@ -93,13 +93,10 @@ def _counts(values: dict[str, Any]) -> str:
 
 def _status(ctx: MatchContext) -> str:
     """The phase the record shows, the minute and who leads; the words a fact must hold."""
-    ended = [
-        e for e in ctx.events
-        if e["payload"]["type"] == "period_boundary" and e["payload"].get("boundary") == "ended"
-    ]  # fmt: skip
-    phase = "in play"
-    if ended:
-        phase = "full time" if ended[-1]["clock"]["period"] >= 2 else "half time"
+    boundaries = [e for e in ctx.events if e["payload"]["type"] == "period_boundary"]
+    phase = "in play"  # the last boundary decides: a period that started again is in play
+    if boundaries and boundaries[-1]["payload"].get("boundary") == "ended":
+        phase = "full time" if boundaries[-1]["clock"]["period"] >= 2 else "half time"
     home, away = _score(ctx)
     if home == away:
         lead = "the teams are level"
@@ -195,7 +192,16 @@ def _has(text: str, pattern: str) -> bool:
     return re.search(rf"\b{pattern}\b", text, re.IGNORECASE) is not None
 
 
-def _ask_problem(text: str, cites: list[str], texts: dict[str, str], limit: int) -> str | None:
+def _sentence_at(text: str, position: int) -> str:
+    """The sentence around a position: the text between the sentence marks either side of it."""
+    start = max(text.rfind(mark, 0, position) for mark in ".;!?") + 1
+    ends = [i for i in (text.find(mark, position) for mark in ".;!?") if i >= 0]
+    return text[start : min(ends, default=len(text))]
+
+
+def _ask_problem(
+    text: str, cites: list[str], texts: dict[str, str], limit: int, clubs: tuple[str, ...]
+) -> str | None:
     """Why an answer may not be shown, or None: it is bound to the facts it cites.
 
     The reasons are short codes, kept in the audit so a refused answer can be traced.
@@ -213,15 +219,26 @@ def _ask_problem(text: str, cites: list[str], texts: dict[str, str], limit: int)
     if not found and not (_capitalised(text) - COMMON_WORDS) & names:
         return "no_fact"  # without a number, the answer must name something the facts give
     for match in SCORELINE.finditer(text):
-        pattern = rf"{match.group(1)}\s*[-–]\s*{match.group(2)}"
+        pattern = rf"{match.group(1)}\s*(?:[-–—:]|to|vs\.?)\s*{match.group(2)}"
         if not any(_has(t, pattern) for t in cited):
             return "scoreline"  # "2-1" must be the score as a cited fact writes it
+    for club in clubs:  # "Northgate FC 2, Harbour United 1": each club's number is its own score
+        for match in re.finditer(rf"{re.escape(club)}\s*[,:]?\s*(\d+)\b", text):
+            if not any(_has(t, rf"{re.escape(club)}\s*[,:]?\s*{match.group(1)}") for t in cited):
+                return "scoreline"
+    clubs = {c: texts[c].split(":", 1)[0] for c in cites if c.startswith("team:")}
     for match in COUNT_PHRASE.finditer(text):
         count, label = match.group(1), _label(match.group(2))
-        if not any(_has(t.casefold(), rf"{re.escape(label)} {re.escape(count)}") for t in cited):
-            return "count"  # "3 shots" must be "shots 3" in a cited fact, not another metric
+        # a count in a sentence that names one cited club must be that club's count
+        sentence = _sentence_at(text, match.start())
+        named = [c for c, club in clubs.items() if _has(sentence, re.escape(club))]
+        scope = [texts[named[0]]] if len(named) == 1 else cited
+        if not any(_has(t.casefold(), rf"{re.escape(label)} {re.escape(count)}") for t in scope):
+            return "count"  # "3 shots" must be "shots 3" in the cited fact of its club
+    # "tackles won" is a count, not a result: it must not satisfy a claim that a side won
+    stated = [t.replace("tackles won", "") for t in cited]
     for phrase in STATE_CLAIMS:
-        if _has(text, re.escape(phrase)) and not any(_has(t, re.escape(phrase)) for t in cited):
+        if _has(text, re.escape(phrase)) and not any(_has(t, re.escape(phrase)) for t in stated):
             return "state"  # "full time", "level", "ahead": the record must say so
     if not _names_fit(text, names):
         return "name"
@@ -280,7 +297,8 @@ class LiveAnswers:
         if not all(isinstance(c, str) and c in texts for c in cites):
             return None, "unknown_citation"  # a citation that is not a fact of this match
         text = text.strip()
-        reason = _ask_problem(text, list(dict.fromkeys(cites)), texts, max(limit, 40))
+        clubs = (ctx.club_name(ctx.home), ctx.club_name(ctx.away))
+        reason = _ask_problem(text, list(dict.fromkeys(cites)), texts, max(limit, 40), clubs)
         if reason:
             return None, reason
         citations = [{"type": "fact", "id": c} for c in dict.fromkeys(cites)]
