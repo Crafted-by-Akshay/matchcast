@@ -31,18 +31,19 @@ button,select{font:inherit;color:inherit}
 
 /* ---- top bar: brand, the dashboard switcher, status ---- */
 .top{display:flex;align-items:center;gap:16px;height:var(--bar);padding:0 var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none}
-.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto}
+.brand>div{min-width:0}
 .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,var(--accent),#7B5CF0);color:var(--accent-ink);flex:none}
 .brand b{font-size:15px;letter-spacing:.01em}
-.brand small{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .switch{display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;overflow-x:auto;scrollbar-width:none;max-width:100%}
 .switch::-webkit-scrollbar{display:none}
 .switch button{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:8px;font-weight:600}
-.switch button small{font-weight:500;font-size:11px}
+.switch button small{font-weight:500;font-size:12px}
 .switch button[aria-selected="true"]{background:#2A62C9;color:var(--accent-ink)}
 .switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .status{display:flex;gap:6px;flex:none}
-.pill{font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill{font-size:12px;min-height:32px;display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .pill.warn{color:var(--warn);border-color:rgba(245,185,66,.35)}
 button.pill{background:none;cursor:pointer;font-family:inherit}
 #status-dlg{background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:10px;max-width:560px;padding:16px 20px}
@@ -50,23 +51,26 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
 #lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+#voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0;min-height:0}   /* a live region for voice announcements, not a visible control */
+#api-pill::before{content:"Agents ·";margin-right:.4em;color:var(--muted)}   /* says which part the pill is about, so it does not read as a contradiction of the engine chips */
+@media (max-width:1500px){.brand small{display:none}.proto{display:none}}
 @media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
 .fx{display:flex;flex-direction:column;gap:3px;min-width:0}
-.fx label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.fx select{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:6px 10px;max-width:320px;min-width:220px}
+.fx label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fx select{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:6px 10px;max-width:380px;min-width:300px}
 .scoreline{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;justify-content:center}
 .team{display:flex;align-items:center;gap:7px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .team i{width:10px;height:10px;border-radius:50%;flex:none}
 .team.h{justify-content:flex-end}
 .score{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;padding:2px 12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;min-width:82px;text-align:center}
-.score small{display:block;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.score small{display:block;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
 .meta{color:var(--muted);font-size:12px;min-width:0}
 .meta b{color:var(--text);font-weight:600}
 .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.chip{font-size:12px;padding:4px 9px;border-radius:999px;background:var(--bg3);border:1px solid var(--line);white-space:nowrap}
+.chip{font-size:12px;padding:5px 10px;border-radius:999px;background:var(--bg3);border:1px solid var(--line);white-space:nowrap}
 .chip.ok{color:var(--ok);border-color:rgba(53,196,138,.35)}
 .chip.live{color:var(--hot);border-color:rgba(255,122,46,.4)}
 .chip button{margin-left:6px;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-weight:600}
@@ -83,7 +87,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
 .view.ready .wait{opacity:0}
 .view.gone .wait{display:none}
-.foot{flex:none;padding:6px var(--gut);font-size:11px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
+.foot{flex:none;padding:6px var(--gut);font-size:12px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
 .foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
 .toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
@@ -91,7 +95,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .recap[hidden]{display:none}
 .recap h2{margin:0 0 4px;font-size:13px}
 .recap p{margin:0 0 8px;line-height:1.45}
-.recap .rm{color:var(--muted);font-size:11px}
+.recap .rm{color:var(--muted);font-size:12px}
 .recap button{min-height:44px;min-width:44px;margin-right:8px}
 
 /* ---- agents: one pipeline for the three views, drawn by the shell (no iframe) ---- */
@@ -142,7 +146,7 @@ dialog.tour{max-width:460px;width:calc(100% - 2 * var(--gut));background:var(--b
 dialog.tour::backdrop{background:rgba(3,8,16,.7)}
 dialog.tour h2{margin:0 0 6px;font-size:17px}
 dialog.tour p{margin:0 0 10px;font-size:14px;line-height:1.5}
-dialog.tour .tour-n{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+dialog.tour .tour-n{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 dialog.tour .tour-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px}
 dialog.tour button{border:1px solid var(--line);background:var(--bg3);color:var(--text);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit;font-weight:600}
 dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-strong);color:var(--accent-ink)}
@@ -155,13 +159,24 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .switch{margin-left:0;width:100%}
   .switch button{flex:1 0 auto;justify-content:center}
   .status{width:100%;flex-wrap:wrap}   /* language, Voice and Status stay reachable on a phone */
-  #voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0}   /* out of sight, still in the accessibility tree for its announcements */
   .matchbar{gap:10px}
   .fx{width:100%}
   .fx select{max-width:none;min-width:0;width:100%}
   .scoreline{width:100%;justify-content:space-between}
   .team{max-width:40%}
   .foot{display:none}
+}
+@media (max-width:560px){
+  /* one scrolling row of utilities instead of three or four wrapped rows */
+  .status{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:4px 2px;-webkit-mask-image:linear-gradient(90deg,#000 92%,transparent);mask-image:linear-gradient(90deg,#000 92%,transparent)}
+  .status::-webkit-scrollbar{display:none}
+  .status>*{flex:none}
+  #api-pill{order:-1}
+  .matchbar .meta:not(.err){display:none}   /* the first screen belongs to the match: fixture, score, then the view; a load error still shows */
+  .toast{bottom:auto;top:12px}   /* a toast must not land on the pitch controls */
+  #src{display:none}   /* the engine chip repeats what the view itself shows; the sync chip stays */
+  .fx label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .brand small{display:block}
 }
 @media (max-width:420px){
   .brand small{display:none}
@@ -177,7 +192,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <header class="top">
   <div class="brand">
     <span class="mark" aria-hidden="true">MC</span>
-    <div><b>MatchCast</b><small>One console: fan Watch, Analyst and Broadcast on one match</small></div>
+    <div><b>MatchCast</b><small title="One console: fan Watch, Analyst and Broadcast on one match">Fan, Analyst and Broadcast on one match</small></div>
   </div>
   <nav class="switch" role="tablist" aria-label="Dashboards">
     <button role="tab" id="tab-watch" data-view="watch" aria-controls="v-watch" aria-selected="true" title="Watch (1)">Watch <small>fan 3D</small></button>
@@ -185,8 +200,8 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <button role="tab" id="tab-broadcast" data-view="broadcast" aria-controls="v-broadcast" aria-selected="false" title="Broadcast (3)">Broadcast <small>desk</small></button>
     <button role="tab" id="tab-agents" data-view="agents" aria-controls="v-agents" aria-selected="false" title="Agents (4)">Agents <small>pipeline</small></button>
   </nav>
-  <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
   <div class="status" aria-label="Environment">
+    <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
     <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
     <span class="pill" id="api-pill" role="status" title="">Starting…</span>
@@ -453,11 +468,11 @@ function paint() {
 
   const f = FR[current];
   const synced = f && f.key === keyOf(s);
-  $('sync').textContent = current === 'agents' ? 'Shared pipeline' : current === 'analyst' ? (fx ? 'Showing ' + fx.id : 'Season fixtures only') : (synced ? 'In sync' : 'Loads on switch');
+  $('sync').textContent = current === 'agents' ? 'Shared pipeline' : current === 'analyst' ? (fx ? 'Showing ' + fx.id : 'Season fixtures only') : (synced ? 'Same fixture as Analyst' : 'Loads on switch');
   $('sync').className = 'chip ' + (current === 'analyst' || synced ? 'ok' : '');
   $('src').textContent = current === 'analyst'
     ? (fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
-    : (live ? 'Live engine · ' + (current === 'agents' ? 'watch' : current) : 'Live engine: same setup as Analyst');
+    : (live ? 'Match engine running here · ' + (current === 'agents' ? 'watch' : current) : 'Match engine: same setup as Analyst');
   $('src').className = 'chip ' + (live ? 'live' : '');
   pushFeed(); renderAgents();
 }
@@ -701,7 +716,7 @@ function init(list) {
   for (const m of Object.keys(md)) {
     const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
     for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
-      o.textContent = fx.home.club + ' ' + fx.score.join('–') + ' ' + fx.away.club; g.appendChild(o); }
+      o.textContent = fx.home.club + ' v ' + fx.away.club + ' (recorded ' + fx.score.join('–') + ')'; g.appendChild(o); }
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
@@ -850,7 +865,7 @@ function tourInit() {
 
 tourInit();
 fetch('shared/fixtures.json').then((r) => r.json()).then(init).catch((err) => {
-  $('meta').textContent = 'Could not load the season fixtures: ' + err.message;
+  $('meta').className = 'meta err'; $('meta').textContent = 'Could not load the season fixtures: ' + err.message;
 });
 </script>
 </body>
