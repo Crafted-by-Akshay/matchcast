@@ -78,6 +78,7 @@
     const analyst = typeof FAN !== 'undefined' && FAN.mode === 'analyst';
     box.hidden = !analyst || !S.started; if (box.hidden) return;
     const r = window.mcIndicesNow();
+    if (r.series.length < 2) { box.hidden = true; return; }   // one point a minute: nothing to draw (or say) until the second minute
     const row = (label, key, max, color, val, unit) => '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="width:52px">' + label + '</span>' + spark(r.series, key, max, color) + '<b style="width:44px;text-align:right">' + val + unit + '</b></div>';
     box.innerHTML = row('Control', 'control', 100, '#6BD08A', Math.round(r.control), '') + row('Chaos', 'chaos', 100, '#F5B942', Math.round(r.chaos), '') + row('Tempo', 'tempo', 12, '#8CC2FF', r.tempo.toFixed(1), '/m')
       + '<div style="color:var(--muted);margin-top:4px">One point a minute; numbers use the last 5 min.</div>';
