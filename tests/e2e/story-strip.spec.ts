@@ -38,10 +38,17 @@ test('the Fan and Analyst switch sets Watch\'s mode and follows it back', async 
   expect(errs).toEqual([]);
 });
 
-test('the strip is hidden on a phone, where the match gets the screen', async ({ page }) => {
+test('on a phone the strip shrinks to one Viewing as row with the Fan and Analyst switch', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openShell(page, 'analyst');
-  await expect(page.locator('#story')).toBeHidden();
+  await expect(page.locator('#story ol')).toBeHidden();
+  await expect(page.locator('#st-demo')).toBeHidden();
+  const fan = page.locator('.story-who [data-persona=casual]');
+  await expect(fan).toBeVisible();
+  expect((await fan.boundingBox())!.height, 'a 44 px tap target').toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await fan.click();
+  await expect(fan).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('Demo at 4x reloads Watch at four times speed and the strip then drops the button', async ({ page }) => {

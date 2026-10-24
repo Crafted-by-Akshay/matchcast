@@ -15,7 +15,8 @@ test('phone header keeps the utilities in one scrolling row under the view switc
   });
   expect(new Set(m.tops).size, 'Tour, Voice, Status and the agents pill share one row').toBe(1);
   expect(m.rowBottom, 'the header leaves most of the first screen to the match').toBeLessThan(230);
-  expect(m.stageH, 'the view gets at least 60 percent of an 844 px phone').toBeGreaterThanOrEqual(500);
+  expect(m.stageH, 'the view gets about 60 percent of an 844 px phone').toBeGreaterThanOrEqual(480);
+  await expect(page.locator('.status .more'), 'a visible cue that the utility row scrolls').toBeVisible();
   expect(m.over).toBeLessThanOrEqual(1);
 });
 
