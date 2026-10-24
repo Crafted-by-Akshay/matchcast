@@ -86,3 +86,39 @@ def test_why_the_first_goal_mattered_states_the_score_change_not_xg(match) -> No
     assert match["names"][first["payload"]["player_id"]] in result.answer
     assert "0-0 to 0-1" in result.answer
     assert result.citations == [{"type": "event", "id": first["event_id"]}]
+
+
+def test_who_scored_for_one_club_lists_only_that_clubs_goals(match) -> None:
+    result = rules_answer(match, "who scored for Northgate FC?")
+    home_goals = [e for e in match["events"] if e["payload"]["type"] == "goal"
+                  and e["payload"]["team_id"] == "home"]  # fmt: skip
+    away_scorers = [
+        match["names"][e["payload"]["player_id"]]
+        for e in match["events"]
+        if e["payload"]["type"] == "goal" and e["payload"]["team_id"] == "away"
+    ]
+    assert result.intent == "goals"
+    assert [c["id"] for c in result.citations] == [g["event_id"] for g in home_goals]
+    assert not any(name in result.answer for name in away_scorers)
+
+
+def test_who_scored_the_most_shots_is_not_a_goal_list(match) -> None:
+    assert rules_answer(match, "who scored the most shots?").intent != "goals"
+
+
+def test_why_goals_matter_in_football_is_not_a_match_goal(match) -> None:
+    assert rules_answer(match, "why do goals matter in football?").intent != "goal_impact"
+
+
+def test_the_winning_goal_question_does_not_cite_the_last_goal(match) -> None:
+    assert rules_answer(match, "why was the winning goal important?").intent != "goal_impact"
+
+
+def test_what_goals_a_club_scored_is_the_goal_list(match) -> None:
+    assert rules_answer(match, "what goals did Harbour United score?").intent == "goals"
+
+
+def test_the_event_marker_is_protected_in_translation() -> None:
+    from matchcast_agents.translate import _MARKER
+
+    assert _MARKER.findall("Dev Hale scored [event:e10] today") == ["[event:e10]"]

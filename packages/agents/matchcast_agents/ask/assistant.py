@@ -66,6 +66,8 @@ LIVE_METRICS: tuple[tuple[tuple[str, ...], str, str], ...] = (
 SCORER_Q = re.compile(
     r"\b(who scored|who got the goals?|who netted|scorers?|goal ?scorers?)\b", re.I
 )
+WHAT_GOALS_Q = re.compile(r"\bwhat goals\b.*\bscore[ds]?\b", re.I)  # "what goals did X score"
+GOAL_WORD = re.compile(r"\bgoals?\b", re.I)
 IMPACT_Q = re.compile(
     r"\b(why|how)\b.*\b(important|matter\w*|decisive|significant|mattered)\b", re.I
 )
@@ -173,10 +175,12 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     clauses = [c for c in CLAUSE.split(question) if c and c.strip()]
     metric = _metric_in(question)
     cue = bool(LIVE_CUE.search(question))
-    if SCORER_Q.search(question):
+    if (SCORER_Q.search(question) or WHAT_GOALS_Q.search(question)) and (
+        metric is None or metric[0] == "goals"
+    ):
         return Route("goals", ("goals", "Goals"), teams, "")  # each goal, from the stored events
-    if IMPACT_Q.search(question) and "goal" in lowered:
-        which = "last" if re.search(r"\b(last|final|winning|late)\b", lowered) else "first"
+    which = _goal_ordinal(question)
+    if IMPACT_Q.search(question) and GOAL_WORD.search(question) and which:
         return Route("goal_impact", ("goals", which), teams, "")  # the score change at one goal
 
     def hit(query: str) -> bool:
@@ -355,18 +359,20 @@ class Assistant:
         if plan.intent == "out_of_scope":
             return AskResult(OUT_OF_SCOPE, plan.intent, abstained=True)
         goals = _goal_lines(ctx) if plan.intent in ("goals", "goal_impact") else []
+        if plan.intent == "goals" and len(plan.teams) == 1:  # "who scored for Northgate FC?"
+            goals = [g for g in goals if g[1] == plan.teams[0]]
         if plan.intent in ("goals", "goal_impact") and not goals:
             plan = Route(
                 "live", ("goals", "Score"), plan.teams, ""
             )  # no goal yet: the score says so
-        event_numbers = {event_id: extract_numbers(text) for event_id, text in goals}
+        event_numbers = {event_id: extract_numbers(text) for event_id, _team, text in goals}
         retrieval = "local"
         sentences: list[tuple[str, str | None]] = []  # (text with citations, claim id if live)
         claims: list[dict[str, Any]] = []
         if plan.intent == "goals":
-            sentences += [(f"{text} [event:{event_id}]", None) for event_id, text in goals]
+            sentences += [(f"{text} [event:{event_id}]", None) for event_id, _team, text in goals]
         elif plan.intent == "goal_impact":
-            event_id, text = goals[0] if plan.metric[1] == "first" else goals[-1]
+            event_id, _team, text = goals[0] if plan.metric[1] == "first" else goals[-1]
             sentences.append((f"{text} [event:{event_id}]", None))
         if plan.intent in ("live", "both") and plan.metric:
             metric, label = plan.metric
@@ -411,16 +417,29 @@ class Assistant:
             return AskResult(
                 ABSTAIN, plan.intent, abstained=True, dropped=dropped, retrieval=retrieval
             )
-        answer = _fit(kept, WORD_LIMIT.get(persona, 80))
+        # a goal list keeps every scorer: cutting it to the word limit would drop names silently
+        if plan.intent == "goals":
+            answer = " ".join(kept)
+        else:
+            answer = _fit(kept, WORD_LIMIT.get(persona, 80))
         citations = [
             {"type": kind, "id": ident} for kind, ident in dict.fromkeys(_CITE.findall(answer))
         ]
         return AskResult(answer, plan.intent, False, citations, dropped, retrieval=retrieval)
 
 
-def _goal_lines(ctx: MatchContext) -> list[tuple[str, str]]:
-    """(event id, line) for each goal so far: who scored, when, and the score it left."""
-    lines: list[tuple[str, str]] = []
+def _goal_ordinal(question: str) -> str | None:
+    """ "first" or "last" when the question names one goal; None when it names none."""
+    if re.search(r"\b(first|opening)\b", question, re.IGNORECASE):
+        return "first"
+    if re.search(r"\b(last|final|late)\b", question, re.IGNORECASE):
+        return "last"
+    return None
+
+
+def _goal_lines(ctx: MatchContext) -> list[tuple[str, str, str]]:
+    """(event id, team id, line) for each goal so far: who scored, when, and the score it left."""
+    lines: list[tuple[str, str, str]] = []
     score = {ctx.home: 0, ctx.away: 0}
     for event in ctx.events:
         payload = event["payload"]
@@ -438,7 +457,7 @@ def _goal_lines(ctx: MatchContext) -> list[tuple[str, str]]:
             f"{who} at minute {minute}; the score went from "
             f"{before[ctx.home]}-{before[ctx.away]} to {score[ctx.home]}-{score[ctx.away]}"
         )
-        lines.append((event["event_id"], text))
+        lines.append((event["event_id"], team, text))
     return lines
 
 
