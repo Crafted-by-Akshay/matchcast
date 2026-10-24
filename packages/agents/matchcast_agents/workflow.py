@@ -174,7 +174,7 @@ class MatchWorkflow:
     ) -> None:
         self.stats_desk = stats_desk
         self._verified_claims: dict[str, dict[str, Any]] = {}
-        self._repair_lock: asyncio.Lock | None = None
+        self._repair_lock = asyncio.Lock()
         self._redrafts: dict[tuple[str, str], tuple[MatchContext, list[dict], list[DraftLine]]] = {}
         self.stream = stream
         self.sk = stream_key(stream)
@@ -276,7 +276,7 @@ class MatchWorkflow:
     def _all_live(self) -> bool:
         """Live again only when no wrapped agent is running its rules twin."""
         wrapped = [a for a in self._agent_list() if hasattr(a, "take_fallbacks")]
-        return bool(wrapped) and all(a.mode == "live" for a in wrapped)
+        return bool(wrapped) and all(a.last_mode == "live" for a in wrapped)
 
     def _agent_list(self) -> list[Any]:
         a = self.agents
@@ -811,6 +811,7 @@ class MatchWorkflow:
             draft.line_id,
             persona=draft.persona,
             claim_ids=list(draft.claim_ids),
+            mode="rules" if draft.origin == "template" else "live",  # what wrote this very line
         )
         verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
         verdict = await self._screen(draft, verdict)
@@ -904,19 +905,27 @@ class MatchWorkflow:
             reason_code=verdict.reason_code,
         )
         self.stats["repaired"] += 1
-        async with self._repair_lock or asyncio.Lock():
+        async with self._repair_lock:
             key = (task.moment_id, target)
             if key not in self._redrafts:
                 fresh_ctx, fresh_claims = ctx, claims
                 if target == "analyst":
                     fresh_ctx = self._ctx()
                     fresh_claims = await self._analyse(fresh_ctx, task, repair=True)
-                if not fresh_claims:
-                    return
-                written = await self._call(
-                    a.narrator, "write", task.moment_id, fresh_ctx, task, fresh_claims, attempt=1
+                written = (
+                    await self._call(
+                        a.narrator,
+                        "write",
+                        task.moment_id,
+                        fresh_ctx,
+                        task,
+                        fresh_claims,
+                        attempt=1,
+                    )
+                    if fresh_claims
+                    else []
                 )
-                self._redrafts[key] = (fresh_ctx, fresh_claims, written)
+                self._redrafts[key] = (fresh_ctx, fresh_claims, written)  # an empty one too
             ctx, claims, redrafts = self._redrafts[key]
         replacement = next((d for d in redrafts if d.persona == draft.persona), None)
         if replacement is None:

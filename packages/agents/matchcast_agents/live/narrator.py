@@ -7,8 +7,7 @@ from ..context import MatchContext
 from ..messages import DraftLine, ProducerTask
 from ..personas import max_chars, slug
 from ..resilience import ModelError
-from ..rules.narrator import NarratorRules
-from .client import ModelClient, model_priority, prompt
+from .client import ModelClient, prompt
 
 SCHEMA = {
     "type": "object",
@@ -34,7 +33,6 @@ class LiveNarrator:
 
     def __init__(self, client: ModelClient) -> None:
         self._client = client
-        self._rules = NarratorRules()
 
     async def write(
         self,
@@ -44,8 +42,6 @@ class LiveNarrator:
         *,
         attempt: int = 0,
     ) -> list[DraftLine]:
-        if task.priority > model_priority():  # a quiet moment: templates, checked like any line
-            return await self._rules.write(ctx, task, claims, attempt=attempt)
         event = ctx.event(task.event_ids[0]) or {"payload": {}}
         payload = event["payload"]
         facts = {

@@ -261,3 +261,46 @@ def test_a_moments_lines_are_checked_together_and_redrafted_once(match, monkeypa
     assert probe.peak > 1  # the Verifier calls of one moment overlap
     assert flow.stats["repaired"] > flow.stats["moments"]  # more than one line repaired per moment
     assert probe.narrator <= 2 * flow.stats["moments"]  # a first draft and one shared redraft
+
+
+def test_quiet_moments_are_audited_as_rules_not_live(match) -> None:
+    flow = build(match, ScriptedModelClient(lambda s, u: answer(s, u)))
+    run(flow.ingest(match["events"]))
+    records = flow.store.audit_records(flow.sk)
+    template = {ln.line_id for ln in flow.store.lines(flow.sk) if ln.origin == "template"}
+    drafted = [r for r in records if r["action"] == "line_drafted" and r["subject_id"] in template]
+    wrong = [
+        r["subject_id"] + ":" + r["details"]["mode"]
+        for r in drafted
+        if r["details"]["mode"] != "rules"
+    ]
+    assert template and drafted and not wrong, wrong
+
+
+def test_a_fallback_in_one_line_check_is_audited_against_that_line(match, monkeypatch) -> None:
+    import asyncio
+
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")
+
+    class Flaky:
+        async def complete(self, system, user, schema, **_):
+            out = answer(system, user)
+            if "lines" in out:
+                return {
+                    "lines": [{**r, "text": r["text"] + f" ({r['persona']})"} for r in out["lines"]]
+                }
+            await asyncio.sleep(0)
+            if "(analyst)" in json.loads(user)["line"]:
+                raise ModelError("verifier down for this line")
+            return out
+
+    flow = build(match, Flaky())
+    run(flow.ingest(match["events"]))
+    records = flow.store.audit_records(flow.sk)
+    lines = {ln.line_id: ln for ln in flow.store.lines(flow.sk)}
+    fell = [r for r in records if r["action"] == "fallback_used" and r["actor_id"] == "verifier"]
+    assert fell and all(lines[r["subject_id"]].persona == "analyst" for r in fell)
+    verified = [r for r in records if r["action"] in ("line_verified", "line_rejected")]
+    for r in verified:
+        expected = "rules" if lines[r["subject_id"]].persona == "analyst" else "live"
+        assert r["details"]["mode"] == expected

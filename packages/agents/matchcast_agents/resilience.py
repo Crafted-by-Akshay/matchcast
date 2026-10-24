@@ -8,11 +8,13 @@ workflow to audit as ``fallback_used``. Tool failures are not model failures and
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from typing import Any
 
 from .tools import ToolError
 
 TIMEOUT_S = 20.0
+MAX_RETRY_WAIT_S = 10.0  # a longer 429 retry-after goes to the rules instead of stalling a moment
 BREAKER_FAILURES = 3
 BREAKER_WINDOW_S = 60.0
 HALF_OPEN_AFTER_S = 30.0
@@ -85,8 +87,13 @@ class ResilientAgent:
         timeout_s: float = TIMEOUT_S,
         breaker: CircuitBreaker | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        skip: Callable[[tuple, dict], bool] | None = None,
     ) -> None:
         self.live, self.rules = live, rules
+        self._skip = skip  # True for a call that goes straight to the rules (not a model failure)
+        # What the current task's last call did, so lines checked side by side keep their own
+        # mode and fallback reasons instead of reading each other's.
+        self._call: ContextVar[dict[str, Any] | None] = ContextVar(f"call-{id(self)}", default=None)
         self.agent_id = rules.agent_id
         self.breaker = breaker or CircuitBreaker()
         self.last_mode = "live"
@@ -96,9 +103,14 @@ class ResilientAgent:
 
     @property
     def mode(self) -> str:
-        return self.last_mode
+        call = self._call.get()
+        return call["mode"] if call else self.last_mode
 
     def take_fallbacks(self) -> list[str]:
+        call = self._call.get()
+        if call is not None:
+            taken, call["fallbacks"] = call["fallbacks"], []
+            return taken
         taken, self._fallbacks = self._fallbacks, []
         return taken
 
@@ -112,7 +124,7 @@ class ResilientAgent:
             except ModelRateLimited as error:
                 if attempt == 1:
                     raise
-                await self._sleep(error.retry_after_s)
+                await self._sleep(min(error.retry_after_s, MAX_RETRY_WAIT_S))
 
     def _reason(self, error: Exception) -> str:
         if isinstance(error, ModelTimeout):
@@ -126,6 +138,10 @@ class ResilientAgent:
             raise AttributeError(name)
 
         async def run(*args: Any, **kwargs: Any) -> Any:
+            self._call.set({"mode": "live", "fallbacks": []})
+            if self._skip and self._skip(args, kwargs):
+                self._call.get()["mode"] = "rules"  # type: ignore[index]
+                return await getattr(self.rules, name)(*args, **kwargs)
             if not self.breaker.allow():
                 return await self._fallback(name, "circuit_open", args, kwargs)
             try:
@@ -141,11 +157,17 @@ class ResilientAgent:
                 return await self._fallback(name, self._reason(error), args, kwargs)
             self.breaker.record_success()
             self.last_mode = "live"
+            self._call.get()["mode"] = "live"  # type: ignore[index]
             return result
 
         return run
 
     async def _fallback(self, method: str, reason: str, args: tuple, kwargs: dict) -> Any:
-        self._fallbacks.append(reason)
+        call = self._call.get()
+        if call is not None:
+            call["fallbacks"].append(reason)
+            call["mode"] = "rules"
+        else:
+            self._fallbacks.append(reason)
         self.last_mode = "rules"
         return await getattr(self.rules, method)(*args, **kwargs)
