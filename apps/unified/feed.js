@@ -54,7 +54,7 @@ const CM = (() => {
   // play-by-play: the booth calls the newest action since its last call, and says how many passes a side made in that stretch.
   // The words come from the events, so the line is checked in page like the rest of the rules lines.
   const callPlay = (at) => {
-    if (playAt >= 0 && at >= playAt && at - playAt < PBP_GAP) return;
+    if (playAt >= 0 && at >= playAt && at - playAt < PBP_GAP - 1e-9) return;   // the epsilon keeps a call exactly PBP_GAP later from failing on float error
     const fresh = events.slice(playFrom).filter((e) => e.ti >= 0 && e.player && PLAY.has(e.type));
     if (!fresh.length) return;
     const act = fresh[fresh.length - 1], tc = club(act.ti);
