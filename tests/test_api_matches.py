@@ -344,6 +344,33 @@ def test_a_stored_match_is_not_started_again_after_a_restart() -> None:
     assert again.status_code == 409 and again.json()["code"] == "match_exists"
 
 
+def test_a_restarted_api_still_serves_the_stream_and_the_match_of_a_stored_match() -> None:
+    first = TestClient(create_app())
+    create(first)
+    post_all(first)
+    restarted = TestClient(create_app())  # a new replica or process: nothing in memory
+    restarted.app.state.matches.store = first.app.state.matches.store
+    assert restarted.get("/v1/matches/match-short", params=Q).status_code == 200
+    stream = restarted.get(
+        "/v1/matches/match-short/stream", params={**Q, "persona": "casual", "follow": "false"}
+    )
+    assert stream.status_code == 200 and "event: state" in stream.text
+    assert restarted.get("/v1/matches/match-short/audit", params=Q).status_code == 200
+    unknown = restarted.get("/v1/matches/other/stream", params={**Q, "follow": "false"})
+    assert unknown.status_code == 404
+
+
+def test_an_unknown_match_is_a_point_read_not_a_hydrate() -> None:
+    client = TestClient(create_app())
+    calls: list[str] = []
+    store = client.app.state.matches.store
+    store.hydrate = lambda sk: calls.append(sk)  # type: ignore[attr-defined]
+    for _ in range(3):
+        stream = client.get("/v1/matches/nope/stream", params={**Q, "follow": "false"})
+        assert stream.status_code == 404
+    assert calls == []  # nothing was loaded for an id that is not stored
+
+
 def test_two_concurrent_creates_of_one_match_make_one_match(monkeypatch) -> None:
     import asyncio
     import time

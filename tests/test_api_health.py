@@ -29,7 +29,10 @@ def test_local_readiness_marks_model_and_store_as_mock() -> None:
         "configuration": {"status": "valid", "errors": []},
         "dependencies": {
             "model": {"status": "local_mock", "detail": "no model connection is attempted"},
-            "session_store": {"status": "local_mock", "detail": "process-local memory"},
+            "session_store": {
+                "status": "local_mock",
+                "detail": "demo /sessions store in memory; matches: see /v1/status",
+            },
         },
     }
 

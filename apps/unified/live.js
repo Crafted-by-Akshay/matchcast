@@ -59,7 +59,9 @@ const LV = (() => {
     open();
   };
   const open = () => {
-    const r = run; if (!r) return;
+    const r = run; if (!r || !r.created) return;
+    if (r.es) r.es.close();   // one stream at a time: a pending retry must not add a second
+    // the api only knows the match once it is created; flush opens the stream right after
     try {
       const es = new EventSource(url('/v1/matches/' + r.id + '/stream', { persona, lang }));
       r.es = es;
@@ -68,7 +70,7 @@ const LV = (() => {
       on('claim', (d) => { r.claimed = true; if (st === 'warming') set('live'); onClaim(d, st); });
       on('line', (d) => onLine(d, st));
       on('publication', (d) => { r.claimed = true; if (st === 'warming') set('live'); onLine(d, st); });
-      es.onerror = () => { es.close(); if (run !== r) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
+      es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
     } catch (e) { set('fallback'); }
   };
 
@@ -79,10 +81,11 @@ const LV = (() => {
       if (!r.created) {
         const bad = badClaim;   // the api takes the demo switch at match creation only
         const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored
+        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; open(); } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
       }
       const batch = r.queue.slice(0, BATCH);
       const res = await post('/v1/matches/' + r.id + '/events', { events: batch });
+      if (res.status === 404) { r.created = false; if (r.es) r.es.close(); }   // the api lost the match (a restart on a store that did not keep it): create it again with the next batch
       if (!res.ok) throw new Error('events ' + res.status);
       r.queue.splice(0, batch.length);
     } catch (e) { if (run === r && st === 'warming') { /* keep waiting; the 45 s timer decides */ } }
