@@ -632,7 +632,7 @@ window.addEventListener('message', (e) => {
   if (d.type === 'talk' && view === 'watch') {   // EXP-16: the api's player agent, when there is a match on the api
     const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply });
     if (!LV.enabled || !LV.key) { back(null); return; }
-    LV.talk(d.player, d.utterance).then((r) => { back(r); if (r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
+    LV.talk(d.player, d.utterance, d.position).then((r) => { back(r); if (r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
     return;
   }
   if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English

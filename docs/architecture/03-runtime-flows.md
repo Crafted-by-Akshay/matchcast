@@ -164,7 +164,7 @@ sequenceDiagram
   A-->>U: reply text + audio URL
 ```
 
-Orders that change play ("press higher") are a game feature labelled "Game mode". They change the simulator's behaviour but never edit past events.
+Orders that change play ("press higher") are a game feature labelled "Game mode". They change the simulator's behaviour but never edit past events. An order a fan types or speaks to a player goes through the talk flow above: the player agent names the instruction it heard, the role guard (ADR-0016) accepts or refuses it for his position, and only an accepted order from a verified reply reaches the simulator. Quick buttons for a disallowed order are greyed out.
 
 ## F6 Translation and voice for a publication
 

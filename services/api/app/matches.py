@@ -176,6 +176,7 @@ class TalkBody(BaseModel):
     session_id: str = Field(pattern=ID)
     target: str = Field(pattern=ID)
     utterance: str = Field(min_length=1, max_length=300)
+    position: str | None = Field(default=None, pattern=r"^[A-Z]{1,3}$")  # the sim's position code
 
 
 class RecapTrigger(BaseModel):
@@ -892,7 +893,7 @@ def build_router(registry: Registry) -> APIRouter:
                 429, "rate_limited", f"at most {TALK_PER_MINUTE} talks a minute", retry_after=60
             )
         try:
-            result = await flow.talk(body.target, body.utterance)
+            result = await flow.talk(body.target, body.utterance, position=body.position)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         result["lang"] = "en"
