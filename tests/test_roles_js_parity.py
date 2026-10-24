@@ -1,4 +1,4 @@
-"""The browser copy of the role table (apps/unified/embed/roles.js) says what orders.py says (EXP-16)."""
+"""The browser role table (embed/roles.js) says what orders.py says (EXP-16)."""
 
 import json
 import re
