@@ -84,6 +84,12 @@ def test_every_order_key_is_one_of_the_sims_keys() -> None:
         ("don't shoot from range", "none"),
         ("stop pressing", "none"),
         ("no need to push higher", "none"),
+        ("why didn't you take the shot", "none"),
+        ("you can't take a shot from there", "none"),
+        ("you won't take a shot", "none"),
+        ("don’t take a shot", "none"),
+        ("that was a mistake the shot", "none"),
+        ("take a shotgun", "none"),
     ],
 )
 def test_rules_mode_hears_the_same_orders_as_the_sim(text: str, key: str) -> None:

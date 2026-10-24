@@ -76,7 +76,9 @@ _RULES = (
     ("rest", re.compile(r"\brest\b|\blegs\b|breath|\btired\b|\beasy\b|conserve")),
     (
         "shoot",
-        re.compile(r"\bshoot|shot on sight|take (a |the |your )?shot|\bstrike\b|hit it|\brange\b"),
+        re.compile(
+            r"\bshoot|shot on sight|\btake (a |the |your )?shots?\b|\bstrike\b|hit it|\brange\b"
+        ),
     ),
     ("mark", re.compile(r"\bmark|\bfollow\b|\btrack\b|shadow|man.?to.?man")),
     ("press", re.compile(r"\bpress|\bhunt\b|close down|harass|win (it|the ball) back")),
@@ -89,7 +91,7 @@ _RULES = (
 )
 
 
-_NEGATED = re.compile(r"\b(don'?t|do not|stop|never|no need to|not)\b")
+_NEGATED = re.compile(r"\b(\w+n'?t|do not|stop|never|no need to|not)\b")
 
 
 @dataclass(frozen=True)
@@ -116,7 +118,7 @@ def decide(position: str | None, key: str) -> OrderDecision:
 
 def keyword_order(utterance: str) -> str:
     """The order a typed instruction means in rules mode; a question or a negation is no order."""
-    text = utterance.casefold()
+    text = utterance.casefold().replace("’", "'")
     if "?" in text or _NEGATED.search(text):
         return NONE
     for key, pattern in _RULES:
