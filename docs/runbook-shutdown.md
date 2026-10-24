@@ -6,7 +6,7 @@ Keeps total spend near the plan (about $49, about $60 with the Translator, Visio
 ```
 scripts/cost_today.sh
 ```
-Prints month-to-date spend per service beside its target and flags anything above 80% of target. This subscription is billed in Indian rupees (INR), so the script shows the billed INR and an estimated USD column (88 INR per USD; override with `INR_PER_USD=<rate>`). The plan targets and caps in this runbook are USD. Alerts exist at $40 and $50 on budget `matchcast-budget` (see "Budget alerts").
+Prints month-to-date spend per service beside its target and flags anything above 80% of target. This subscription is billed in Indian rupees (INR), so the script shows the billed INR and Azure's own USD figure (`CostUSD`, about 96 INR per USD on 24 Oct 2026). The plan targets and caps in this runbook are USD. Alerts exist at $40 and $50 on budget `matchcast-budget` (see "Budget alerts").
 
 ## Schedule
 
@@ -25,15 +25,15 @@ Do not delete `matchcast-foundry` or `rg-matchcast` without Akshay's say-so; `az
 `scripts/shutdown.sh <scale-down|pause-fabric|cost-final|stop-eventhubs|teardown>` prints the command for that step; add `--execute` to run it. `stop-eventhubs` and `teardown` also refuse to run without `CONFIRM_DESTROY=rg-matchcast` in the environment, which is Akshay's call. `pause-fabric` needs `FABRIC_CAPACITY`. After any step, or at any time, `scripts/health_check.sh <api-url> [web-url]` checks `/health`, `/ready`, that `/v1/status` lists no unavailable dependency, and the web page (`DRY_RUN=1` prints the requests only). The destructive steps have not been run.
 
 ## Budget alerts
-The budget amount is in the billing currency, INR here. At about 88 INR per USD, $50 is about 4,200 INR and $40 about 3,500 INR (83.33% of 4,200). A budget of `50` means 50 rupees, about $0.60. To set it from the CLI (keeps the existing contact emails; changes only the amount and the two thresholds):
+The budget amount is in the billing currency, INR here. At about 96 INR per USD (the rate Azure used on 24 Oct 2026), $50 is about 4,800 INR and $40 about 3,840 INR (80% of 4,800). A budget of `50` means 50 rupees, about $0.50. To set it from the CLI (keeps the existing contact emails; changes only the amount and the two thresholds):
 ```
 SUB=538de541-d855-4dcc-8644-8c1ce1da7486
 URL="https://management.azure.com/subscriptions/$SUB/providers/Microsoft.Consumption/budgets/matchcast-budget?api-version=2023-05-01"
 az rest --method get --url "$URL" | python3 -c "
 import sys,json
-d=json.load(sys.stdin); p=d['properties']; p['amount']=4200
+d=json.load(sys.stdin); p=d['properties']; p['amount']=4800
 n=next(iter(p['notifications'].values()))
-p['notifications']={'actual_GreaterThan_83_Percent':dict(n,threshold=83.33),'actual_GreaterThan_100_Percent':dict(n,threshold=100.0)}
+p['notifications']={'actual_GreaterThan_80_Percent':dict(n,threshold=80.0),'actual_GreaterThan_100_Percent':dict(n,threshold=100.0)}
 json.dump({'properties':p},open('/tmp/budget.json','w'))"
 az rest --method put --url "$URL" --body @/tmp/budget.json --query "properties.amount"
 ```

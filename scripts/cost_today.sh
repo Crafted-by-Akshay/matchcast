@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Month-to-date Azure spend per service next to the plan targets (PLT-10).
 # Uses only the signed-in az session; no keys. Needs: az login, jq.
-# Usage: [INR_PER_USD=88] scripts/cost_today.sh [subscription-id]
+# Usage: scripts/cost_today.sh [subscription-id]
 set -euo pipefail
 
 SUB="${1:-${AZURE_SUBSCRIPTION_ID:-$(az account show --query id -o tsv)}}"
@@ -25,29 +25,27 @@ TARGETS='{
   "Log Analytics": 3
 }'
 
+# Cost Management bills in the subscription's currency (INR here) and also returns CostUSD, which uses
+# Azure's own exchange rate, so the USD column needs no rate of our own. Rows are read by column name.
 BODY=$(jq -n --arg s "${START}T00:00:00Z" --arg e "${END}T23:59:59Z" '{
   type: "ActualCost", timeframe: "Custom",
   timePeriod: {from: $s, to: $e},
   dataset: {granularity: "None",
-    aggregation: {totalCost: {name: "Cost", function: "Sum"}},
+    aggregation: {billed: {name: "Cost", function: "Sum"}, usd: {name: "CostUSD", function: "Sum"}},
     grouping: [{type: "Dimension", name: "ServiceName"}]}}')
 
 RESULT=$(az rest --method post \
   --url "https://management.azure.com/subscriptions/${SUB}/providers/Microsoft.CostManagement/query?api-version=2023-11-01" \
   --body "$BODY")
 
-# Cost Management reports in the billing currency (INR on this subscription), so convert to USD before
-# comparing with the USD targets. The rate is an estimate: override it with INR_PER_USD=<rate>.
-INR_PER_USD="${INR_PER_USD:-88}"
-CUR="$(echo "$RESULT" | jq -r '.properties.rows[0][-1] // "USD"')"
+CUR="$(echo "$RESULT" | jq -r '(.properties.columns | map(.name) | index("Currency")) as $i | .properties.rows[0][$i] // "USD"')"
 
 echo "Month to date ${START} .. ${END}, subscription ${SUB}, billing currency ${CUR}"
-[ "$CUR" = "USD" ] || echo "USD values are estimates at ${INR_PER_USD} ${CUR} per USD (set INR_PER_USD to change)"
-echo "$RESULT" | jq -r --argjson t "$TARGETS" --arg cur "$CUR" --argjson rate "$INR_PER_USD" '
-  (if $cur == "USD" then 1 else $rate end) as $div
-  | def row: {service: .[1], billed: .[0], cost: (.[0] / $div)};
-  def r2: (. * 100 | round / 100 | tostring);
-  [.properties.rows[] | row] | sort_by(-.cost) as $rows
+echo "$RESULT" | jq -r --argjson t "$TARGETS" --arg cur "$CUR" '
+  (.properties.columns | map(.name)) as $c
+  | ($c | index("Cost")) as $bi | ($c | index("CostUSD")) as $ui | ($c | index("ServiceName")) as $si
+  | def r2: (. * 100 | round / 100 | tostring);
+  [.properties.rows[] | {service: .[$si], billed: .[$bi], cost: .[$ui]}] | sort_by(-.cost) as $rows
   | ($rows | map(.cost) | add // 0) as $total
   | ($rows | map(.billed) | add // 0) as $billed
   | ["SERVICE", "SPEND_" + $cur, "SPEND_USD", "TARGET_USD", "FLAG"],
