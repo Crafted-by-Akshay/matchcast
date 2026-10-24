@@ -189,7 +189,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <div class="status" aria-label="Environment">
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
     <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
-    <span class="pill" id="api-pill" role="status" title="">Offline (simulated)</span>
+    <span class="pill" id="api-pill" role="status" title="">Starting…</span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
     <span class="pill proto">Browser prototype</span>
     <span class="pill warn">Azure parts simulated</span>
@@ -556,16 +556,19 @@ function cardOf(c) {
   return card;
 }
 // ---------------------------------------------------------------- Ask (EXP-5)
-// 300 characters, 5 questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
+// 300 characters, ASK_LIMIT questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
 const LANGS_OK = ['en', 'es', 'hi'];
+const ANSWER_WAIT_MS = 20000;   // the api's model call is given 15 s (packages/agents live/answers.py); Watch waits longer than this
 const askTimes = { watch: [], broadcast: [] };   // one budget per view
+const ASK_LIMIT = 10;   // questions a minute per view; the api has its own limit of the same size per session
 async function answerAsk(id, q, to = 'watch') {
   const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
   const times = askTimes[to] || (askTimes[to] = []), now = Date.now(); while (times.length && now - times[0] > 60000) times.shift();
-  if (times.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
+  if (times.length >= ASK_LIMIT) { reply({ text: 'You can ask ' + ASK_LIMIT + ' questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
   times.push(now);
-  if (LV.enabled && LV.status === 'live') { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
+  // the api answers whenever a match is on it (live or rules), so a viewer does not wait for the warm-up; it is given ANSWER_WAIT_MS before the rules answer
+  if (LV.enabled && LV.key) { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ANSWER_WAIT_MS))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
   const a = AG.ask(q);
   reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
 }
@@ -786,7 +789,18 @@ function init(list) {
   AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
-  const paintPill = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
+  let warmTick = null;   // while warming, count the seconds so a cold start shows progress; the api's own limit is MATCHCAST_WARM_MS (45 s), then the rules agents take over
+  const paintPill = (s) => {
+    clearInterval(warmTick); warmTick = null;
+    if (s === 'warming') {
+      const lim = Math.round((window.MATCHCAST_WARM_MS || 45000) / 1000), t0 = Date.now(), base = PILL.warming[0], p = $('api-pill');
+      const tick = () => { const n = Math.min(lim, Math.round((Date.now() - t0) / 1000)); p.textContent = base + ' · ' + n + ' s of up to ' + lim; };
+      warmTick = setInterval(tick, 1000);
+    }
+    paintPillNow(s);
+    if (s === 'warming') $('api-pill').textContent = PILL.warming[0] + ' · 0 s of up to ' + Math.round((window.MATCHCAST_WARM_MS || 45000) / 1000);
+  };
+  const paintPillNow = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
   LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);

@@ -6,7 +6,7 @@ const LV = (() => {
   let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
-  const set = (s) => { if (s !== st) { st = s; onStatus(s); } };
+  const set = (s, again) => { if (s !== st || again) { st = s; onStatus(s); } };
 
   // Watch events to the contract's event payloads (docs/contracts.md). Types the contract has no fields for here return null:
   // tackles and pressure need a target player and a distance Watch does not record.
@@ -52,14 +52,16 @@ const LV = (() => {
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
     run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, sending: false };
-    set('warming');
+    set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the 45 s timer
     timer = setTimeout(() => { if (run && !run.claimed) set('fallback'); }, WARM_MS);
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
       players: roster.players.map((q) => ({ player_id: slug(q.name), team_id: slug(q.team) })) } : null;
     open();
   };
   const open = () => {
-    const r = run; if (!r) return;
+    const r = run; if (!r || !r.created) return;
+    if (r.es) r.es.close();   // one stream at a time: a pending retry must not add a second
+    // the api only knows the match once it is created; flush opens the stream right after
     try {
       const es = new EventSource(url('/v1/matches/' + r.id + '/stream', { persona, lang }));
       r.es = es;
@@ -68,7 +70,7 @@ const LV = (() => {
       on('claim', (d) => { r.claimed = true; if (st === 'warming') set('live'); onClaim(d, st); });
       on('line', (d) => onLine(d, st));
       on('publication', (d) => { r.claimed = true; if (st === 'warming') set('live'); onLine(d, st); });
-      es.onerror = () => { es.close(); if (run !== r) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
+      es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
     } catch (e) { set('fallback'); }
   };
 
@@ -79,10 +81,11 @@ const LV = (() => {
       if (!r.created) {
         const bad = badClaim;   // the api takes the demo switch at match creation only
         const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored
+        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; open(); } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
       }
       const batch = r.queue.slice(0, BATCH);
       const res = await post('/v1/matches/' + r.id + '/events', { events: batch });
+      if (res.status === 404) { r.created = false; if (r.es) r.es.close(); }   // the api lost the match (a restart on a store that did not keep it): create it again with the next batch
       if (!res.ok) throw new Error('events ' + res.status);
       r.queue.splice(0, batch.length);
     } catch (e) { if (run === r && st === 'warming') { /* keep waiting; the 45 s timer decides */ } }

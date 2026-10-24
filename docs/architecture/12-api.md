@@ -31,8 +31,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/lines/{line_id}/kill` | Producer | `session_id, match_id, reason ≤ 200` | 200 | 403, 404 |
 | `GET /v1/matches/{match_id}/audit` | anyone | `session_id, from_seq?, limit ≤ 1000` | 200 records | 404 |
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
-| `POST /v1/matches/{match_id}/ask` | anyone | `session_id, question ≤ 300, persona, lang (en, es, hi), surface (ask or broadcast; default ask)` (`browser_session_id` is **Planned**) | 200 `{answer, intent, abstained, citations[], mode, retrieval, lang, variants?, broadcast?}` where `broadcast` is `{highlights[]}`, `{focus}` or `{plan[]}` when `surface` is `broadcast` and the question asks for one (ADR-0018). `claim_ids`, `verdict` and `trace_id` are **Planned**. | 400 shield, 429 |
-| `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300` | 200 `{target, reply, verdict, facts, lang, audio_url}` (rules-mode template replies; the reply passes Content Safety as well as the Verifier; without `CONTENT_SAFETY_ENDPOINT` that check is the local word list (**Simulated**). `lang` is `en`; `audio_url` is `/v1/audio/{id}.mp3` only for a verified reply that was voiced, otherwise null; a clip stays in the api's memory for a while, so fetch it promptly) | 400 `prompt_attack`, 404 unknown target, 422, 429 |
+| `POST /v1/matches/{match_id}/ask` | anyone | `session_id, question ≤ 300, persona, lang (en, es, hi), surface (ask or broadcast; default ask)` (`browser_session_id` is **Planned**) | 200 `{answer, intent, abstained, citations[], mode, retrieval, lang, variants?, broadcast?}` where `broadcast` is `{highlights[]}`, `{focus}` or `{plan[]}` when `surface` is `broadcast` and the question asks for one (ADR-0019). `claim_ids`, `verdict` and `trace_id` are **Planned**. | 400 shield, 429 |
+| `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300` | 200 `{target, reply, verdict, facts, lang, audio_url}` (in live mode the player's own reply from the model, checked against the log's counts and names, with `facts` the player's counts; otherwise, or when the model's reply fails a check, the rules template; a reply with words for counts is refused; the reply passes Content Safety as well as the Verifier; without `CONTENT_SAFETY_ENDPOINT` that check is the local word list (**Simulated**). `lang` is `en`; `audio_url` is `/v1/audio/{id}.mp3` only for a verified reply that was voiced, otherwise null; a clip stays in the api's memory for a while, so fetch it promptly) | 400 `prompt_attack`, 404 unknown target, 422, 429 |
 | `POST /v1/matches/{id}/vision/identify` | anyone | `session_id, crop (base64 PNG 128x128, ≤ 40 KB), track_id, team_hint` | 200 `{shirt, confidence, source, elapsed_ms}`. Plain base64 only (no `data:` prefix); a complete PNG, exactly 128x128. | 404, 413 (body over 64 KB or crop over 40 KB decoded), 422 (bad crop, or `crop` over 60,000 characters), 429 `rate_limited`/`vision_budget_used`, 502 `vision_unavailable` |
 | `GET /v1/exports/{export_id}` | anyone | none | 200 the file as an attachment | 404 |
 | `POST /v1/ds/ask` | anyone | `session_id, question ≤ 300` | 200 `{answer, verdict, sql, columns[], rows[], chart_spec}` | 400 `invalid_query`, 429, 503 |
@@ -46,6 +46,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /internal/v1/recaps` | `fn-recap` identity only | `tenant_id, session_id, match_id` | 202 | 401, 403 |
 
 "Anyone" means unauthenticated access is allowed (judges can view without signing in). "Viewer" means any signed-in user. "Producer" means the `roles` claim contains `Producer` or `Admin`.
+
+Every match route rebuilds the workflow of a stored match from its roster when this process has not seen it (after a restart of this single replica, ADR-0005; the stream replays nothing from before the restart), so a stream or event call does not 404 for a match that exists in the store; an unknown match is still a 404.
 
 ## 3. Server-Sent Events
 
@@ -105,7 +107,8 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | Route | Limit | Key |
 | --- | --- | --- |
 | `/events` | 20 batches a second (**Planned**, not enforced yet) | stream key |
-| `/ask`, `/talk` | 5 a minute | `browser_session_id` (or IP) |
+| `/ask` | 10 a minute | `browser_session_id` (or IP) |
+| `/talk` | 10 a minute, a budget of its own | `browser_session_id` (or IP) |
 | `/ds/ask` | 5 a minute | client address |
 | `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | one api process (a cost cap, shared by all callers) |
 | `/speech/token` | 10 a minute | IP |

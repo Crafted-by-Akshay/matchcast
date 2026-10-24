@@ -1,4 +1,4 @@
-# ADR-0018: The Broadcast Copilot reuses the Ask workflow, ranks picks in code, and leaves the camera with Watch
+# ADR-0019: The Broadcast Copilot reuses the Ask workflow, ranks picks in code, and leaves the camera with Watch
 
 - **Status:** Accepted
 - **Date:** 2026-10-24

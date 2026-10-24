@@ -1,4 +1,4 @@
-"""Broadcast Copilot picks: highlights, camera focus and a plan, ranked in code (ADR-0018).
+"""Broadcast Copilot picks: highlights, camera focus and a plan, ranked in code (ADR-0019).
 
 No model is called here. Every minute comes from an event's clock, every name from the roster
 and every score from the match state, so the picks repeat and the Verifier has nothing to guess.

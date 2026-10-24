@@ -1,4 +1,4 @@
-"""Broadcast Copilot picks (ADR-0018): ranked in code, cited to events, never on the live loop."""
+"""Broadcast Copilot picks (ADR-0019): ranked in code, cited to events, never on the live loop."""
 
 from pathlib import Path
 
