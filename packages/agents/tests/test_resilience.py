@@ -245,3 +245,25 @@ def test_tool_error_leaves_the_breaker_untouched(match) -> None:
     with pytest.raises(TE):
         run(agent.write(None, None, []))
     assert breaker.state == "half_open" and breaker.allow() is True
+
+
+def test_a_long_retry_after_is_capped_before_the_retry() -> None:
+    from matchcast_agents.resilience import MAX_RETRY_WAIT_S
+
+    slept: list[float] = []
+
+    async def record(seconds: float) -> None:
+        slept.append(seconds)
+
+    class Live:
+        calls = 0
+
+        async def write(self):
+            Live.calls += 1
+            if Live.calls == 1:
+                raise ModelRateLimited(900)
+            return "ok"
+
+    agent = ResilientAgent(Live(), NarratorRules(), sleep=record)
+    assert run(agent.write()) == "ok"
+    assert slept == [MAX_RETRY_WAIT_S]

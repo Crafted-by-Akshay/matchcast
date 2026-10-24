@@ -316,6 +316,20 @@ def compare_live(runs: int = 1) -> dict[str, Any]:
 
     Needs FOUNDRY_PROJECT_ENDPOINT (and FOUNDRY_MODEL_DEPLOYMENT, default gpt-6-luna) and an
     `az login`. Each run plays the match once per live arm, so check the cost caps first."""
+    previous = os.environ.get("MATCHCAST_LIVE_MAX_PRIORITY")
+    os.environ["MATCHCAST_LIVE_MAX_PRIORITY"] = (
+        "3"  # the comparison judges the model on every moment
+    )
+    try:
+        return _compare_live(runs)
+    finally:
+        if previous is None:
+            os.environ.pop("MATCHCAST_LIVE_MAX_PRIORITY", None)
+        else:
+            os.environ["MATCHCAST_LIVE_MAX_PRIORITY"] = previous
+
+
+def _compare_live(runs: int) -> dict[str, Any]:
     from matchcast_agents.live import live_agents
     from matchcast_agents.live.client import FoundryModelClient
 

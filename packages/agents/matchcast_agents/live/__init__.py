@@ -6,7 +6,7 @@ from ..rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from ..tools import ToolCall
 from ..workflow import AgentSet
 from .analyst import LiveAnalyst
-from .client import FoundryModelClient, ModelClient, ScriptedModelClient
+from .client import FoundryModelClient, ModelClient, ScriptedModelClient, model_priority
 from .narrator import LiveNarrator
 from .verifier import LiveVerifier
 
@@ -37,9 +37,14 @@ def live_agents(
         corrupt_after_ms=seed_bad_claim_at_ms,
         tool_call=tool_call,
     )
+
+    def quiet(args: tuple, kwargs: dict) -> bool:
+        """(ctx, task, ...): a moment below the model's priority goes straight to the rules."""
+        return args[1].priority > model_priority()
+
     return AgentSet(
         ProducerRules(personas),
-        ResilientAgent(LiveAnalyst(client, analyst_rules), analyst_rules),
-        ResilientAgent(LiveNarrator(client), NarratorRules()),
+        ResilientAgent(LiveAnalyst(client, analyst_rules), analyst_rules, skip=quiet),
+        ResilientAgent(LiveNarrator(client), NarratorRules(), skip=quiet),
         ResilientAgent(LiveVerifier(client), VerifierRules()),
     )

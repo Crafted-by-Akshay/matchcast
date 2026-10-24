@@ -448,7 +448,10 @@ def test_ask_refuses_attacks_long_questions_and_the_sixth_question_a_minute(
     assert limited.headers["retry-after"] == "60"
 
 
-def test_live_mode_uses_the_model_client_and_audits_its_lines(client: TestClient) -> None:
+def test_live_mode_uses_the_model_client_and_audits_its_lines(
+    client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")  # every moment goes to the model
     import json as _json
 
     from matchcast_agents.live import ScriptedModelClient

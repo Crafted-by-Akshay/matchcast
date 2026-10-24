@@ -28,6 +28,23 @@ def prompt(name: str) -> str:
 
 
 REASONING_EFFORT = "low"  # keeps a call well inside the 20 s wait
+MODEL_PRIORITY = 1  # moments up to this priority use the model; the rest use the rules twin
+
+
+def reasoning_effort() -> str:
+    """FOUNDRY_REASONING_EFFORT (minimal, low, medium, high) so a deploy can tune latency."""
+    value = os.environ.get("FOUNDRY_REASONING_EFFORT", "").strip().lower()
+    return value if value in ("minimal", "low", "medium", "high") else REASONING_EFFORT
+
+
+def model_priority() -> int:
+    """MATCHCAST_LIVE_MAX_PRIORITY (1-3): quiet moments skip the model to keep Watch in step."""
+    try:
+        return min(3, max(1, int(os.environ.get("MATCHCAST_LIVE_MAX_PRIORITY", MODEL_PRIORITY))))
+    except ValueError:
+        return MODEL_PRIORITY
+
+
 REASONING_HEADROOM = 1500  # completion tokens on top of the answer, spent on reasoning first
 
 
@@ -106,7 +123,7 @@ class FoundryModelClient:
                 # Reasoning models (gpt-5-mini) reject max_tokens and any non-default temperature,
                 # and count their hidden reasoning against the completion budget.
                 max_completion_tokens=max_tokens + REASONING_HEADROOM,
-                reasoning_effort=REASONING_EFFORT,
+                reasoning_effort=reasoning_effort(),
                 response_format={
                     "type": "json_schema",
                     "json_schema": {"name": "answer", "schema": schema, "strict": True},

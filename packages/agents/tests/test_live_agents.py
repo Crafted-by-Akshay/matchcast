@@ -49,7 +49,8 @@ def actions(flow):
     return [r["action"] for r in flow.store.audit_records(flow.sk)]
 
 
-def test_model_written_lines_pass_the_checks_and_publish(match) -> None:
+def test_model_written_lines_pass_the_checks_and_publish(match, monkeypatch) -> None:
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")  # every moment goes to the model
     client = ScriptedModelClient(lambda s, u: answer(s, u))
     flow = build(match, client)
     run(flow.ingest(match["events"]))
@@ -97,7 +98,9 @@ def test_the_model_meaning_check_can_reject_or_send_to_review(match) -> None:
     assert any(ln.status == "review" for ln in flow.store.lines(flow.sk))
 
 
-def test_a_model_outage_falls_back_to_rules_and_is_audited(match) -> None:
+def test_a_model_outage_falls_back_to_rules_and_is_audited(match, monkeypatch) -> None:
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")  # every moment goes to the model
+
     def down(system, user):
         return ModelTimeout()
 
@@ -217,3 +220,87 @@ def test_foundry_client_maps_failures_to_the_resilience_vocabulary() -> None:
     fake, _ = fake_openai(message("not json"))
     with pytest.raises(ModelError):
         run(FoundryModelClient(client=fake).complete("s", "u", {}))
+
+
+def test_quiet_moments_use_the_rules_and_skip_the_model(match, monkeypatch) -> None:
+    def model_calls() -> int:
+        client = ScriptedModelClient(lambda s, u: answer(s, u))
+        run(build(match, client).ingest(match["events"]))
+        return len(client.calls)
+
+    default = model_calls()  # priority 1 only: goals and red cards
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")
+    assert default < model_calls()
+
+
+def test_a_moments_lines_are_checked_together_and_redrafted_once(match, monkeypatch) -> None:
+    import asyncio
+
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")
+
+    class Probe:
+        def __init__(self) -> None:
+            self.live = self.peak = self.narrator = 0
+
+        async def complete(self, system, user, schema, **_):
+            out = answer(system, user)
+            if "lines" in out:
+                self.narrator += 1
+                if self.narrator % 2:  # each first draft carries numbers no claim backs
+                    out = {"lines": [{**r, "text": r["text"] + " 99 77"} for r in out["lines"]]}
+                return out
+            self.live += 1
+            self.peak = max(self.peak, self.live)
+            await asyncio.sleep(0)
+            self.live -= 1
+            return out
+
+    probe = Probe()
+    flow = build(match, probe)
+    run(flow.ingest(match["events"]))
+    assert probe.peak > 1  # the Verifier calls of one moment overlap
+    assert flow.stats["repaired"] > flow.stats["moments"]  # more than one line repaired per moment
+    assert probe.narrator <= 2 * flow.stats["moments"]  # a first draft and one shared redraft
+
+
+def test_quiet_moments_are_audited_as_rules_not_live(match) -> None:
+    flow = build(match, ScriptedModelClient(lambda s, u: answer(s, u)))
+    run(flow.ingest(match["events"]))
+    records = flow.store.audit_records(flow.sk)
+    template = {ln.line_id for ln in flow.store.lines(flow.sk) if ln.origin == "template"}
+    drafted = [r for r in records if r["action"] == "line_drafted" and r["subject_id"] in template]
+    wrong = [
+        r["subject_id"] + ":" + r["details"]["mode"]
+        for r in drafted
+        if r["details"]["mode"] != "rules"
+    ]
+    assert template and drafted and not wrong, wrong
+
+
+def test_a_fallback_in_one_line_check_is_audited_against_that_line(match, monkeypatch) -> None:
+    import asyncio
+
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")
+
+    class Flaky:
+        async def complete(self, system, user, schema, **_):
+            out = answer(system, user)
+            if "lines" in out:
+                return {
+                    "lines": [{**r, "text": r["text"] + f" ({r['persona']})"} for r in out["lines"]]
+                }
+            await asyncio.sleep(0)
+            if "(analyst)" in json.loads(user)["line"]:
+                raise ModelError("verifier down for this line")
+            return out
+
+    flow = build(match, Flaky())
+    run(flow.ingest(match["events"]))
+    records = flow.store.audit_records(flow.sk)
+    lines = {ln.line_id: ln for ln in flow.store.lines(flow.sk)}
+    fell = [r for r in records if r["action"] == "fallback_used" and r["actor_id"] == "verifier"]
+    assert fell and all(lines[r["subject_id"]].persona == "analyst" for r in fell)
+    verified = [r for r in records if r["action"] in ("line_verified", "line_rejected")]
+    for r in verified:
+        expected = "rules" if lines[r["subject_id"]].persona == "analyst" else "live"
+        assert r["details"]["mode"] == expected
