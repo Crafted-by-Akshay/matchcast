@@ -60,6 +60,20 @@ def test_what_is_the_score_is_answered_from_the_log_not_the_knowledge_base(match
     assert "offside" not in result.answer.casefold()
 
 
-def test_who_scored_is_answered_from_the_log_not_abstained(match) -> None:
+def test_who_scored_names_each_scorer_with_its_own_event(match) -> None:
+    scorers = [e for e in match["events"] if e["payload"]["type"] == "goal"]
     result = rules_answer(match, "who scored?")
-    assert result.intent == "live" and not result.abstained
+    assert result.intent == "goals" and not result.abstained
+    for goal in scorers:
+        assert match["names"][goal["payload"]["player_id"]] in result.answer
+    assert [c["id"] for c in result.citations] == [g["event_id"] for g in scorers]
+    assert {c["type"] for c in result.citations} == {"event"}
+
+
+def test_why_the_first_goal_mattered_states_the_score_change_not_xg(match) -> None:
+    first = next(e for e in match["events"] if e["payload"]["type"] == "goal")
+    result = rules_answer(match, "Why was the first goal important?")
+    assert result.intent == "goal_impact" and not result.abstained
+    assert match["names"][first["payload"]["player_id"]] in result.answer
+    assert "0-0 to 0-1" in result.answer
+    assert result.citations == [{"type": "event", "id": first["event_id"]}]
