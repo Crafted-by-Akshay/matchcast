@@ -20,6 +20,6 @@ test('Watch at 1440 px: the Match Pulse control line does not overlap its label 
   });
   expect(m.overlap, 'CONTROL · CHAOS and the control value share no pixels').toBe(false);
   expect(m.alphas.length, 'the HUD panels exist').toBeGreaterThan(0);
-  for (const a of m.alphas) expect(a).toBeGreaterThanOrEqual(0.95);
+  for (const a of m.alphas) expect(a).toBeGreaterThanOrEqual(0.99);
   expect(errs).toEqual([]);
 });
