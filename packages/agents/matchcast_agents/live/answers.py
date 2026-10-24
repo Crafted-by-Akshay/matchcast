@@ -1,8 +1,9 @@
 """Ask and talk on the model: an answer from a fact sheet of this match, checked before it is shown.
 
-The model sees only what the stored events say (score, team and player counts, the last events),
-recounted with the same code the Verifier uses. An answer that breaks a check returns None, and the
-caller answers from the rules instead, so a slow, failing or wrong model never reaches a viewer.
+The model sees only what the stored events say (score, match state, team and player counts, every
+goal and card, the last events), recounted with the same code the Verifier uses. An answer that
+breaks a check returns None and the reason, and the caller answers from the rules instead, so a
+slow, failing or wrong model never reaches a viewer.
 """
 
 import asyncio
@@ -21,6 +22,7 @@ from .client import ModelClient, prompt
 ANSWER_BUDGET_S = 15.0  # a viewer waits this long at most; the rules answer after it
 TALK_WORD_LIMIT = 60
 RECENT_EVENTS = 15
+KEY_EVENTS = ("goal", "card")  # every one of these is in the sheet, however long ago it was
 TEAM_METRICS = ("goals", "shots", "shots_on_target", "passes", "tackles_won", "fouls", "cards")
 PLAYER_METRICS = ("goals", "shots", "shots_on_target", "tackles_won", "fouls", "cards")
 # A count is checked only when it is digits bound to a metric, so the model may not write one in
@@ -38,6 +40,14 @@ COUNT_PHRASE = re.compile(
     r"(shots? on target|shots?|goals?|fouls?|cards?|passes|tackles?(?: won)?|xg)\b",
     re.IGNORECASE,
 )
+# "1-2": a scoreline must be the one the score fact writes, home first
+SCORELINE = re.compile(r"\b(\d+)\s*[-–]\s*(\d+)\b")
+# words that claim the state of the match: each must be in a cited fact, or it is not shown
+STATE_CLAIMS = (
+    "full time", "full-time", "half time", "half-time", "in play", "final", "at the end",
+    "winning", "losing", "leading", "drawing", "level", "ahead", "behind", "won", "lost", "draw",
+    "beat",
+)  # fmt: skip
 # capitalised words an answer may use without them being a name of the cited facts
 COMMON_WORDS = frozenset({
     "I", "I'm", "I'll", "I've", "The", "A", "An", "So", "It", "It's", "This", "That", "We", "They",
@@ -69,23 +79,48 @@ def _minute(ms: int) -> int:
     return int(ms // 60_000)
 
 
-def _score(ctx: MatchContext) -> str:
-    home, away = ctx.state.score.get(ctx.home, 0), ctx.state.score.get(ctx.away, 0)
-    return f"{ctx.club_name(ctx.home)} {home}, {ctx.club_name(ctx.away)} {away}"
+def _score(ctx: MatchContext) -> tuple[int, int]:
+    """The score as the stored events give it up to the state's sequence, never the state's copy."""
+    return (
+        int(recompute(ctx.events, f"goals:{ctx.home}", ctx.state.max_sequence)),
+        int(recompute(ctx.events, f"goals:{ctx.away}", ctx.state.max_sequence)),
+    )
 
 
 def _counts(values: dict[str, Any]) -> str:
     return ", ".join(f"{name.replace('_', ' ')} {value}" for name, value in values.items())
 
 
+def _status(ctx: MatchContext) -> str:
+    """The phase the record shows, the minute and who leads; the words a fact must hold."""
+    ended = [
+        e for e in ctx.events
+        if e["payload"]["type"] == "period_boundary" and e["payload"].get("boundary") == "ended"
+    ]  # fmt: skip
+    phase = "in play"
+    if ended:
+        phase = "full time" if ended[-1]["clock"]["period"] >= 2 else "half time"
+    home, away = _score(ctx)
+    if home == away:
+        lead = "the teams are level"
+    else:
+        leader = ctx.club_name(ctx.home if home > away else ctx.away)
+        lead = f"{leader} are ahead"
+    return f"{phase} at minute {_minute(ctx.state.event_time_ms)}; {lead}"
+
+
 def fact_sheet(ctx: MatchContext) -> dict[str, Any]:
     """Numbered facts about the match so far; every number in them is recounted from the events."""
+    ctx = ctx.as_of()
     upto = ctx.state.max_sequence
+    home, away = _score(ctx)
     facts = [
         {
             "id": "score",
-            "text": f"{_score(ctx)} at minute {_minute(ctx.state.event_time_ms)}",
-        }
+            "text": f"score {home}-{away}: {ctx.club_name(ctx.home)} {home}, "
+            f"{ctx.club_name(ctx.away)} {away}",
+        },
+        {"id": "status", "text": _status(ctx)},
     ]
     for team in (ctx.home, ctx.away):
         values = {m: recompute(ctx.events, f"{m}:{team}", upto) for m in TEAM_METRICS}
@@ -98,7 +133,10 @@ def fact_sheet(ctx: MatchContext) -> dict[str, Any]:
         values = {m: getattr(stats, m) for m in PLAYER_METRICS}
         club = ctx.club_name(stats.team_id) if stats.team_id else ""
         facts.append({"id": f"player:{player_id}", "text": f"{name} ({club}): {_counts(values)}"})
-    for event in ctx.events[-RECENT_EVENTS:]:
+    recent = {e["event_id"] for e in ctx.events[-RECENT_EVENTS:]}
+    for event in ctx.events:
+        if event["payload"]["type"] not in KEY_EVENTS and event["event_id"] not in recent:
+            continue
         line = _event_line(ctx, event)
         if line:
             facts.append({"id": f"event:{event['event_id']}", "text": line})
@@ -153,21 +191,41 @@ def _words_fit(text: str) -> bool:
     return not (NUMBER_WORD.search(text) or ORDINAL_DIGITS.search(text))
 
 
-def _ask_fits(text: str, cites: list[str], texts: dict[str, str], limit: int) -> bool:
-    """An answer is bound to the facts it cites: its numbers, its counts and its names."""
-    if not text or len(text.split()) > limit or not _words_fit(text):
-        return False
+def _has(text: str, pattern: str) -> bool:
+    return re.search(rf"\b{pattern}\b", text, re.IGNORECASE) is not None
+
+
+def _ask_problem(text: str, cites: list[str], texts: dict[str, str], limit: int) -> str | None:
+    """Why an answer may not be shown, or None: it is bound to the facts it cites.
+
+    The reasons are short codes, kept in the audit so a refused answer can be traced.
+    """
+    if not text or len(text.split()) > limit:
+        return "length"
+    if not _words_fit(text):
+        return "count_in_words"
     cited = [texts[c] for c in cites]
     numbers = {n for t in cited for n in extract_numbers(t)}
     found = extract_numbers(text)
-    if not found or any(n not in numbers for n in found):
-        return False  # a number, and at least one, must come from a cited fact
+    if any(n not in numbers for n in found):
+        return "number"  # every number must come from a cited fact
+    names = set().union(*(_capitalised(t) for t in cited))
+    if not found and not (_capitalised(text) - COMMON_WORDS) & names:
+        return "no_fact"  # without a number, the answer must name something the facts give
+    for match in SCORELINE.finditer(text):
+        pattern = rf"{match.group(1)}\s*[-–]\s*{match.group(2)}"
+        if not any(_has(t, pattern) for t in cited):
+            return "scoreline"  # "2-1" must be the score as a cited fact writes it
     for match in COUNT_PHRASE.finditer(text):
         count, label = match.group(1), _label(match.group(2))
-        pattern = rf"\b{re.escape(label)} {re.escape(count)}\b"
-        if not any(re.search(pattern, t.casefold()) for t in cited):
-            return False  # "3 shots" must be "shots 3" in a cited fact, not another metric
-    return _names_fit(text, set().union(*(_capitalised(t) for t in cited)))
+        if not any(_has(t.casefold(), rf"{re.escape(label)} {re.escape(count)}") for t in cited):
+            return "count"  # "3 shots" must be "shots 3" in a cited fact, not another metric
+    for phrase in STATE_CLAIMS:
+        if _has(text, re.escape(phrase)) and not any(_has(t, re.escape(phrase)) for t in cited):
+            return "state"  # "full time", "level", "ahead": the record must say so
+    if not _names_fit(text, names):
+        return "name"
+    return None
 
 
 def talk_fits(ctx: MatchContext, target: str, reply: str) -> bool:
@@ -200,7 +258,10 @@ class LiveAnswers:
         except RESILIENCE_ERRORS:
             return None
 
-    async def ask(self, ctx: MatchContext, question: str, persona: str) -> AskResult | None:
+    async def ask(
+        self, ctx: MatchContext, question: str, persona: str
+    ) -> tuple[AskResult | None, str]:
+        """(answer, "") when the model's answer passes its checks, else (None, the reason)."""
         sheet = fact_sheet(ctx)
         texts = {f["id"]: f["text"] for f in sheet["facts"]}
         limit = WORD_LIMIT.get(persona, 80)
@@ -209,18 +270,21 @@ class LiveAnswers:
             {"question": question, "persona": persona, "word_limit": limit, **sheet},
             ASK_SCHEMA,
         )
-        if not answer or answer.get("answerable") is not True:
-            return None
+        if answer is None:
+            return None, "model_unavailable"
+        if answer.get("answerable") is not True:
+            return None, "not_answerable"
         text, cites = answer.get("answer"), answer.get("cites")
         if not isinstance(text, str) or not isinstance(cites, list) or not cites:
-            return None
+            return None, "malformed"
         if not all(isinstance(c, str) and c in texts for c in cites):
-            return None  # a citation that is not a fact of this match
+            return None, "unknown_citation"  # a citation that is not a fact of this match
         text = text.strip()
-        if not _ask_fits(text, list(dict.fromkeys(cites)), texts, max(limit, 40)):
-            return None
+        reason = _ask_problem(text, list(dict.fromkeys(cites)), texts, max(limit, 40))
+        if reason:
+            return None, reason
         citations = [{"type": "fact", "id": c} for c in dict.fromkeys(cites)]
-        return AskResult(text, "live", False, citations, mode="live", retrieval="local")
+        return AskResult(text, "live", False, citations, mode="live", retrieval="local"), ""
 
     async def talk(self, ctx: MatchContext, target: str, utterance: str) -> tuple[str, dict] | None:
         """(reply, facts) in the player's voice, or None when the model gave no checked reply."""
@@ -232,6 +296,7 @@ class LiveAnswers:
             for e in ctx.events
             if e["payload"].get("player_id") == target and (line := _event_line(ctx, e))
         ][-8:]
+        home, away = _score(ctx)
         facts = {
             "you": {
                 "name": ctx.player_name(target),
@@ -240,7 +305,7 @@ class LiveAnswers:
                 "recent_events": recent,
             },
             "match": {
-                "score": _score(ctx),
+                "score": f"{ctx.club_name(ctx.home)} {home}, {ctx.club_name(ctx.away)} {away}",
                 "minute": _minute(ctx.state.event_time_ms),
             },
             "instruction_from_the_manager": utterance,

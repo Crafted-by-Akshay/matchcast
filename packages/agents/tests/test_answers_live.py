@@ -2,10 +2,12 @@
 
 import asyncio
 import json
+from dataclasses import replace
 
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.live import ScriptedModelClient
+from matchcast_agents.live.answers import fact_sheet
 from matchcast_agents.resilience import ModelError
 
 
@@ -224,3 +226,80 @@ def test_a_talk_reply_naming_another_player_goes_to_the_rules(match) -> None:
     run(flow.ingest(match["events"]))
     run(flow.talk("home1", "How many shots have you had?"))
     assert audit_of(flow, "talk_answered")[-1]["details"]["origin"] == "rules"
+
+
+def goals(match, upto: int = 10**9) -> list[dict]:
+    return [
+        e for e in match["events"]
+        if e["payload"]["type"] == "goal" and e["stream_sequence"] <= upto
+    ]  # fmt: skip
+
+
+def scoreline(match, upto: int = 10**9) -> tuple[int, int]:
+    """(home, away) goals in the fixture up to a sequence, recounted here from the events."""
+    home = sum(1 for g in goals(match, upto) if g["payload"]["team_id"] == "home")
+    return home, len(goals(match, upto)) - home
+
+
+def refusal(match, text: str, cites: list[str], question: str = "Who scored?") -> str | None:
+    """The reason the model answer was not shown, or None when it was shown."""
+    flow = build(match, answer_model=ask_model(text, cites))
+    run(flow.ingest(match["events"]))
+    run(flow.ask(question, "casual"))
+    return audit_of(flow, "ask_answered")[-1]["details"]["rejected"]
+
+
+def test_a_scoreline_the_record_does_not_hold_goes_to_the_rules(match) -> None:
+    home, away = scoreline(match)
+    assert home != away
+    # the cited team facts hold both numbers, so only the scoreline binding can refuse this
+    text = f"The score reads {away}-{home} so far."
+    assert refusal(match, text, ["score", "team:home", "team:away"]) == "scoreline"
+
+
+def test_a_match_state_the_cited_facts_do_not_give_goes_to_the_rules(match) -> None:
+    home, away = scoreline(match)
+    text = f"It is full time, {home}-{away}."
+    assert refusal(match, text, ["score", "status"]) == "state"
+
+
+def test_a_match_state_the_cited_facts_give_is_shown(match) -> None:
+    home, away = scoreline(match)
+    text = f"It is half time and the score is {home}-{away}."
+    assert refusal(match, text, ["score", "status"]) is None
+
+
+def test_who_scored_cites_every_goal_in_the_record_and_names_them(match) -> None:
+    scorers = goals(match)
+    ids = [f"event:{g['event_id']}" for g in scorers]  # the first goal is long before the last 15
+    names = [match["names"][g["payload"]["player_id"]] for g in scorers]
+    model = ask_model(" and ".join(names) + " scored.", ids)
+    flow = build(match, answer_model=model)
+    run(flow.ingest(match["events"]))
+    result = run(flow.ask("Who scored?", "casual"))
+    assert result.mode == "live"
+    assert {c["id"] for c in result.citations} == set(ids)
+    assert all(i in facts_of(model.calls[-1]["user"]) for i in ids)
+
+
+def test_an_answer_with_no_number_and_no_name_from_the_facts_goes_to_the_rules(match) -> None:
+    assert refusal(match, "Nobody has scored yet.", ["score"]) == "no_fact"
+
+
+def test_the_fact_sheet_counts_only_the_events_its_state_has_seen(match) -> None:
+    flow = build(match)
+    run(flow.ingest(match["events"][:40]))
+    # the events read after the state can run ahead of it; the sheet must not count them
+    ctx = replace(flow._ctx(), events=tuple(match["events"]))
+    facts = {f["id"]: f["text"] for f in fact_sheet(ctx)["facts"]}
+    home, away = scoreline(match, upto=40)
+    assert facts["score"].startswith(f"score {home}-{away}:")
+    later = goals(match)[-1]  # a goal after the state's last sequence
+    assert f"event:{later['event_id']}" not in facts
+
+
+def test_a_rejected_model_answer_records_why_in_the_audit(match) -> None:
+    shots = count(match, team="home")
+    wrong = refusal(match, "Northgate FC have 99 shots so far.", ["team:home"], "How many?")
+    assert wrong == "number"
+    assert refusal(match, f"Northgate FC have {shots} shots.", ["team:home"], "How many?") is None
