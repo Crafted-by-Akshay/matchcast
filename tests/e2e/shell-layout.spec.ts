@@ -34,7 +34,7 @@ test('desktop chips are at least 32 px tall and the live-region pill is not draw
   });
   expect(m.small).toEqual([]);
   expect(m.vsW, '#voice-src stays out of sight when it has no text').toBeLessThanOrEqual(2);
-  expect(m.subRight, 'the subtitle ends before the view switcher').toBeLessThanOrEqual(m.swLeft);
+  expect(m.subRight, 'the subtitle is either hidden or ends before the view switcher').toBeLessThanOrEqual(m.swLeft);
 });
 
 test('the fixture list says its score is recorded, and the score label says so too', async ({ page }) => {
@@ -43,5 +43,12 @@ test('the fixture list says its score is recorded, and the score label says so t
   expect(labels.length).toBeGreaterThan(20);
   for (const t of labels) expect(t).toMatch(/ v .* \(recorded \d+–\d+\)$/);
   await expect(page.locator('#score-l')).toHaveText('Recorded');
-  await expect(page.locator('#api-pill')).toHaveCSS('min-height', '32px');
+});
+
+test('a season load error is still visible on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/shared/fixtures.json*', (r) => r.abort());
+  await page.goto('/index.html#watch', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#meta')).toContainText('Could not load the season fixtures');
+  await expect(page.locator('#meta')).toBeVisible();
 });

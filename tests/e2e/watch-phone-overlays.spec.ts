@@ -19,7 +19,7 @@ test('Watch at 390 px: the Vision panel starts closed, the tracker runs, the but
   await expect(f.locator('#visp')).toBeHidden();
   expect(await f.evaluate(() => (window as any).__mc.vis.VIS.on), 'closing the panel leaves the tracker on').toBe(true);
   await expect(f.locator('#fan-strip')).toBeHidden();   // the stats strip no longer sits under the Match Pulse bar
-  const toast = await page.evaluate(() => { const t = document.getElementById('toast') || document.querySelector('.toast'); return t ? getComputedStyle(t).top : null; });
+  const toast = await page.evaluate(() => { const t = document.getElementById('toast'); return t ? getComputedStyle(t).top : null; });
   expect(toast).toBe('12px');
   expect(errs).toEqual([]);
 });
