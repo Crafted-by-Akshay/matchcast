@@ -37,6 +37,7 @@ flowchart TB
   gha[GitHub Actions OIDC]
   gha -->|azd deploy| cae
   ghcr -->|public images| cae
+  acr[acrmatchcast suffix<br/>Basic ACR, az acr build] -->|AcrPull, id-matchcast| cae
   evh --> fabric
 ```
 
@@ -57,6 +58,7 @@ Everything except the Foundry resource (created by hand on 21 Oct) and Fabric is
 | `infra/modules/containerapps.bicep` | Environment, apps `web`, `api`, `mcp`, scale rules, Easy Auth, Key Vault secret references |
 | `infra/modules/function.bicep` | Flex Consumption plan and `fn-matchcast-recap-dev` |
 | `infra/modules/databricks.bicep` | Workspace and access connector |
+| `infra/modules/registry.bicep` | Basic ACR `acrmatchcast<suffix>`, admin user off, for `scripts/deploy_cloud.sh` (ADR-0019) |
 | `infra/modules/roles.bicep` | Every role assignment in §3 |
 
 Rules: no output, parameter default or app setting holds a key or connection string; `az bicep build` must pass with no warnings in CI; a second `azd up` with no changes replaces nothing.
@@ -70,6 +72,7 @@ Rules: no output, parameter default or app setting holds a key or connection str
 | | Event Hubs namespace | Azure Event Hubs Data Sender, Azure Event Hubs Data Receiver |
 | | Key Vault | Key Vault Secrets User |
 | | Content Safety, Speech, Translator, Vision | Cognitive Services User |
+| | Container registry `acrmatchcast<suffix>` | AcrPull (web, api and mcp pull cloud-built images) |
 | `matchcast-github` (OIDC, branch `main`) | `rg-matchcast` | Contributor; Role Based Access Control Administrator limited to the roles in this table |
 | | Key Vault | Key Vault Secrets User (for `srch-admin-key` during KB ingestion) |
 | Databricks access connector | Storage containers `scenes`, `season`, `models` | Storage Blob Data Contributor |

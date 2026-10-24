@@ -20,7 +20,9 @@ Option 2. `scripts/deploy_cloud.sh [api] [web] [mcp]` (deploy_local.sh with `BUI
 
 ## Consequences
 
-- The deploying machine needs only az, azd, git and python3: no Docker, no image layers on disk.
+- The deploying machine needs only az, azd, git, curl and python3: no Docker, no image layers on disk.
+- The build context is uploaded to Azure, so both `.dockerignore` files exclude `.azure`, `.env*`, `*.pem` and `*.key`.
+- Builds and the provision retry three times a minute apart (Docker Hub rate limits, AcrPull propagation).
 - Cost: Basic is about $0.17 a day (about $5 to 20 Nov) plus build seconds; inside the ~$100 cap.
 - Images are private in ACR; no pull secret anywhere.
 

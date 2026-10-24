@@ -11,6 +11,17 @@ cd "$(git rev-parse --show-toplevel)"
 REGISTRY=ghcr.io/crafted-by-akshay
 ENV_NAME=${AZURE_ENV_NAME:-dev}
 BUILD=${BUILD:-docker}
+
+# Three tries a minute apart: a cloud build can hit a Docker Hub rate limit, and a provision right
+# after the registry's AcrPull assignment can run before the role has propagated.
+retry() {
+  for n in 1 2 3; do
+    "$@" && return 0
+    [ "$n" = 3 ] && return 1
+    echo "retrying in 60 s: $*" >&2
+    sleep 60
+  done
+}
 SERVICES=("$@")
 [ ${#SERVICES[@]} -eq 0 ] && SERVICES=(api web mcp)
 
@@ -27,19 +38,19 @@ if [ "$BUILD" = acr ]; then
     echo "no registry yet: provisioning it with the images that run now"
     for s in api web mcp; do
       current=$(az containerapp show -g rg-matchcast -n "ca-$s-matchcast-$ENV_NAME" --query 'properties.template.containers[0].image' -o tsv)
-      azd env set "$(echo "$s" | tr a-z A-Z)_IMAGE" "$current" -e "$ENV_NAME"
+      if [ -n "$current" ]; then azd env set "$(echo "$s" | tr a-z A-Z)_IMAGE" "$current" -e "$ENV_NAME"; fi
     done
-    azd provision -e "$ENV_NAME" --no-prompt
+    retry azd provision -e "$ENV_NAME" --no-prompt
     ACR=$(az acr list -g rg-matchcast --query "[0].name" -o tsv)
   fi
   REGISTRY=$(az acr show -n "$ACR" --query loginServer -o tsv)
   for s in "${SERVICES[@]}"; do
     case "$s" in
-      api) az acr build -r "$ACR" --platform linux/amd64 -f services/api/Dockerfile -t "matchcast-api:$SHA" . ;;
-      mcp) az acr build -r "$ACR" --platform linux/amd64 -f services/mcp/Dockerfile -t "matchcast-mcp:$SHA" . ;;
+      api) retry az acr build -r "$ACR" --platform linux/amd64 -f services/api/Dockerfile -t "matchcast-api:$SHA" . ;;
+      mcp) retry az acr build -r "$ACR" --platform linux/amd64 -f services/mcp/Dockerfile -t "matchcast-mcp:$SHA" . ;;
       web)
         API_FQDN=$(az containerapp show -g rg-matchcast -n "ca-api-matchcast-$ENV_NAME" --query properties.configuration.ingress.fqdn -o tsv)
-        az acr build -r "$ACR" --platform linux/amd64 --build-arg API_URL="https://$API_FQDN" -t "matchcast-web:$SHA" apps/unified ;;
+        retry az acr build -r "$ACR" --platform linux/amd64 --build-arg API_URL="https://$API_FQDN" -t "matchcast-web:$SHA" apps/unified ;;
       *) echo "unknown service $s" >&2; exit 2 ;;
     esac
     azd env set "$(echo "$s" | tr a-z A-Z)_IMAGE" "$REGISTRY/matchcast-$s:$SHA" -e "$ENV_NAME"
@@ -63,10 +74,10 @@ fi
 for s in api web mcp; do
   case " ${SERVICES[*]} " in *" $s "*) continue ;; esac
   current=$(az containerapp show -g rg-matchcast -n "ca-$s-matchcast-$ENV_NAME" --query 'properties.template.containers[0].image' -o tsv)
-  azd env set "$(echo "$s" | tr a-z A-Z)_IMAGE" "$current" -e "$ENV_NAME"
+  if [ -n "$current" ]; then azd env set "$(echo "$s" | tr a-z A-Z)_IMAGE" "$current" -e "$ENV_NAME"; fi
 done
 
-azd provision -e "$ENV_NAME" --no-prompt
+retry azd provision -e "$ENV_NAME" --no-prompt
 azd deploy recap -e "$ENV_NAME" --no-prompt || echo "warning: azd deploy recap failed; the recap function keeps its previous code"
 
 API_URI=$(azd env get-value API_URI -e "$ENV_NAME")
