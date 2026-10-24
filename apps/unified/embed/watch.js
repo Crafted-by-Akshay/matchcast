@@ -72,12 +72,9 @@ MCS.progress('Loading the stadium and players');
   // EXP-16: the same words go to the api's player agent through the shell; a reply built from checked facts is added to the chat, anything else is not
   const talks = new Map(); let talkN = 0;
   if (!document.documentElement.lang) document.documentElement.lang = 'en';   // the source head has no lang (WCAG 3.1.1); Watch's own language list changes the text, not this
+  window.__mcSetOrder = (p, k) => setOrder(p, k, 'test');   // read by tests (role-clamp.spec.ts)
   window.__mcTalkLog = (p) => (TK.log.get(p) || []).map((m) => m.text);   // read by tests
   // Role bounds for orders (mirrors packages/agents/matchcast_agents/roles/orders.py). Typed lines go to the api, which applies the same table to the position this browser sends. Quick buttons and the rules fallback are checked here only.
-  const MC_GROUP = { GK: 'keeper', CB: 'centre_back', LB: 'fullback', RB: 'fullback', LWB: 'fullback', RWB: 'fullback', DM: 'midfield', CM: 'midfield', LM: 'midfield', RM: 'midfield', AM: 'midfield', LW: 'forward', RW: 'forward', ST: 'forward' };
-  const MC_ORDERS = { keeper: ['deep', 'simple', 'rest'], centre_back: ['push', 'deep', 'mark', 'simple', 'rest'], fullback: ['push', 'deep', 'wide', 'runs', 'mark', 'simple', 'rest'], midfield: ['push', 'deep', 'wide', 'inside', 'press', 'mark', 'shoot', 'simple', 'runs', 'rest'], forward: ['push', 'deep', 'wide', 'inside', 'press', 'shoot', 'runs', 'simple', 'rest'], unknown: ['deep', 'simple', 'rest'] };
-  const MC_REFUSAL = 'Not from my role, boss. Ask me for something else.';
-  const mcAllowed = (pos, k) => k === 'clear' || k === 'none' || (MC_ORDERS[MC_GROUP[pos] || 'unknown'] || MC_ORDERS.unknown).includes(k);
   const mcRulesOrder = (p, k, text) => {
     if (!mcAllowed(p.pos, k)) { talkLine(p, 'pl', MC_REFUSAL); speak(p, MC_REFUSAL); renderTalk(); return; }
     setOrder(p, k, text); const r = ruleReply(p, k); talkLine(p, 'pl', r); speak(p, r); renderTalk();
