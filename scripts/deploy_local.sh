@@ -33,7 +33,7 @@ SHA=sha-$(git rev-parse --short HEAD)
 echo "deploying $SHA to azd env $ENV_NAME: ${SERVICES[*]}"
 
 if [ "$BUILD" = acr ]; then
-  ACR=$(az acr list -g rg-matchcast --query "[0].name" -o tsv)
+  ACR=$(az acr list -g rg-matchcast --query "[?starts_with(name, 'acrmatchcast')].name | [0]" -o tsv)
   if [ -z "$ACR" ]; then
     echo "no registry yet: provisioning it with the images that run now"
     for s in api web mcp; do
@@ -41,7 +41,7 @@ if [ "$BUILD" = acr ]; then
       if [ -n "$current" ]; then azd env set "$(echo "$s" | tr a-z A-Z)_IMAGE" "$current" -e "$ENV_NAME"; fi
     done
     retry azd provision -e "$ENV_NAME" --no-prompt
-    ACR=$(az acr list -g rg-matchcast --query "[0].name" -o tsv)
+    ACR=$(az acr list -g rg-matchcast --query "[?starts_with(name, 'acrmatchcast')].name | [0]" -o tsv)
   fi
   REGISTRY=$(az acr show -n "$ACR" --query loginServer -o tsv)
   for s in "${SERVICES[@]}"; do

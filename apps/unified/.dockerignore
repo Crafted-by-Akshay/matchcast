@@ -3,11 +3,11 @@ watch
 broadcast
 analyst
 shared
-node_modules
+**/node_modules
 __pycache__
 # az acr build uploads the context: keep local env files and keys on this machine
-.azure
-.env
-.env.*
-*.pem
-*.key
+**/.azure
+**/.env
+**/.env.*
+**/*.pem
+**/*.key

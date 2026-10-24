@@ -48,7 +48,7 @@ def test_cloud_build_upload_leaves_local_secrets_behind():
     for path in (".dockerignore", "apps/unified/.dockerignore"):
         ignored = (ROOT / path).read_text().split()
         for entry in (".azure", ".env", ".env.*", "*.pem", "*.key"):
-            assert entry in ignored, (path, entry)
+            assert f"**/{entry}" in ignored, (path, entry)  # at any depth, not only the root
 
 
 def test_cloud_deploy_retries_the_steps_a_first_run_can_trip_on():
