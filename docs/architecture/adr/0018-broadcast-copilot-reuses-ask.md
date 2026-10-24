@@ -19,13 +19,14 @@ The Broadcast view needs highlights, a camera or story focus, and a production p
 Option 2, with code ranking.
 
 - `POST /v1/matches/{id}/ask` takes `surface` (default `ask`). With `surface: "broadcast"`, a question with a Broadcast cue is answered by `matchcast_agents.broadcast`. The reply adds `broadcast` (`highlights`, `focus` or `plan`), and each pick cites its event.
-- Highlights are the events scoring at least 40 on the producer's moment scale, best first. Focus is the best player moment in the last three minutes, else a wide shot. Minutes come from event clocks and names from the roster, so no model call is needed.
+- Highlights are the events scoring at least 40 on the producer's moment scale, best first. Focus is the best player moment in the last three minutes, else a wide shot. An own goal names no player and is never a focus target. Period ends read "Half time" or "Full time" from the clock period. Minutes come from event clocks and names from the roster, so no model call is needed. Picks cite their events with the citation type `event`, which the Ask path does not use.
 - The camera is never moved by the API or by Broadcast. Focus returns a `camera` preset and a player or zone. Watch shows a "Go to it" control, and the camera moves only on click (planned in the front end).
 - No new core agent and no LLM call in the live loop. The Verifier's rules still apply to any model text that a later phase adds.
 
 ## Consequences
 
 - The Broadcast Copilot is deterministic and repeatable, so its picks can be checked by tests.
+- Broadcast cues are narrow (a question must say highlights, camera, focus, production plan, strategy, rundown or what next), so a broadcast question never reaches the router's declines by accident. Plain questions on the same surface take the Ask path.
 - The audit action stays `ask_answered`, with a `surface` field, so the closed list in 04 §4 does not change.
 - Model-written wording for highlights and plans is a later step. Until then, the reasons are templates over event data.
 - Phase 1 (the resizable pane) and the front end for Phase 4 are not in this ADR's first merge.

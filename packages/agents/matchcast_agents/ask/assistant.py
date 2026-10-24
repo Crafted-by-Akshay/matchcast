@@ -315,7 +315,10 @@ class Assistant:
         ``surface="broadcast"`` answers highlight, focus and plan questions from ranked picks
         (see ``broadcast.py``); any other question takes the normal path."""
         ctx = flow._ctx()
-        if surface == "broadcast" and (intent := broadcast.intent_for(question)):
+        intent = broadcast.intent_for(question) if surface == "broadcast" else None
+        if (
+            intent
+        ):  # the cues are narrow, so a broadcast question never reaches the router's declines
             return _broadcast_answer(ctx, intent)
         plan = route(ctx, question, self.index)
         if plan.intent == "out_of_scope":
@@ -386,9 +389,9 @@ def _broadcast_answer(ctx: MatchContext, intent: str) -> AskResult:
         citations = [{"type": "event", "id": pick["event_id"]}] if "event_id" in pick else []
         payload = {"focus": pick}
     else:
-        steps = broadcast.plan(ctx)
+        steps, event_ids = broadcast.plan(ctx)
         answer = " ".join(steps)
-        citations = []
+        citations = [{"type": "event", "id": event_id} for event_id in event_ids]
         payload = {"plan": steps}
     return AskResult(answer, intent, False, citations, broadcast=payload)
 
