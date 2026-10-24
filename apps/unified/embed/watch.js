@@ -142,6 +142,7 @@ MCS.progress('Loading the stadium and players');
   const go = setInterval(() => {
     if (!window.__mc || !players.length || !$('load').hidden) return;
     clearInterval(go);
+    try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { saved = null; }   // the shell's Fan / Analyst switch may have written it while Watch loaded
     if (saved && FAN_MODES.some((m) => m[0] === saved.mode)) {
       const p = saved.player ? players.find((q) => q.name === saved.player) : null;
       _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric: FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
@@ -149,6 +150,13 @@ MCS.progress('Loading the stadium and players');
     tell();
   }, 300);
 })();
+
+// ---- the shell's Fan / Analyst switch (UX review, finding 10) sets Watch's mode; every other mode (club, player, metric) stays in Watch's own picker.
+window.addEventListener('message', (e) => {
+  const d = e.data || {};
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'persona-set' || !['casual', 'analyst'].includes(d.mode)) return;
+  if (FAN.mode !== d.mode) fanSet({ mode: d.mode }, 'shell');
+});
 
 // ---- EXP-2: Watch is the only engine. Four times a second it sends the pitch state (22 players, the ball, score, clock, stats) for the shell to hand to Broadcast.
 (() => {
