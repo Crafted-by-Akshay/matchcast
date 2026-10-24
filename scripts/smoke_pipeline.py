@@ -22,14 +22,18 @@ FIXTURE = Path(__file__).parents[1] / "packages/agents/tests/fixtures/match-shor
 # In live mode each events POST runs model calls in the request (direct pipeline): measured
 # 24 Oct at 21-101 s for 10 events, so one 50-event batch can take minutes.
 REQUEST_TIMEOUT_S = 300
-FINAL_VERDICTS = {"verified", "review", "rejected"}
 
 
-def settled(claims: list[dict]) -> bool:
-    """Every claim has a final verdict and at least one is verified. Live agents can produce
-    claims the Verifier rejects; that is the Verifier working, not a failed pipeline."""
-    verdicts = [c.get("verdict") for c in claims]
-    return bool(verdicts) and all(v in FINAL_VERDICTS for v in verdicts) and "verified" in verdicts
+def snapshot(claims: list[dict]) -> list[tuple[str, str]]:
+    return sorted((str(c.get("claim_id")), str(c.get("verdict"))) for c in claims)
+
+
+def settled(claims: list[dict], previous: list[tuple[str, str]] | None) -> bool:
+    """At least one claim is verified and nothing changed since the last poll. The api reports
+    verified, rejected or pending; live agents leave some claims rejected (the Verifier working)
+    or pending (a line held back), so "every claim verified" only ever holds in rules mode."""
+    current = snapshot(claims)
+    return any(v == "verified" for _, v in current) and current == previous
 
 
 def call(method: str, url: str, body: dict | None = None) -> tuple[int, dict]:
@@ -47,7 +51,7 @@ def call(method: str, url: str, body: dict | None = None) -> tuple[int, dict]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", required=True)
-    parser.add_argument("--timeout", type=float, default=90)
+    parser.add_argument("--timeout", type=float, default=600)
     args = parser.parse_args()
     base = args.base.rstrip("/")
     fixture = json.loads(FIXTURE.read_text())
@@ -85,18 +89,24 @@ def main() -> int:
     print(f"all {len(events)} events accepted after {time.perf_counter() - started:.1f}s")
 
     deadline = time.monotonic() + args.timeout
+    previous: list[tuple[str, str]] | None = None
+    processed = 0
     while time.monotonic() < deadline:
+        status, match = call("GET", f"{base}/v1/matches/{name}?session_id={name}")
+        processed = match.get("stats", {}).get("events", 0) if status == 200 else 0
         status, reply = call("GET", f"{base}/v1/matches/{name}/claims?session_id={name}")
         items = reply.get("items", []) if status == 200 else []
-        if settled(items):
+        # eventhubs mode answers the POSTs before processing, so wait for every event too
+        if processed >= len(events) and settled(items, previous):
             verified = sum(c.get("verdict") == "verified" for c in items)
             others = len(items) - verified
-            extra = f" ({others} rejected or held for review)" if others else ""
+            extra = f" ({others} rejected or pending)" if others else ""
             elapsed = time.perf_counter() - started
             print(f"OK: {verified} verified claims{extra} after {elapsed:.1f}s")
             return 0
+        previous = snapshot(items)
         time.sleep(2)
-    print(f"FAIL: no verified claims in {args.timeout:.0f}s (status {status}, {len(items)} claims)")
+    print(f"FAIL: claims not settled in {args.timeout:.0f}s ({processed} events processed)")
     return 1
 
 

@@ -110,12 +110,20 @@ def _smoke():
     return module
 
 
-def test_smoke_accepts_verifier_rejections_in_live_mode():
-    settled = _smoke().settled
-    assert settled([{"verdict": "verified"}, {"verdict": "rejected"}, {"verdict": "review"}])
-    assert not settled([{"verdict": "verified"}, {"verdict": None}])
-    assert not settled([{"verdict": "rejected"}])
-    assert not settled([])
+def test_smoke_accepts_verifier_rejections_once_claims_stop_changing():
+    smoke = _smoke()
+    claims = [
+        {"claim_id": "a", "verdict": "verified"},
+        {"claim_id": "b", "verdict": "rejected"},
+        {"claim_id": "c", "verdict": "pending"},
+    ]
+    assert not smoke.settled(claims, None)  # first poll: nothing to compare with yet
+    assert smoke.settled(claims, smoke.snapshot(claims))
+    moved = [claims[0], claims[1], {"claim_id": "c", "verdict": "verified"}]
+    assert not smoke.settled(moved, smoke.snapshot(claims))
+    rejected = [{"claim_id": "b", "verdict": "rejected"}]
+    assert not smoke.settled(rejected, smoke.snapshot(rejected))
+    assert not smoke.settled([], [])
 
 
 def test_smoke_waits_long_enough_for_live_model_calls():
