@@ -5,7 +5,7 @@ This is the unified app for the hackathon. Generated folders (`watch/`, `broadca
 One app for the three MatchCast dashboards, switched from one top bar:
 
 - **Watch** (fan 3D match): the 3D app from `sources/3d-source/v2`, without its v10 Director and v11 Analyst boards.
-- **Analyst** (enterprise console): `sources/enterprise-console/src` with its data.
+- **Analyst** (enterprise console): `sources/enterprise-console/src` with its data. The default nav is focused on the match: Live match, Match centre (five tabs), Ask the match, How was this made? and Match library; the rest sits under More (`analyst-pages/70_focus.js`).
 - **Broadcast** (broadcaster desk): `sources/broadcaster-console`, same build.
 
 Sources are in `sources/`, a copy of the three prototype folders. They are read only. `build.py` copies each view from its source folder and applies a few asserted patches. The shell, `index.html`, is written by hand.

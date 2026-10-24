@@ -93,8 +93,17 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 - Content Security Policy: `default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://<api-fqdn> https://*.tts.speech.microsoft.com https://*.stt.speech.microsoft.com wss://*.stt.speech.microsoft.com; img-src 'self' data: blob:; media-src 'self' https://<api-fqdn> blob:`.
 - The shell head preconnects to the CDN and `modulepreload`s `three.module.js` so Watch and Broadcast find it in the HTTP cache (EXP-15). The version must equal `CDN` in `build.py`.
 
+### Focused Analyst mode (refocus, 24 Oct)
+`apps/unified/analyst-pages/70_focus.js` reshapes the Analyst console for the judge path. The nav shows five entries under **This match**: Live match (the new landing page, `#live.<fixture>`), Match centre, Ask the match, How was this made?, and Match library. **More** holds Scouting, Opposition report, Set pieces, Tactical board, Query explorer, Reports, Audit log, Agent operations and Users and access.
+The Data science and Platform pages are not in the nav any more. They stay registered and open by route, and their code is not deleted.
+- Match centre has five tabs: Overview, Shots, Patterns (pass network and average shape), Players, Verifier. The headline comparison stays in Overview's at-a-glance card; the full team table and the event log are no longer tabs (the event log is still one CSV export).
+- Live match reads the shell's feed (`pushFeed` in `index.html`): Watch's score, minute, stats (xG, shots, possession, completed passes) and last five events. It is labelled 'Live from Watch · the simulated match engine'. With no live feed it shows the season run for the fixture and says so. PPDA is shown at full time only.
+- Ask the match sends the question to the shell (`window.mcAskShell` in `embed/analyst.js`), which answers through the api or the rules, as it does for Watch. Answers say whether the Verifier checked them.
+- How was this made? lists each agent insight of the match with its Verifier verdict, from the recorded run. It does not open the live trace panel yet.
+- Tests: `tests/e2e/analyst-focus.spec.ts`.
+
 ### Analyst Data platform page (EXP-13)
-`apps/unified/analyst-pages/10_data_platform.js` adds Platform > Data platform. It shows the Fabric clip/screenshot and the Databricks model card from `shared/` (copied from `apps/unified/platform-assets/` by `build.py`). Until DAT-8 / DAT-6 supply the files each block is labelled Planned. The card moves to a Blob read through the api when DAT-6 lands.
+`apps/unified/analyst-pages/10_data_platform.js` adds the Data platform page (not in the focused nav since 24 Oct; open it with `go('data-platform')`). It shows the Fabric clip/screenshot and the Databricks model card from `shared/` (copied from `apps/unified/platform-assets/` by `build.py`). Until DAT-8 / DAT-6 supply the files each block is labelled Planned. The card moves to a Blob read through the api when DAT-6 lands.
 
 ### Broadcast instant replay (AB#360)
 `apps/unified/embed/replay.js`, appended to the Broadcast view after `broadcast.js`. A capture listener on the `frame` bus message keeps the last 60 s of Watch's frames in the page (not persisted). The producer can replay the last 10, 20 or 30 s at normal or half speed; the view then shows the buffered player and ball positions while clock, score and stats stay live, with a REPLAY tag, and returns to live by itself or on Back to live. Events and agent lines are never replayed. Overlays for this view must sit inside `#bc-view` (the desk's CSS hides other children of `body`).

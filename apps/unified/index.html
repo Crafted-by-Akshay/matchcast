@@ -395,10 +395,10 @@ function ensure(view) {
 function routeAnalyst() {
   if (!M.fixture) return;
   if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
-    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#match.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
+    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#live.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
   if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
     FR.analyst.route = M.fixture;
-    post('analyst', { src: 'matchcast-shell', type: 'route', page: 'match', arg: M.fixture });
+    post('analyst', { src: 'matchcast-shell', type: 'route', page: 'live', arg: M.fixture });
   }
 }
 
@@ -468,7 +468,9 @@ function pushFeed() {
   const w = FR.watch && FR.watch.live;
   const on = !!(w && w.started && keyOf(w.setup) === keyOf(M.setup));
   const last = on && AG.run ? AG.run.events.slice(-5).map((e) => ({ minute: e.minute, type: e.type, player: e.player })) : [];
-  const msg = { src: 'matchcast-shell', type: 'feed', on, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over), last };
+  const st = on && FR.watch.stats;
+  const stats = st ? { xg: st.xg, shots: st.shots, poss: st.poss, passes: st.passes, done: st.done } : null;
+  const msg = { src: 'matchcast-shell', type: 'feed', on, fixture: M.fixture, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over), last, stats };
   post('broadcast', msg); post('analyst', msg);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -607,7 +609,7 @@ window.addEventListener('message', (e) => {
     return;
   }
   if (d.type === 'vision-events' && view === 'watch') { LV.visionEvents(d.batch); return; }   // the tracker's derived passes, on the separate .vision stream (DAT-11)
-  if (d.type === 'ask' && (view === 'watch' || view === 'broadcast')) { answerAsk(d.id, d.q, view); return; }
+  if (d.type === 'ask' && (view === 'watch' || view === 'broadcast' || view === 'analyst')) { answerAsk(d.id, d.q, view); return; }
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
   if (d.type === 'indices' && view === 'watch') {   // control, chaos and tempo from Watch's events (DAT-4); the Analyst's match page shows them
     M.indices = d.data; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'indices', data: d.data }); return;
@@ -637,7 +639,7 @@ window.addEventListener('message', (e) => {
   }
   if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); CM.setPersona(d.persona); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
    // the viewer's watch mode changed (EXP-4)
-  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
+  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) { post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); if (FR.watch) { FR.watch.stats = d.frame.stats; if (Date.now() - (FR.watch.feedAt || 0) > 1000) { FR.watch.feedAt = Date.now(); pushFeed(); } } } return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
     if (view === 'watch' && AG.run && AG.run.key === keyOf(d.setup)) CM.fromWatch(d.batch, d.moments);   // the continuous feed (feed.js): every moment, key event and quiet-stretch summary
