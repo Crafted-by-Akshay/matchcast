@@ -61,6 +61,14 @@ def sub(text, old, new, label):
     return text.replace(old, new)
 
 
+ORDER_OLD = "function setOrder(p, k, text, by) {\n  if (!k || k === 'none') return;"
+ORDER_NEW = (
+    "function setOrder(p, k, text, by) {\n"
+    "  if (!k || k === 'none' || !mcAllowed(p.pos, k)) return;"
+    "   // role bound (embed/roles.js): an order outside the role never reaches p.orders"
+)
+
+
 def importmap():
     return (
         '<script type="importmap">\n{"imports":{"three":"'
@@ -99,6 +107,7 @@ def build_watch():
         .replace("/*@@TACTICS@@*/", r(W + "tactics.js"))
         .replace("/*@@SETUP@@*/", "\n".join(r(W + f) for f in WATCH_MODS))
     )
+    main = sub(main, ORDER_OLD, ORDER_NEW, "watch role bound")
     main = sub(main, "'./players.json'", "'../shared/players.json'", "watch players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
@@ -149,6 +158,8 @@ def build_watch():
         + "\n"
         + r(EMB + "hook.js")
         + "\n"
+        + r(EMB + "roles.js")
+        + "\n"
         + r(EMB + "watch.js")
         + "\n"
         + r(EMB + "vision-crops.js")
@@ -190,6 +201,14 @@ def build_broadcast():
             + "\n"
             + "\n".join(r(BS + f) for f in BC),
         )
+    )
+    main = sub(main, ORDER_OLD, ORDER_NEW, "broadcast role bound")
+    # a refused order is said out loud, not acknowledged: the same line Watch uses
+    main = sub(
+        main,
+        "if (quick || !SAMPLE) { const k = quick || keywordOrder(text); setOrder(p, k, text);",
+        "if (quick || !SAMPLE) { const k = quick || keywordOrder(text); if (!mcAllowed(p.pos, k)) { talkLine(p, 'pl', MC_REFUSAL); speak(p, MC_REFUSAL); renderTalk(); return; } setOrder(p, k, text);",
+        "broadcast role refusal",
     )
     main = sub(main, "'./players.json'", "'../shared/players.json'", "broadcast players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "broadcast intl path")
@@ -238,6 +257,8 @@ def build_broadcast():
         + main
         + "\n"
         + r(EMB + "hook.js")
+        + "\n"
+        + r(EMB + "roles.js")
         + "\n"
         + r(EMB + "broadcast.js")
         + "\n"

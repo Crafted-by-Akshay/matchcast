@@ -27,6 +27,7 @@ MCS.progress('Loading the stadium and players');
     + '#mcx-log{max-height:190px;overflow:auto;display:flex;flex-direction:column;gap:6px}#mcx-log[hidden]{display:none}'
     + '.fm-planned{font-size:9px;opacity:.7}.mcx-w{margin-top:6px;border-top:1px solid var(--line);padding-top:6px;font:11px/1.4 var(--f-mono);color:var(--muted)}.mcx-w b{color:var(--ink)}';
   st.textContent += '@media (max-width:560px){button:not(.sw):not(.dk-grab),select,input:not([type=checkbox]),textarea,#px-head{min-height:44px !important;min-width:44px !important}input[type=checkbox]{width:24px;height:24px}label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}';   // phone: 44 px tap targets
+  st.textContent += '@media (max-width:640px){#fan-strip,#fan-metric{display:none !important}}';   // phone: the live stats strip sat under the Match Pulse bar; Match data holds the numbers (UX review, finding 14)
   document.head.appendChild(st);
   const box = document.createElement('div'); box.id = 'mcx-box';
   box.innerHTML = '<div id="mcx-live" aria-live="polite"></div><div id="mcx-log" hidden></div><button class="mcx-b" id="mcx-tog" hidden>Pulse log (0)</button>';
@@ -72,12 +73,9 @@ MCS.progress('Loading the stadium and players');
   // EXP-16: the same words go to the api's player agent through the shell; a reply built from checked facts is added to the chat, anything else is not
   const talks = new Map(); let talkN = 0;
   if (!document.documentElement.lang) document.documentElement.lang = 'en';   // the source head has no lang (WCAG 3.1.1); Watch's own language list changes the text, not this
+  window.__mcSetOrder = (p, k) => setOrder(p, k, 'test');   // read by tests (role-clamp.spec.ts)
   window.__mcTalkLog = (p) => (TK.log.get(p) || []).map((m) => m.text);   // read by tests
   // Role bounds for orders (mirrors packages/agents/matchcast_agents/roles/orders.py). Typed lines go to the api, which applies the same table to the position this browser sends. Quick buttons and the rules fallback are checked here only.
-  const MC_GROUP = { GK: 'keeper', CB: 'centre_back', LB: 'fullback', RB: 'fullback', LWB: 'fullback', RWB: 'fullback', DM: 'midfield', CM: 'midfield', LM: 'midfield', RM: 'midfield', AM: 'midfield', LW: 'forward', RW: 'forward', ST: 'forward' };
-  const MC_ORDERS = { keeper: ['deep', 'simple', 'rest'], centre_back: ['push', 'deep', 'mark', 'simple', 'rest'], fullback: ['push', 'deep', 'wide', 'runs', 'mark', 'simple', 'rest'], midfield: ['push', 'deep', 'wide', 'inside', 'press', 'mark', 'shoot', 'simple', 'runs', 'rest'], forward: ['push', 'deep', 'wide', 'inside', 'press', 'shoot', 'runs', 'simple', 'rest'], unknown: ['deep', 'simple', 'rest'] };
-  const MC_REFUSAL = 'Not from my role, boss. Ask me for something else.';
-  const mcAllowed = (pos, k) => k === 'clear' || k === 'none' || (MC_ORDERS[MC_GROUP[pos] || 'unknown'] || MC_ORDERS.unknown).includes(k);
   const mcRulesOrder = (p, k, text) => {
     if (!mcAllowed(p.pos, k)) { talkLine(p, 'pl', MC_REFUSAL); speak(p, MC_REFUSAL); renderTalk(); return; }
     setOrder(p, k, text); const r = ruleReply(p, k); talkLine(p, 'pl', r); speak(p, r); renderTalk();
