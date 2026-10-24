@@ -21,5 +21,13 @@ def test_build_stage_makes_the_shipped_tree_world_readable(dockerfile: str, tree
     text = (ROOT / dockerfile).read_text()
     build, _, runtime = text.rpartition("\nFROM ")
     fix = f"RUN chmod -R a+rX {tree}"
-    assert fix in build, f"{dockerfile}: add `{fix}` to the build stage"
+    steps = [
+        line for line in build.splitlines() if line and not line[0].isspace() and line[0] != "#"
+    ]
+    assert steps[-1] == fix, f"{dockerfile}: `{fix}` must be the last step of the build stage"
     assert f"COPY --from=build {tree}" in runtime
+    for line in runtime.splitlines():
+        if line.startswith("COPY ") and "--from=" not in line:
+            assert "--chmod=" in line, (
+                f"{dockerfile}: {line!r} copies from the context without --chmod"
+            )

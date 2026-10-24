@@ -16,6 +16,6 @@ RUN find /site -type f -size +1k ! -name config.js \
 RUN chmod -R a+rX /site
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=644 nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /site /usr/share/nginx/html
 EXPOSE 8080
