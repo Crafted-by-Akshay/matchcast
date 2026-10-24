@@ -12,6 +12,8 @@ RUN mkdir /site && cp -r index.html config.js contracts.js agents.js live.js tra
 RUN find /site -type f -size +1k ! -name config.js \
       \( -name '*.html' -o -name '*.js' -o -name '*.json' -o -name '*.css' -o -name '*.svg' \) \
       -exec gzip -9 -k {} +
+# nginx runs unprivileged; a checkout made under a strict umask must still be readable.
+RUN chmod -R a+rX /site
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
