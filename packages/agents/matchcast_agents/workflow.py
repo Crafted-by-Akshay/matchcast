@@ -443,13 +443,13 @@ class MatchWorkflow:
             raise WorkflowError("prompt_attack", "the question was flagged as a prompt attack")
         # An answer reads a snapshot and never waits for the ingest lock: a live batch holds that
         # lock while the agents write, and a viewer must not wait behind it (ADR-0018).
-        result = None
+        result, rejected = None, ""
         if assistant is None and self._answers is not None:
-            result = await self._answers.ask(self._ctx(), question, persona)
+            result, rejected = await self._answers.ask(self._ctx().as_of(), question, persona)
             if result is not None and not (await self.safety.analyze(result.answer)).allowed:
                 self._audit("system", "content-safety", "safety_blocked", "ask",
                             {"source": self.safety.source, "kind": "unsafe_content"})  # fmt: skip
-                result = None  # the model's answer failed the content screen: the rules answer
+                result, rejected = None, "unsafe_content"  # the rules answer instead
         if result is None:
             result = await (assistant or default_assistant()).ask(self, question, persona)
         self._audit(
@@ -463,6 +463,7 @@ class MatchWorkflow:
                 "dropped": result.dropped,
                 "citations": [c["id"] for c in result.citations],
                 "mode": result.mode,
+                "rejected": rejected or None,  # why the model's answer was not shown, if it was not
             },
         )
         return result
@@ -490,7 +491,7 @@ class MatchWorkflow:
             self._audit("system", "content-safety", "safety_blocked", "talk",
                         {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
             raise WorkflowError("prompt_attack", "the utterance was flagged as a prompt attack")
-        ctx = self._ctx()  # a snapshot: a talk never waits for the ingest lock (ADR-0018)
+        ctx = self._ctx().as_of()  # a snapshot: a talk never waits for the ingest lock (ADR-0018)
         origin, heard = "rules", NONE
         if target == "producer":
             reply, facts = producer_reply(ctx, utterance)
