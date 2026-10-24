@@ -133,6 +133,7 @@ packages/agents/
     rules/             deterministic Producer, Analyst, Narrator and Verifier
     live/              Foundry model client and the model-backed Analyst, Narrator, Verifier
     resilience.py      timeouts, one retry on 429, circuit breaker, rules fallback
+    (live pacing: model only for priority-1 moments by default, lines of a moment verified together, one shared redraft per target; docs/infra.md)
     verify/            deterministic checks 1-7 (check 8, meaning, is the live Verifier's model step)
     tools/             in-process tools and the MCP client path for the Analyst
     ask/               chunking, BM25 retrieval, router rules and answer assembly

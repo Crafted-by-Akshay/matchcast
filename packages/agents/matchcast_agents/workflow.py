@@ -174,6 +174,8 @@ class MatchWorkflow:
     ) -> None:
         self.stats_desk = stats_desk
         self._verified_claims: dict[str, dict[str, Any]] = {}
+        self._repair_lock: asyncio.Lock | None = None
+        self._redrafts: dict[tuple[str, str], tuple[MatchContext, list[dict], list[DraftLine]]] = {}
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
@@ -675,8 +677,19 @@ class MatchWorkflow:
     ) -> None:
         """Verifier, repair router and approval for every draft of the moment."""
         self._verified_claims = {}
-        for draft in drafts:
-            await self._verify_line(ctx, task, claims, draft, attempt=0)
+        self._redrafts = {}  # one redraft per moment and target serves every rejected persona
+        self._repair_lock = asyncio.Lock()
+        # The lines of a moment are independent, so their model checks run together (a moment
+        # costs one round of Verifier calls, not one per persona); repairs take turns.
+        results = await asyncio.gather(
+            *(self._verify_line(ctx, task, claims, d, attempt=0) for d in drafts),
+            return_exceptions=True,
+        )
+        for failure in results:
+            if isinstance(failure, BaseException):
+                if isinstance(failure, asyncio.CancelledError):
+                    raise RuntimeError("a line check was cancelled") from failure
+                raise failure
 
     def _wants_desk(self, task: ProducerTask) -> bool:
         return task.priority == 1 and self.stats_desk is not None
@@ -891,15 +904,20 @@ class MatchWorkflow:
             reason_code=verdict.reason_code,
         )
         self.stats["repaired"] += 1
-        if target == "analyst":
-            fresh = self._ctx()
-            claims = await self._analyse(fresh, task, repair=True)
-            if not claims:
-                return
-            ctx = fresh
-        redrafts = await self._call(
-            a.narrator, "write", task.moment_id, ctx, task, claims, attempt=1
-        )
+        async with self._repair_lock or asyncio.Lock():
+            key = (task.moment_id, target)
+            if key not in self._redrafts:
+                fresh_ctx, fresh_claims = ctx, claims
+                if target == "analyst":
+                    fresh_ctx = self._ctx()
+                    fresh_claims = await self._analyse(fresh_ctx, task, repair=True)
+                if not fresh_claims:
+                    return
+                written = await self._call(
+                    a.narrator, "write", task.moment_id, fresh_ctx, task, fresh_claims, attempt=1
+                )
+                self._redrafts[key] = (fresh_ctx, fresh_claims, written)
+            ctx, claims, redrafts = self._redrafts[key]
         replacement = next((d for d in redrafts if d.persona == draft.persona), None)
         if replacement is None:
             return

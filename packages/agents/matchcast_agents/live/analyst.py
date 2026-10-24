@@ -7,7 +7,7 @@ from ..messages import ProducerTask
 from ..metrics_spec import METRIC_UNITS
 from ..resilience import ModelError
 from ..rules.analyst import AnalystRules, ClaimResult
-from .client import ModelClient, prompt
+from .client import ModelClient, model_priority, prompt
 
 SCHEMA = {
     "type": "object",
@@ -28,6 +28,8 @@ class LiveAnalyst:
     async def analyse(
         self, ctx: MatchContext, task: ProducerTask, *, repair: bool = False
     ) -> list[ClaimResult]:
+        if task.priority > model_priority():  # a quiet moment: the rules pick the metrics
+            return await self._tools.analyse(ctx, task, repair=repair)
         teams = (ctx.home, ctx.away)
         menu = [f"{m}:{t}" for m in METRIC_UNITS for t in teams]
         request = {"moment": task.reason, "metrics_available": menu, "max": 3}
