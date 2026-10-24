@@ -82,3 +82,69 @@ def test_the_player_prompt_is_given_the_orders_his_role_allows(match) -> None:
     facts = json.loads(model.calls[-1]["user"])
     assert sorted(facts["you"]["allowed_orders"]) == ["clear", "deep", "rest", "simple"]
     assert facts["you"]["position"] == "GK"
+
+
+def match_talk_names(match, flow) -> list[str]:
+    """Names of players in the last events of the match, recounted from the event log."""
+    events = flow._ctx().events[-8:]
+    return [
+        match["names"][e["payload"]["player_id"]] for e in events if "player_id" in e["payload"]
+    ]
+
+
+def test_the_player_can_talk_about_a_recent_event_by_a_teammate_or_opponent(match) -> None:
+    flow = flow_with(match)
+    other = match_talk_names(match, flow)[-1]
+    reply = f"Okay, boss. {other} had that pass, I saw it from here."
+
+    flow = flow_with(
+        match, ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    )
+    result = run(flow.talk("home1", "what happened just now?", position="GK"))
+    assert result["reply"] == reply and result["verdict"] == "verified"
+
+
+def test_a_name_that_is_not_in_the_recent_events_is_not_said_by_the_model(match) -> None:
+    reply = "Okay, boss. Zed Quorrin had that pass, I saw it from here."
+    flow = flow_with(
+        match, ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    )
+    result = run(flow.talk("home1", "what happened just now?", position="GK"))
+    assert (
+        result["reply"] != reply
+    )  # the rules answer replaces a model reply with a name it cannot cite
+    assert result["verdict"] == "verified"
+
+
+def log_goals(match, team: str) -> int:
+    """Goals for a team, counted from the fixture's events, not from the code under test."""
+    return sum(
+        1 for e in match["events"]
+        if e["payload"]["type"] == "goal" and e["payload"].get("team_id") == team
+    )  # fmt: skip
+
+
+def test_a_fan_can_hear_about_a_goal_by_any_player_in_the_match(match) -> None:
+    goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
+    scorer = match["names"][goal["payload"]["player_id"]]
+    reply = f"Okay, boss. {scorer} got that goal, I felt it was coming."
+    flow = flow_with(
+        match, ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    )
+    result = run(flow.talk("home1", "who scored?", position="GK"))
+    assert result["reply"] == reply and result["verdict"] == "verified"
+
+
+def test_a_team_total_is_checked_against_the_log(match) -> None:
+    flow = flow_with(match)
+    home = flow._ctx().home
+    club = flow._ctx().club_name(home)
+    true_total = log_goals(match, home)
+    right = f"Okay, boss. {club} have {true_total} goals, I reckon."
+    wrong = f"Okay, boss. {club} have {true_total + 1} goals, I reckon."
+    for reply, verdict in ((right, "verified"), (wrong, "rejected")):
+        flow = flow_with(
+            match, ScriptedModelClient(answers=lambda s, u, r=reply: {"reply": r, "order": "none"})
+        )
+        result = run(flow.talk("home1", "how many goals have we got?", position="GK"))
+        assert (result["reply"] == reply) == (verdict == "verified"), reply

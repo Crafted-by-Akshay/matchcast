@@ -187,9 +187,11 @@ class MatchWorkflow:
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
-        self.names = names or {}
-        self.clubs = clubs or {}
         self.store = store or MemoryStore()
+        # a rebuild without names or clubs keeps the ones stored at creation, never blanks them
+        stored = self.store.get_match(self.sk) or {}
+        self.names = {**stored.get("names", {}), **(names or {})}
+        self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)
@@ -576,7 +578,19 @@ class MatchWorkflow:
                     if metric in recount:
                         recount[metric] += 1
         named = [(float(m.group(1)), TALK_PHRASES[m.group(2)]) for m in TALK_RE.finditer(reply)]
-        return len(named) == len(numbers) and all(recount[k] == n for n, k in named)
+        upto = ctx.state.max_sequence
+
+        def from_the_log(n: float, metric: str) -> bool:
+            """His own count, or a club's total from the log when the reply names that club."""
+            if recount[metric] == n:
+                return True
+            return any(
+                recompute(ctx.events, f"{metric}:{team}", upto) == n
+                and ctx.club_name(team).casefold() in reply.casefold()
+                for team in (ctx.home, ctx.away)
+            )
+
+        return len(named) == len(numbers) and all(from_the_log(n, k) for n, k in named)
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
