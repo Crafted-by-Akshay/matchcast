@@ -325,13 +325,19 @@ class Registry:
             info = await asyncio.to_thread(stored)
             if info is None:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
-            config = WorkflowConfig()
+            config = WorkflowConfig(approval_mode=info.get("approval_mode", "auto"))
+            seeds: dict[str, Any] = {}
+            if info.get("seed_bad_claim"):
+                seeds = {
+                    "seed_bad_claim": True,
+                    "seed_bad_claim_at_ms": info.get("seed_bad_claim_at_ms", 720_000),
+                }
             flow = MatchWorkflow(
                 stream=stream,
                 roster=info["roster"],
                 names=info.get("names", {}),
                 clubs=info.get("clubs", {}),
-                agents=self.agents_for(config.personas),
+                agents=self.agents_for(config.personas, **seeds),
                 config=config,
                 store=self.store,
                 stats_desk=self.stats_desk,
@@ -560,6 +566,17 @@ def build_router(registry: Registry) -> APIRouter:
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
             registry.flows[key] = flow
+            # what a rebuilt match needs to behave as this one does after a restart
+            seed = body.seed_bad_claim or x_matchcast_seed_bad_claim == "1"
+            registry.store.put_match(
+                flow.sk,
+                {
+                    **(registry.store.get_match(flow.sk) or {}),
+                    "approval_mode": body.approval_mode,
+                    "seed_bad_claim": seed,
+                    "seed_bad_claim_at_ms": body.seed_bad_claim_at_ms,
+                },
+            )
         return {"stream": stream, "approval_mode": body.approval_mode, "mode": flow.agents.mode}
 
     @router.get("/matches/{match_id}")

@@ -360,6 +360,19 @@ def test_a_restarted_api_still_serves_the_stream_and_the_match_of_a_stored_match
     assert unknown.status_code == 404
 
 
+def test_a_rebuilt_match_keeps_its_approval_mode_and_demo_seed() -> None:
+    first = TestClient(create_app())
+    create(first, approval_mode="producer", seed_bad_claim=True, seed_bad_claim_at_ms=0)
+    restarted = TestClient(create_app())
+    restarted.app.state.matches.store = first.app.state.matches.store
+    info = restarted.get("/v1/matches/match-short", params=Q).json()
+    assert info["approval_mode"] == "producer"
+    post_all(restarted)  # the seeded wrong claim still fires and is rejected
+    assert _rejections(restarted)
+    published = restarted.get("/v1/matches/match-short/lines", params=Q).json()["items"]
+    assert not [ln for ln in published if ln["status"] in ("approved", "published")]
+
+
 def test_an_unknown_match_is_a_point_read_not_a_hydrate() -> None:
     client = TestClient(create_app())
     calls: list[str] = []
