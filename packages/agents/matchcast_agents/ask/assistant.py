@@ -97,6 +97,13 @@ PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IG
 # player ranking.
 LEADER_Q = re.compile(r"\b(most|more)\b", re.IGNORECASE)
 LEADER_METRICS = ("shots", "shots_on_target")
+# only a question asked as "who or which team/club/player has ..." is a count to answer
+LEADER_ASK = re.compile(r"^\s*(who|which (?:player|team|club))\b", re.IGNORECASE)
+# words that narrow a count to a zone, a period or a condition: the club totals do not answer those
+QUALIFIER = re.compile(
+    r"\b(from|in|during|after|before|outside|inside|within|by|at|with|against|for|of)\b",
+    re.IGNORECASE,
+)
 PLAYER_NOUN = re.compile(
     r"\b(players?|midfielders?|strikers?|forwards?|defend\w*|goalkeepers?|keepers?|wingers?"
     r"|captains?|scorers?)\b",
@@ -174,6 +181,13 @@ def names_outside_the_match(ctx: MatchContext, question: str, index: Bm25Index) 
     return False
 
 
+def _names_a_player(ctx: MatchContext, question: str) -> bool:
+    return any(
+        re.search(rf"\b{re.escape(name)}\b", question, re.IGNORECASE)
+        for name in ctx.names.values() if name
+    )  # fmt: skip
+
+
 def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     """Rules router (the model-free fallback of the one-call router)."""
     lowered = question.casefold()
@@ -200,13 +214,16 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     asks_now = (
         bool(STRONG_LIVE.search(clauses[0]))
         or not DEFINITIONAL.match(clauses[0])
-        or bool(PLAYER_Q.search(clauses[0]))  # "which player has the most ..." asks a count
+        or bool(
+            PLAYER_Q.search(clauses[0]) and LEADER_ASK.match(clauses[0])
+        )  # "which player has most"
     )
     if metric is not None and cue and asks_now:
         if PLAYER_Q.search(question) and metric[0] != "goals":
             if (
                 LEADER_Q.search(question) and metric[0] in LEADER_METRICS
-                and not PLAYER_NOUN.search(question) and len(teams) != 1
+                and not PLAYER_NOUN.search(question) and not QUALIFIER.search(question)
+                and not _names_a_player(ctx, question) and len(teams) != 1
             ):  # fmt: skip
                 return Route("leader", metric, (), "")  # which club leads on this count
             return Route("abstain", None, teams, "")  # per-player rankings have no tool

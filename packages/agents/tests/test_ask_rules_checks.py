@@ -165,3 +165,32 @@ def test_a_level_count_is_said_as_level_and_both_clubs_are_cited() -> None:
     assert (
         _leader_sentence(ctx, "Shots", claims) == "Shots are level at 3 each. [claim:c1][claim:c2]"
     )
+
+
+def test_a_definition_that_names_a_count_is_not_a_club_comparison(match) -> None:
+    result = rules_answer(match, "What are the top ways to score goals?")
+    assert result.intent not in ("live", "leader")
+
+
+def test_a_question_about_impact_is_not_a_club_comparison(match) -> None:
+    result = rules_answer(match, "Which shots have the most impact on a match?")
+    assert result.intent != "leader"
+
+
+def test_who_has_the_most_with_a_named_player_abstains(match) -> None:
+    assert rules_answer(match, "Who has the most shots, Arlo Dunne?").abstained
+
+
+def test_who_has_the_most_with_a_qualifier_abstains(match) -> None:
+    result = rules_answer(match, "Who has the most shots from outside the box?")
+    assert result.abstained and result.intent != "leader"
+
+
+def test_a_no_goal_question_for_two_named_clubs_gives_both_goals_so_far(match) -> None:
+    events = [
+        e for e in match["events"] if not (e["payload"]["type"] == "goal")
+    ]  # fmt: skip
+    flow = build(match)
+    run(flow.ingest(events))
+    result = run(flow.ask("who scored for Northgate FC and Harbour United?", "casual"))
+    assert result.answer.startswith("Goals so far: Northgate FC 0, Harbour United 0.")
