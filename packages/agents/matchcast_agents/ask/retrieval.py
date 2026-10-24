@@ -20,6 +20,15 @@ STOP = frozenset(
 )
 
 
+def defines(chunk: Chunk, named: set[str]) -> bool:
+    """The chunk is the definition section of a page titled for exactly the asked term."""
+    return (
+        bool(named)
+        and bool(DEFINING_SECTION.search(chunk.section))
+        and set(analyse(chunk.title)) == named
+    )
+
+
 def analyse(text: str) -> list[str]:
     """Lower-case words, stop words dropped, plural 's' and 'es' stripped."""
     words = []
@@ -95,10 +104,9 @@ class Bm25Index:
                     score += self._idf.get(word, 0.0) * tf * (K1 + 1) / norm
             if score > 0 and DEFINING_SECTION.search(chunk.section):
                 score *= DEFINITION_BOOST
-                if named and set(analyse(chunk.title)) == named:
+                if defines(chunk, named):
                     score *= DEFINITION_BOOST  # the page is named for exactly what was asked
-            if score > 0:
-                score += TITLE_WORD_BONUS * len(named & set(analyse(chunk.title)))
+                score += TITLE_WORD_BONUS * min(1, len(named & set(analyse(chunk.title))))
             if score > 0:
                 hits.append(Hit(chunk, score))
         hits.sort(key=lambda h: (-h.score, h.chunk.id))

@@ -47,6 +47,11 @@ def test_what_is_questions_get_the_definition(assistant, flow) -> None:
     assert offside.citations[0]["id"] == "laws:offside:1"  # the rule, before its exceptions
 
 
+@pytest.mark.parametrize("question", ["what is the weather", "capital of France", "best pizza"])
+def test_off_topic_questions_still_decline(assistant, flow, question) -> None:
+    assert ask(assistant, flow, question).abstained
+
+
 def test_both_question_mixes_claim_and_kb(assistant, flow) -> None:
     result = ask(assistant, flow, "How many shots on target so far, and what counts as one?")
     assert result.intent == "both"
