@@ -85,7 +85,9 @@ DEFINITIONAL = re.compile(
     r"^\s*(what|why|when|which|explain|define|how (?:is|are|does|do|can))\b", re.IGNORECASE
 )
 STRONG_LIVE = re.compile(
-    r"\b(so far|right now|currently|at the moment|how many|now|the score)\b", re.IGNORECASE
+    r"\b(so far|right now|currently|at the moment|how many|now)\b"
+    r"|\bwhat(?:'s| is) the score\b|\bcurrent score\b",
+    re.IGNORECASE,
 )
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")

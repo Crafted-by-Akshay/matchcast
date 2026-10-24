@@ -190,8 +190,8 @@ class MatchWorkflow:
         self.store = store or MemoryStore()
         # a rebuild without names or clubs keeps the ones stored at creation, never blanks them
         stored = self.store.get_match(self.sk) or {}
-        self.names = names or stored.get("names") or {}
-        self.clubs = clubs or stored.get("clubs") or {}
+        self.names = {**stored.get("names", {}), **(names or {})}
+        self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)

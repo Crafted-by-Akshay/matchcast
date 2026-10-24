@@ -1,11 +1,16 @@
 """The rules Ask: a knowledge example is not this match's score; a rebuilt match keeps its clubs."""
 
+from pathlib import Path
+
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
-from matchcast_agents.ask.assistant import OUT_OF_SCOPE, _knowledge_sentences
+from matchcast_agents.ask import Assistant, Bm25Index, load_kb
+from matchcast_agents.ask.assistant import _knowledge_sentences
 from matchcast_agents.ask.chunking import Chunk
 from matchcast_agents.ask.retrieval import Hit
 from matchcast_agents.store import MemoryStore
+
+KB = Path(__file__).resolve().parents[3] / "kb"
 
 
 def build(match, store=None, clubs=None):
@@ -17,12 +22,11 @@ def build(match, store=None, clubs=None):
     )  # fmt: skip
 
 
-def test_a_worked_example_in_the_knowledge_base_is_not_shown_as_this_match(match) -> None:
-    flow = build(match)
-    run(flow.ingest(match["events"]))
-    result = run(flow.ask("Why was the first goal important?", "casual"))
-    # the goals chunk's example reads "the score reads 2-1"; this match has its own score
-    assert "2-1" not in result.answer
+def test_a_worked_example_in_the_knowledge_base_is_not_shown_as_this_match() -> None:
+    hits = Assistant(Bm25Index(load_kb(KB))).index.search("goal worked example score reads", k=5)
+    assert "metrics:goals:3" in [h.chunk.id for h in hits]  # the example the bug surfaced
+    sentences = [text for text, _chunk in _knowledge_sentences(hits)]
+    assert not any("2-1" in text for text in sentences)
 
 
 def test_a_rebuilt_match_keeps_the_clubs_it_was_given(match) -> None:
@@ -31,7 +35,7 @@ def test_a_rebuilt_match_keeps_the_clubs_it_was_given(match) -> None:
     run(first.ingest(match["events"]))
     rebuilt = build(match, store=store, clubs={})  # a restart may rebuild without the clubs
     result = run(rebuilt.ask("How many shots on target does Northgate FC have?", "casual"))
-    assert result.answer != OUT_OF_SCOPE
+    assert result.intent == "live" and result.answer.startswith("Shots on target")
 
 
 def test_a_worked_example_that_states_a_score_is_never_the_knowledge_sentence() -> None:
@@ -57,7 +61,12 @@ def rules_answer(match, question: str):
 def test_what_is_the_score_is_answered_from_the_log_not_the_knowledge_base(match) -> None:
     result = rules_answer(match, "what is the score?")
     assert result.intent == "live" and not result.abstained
-    assert "offside" not in result.answer.casefold()
+    assert result.answer.startswith("Score: Northgate FC 1, Harbour United 2.")
+
+
+def test_what_the_score_means_is_still_a_definition(match) -> None:
+    result = rules_answer(match, "what does the score mean?")
+    assert result.intent == "knowledge"
 
 
 def test_who_scored_names_each_scorer_with_its_own_event(match) -> None:
