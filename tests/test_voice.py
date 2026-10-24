@@ -64,6 +64,17 @@ def test_voice_for_picks_the_role_and_the_player_override() -> None:
     assert svc.voice_for("player", "away1") == "en-US-GuyNeural"
 
 
+def test_players_without_an_override_get_a_stable_voice_from_the_pool() -> None:
+    pool = ["en-US-GuyNeural", "en-US-DavisNeural", "en-GB-RyanNeural"]
+    voices = {**VOICES, "players": {"default": "en-US-GuyNeural", "pool": pool}}
+    svc = VoiceService(endpoint=ENDPOINT, synthesiser=FakeSynth(), voices=voices)
+    ids = [f"home{n}" for n in range(1, 12)] + [f"away{n}" for n in range(1, 12)]
+    picked = {pid: svc.voice_for("player", pid) for pid in ids}
+    assert set(picked.values()) == set(pool)  # every voice in the pool is used
+    assert all(svc.voice_for("player", pid) == v for pid, v in picked.items())  # stable
+    assert svc.voice_for("player", None) == "en-US-GuyNeural"  # no id: the default
+
+
 def test_only_a_valid_speech_endpoint_is_ready() -> None:
     assert VoiceService(endpoint=ENDPOINT, voices=VOICES).ready
     assert not VoiceService(endpoint="", voices=VOICES).ready

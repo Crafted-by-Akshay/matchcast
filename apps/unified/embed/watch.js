@@ -104,11 +104,14 @@ MCS.progress('Loading the stadium and players');
     if (r && r.api) { talkLine(p, 'pl', 'No checked answer: the match record did not confirm that.'); renderTalk(); return; }   // never the unverified reply itself
     mcRulesFallback(p, text);   // no api for this match: the rules answer, inside the same role bounds
   });
-  // a quick order the player's role does not allow is greyed out, as the api would refuse it
+  // a quick order the player's role does not allow is greyed out, as the api would refuse it; picking a player follows him with the camera (Watch's player mode)
   const mcRenderTalk = renderTalk;
+  let mcFollowed = null;
   renderTalk = function () {
     mcRenderTalk();
-    const p = TK.p, qo = $('tk-orders'); if (!p || !qo) return;
+    const p = TK.p, qo = $('tk-orders');
+    if (p !== mcFollowed) { mcFollowed = p; if (p) fanSet({ mode: 'player', player: p }, 'talk-pick'); }
+    if (!p || !qo) return;
     [...qo.querySelectorAll('button')].forEach((b, i) => { const k = Object.keys(ORDERS)[i]; b.disabled = !mcAllowed(p.pos, k); b.title = b.disabled ? 'Outside this player\'s role' : ''; });
   };
   // EXP-16: a label for what orders do (Watch's own mic button already does speech recognition)

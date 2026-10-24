@@ -16,6 +16,7 @@ import os
 import re
 import threading
 import time
+import zlib
 from collections import OrderedDict, deque
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -194,7 +195,12 @@ class VoiceService:
         """The voice for a role: commentary, producer, or a player (by id, else the default)."""
         if role == "player":
             players = self.voices["players"]
-            return str(players.get(player_id or "", players["default"]))
+            if player_id in players:  # an explicit override for this player
+                return str(players[player_id])
+            pool = players.get("pool")
+            if pool and player_id:  # every other player keeps one voice from the pool, every time
+                return str(pool[zlib.crc32(player_id.encode()) % len(pool)])
+            return str(players["default"])
         return str(self.voices[role])
 
     def get(self, key: str) -> bytes | None:
