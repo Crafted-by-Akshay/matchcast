@@ -149,11 +149,11 @@ def fake_openai(outcome):
     return SimpleNamespace(chat=SimpleNamespace(completions=completions)), completions
 
 
-def message(content: str):
+def message(content: str, finish_reason: str = "stop"):
     from types import SimpleNamespace
 
     usage = SimpleNamespace(prompt_tokens=11, completion_tokens=7)
-    choice = SimpleNamespace(message=SimpleNamespace(content=content))
+    choice = SimpleNamespace(message=SimpleNamespace(content=content), finish_reason=finish_reason)
     return SimpleNamespace(choices=[choice], usage=usage)
 
 
@@ -171,6 +171,28 @@ def test_foundry_client_sends_a_json_schema_and_counts_tokens() -> None:
         11,
         7,
     )
+
+
+def test_foundry_client_sends_the_reasoning_model_parameters() -> None:
+    from matchcast_agents.live import FoundryModelClient
+    from matchcast_agents.live.client import REASONING_HEADROOM
+
+    fake, completions = fake_openai(message("{}"))
+    client = FoundryModelClient(deployment="gpt-5-mini", client=fake)
+    run(client.complete("sys", "user", {"type": "object"}, temperature=0.6, max_tokens=400))
+    sent = completions.kwargs
+    assert sent["max_completion_tokens"] == 400 + REASONING_HEADROOM >= 1500
+    assert "max_tokens" not in sent and "temperature" not in sent  # gpt-5-mini rejects both
+    assert sent["reasoning_effort"] == "low"
+
+
+def test_a_reasoning_run_that_hits_the_budget_is_its_own_error() -> None:
+    import pytest
+    from matchcast_agents.live import FoundryModelClient
+
+    fake, _ = fake_openai(message("", finish_reason="length"))
+    with pytest.raises(ModelError, match="budget"):
+        run(FoundryModelClient(deployment="gpt-5-mini", client=fake).complete("s", "u", {}))
 
 
 def test_foundry_client_maps_failures_to_the_resilience_vocabulary() -> None:

@@ -27,6 +27,10 @@ def prompt(name: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.startswith("version:")).strip()
 
 
+REASONING_EFFORT = "low"  # keeps a call well inside the 20 s wait
+REASONING_HEADROOM = 1500  # completion tokens on top of the answer, spent on reasoning first
+
+
 class ModelClient(Protocol):
     async def complete(
         self,
@@ -85,7 +89,7 @@ class FoundryModelClient:
         user: str,
         schema: dict[str, Any],
         *,
-        temperature: float = 0.1,
+        temperature: float = 0.1,  # kept for callers; reasoning models take only the default
         max_tokens: int = 400,
     ) -> dict[str, Any]:
         loop = asyncio.get_running_loop()
@@ -99,8 +103,10 @@ class FoundryModelClient:
             response = await self._client.chat.completions.create(
                 model=self.deployment,
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                temperature=temperature,
-                max_tokens=max_tokens,
+                # Reasoning models (gpt-5-mini) reject max_tokens and any non-default temperature,
+                # and count their hidden reasoning against the completion budget.
+                max_completion_tokens=max_tokens + REASONING_HEADROOM,
+                reasoning_effort=REASONING_EFFORT,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {"name": "answer", "schema": schema, "strict": True},
@@ -112,6 +118,8 @@ class FoundryModelClient:
         if response.usage:
             self.usage.prompt_tokens += response.usage.prompt_tokens
             self.usage.completion_tokens += response.usage.completion_tokens
+        if response.choices and getattr(response.choices[0], "finish_reason", None) == "length":
+            raise ModelError("the reasoning used up the completion budget")
         try:
             data = json.loads(response.choices[0].message.content)
         except (ValueError, TypeError, IndexError, AttributeError) as error:

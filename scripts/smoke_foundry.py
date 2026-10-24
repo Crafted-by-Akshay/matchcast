@@ -27,7 +27,7 @@ def main() -> int:
     reply = client.chat.completions.create(
         model=deployment,
         messages=[{"role": "user", "content": "Reply with the single word: ready"}],
-        max_completion_tokens=16,
+        max_completion_tokens=300,  # reasoning models spend the budget on thinking first
     )
     latency_ms = round((time.perf_counter() - started) * 1000)
 
@@ -41,7 +41,7 @@ def main() -> int:
 
 
 def structured_check() -> int:
-    """The path the agents use: FoundryModelClient, max_tokens, temperature and a strict schema."""
+    """The path the agents use: FoundryModelClient, max_completion_tokens and a strict schema."""
     import asyncio
 
     from matchcast_agents.live.client import FoundryModelClient
