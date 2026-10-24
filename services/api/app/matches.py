@@ -145,6 +145,7 @@ class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=300)
     persona: Literal["casual", "analyst", "broadcast"] = "casual"
     lang: Literal["en", "es", "hi"] = "en"
+    surface: Literal["ask", "broadcast"] = "ask"
 
 
 class ExportBody(BaseModel):
@@ -934,7 +935,7 @@ def build_router(registry: Registry) -> APIRouter:
                 429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
             )
         try:
-            result = await flow.ask(body.question, body.persona)
+            result = await flow.ask(body.question, body.persona, surface=body.surface)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         reply: dict[str, Any] = {
@@ -946,6 +947,8 @@ def build_router(registry: Registry) -> APIRouter:
             "retrieval": result.retrieval,
             "lang": "en",
         }
+        if result.broadcast is not None:  # the Broadcast Copilot's picks: highlights, focus or plan
+            reply["broadcast"] = result.broadcast
         if body.lang != "en" and not result.abstained:
             key = "ask-" + hashlib.sha256(result.answer.encode()).hexdigest()[:12]
             variant = await registry.translation.variant(

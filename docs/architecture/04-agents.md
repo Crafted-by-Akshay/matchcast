@@ -29,6 +29,7 @@ On-demand agents (never on the live loop):
 | Player persona (talk) | `POST /v1/matches/{id}/talk` | First-person reply ≤ 60 words using only that player's own counts (or the producer's score and key moment); template replies in rules mode, a Foundry persona is **Planned** | counts recounted from the event log | Reply checked before it is returned: each number must equal the log's count for the metric it names, names in the roster; otherwise "I can't confirm that from the match data yet." |
 | Recap mode | `POST /internal/v1/recaps` | Full-time recap per persona | Same as the core four | Verifier per sentence; a failing sentence is dropped |
 | Ask pipeline | `POST /v1/matches/{id}/ask` | Chatbot answers | Router + AI Search + core tools | Verifier, see [05-assistant-rag.md](05-assistant-rag.md) |
+| Broadcast Copilot | `POST /v1/matches/{id}/ask` with `surface: "broadcast"` | Highlights, camera focus and a production plan for the Broadcast view | Ranking in code over events and state (`matchcast_agents/broadcast.py`); no model call yet | Rules; every pick cites its event. See [ADR-0018](adr/0018-broadcast-copilot-reuses-ask.md) |
 
 ## 3. Workflow graph (Microsoft Agent Framework)
 

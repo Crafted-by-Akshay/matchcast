@@ -1,0 +1,31 @@
+# ADR-0018: The Broadcast Copilot reuses the Ask workflow, ranks picks in code, and leaves the camera with Watch
+
+- **Status:** Accepted
+- **Date:** 2026-10-24
+- **Decided by:** Akshay (plan approved in the Broadcast copilot thread, Oct 24)
+
+## Context
+
+The Broadcast view needs highlights, a camera or story focus, and a production plan that a broadcaster can act on during a live match. The judging rules (§4.1) ask for a pipeline that explains why a moment matters and renders it beside the match. A separate chatbot would add a second answer path with its own verifier and cost.
+
+## Options
+
+1. A new Broadcast agent with its own workflow and route.
+2. The Ask workflow gets a `surface` field (`ask` or `broadcast`). Broadcast intents (`highlights`, `focus`, `plan`) are answered by code over the match state and events, and every other question takes the Ask path unchanged.
+3. The model ranks highlights and focus and writes their reasons.
+
+## Decision
+
+Option 2, with code ranking.
+
+- `POST /v1/matches/{id}/ask` takes `surface` (default `ask`). With `surface: "broadcast"`, a question with a Broadcast cue is answered by `matchcast_agents.broadcast`. The reply adds `broadcast` (`highlights`, `focus` or `plan`), and each pick cites its event.
+- Highlights are the events scoring at least 40 on the producer's moment scale, best first. Focus is the best player moment in the last three minutes, else a wide shot. Minutes come from event clocks and names from the roster, so no model call is needed.
+- The camera is never moved by the API or by Broadcast. Focus returns a `camera` preset and a player or zone. Watch shows a "Go to it" control, and the camera moves only on click (planned in the front end).
+- No new core agent and no LLM call in the live loop. The Verifier's rules still apply to any model text that a later phase adds.
+
+## Consequences
+
+- The Broadcast Copilot is deterministic and repeatable, so its picks can be checked by tests.
+- The audit action stays `ask_answered`, with a `surface` field, so the closed list in 04 §4 does not change.
+- Model-written wording for highlights and plans is a later step. Until then, the reasons are templates over event data.
+- Phase 1 (the resizable pane) and the front end for Phase 4 are not in this ADR's first merge.

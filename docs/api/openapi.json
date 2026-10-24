@@ -34,6 +34,15 @@
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
             "title": "Session Id",
             "type": "string"
+          },
+          "surface": {
+            "default": "ask",
+            "enum": [
+              "ask",
+              "broadcast"
+            ],
+            "title": "Surface",
+            "type": "string"
           }
         },
         "required": [

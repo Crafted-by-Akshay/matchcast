@@ -417,7 +417,9 @@ class MatchWorkflow:
 
     # ---- ask the match (AGT-16) ---------------------------------------------------------
 
-    async def ask(self, question: str, persona: str = "casual", assistant: Any = None) -> Any:
+    async def ask(
+        self, question: str, persona: str = "casual", assistant: Any = None, surface: str = "ask"
+    ) -> Any:
         """Answer one fan question from the match tools and the knowledge base, with citations."""
         from .ask import default_assistant
 
@@ -427,13 +429,16 @@ class MatchWorkflow:
                 self._audit("system", "content-safety", "safety_blocked", "ask",
                             {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
                 raise WorkflowError("prompt_attack", "the question was flagged as a prompt attack")
-            result = await (assistant or default_assistant()).ask(self, question, persona)
+            result = await (assistant or default_assistant()).ask(
+                self, question, persona, surface=surface
+            )
             self._audit(
                 "agent",
                 "assistant",
                 "ask_answered",
                 "ask",
                 {
+                    "surface": surface,
                     "intent": result.intent,
                     "abstained": result.abstained,
                     "dropped": result.dropped,

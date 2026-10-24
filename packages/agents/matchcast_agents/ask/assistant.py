@@ -14,6 +14,7 @@ from typing import Any
 
 from matchcast_contracts import validate
 
+from .. import broadcast
 from ..context import MatchContext
 from ..messages import DraftLine
 from ..tools import InProcessTools, ToolError
@@ -82,6 +83,7 @@ class AskResult:
     dropped: int = 0
     mode: str = "rules"
     retrieval: str = "local"  # local | search | search_fallback (the "Search fallback" chip)
+    broadcast: dict[str, Any] | None = None  # highlights, focus or plan, for the Broadcast Copilot
 
 
 @dataclass(frozen=True)
@@ -305,9 +307,16 @@ class Assistant:
             return local[:top], "search_fallback"
         return hits, "search"
 
-    async def ask(self, flow: Any, question: str, persona: str = "casual") -> AskResult:
-        """Answer from the match in ``flow``; callers hold the workflow lock."""
+    async def ask(
+        self, flow: Any, question: str, persona: str = "casual", surface: str = "ask"
+    ) -> AskResult:
+        """Answer from the match in ``flow``; callers hold the workflow lock.
+
+        ``surface="broadcast"`` answers highlight, focus and plan questions from ranked picks
+        (see ``broadcast.py``); any other question takes the normal path."""
         ctx = flow._ctx()
+        if surface == "broadcast" and (intent := broadcast.intent_for(question)):
+            return _broadcast_answer(ctx, intent)
         plan = route(ctx, question, self.index)
         if plan.intent == "out_of_scope":
             return AskResult(OUT_OF_SCOPE, plan.intent, abstained=True)
@@ -362,6 +371,26 @@ class Assistant:
             {"type": kind, "id": ident} for kind, ident in dict.fromkeys(_CITE.findall(answer))
         ]
         return AskResult(answer, plan.intent, False, citations, dropped, retrieval=retrieval)
+
+
+def _broadcast_answer(ctx: MatchContext, intent: str) -> AskResult:
+    """The Broadcast Copilot's answer: the picks as text, with each pick cited to its event."""
+    if intent == "highlights":
+        picks = broadcast.highlights(ctx)
+        answer = " ".join(p["reason"] for p in picks) or "No moment worth airing yet."
+        citations = [{"type": "event", "id": p["event_id"]} for p in picks]
+        payload: dict[str, Any] = {"highlights": picks}
+    elif intent == "focus":
+        pick = broadcast.focus(ctx)
+        answer = pick["reason"]
+        citations = [{"type": "event", "id": pick["event_id"]}] if "event_id" in pick else []
+        payload = {"focus": pick}
+    else:
+        steps = broadcast.plan(ctx)
+        answer = " ".join(steps)
+        citations = []
+        payload = {"plan": steps}
+    return AskResult(answer, intent, False, citations, broadcast=payload)
 
 
 def _fit(sentences: list[str], limit: int) -> str:
