@@ -31,7 +31,7 @@ const VC = (() => {
     // Azure Speech (token from the api) when it is there, otherwise the browser voice; one voice per role and language
     if (typeof SPX === 'undefined') { browser(); return; }
     const voice = it.lang === 'es' ? voices.es : it.lang === 'hi' ? voices.hi : it.role === 'analyst' ? voices.analyst : voices.playByPlay;
-    SPX.speak(it.text, voice, lang).then((ok) => { if (my !== gen || !on) return; if (ok) { source = 'azure'; onChange(); done(); } else if (Date.now() - it.at > EXPIRY_MS) done(); else browser(); });   // not spoken late by the browser after a slow Azure try
+    SPX.speak(it.text, voice, lang, it.tone === 'big').then((ok) => { if (my !== gen || !on) return; if (ok) { source = 'azure'; onChange(); done(); } else if (Date.now() - it.at > EXPIRY_MS) done(); else browser(); });   // not spoken late by the browser after a slow Azure try
   };
   // a line to show and (if voice is on) speak. at: when it was written, in ms; lang: en, es or hi; audio: an api audio url
   const say = (text, o) => {
@@ -39,7 +39,7 @@ const VC = (() => {
     caption(text);
     source = o.audio ? 'azure' : 'browser'; onChange();
     if (on && !(o.id && spoken.has(o.id))) {
-      if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null }); next(); }
+      if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' }); next(); }
   };
   const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; } onChange(); };
   return { load, say, set, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };

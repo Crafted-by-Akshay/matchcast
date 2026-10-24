@@ -124,9 +124,9 @@ test('speech: Broadcast Ask shows the rate-limit message and only the newest que
   await expect.poll(() => bc.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
   await page.evaluate(() => { AG.ask = (q: string) => ({ text: 'Answer to ' + q, verdict: 'verified' }); });
   await bc.locator('#bc-tabs button[data-p="desk"]').click();
-  for (let i = 1; i <= 5; i++) { await bc.locator('#bcd-q').fill('q' + i); await bc.locator('#bcd-ask').click(); await expect(bc.locator('#bcd-ans')).toHaveText('Answer to q' + i); }
-  await bc.locator('#bcd-q').fill('q6'); await bc.locator('#bcd-ask').click();
-  await expect(bc.locator('#bcd-ans')).toContainText('5 questions a minute');
+  for (let i = 1; i <= 10; i++) { await bc.locator('#bcd-q').fill('q' + i); await bc.locator('#bcd-ask').click(); await expect(bc.locator('#bcd-ans')).toHaveText('Answer to q' + i); }
+  await bc.locator('#bcd-q').fill('q11'); await bc.locator('#bcd-ask').click();
+  await expect(bc.locator('#bcd-ans')).toContainText('10 questions a minute');
   await expect(bc.locator('#bcd-ai')).toHaveText('Slow down');
   expect(errs).toEqual([]);
 });

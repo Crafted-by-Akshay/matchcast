@@ -286,6 +286,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="contracts.js"></script>
 <script src="config.js"></script>
 <script src="agents.js"></script>
+<script src="feed.js"></script>
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
 <dialog id="status-dlg" aria-labelledby="status-h"><h2 id="status-h">What is running</h2><div id="status-box"></div><form method="dialog"><button class="pill">Close</button></form></dialog>
@@ -572,6 +573,13 @@ async function answerAsk(id, q, to = 'watch') {
   const a = AG.ask(q);
   reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
 }
+// the continuous feed goes to both views, at most every 200 ms: Watch and Broadcast draw the newest line and the list
+let linesT = 0;
+function pushLines() {
+  if (linesT) return;
+  linesT = setTimeout(() => { linesT = 0; const msg = { src: 'matchcast-shell', type: 'feed-lines', items: CM.view(40) }; post('watch', msg); post('broadcast', msg); }, 200);
+}
+CM.onChange(pushLines);
 function pushCards() {
   const r = AG.run; if (!r) return;
   for (const c of r.claims) {
@@ -581,7 +589,7 @@ function pushCards() {
     if (sentCards.get(c.id) === sig) continue;
     sentCards.set(c.id, sig);
     post('watch', { src: 'matchcast-shell', type: 'pulse', card: cardOf(c) });
-    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); { const t = !c.airText && M.lang !== 'en' && c.tr && c.tr[M.lang] && c.tr[M.lang].ok && c.tr[M.lang].text; VC.say(t || c.airText || c.text, { id: c.id, lang: t ? M.lang : 'en', at: c.airedAt, audio: t ? null : (c.audioUrl || null) }); } }
+    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); { const t = !c.airText && M.lang !== 'en' && c.tr && c.tr[M.lang] && c.tr[M.lang].ok && c.tr[M.lang].text; VC.say(t || c.airText || c.text, { id: c.id, lang: t ? M.lang : 'en', at: c.airedAt, audio: t ? null : (c.audioUrl || null), tone: c.kind === 'score' || c.alert ? 'big' : '' }); } }
     $('sr-lines').textContent = (c.verdict === 'verified' ? 'Verified line: ' : 'Line awaiting review: ') + c.text;   // screen readers hear each published line
   }
 }
@@ -632,6 +640,7 @@ window.addEventListener('message', (e) => {
   if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
+    if (view === 'watch' && AG.run && AG.run.key === keyOf(d.setup)) CM.fromWatch(d.batch, d.moments);   // the continuous feed (feed.js): every moment, key event and quiet-stretch summary
     if (AG.run && AG.run.key === keyOf(d.setup)) { LV.events(d.batch); post('broadcast', { src: 'matchcast-shell', type: 'events', batch: d.batch }); pushFeed(); }
     return;
   }   // Watch's live events and moments
@@ -648,7 +657,7 @@ window.addEventListener('message', (e) => {
     $('v-' + view).classList.add('ready');
     if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });
     if (M.agents) post(view, M.agents);   // a view that (re)loaded learns the viewer's language
-    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
+    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); CM.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
     prefetchOthers();
     toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
     paint(); routeAnalyst();

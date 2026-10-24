@@ -80,7 +80,9 @@ MCS.progress('Loading the stadium and players');
     const p = talks.get(d.id); talks.delete(d.id);
     window.__mcTalkReplies = (window.__mcTalkReplies || 0) + 1;   // read by tests
     const r = d.reply;
-    if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) { talkLine(p, 'pl', r.text); renderTalk(); }   // the player's own answer, checked against the match record
+    if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) { talkLine(p, 'pl', r.text); renderTalk(); return; }   // the player's own answer, checked against the match record
+    // nothing checked came back: the chat says so, so an order or question never seems to vanish
+    talkLine(p, 'pl', r && r.api ? 'No checked answer: the match record did not confirm that.' : 'No checked answer yet: the agent api did not answer for this match.'); renderTalk();   // never the unverified reply itself
   });
   // EXP-16: a label for what orders do (Watch's own mic button already does speech recognition)
   const gm = document.createElement('div'); gm.className = 'mcx-gm'; gm.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px';

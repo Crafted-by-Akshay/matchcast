@@ -157,6 +157,8 @@ def build_watch():
         + r(EMB + "vision-events.js")
         + "\n"
         + r(EMB + "indices.js")
+        + "\n"
+        + r(EMB + "feed.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
@@ -243,6 +245,8 @@ def build_broadcast():
         + r(EMB + "bclang.js")
         + "\n"
         + r(EMB + "replay.js")
+        + "\n"
+        + r(EMB + "feed.js")
         + "\n"
         + r(EMB + "onair.js")
         + "\n</script>\n</body>\n</html>\n"
@@ -375,7 +379,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "contracts.js", "agents.js", "live.js", "trace-panel.js"]
+        shell = ["index.html", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)
