@@ -67,20 +67,20 @@ MCS.progress('Loading the stadium and players');
   };
   // EXP-5: a typed question goes to the shell, which asks the agents (api when live, else the in-page rules) and sends back a checked answer
   const asks = new Map(); let askN = 0;
-  window.mcAsk = (q) => new Promise((res) => { const id = ++askN; asks.set(id, res); MCS.send({ type: 'ask', id, q }); setTimeout(() => { if (asks.delete(id)) res({ text: "I can't confirm that from the match data yet.", verdict: 'abstained', note: 'no answer in time' }); }, 9000); });
+  window.mcAsk = (q) => new Promise((res) => { const id = ++askN; asks.set(id, res); MCS.send({ type: 'ask', id, q }); setTimeout(() => { if (asks.delete(id)) res({ text: "I can't confirm that from the match data yet.", verdict: 'abstained', note: 'no answer in time' }); }, 24000); });
   window.addEventListener('message', (e) => { const d = e.data || {}; if (d.src === 'matchcast-shell' && d.type === 'answer' && asks.has(d.id)) { asks.get(d.id)(d.answer); asks.delete(d.id); } });
   // EXP-16: the same words go to the api's player agent through the shell; a reply built from checked facts is added to the chat, anything else is not
   const talks = new Map(); let talkN = 0;
   if (!document.documentElement.lang) document.documentElement.lang = 'en';   // the source head has no lang (WCAG 3.1.1); Watch's own language list changes the text, not this
   window.__mcTalkLog = (p) => (TK.log.get(p) || []).map((m) => m.text);   // read by tests
-  window.mcTalkApi = (p, text) => { const id = ++talkN; talks.set(id, p); MCS.send({ type: 'talk', id, player: p.name, utterance: text }); setTimeout(() => talks.delete(id), 15000); };
+  window.mcTalkApi = (p, text) => { const id = ++talkN; talks.set(id, p); MCS.send({ type: 'talk', id, player: p.name, utterance: text }); setTimeout(() => talks.delete(id), 24000); };
   window.addEventListener('message', (e) => {
     const d = e.data || {};
     if (d.src !== 'matchcast-shell' || d.type !== 'talk-reply' || !talks.has(d.id)) return;
     const p = talks.get(d.id); talks.delete(d.id);
     window.__mcTalkReplies = (window.__mcTalkReplies || 0) + 1;   // read by tests
     const r = d.reply;
-    if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) { talkLine(p, 'pl', '✓ Checked against the match record: ' + r.text); renderTalk(); }
+    if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) { talkLine(p, 'pl', r.text); renderTalk(); }   // the player's own answer, checked against the match record
   });
   // EXP-16: a label for what orders do (Watch's own mic button already does speech recognition)
   const gm = document.createElement('div'); gm.className = 'mcx-gm'; gm.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px';

@@ -1,6 +1,7 @@
 """A cross-origin browser can read Retry-After on a 429 only when the api exposes it."""
 
 import pytest
+from app import matches
 from app.main import create_app
 from fastapi.testclient import TestClient
 
@@ -24,7 +25,7 @@ def test_retry_after_is_exposed_to_the_configured_origin(client: TestClient) -> 
     create(client)
     headers = {"Origin": ORIGIN}
     last = None
-    for _ in range(8):  # /ask allows 5 a minute per caller
+    for _ in range(matches.ASK_PER_MINUTE + 1):  # the budget is per caller, one minute
         last = ask(client, headers)
         if last.status_code == 429:
             break
