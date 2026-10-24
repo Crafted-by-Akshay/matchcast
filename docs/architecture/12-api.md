@@ -107,8 +107,8 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | Route | Limit | Key |
 | --- | --- | --- |
 | `/events` | 20 batches a second (**Planned**, not enforced yet) | stream key |
-| `/ask` | 10 a minute | `browser_session_id` (or IP) |
-| `/talk` | 10 a minute, a budget of its own | `browser_session_id` (or IP) |
+| `/ask` | 20 a minute | `browser_session_id` (or IP) |
+| `/talk` | 20 a minute, a budget of its own | `browser_session_id` (or IP) |
 | `/ds/ask` | 5 a minute | client address |
 | `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | one api process (a cost cap, shared by all callers) |
 | `/speech/token` | 10 a minute | IP |

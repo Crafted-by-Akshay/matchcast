@@ -38,7 +38,20 @@ LIVE_METRICS: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("fouls", "foul"), "fouls", "Fouls"),
     (("tackles", "tackle"), "tackles_won", "Tackles won"),
     (
-        ("score", "winning", "losing", "leading", "ahead", "behind", "result", "goals", "goal"),
+        (
+            "score",
+            "winning",
+            "losing",
+            "leading",
+            "ahead",
+            "behind",
+            "result",
+            "goals",
+            "goal",
+            "scored",
+            "scorer",
+            "scorers",
+        ),
         "goals",
         "Score",
     ),
@@ -49,6 +62,14 @@ LIVE_METRICS: tuple[tuple[tuple[str, ...], str, str], ...] = (
         "possession_won",
         "Possession won",
     ),
+)
+SCORER_Q = re.compile(
+    r"\b(who scored|who got the goals?|who netted|scorers?|goal ?scorers?)\b", re.I
+)
+WHAT_GOALS_Q = re.compile(r"\bwhat goals\b.*\bscore[ds]?\b", re.I)  # "what goals did X score"
+GOAL_WORD = re.compile(r"\bgoals?\b", re.I)
+IMPACT_Q = re.compile(
+    r"\b(why|how)\b.*\b(important|matter\w*|decisive|significant|mattered)\b", re.I
 )
 LIVE_CUE = re.compile(
     r"\b(how many|so far|currently|right now|at the moment|has|have|had|score|winning|losing|"
@@ -66,11 +87,14 @@ DEFINITIONAL = re.compile(
     r"^\s*(what|why|when|which|explain|define|how (?:is|are|does|do|can))\b", re.IGNORECASE
 )
 STRONG_LIVE = re.compile(
-    r"\b(so far|right now|currently|at the moment|how many|now)\b", re.IGNORECASE
+    r"\b(so far|right now|currently|at the moment|how many|now)\b"
+    r"|\bwhat(?:'s| is) the score\b|\bcurrent score\b",
+    re.IGNORECASE,
 )
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
-_CITE = re.compile(r"\[(kb|claim):([^\]]+)\]")
+_SCORE_PAIR = re.compile(r"\b\d+\s*(?:[-–—:]|to|vs\.?)\s*\d+\b", re.IGNORECASE)
+_CITE = re.compile(r"\[(kb|claim|event):([^\]]+)\]")
 
 
 @dataclass
@@ -151,6 +175,13 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     clauses = [c for c in CLAUSE.split(question) if c and c.strip()]
     metric = _metric_in(question)
     cue = bool(LIVE_CUE.search(question))
+    if (SCORER_Q.search(question) or WHAT_GOALS_Q.search(question)) and (
+        metric is None or metric[0] == "goals"
+    ):
+        return Route("goals", ("goals", "Goals"), teams, "")  # each goal, from the stored events
+    which = _goal_ordinal(question)
+    if IMPACT_Q.search(question) and GOAL_WORD.search(question) and which:
+        return Route("goal_impact", ("goals", which), teams, "")  # the score change at one goal
 
     def hit(query: str) -> bool:
         top = max((h.score for h in index.search(query, k=1)), default=0.0) if query else 0.0
@@ -186,6 +217,8 @@ def _knowledge_sentences(hits: list[Hit]) -> list[tuple[str, str]]:
     for hit in hits:
         if hit.score < KB_THRESHOLD:
             break
+        if hit.chunk.section.casefold() == "worked example" and _SCORE_PAIR.search(hit.chunk.text):
+            continue  # an example that states a score is an illustration, never this match's score
         prose = [b for b in hit.chunk.text.split("\n\n") if not b.lstrip().startswith("|")]
         sentences = [s for s in _SENTENCE.split(_strip_markup(" ".join(prose))) if s]
         if sentences:
@@ -240,9 +273,15 @@ def _live_sentence(ctx: MatchContext, label: str, claims: list[dict[str, Any]]) 
 
 
 def check_citations(
-    sentence: str, kb: dict[str, str], claims: dict[str, dict[str, Any]]
+    sentence: str,
+    kb: dict[str, str],
+    claims: dict[str, dict[str, Any]],
+    events: dict[str, list[float]] | None = None,
 ) -> tuple[bool, str]:
-    """Check 6: every sentence cites something real, and its numbers come from what it cites."""
+    """Check 6: every sentence cites something real, and its numbers come from what it cites.
+
+    An ``event`` citation names a stored event; its allowed numbers are those of its own line.
+    """
     cites = _CITE.findall(sentence)
     if not cites:
         return False, "citation_missing"
@@ -252,6 +291,10 @@ def check_citations(
             if ident not in kb:
                 return False, "unknown_source"
             allowed.update(extract_numbers(kb[ident]))
+        elif kind == "event":
+            if events is None or ident not in events:
+                return False, "unknown_source"
+            allowed.update(events[ident])
         else:
             if ident not in claims:
                 return False, "unknown_source"
@@ -311,13 +354,26 @@ class Assistant:
 
     async def ask(self, flow: Any, question: str, persona: str = "casual") -> AskResult:
         """Answer from the match in ``flow``; callers hold the workflow lock."""
-        ctx = flow._ctx()
+        ctx = flow._ctx().as_of()  # one moment: the events a batch wrote after the state wait
         plan = route(ctx, question, self.index)
         if plan.intent == "out_of_scope":
             return AskResult(OUT_OF_SCOPE, plan.intent, abstained=True)
+        goals = _goal_lines(ctx) if plan.intent in ("goals", "goal_impact") else []
+        if plan.intent == "goals" and len(plan.teams) == 1:  # "who scored for Northgate FC?"
+            goals = [g for g in goals if g[1] == plan.teams[0]]
+        if plan.intent in ("goals", "goal_impact") and not goals:
+            plan = Route(
+                "live", ("goals", "Score"), plan.teams, ""
+            )  # no goal yet: the score says so
+        event_numbers = {event_id: extract_numbers(text) for event_id, _team, text in goals}
         retrieval = "local"
         sentences: list[tuple[str, str | None]] = []  # (text with citations, claim id if live)
         claims: list[dict[str, Any]] = []
+        if plan.intent == "goals":
+            sentences += [(f"{text} [event:{event_id}]", None) for event_id, _team, text in goals]
+        elif plan.intent == "goal_impact":
+            event_id, _team, text = goals[0] if plan.metric[1] == "first" else goals[-1]
+            sentences.append((f"{text} [event:{event_id}]", None))
         if plan.intent in ("live", "both") and plan.metric:
             metric, label = plan.metric
             try:
@@ -345,7 +401,7 @@ class Assistant:
         kept, dropped = [], 0
         by_claim = {c["claim_id"]: c for c in claims}
         for text, live in sentences:
-            ok, _reason = check_citations(text, self._text, by_claim)
+            ok, _reason = check_citations(text, self._text, by_claim, event_numbers)
             if ok and live:
                 draft = DraftLine(
                     line_id="ask", claim_ids=tuple(by_claim), persona="analyst",
@@ -361,11 +417,48 @@ class Assistant:
             return AskResult(
                 ABSTAIN, plan.intent, abstained=True, dropped=dropped, retrieval=retrieval
             )
-        answer = _fit(kept, WORD_LIMIT.get(persona, 80))
+        # a goal list keeps every scorer: cutting it to the word limit would drop names silently
+        if plan.intent == "goals":
+            answer = " ".join(kept)
+        else:
+            answer = _fit(kept, WORD_LIMIT.get(persona, 80))
         citations = [
             {"type": kind, "id": ident} for kind, ident in dict.fromkeys(_CITE.findall(answer))
         ]
         return AskResult(answer, plan.intent, False, citations, dropped, retrieval=retrieval)
+
+
+def _goal_ordinal(question: str) -> str | None:
+    """ "first" or "last" when the question names one goal; None when it names none."""
+    if re.search(r"\b(first|opening)\b", question, re.IGNORECASE):
+        return "first"
+    if re.search(r"\b(last|final|late)\b", question, re.IGNORECASE):
+        return "last"
+    return None
+
+
+def _goal_lines(ctx: MatchContext) -> list[tuple[str, str, str]]:
+    """(event id, team id, line) for each goal so far: who scored, when, and the score it left."""
+    lines: list[tuple[str, str, str]] = []
+    score = {ctx.home: 0, ctx.away: 0}
+    for event in ctx.events:
+        payload = event["payload"]
+        if payload["type"] != "goal":
+            continue
+        before = dict(score)
+        team = payload["team_id"]
+        score[team] = score.get(team, 0) + 1
+        club = ctx.club_name(team)
+        verb = "scored an own goal for" if payload.get("own_goal") else "scored for"
+        scorer = payload.get("player_id")
+        who = f"{ctx.player_name(scorer)} {verb} {club}" if scorer else f"a goal for {club}"
+        minute = int(event["event_time_ms"] // 60_000)
+        text = (
+            f"{who} at minute {minute}; the score went from "
+            f"{before[ctx.home]}-{before[ctx.away]} to {score[ctx.home]}-{score[ctx.away]}"
+        )
+        lines.append((event["event_id"], team, text))
+    return lines
 
 
 def _fit(sentences: list[str], limit: int) -> str:

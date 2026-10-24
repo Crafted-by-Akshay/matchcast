@@ -41,7 +41,7 @@ _STORE_POOL = ThreadPoolExecutor(
     max_workers=2, thread_name_prefix="clipstore"
 )  # Blob calls get their own threads, so a slow Blob cannot starve Speech
 STORE_TIMEOUT_S = 3.0  # a Blob read or write that takes longer is skipped, never waited on
-MARKER = re.compile(r"\[(?:claim|kb|line):[^\]]+\]")
+MARKER = re.compile(r"\[(?:claim|kb|line|event):[^\]]+\]")
 
 AUDITION_SCRIPT = (
     "Welcome to MatchCast. Northgate FC get the ball in their own half and play it wide. "

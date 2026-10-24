@@ -187,9 +187,11 @@ class MatchWorkflow:
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
-        self.names = names or {}
-        self.clubs = clubs or {}
         self.store = store or MemoryStore()
+        # a rebuild without names or clubs keeps the ones stored at creation, never blanks them
+        stored = self.store.get_match(self.sk) or {}
+        self.names = {**stored.get("names", {}), **(names or {})}
+        self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)

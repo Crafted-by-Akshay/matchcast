@@ -58,8 +58,8 @@ from app.voice import (
 
 TENANT = "demo"
 HEARTBEAT_S = 15
-ASK_PER_MINUTE = 10  # Copilot questions per browser session
-TALK_PER_MINUTE = 10  # player and producer replies per browser session, a budget of their own
+ASK_PER_MINUTE = 20  # Copilot questions per browser session; a judge's quick run stays under it
+TALK_PER_MINUTE = 20  # player and producer replies per browser session, a budget of their own
 DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 STATUS = {

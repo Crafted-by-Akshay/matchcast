@@ -29,7 +29,7 @@ SCOPE = "https://cognitiveservices.azure.com/.default"
 ENDPOINT = re.compile(r"^https://[a-z0-9-]{2,64}\.cognitiveservices\.azure\.com/?$")
 _DEVANAGARI = {ord("०") + i: str(i) for i in range(10)}
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
-_MARKER = re.compile(r"\[(?:claim|kb|line):[^\]]+\]")
+_MARKER = re.compile(r"\[(?:claim|kb|line|event):[^\]]+\]")
 _TAG = re.compile(r"<[^>]+>")
 
 log = logging.getLogger("matchcast.translate")
