@@ -186,3 +186,13 @@ The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which W
 ## Keyboard path and plain-words states (Broadcast)
 - `tests/e2e/broadcast-keyboard.spec.ts` walks the desk with Tab: every control is reachable and shows a focus ring. Broadcast has no popovers of its own, so there is no Escape path to test.
 - Below the tabs a line says where the agents' lines come from: "live from the api", "api did not answer, rules in this page", or "rules in this page (no api connected)" (the shell sends it with the status pill). With no speech in the browser, Speak is disabled with "Speech is not available here; the text still shows."
+
+## Continuous commentary feed (Experience, live commentary)
+- `feed.js` (`CM`) is the one feed for Watch and Broadcast. Every Watch moment (goal, red card, turning point, control spell, pressing wave and the rest) becomes a line with its explanation. Shots (xG on the line, big chances marked), yellow cards, corners, tactical changes, kick-off, half time and full time become lines too.
+- A quiet stretch of two match minutes gets a summary counted from the events in that window: passes and shots for each side, and the score. The feed never goes silent while a match runs.
+- A line the agent api writes (its Verifier checked it) replaces the rules line for the same match minute, or joins the feed. The label says who wrote it: `Rules · recounted` or `Live agents · verified`, and the list shows the agents that made it (Producer › Analyst › Narrator › Verifier).
+- `embed/feed.js` draws it in both views: the newest line at the bottom left, and `All lines` for the last 40. The shell posts `feed-lines` at most every 200 ms.
+- Voice: a line Voice speaks is sent to Azure Speech as SSML (`speech.js`): a cheerful style, a measured rate, and a higher pitch and emphasis on a goal, a red card or a score claim. Azure ignores a style the voice does not offer. Check the styles on the live voices before the demo.
+- Ask (rules) also counts from the event log: "how many passes has Ana made", "shots for Ridgeview", "who has the most fouls". Each answer cites the events it counted.
+- A talk order always gets a reply in the chat: the checked reply, or "Not checked against the match record", or "No checked answer yet" when the api has no live match.
+- Tests: `tests/e2e/feed.spec.ts`.

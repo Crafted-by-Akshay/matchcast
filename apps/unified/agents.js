@@ -177,10 +177,52 @@ const AG = (() => {
   // Ask (rules): the question types the event log can answer. Each answer is counted from the log and names the events it used; anything else abstains.
   const CANT = "I can't confirm that from the match data yet.";
   const tally = (type) => { const m = new Map(); for (const e of run.events) if (e.type === type && e.player) { const k = e.player + '|' + e.team; m.set(k, (m.get(k) || []).concat(e.id)); } return [...m.entries()].map(([k, ids]) => ({ player: k.split('|')[0], team: k.split('|')[1], n: ids.length, ids })).sort((a, b) => b.n - a.n); };
+  // Ask, counts (rules): "how many passes has Ana made", "shots for Ridgeview", "who has the most fouls". Counted from the event log, with the events it used cited.
+  const COUNTS = [[/goal/, ['goal'], 'goal', 'goals'], [/shot/, ['shot'], 'shot', 'shots'], [/pass/, ['pass'], 'pass', 'passes'], [/foul/, ['foul'], 'foul', 'fouls'],
+    [/corner/, ['corner'], 'corner', 'corners'], [/tackle/, ['slide_tackle'], 'tackle', 'tackles'], [/card|booking|booked/, ['yellow_card', 'red_card'], 'card', 'cards']];
+  // a qualifier the counts do not model (long balls, set pieces, halves, a span of minutes): the answer abstains rather than counting everything
+  const QUALIFIED = /long|short|cross|header|free kick|corner|penalty|inside|outside|first half|second half|last \d+|since/;
+  const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const mentioned = (s, name) => new RegExp('(^|[^\\p{L}])' + escapeRe(name.toLowerCase()) + '($|[^\\p{L}])', 'u').test(s);
+  const countOf = (s, last) => {
+    const hit = COUNTS.find(([re]) => re.test(s)); if (!hit) return null;
+    const [, types, one, many] = hit, ended = min(last);
+    if (QUALIFIED.test(s)) return null;
+    if (/on target/.test(s) && !types.includes('shot')) return null;
+    const pool = /on target/.test(s) ? run.events.filter((e) => e.type === 'shot' && e.data && (e.data.fate === 'goal' || e.data.fate === 'save')) : run.events.filter((e) => types.includes(e.type));
+    const players = [...new Set(run.events.map((e) => e.player).filter(Boolean))];
+    const full = players.find((p) => mentioned(s, p));
+    const bySurname = players.filter((p) => mentioned(s, p.split(' ').slice(-1)[0]));
+    const named = full || (bySurname.length === 1 ? bySurname[0] : null);
+    if (!named && bySurname.length > 1) return null;   // two players share the surname: ask again with the full name
+    if (named) {
+      const club = run.events.find((e) => e.player === named), team = club ? teamName(teamIx(club.team)) : '';
+      if (/concede|against/.test(s)) return null;   // a player does not concede goals
+      const ids = pool.filter((e) => e.player === named).map((e) => e.id);
+      return { text: named + (team ? ' (' + team + ')' : '') + ' has ' + ids.length + ' ' + (ids.length === 1 ? one : many) + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: ids };
+    }
+    const side = [0, 1].find((i) => mentioned(s, teamName(i)));
+    if (side != null) {
+      if (/concede|against/.test(s)) {   // goals a side conceded are the other side's goals
+        if (!types.includes('goal')) return null;
+        const ids = run.events.filter((e) => e.type === 'goal' && teamIx(e.team) === 1 - side).map((e) => e.id);
+        return { text: teamName(side) + ' have conceded ' + ids.length + ' ' + (ids.length === 1 ? one : many) + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: ids };
+      }
+      const ids = pool.filter((e) => teamIx(e.team) === side).map((e) => e.id);
+      return { text: teamName(side) + ' have ' + ids.length + ' ' + (ids.length === 1 ? one : many) + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: ids };
+    }
+    if (/most|top|leads?|who/.test(s)) {
+      const m = new Map(); for (const e of pool) if (e.player) { const k = e.player + '|' + e.team; m.set(k, (m.get(k) || []).concat(e.id)); }
+      const best = [...m.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+      if (best) { const [p, t] = best[0].split('|'); return { text: p + ' (' + teamName(teamIx(t)) + ') leads with ' + best[1].length + ' ' + many + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: best[1] }; }
+    }
+    return null;
+  };
   const ask = (q) => {
     if (!run || !run.events.length) return { text: CANT, verdict: 'abstained', source: 'rules', citations: [] };
     const s = String(q).toLowerCase(), last = run.events[run.events.length - 1].minute, ix = (t) => teamName(teamIx(t));
     let top;
+    const counted = countOf(s, last); if (counted) return counted;   // counts first: "scored" is a goal count, not the score
     if (/shots?/.test(s) && /(most|top|more|leads?|who)/.test(s) && (top = tally('shot')).length) {
       const t = top[0]; return { text: t.player + ' (' + ix(t.team) + ') has the most shots: ' + t.n + ' by ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: t.ids };
     }
@@ -249,7 +291,7 @@ const AG = (() => {
       c.tr = c.tr || {};
       for (const l of ['es', 'hi']) if (typeof d.variants[l] === 'string' && d.variants[l].trim()) c.tr[l] = { ok: true, text: d.variants[l], reason: 'api: translated and re-checked', api: true };
     }
-    if (d.text) { c.text = d.text; run.stat.lines++; say('Narrator', c.minute, c.id + ' · ' + d.text, ''); }
+    if (d.text) { c.text = d.text; run.stat.lines++; say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, last, d.metric); }   // the api's checked line also joins the continuous feed (feed.js)
     if (d.status === 'approved') c.route = 'fan';
     c.source = src; changed();
   };

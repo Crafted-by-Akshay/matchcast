@@ -35,7 +35,7 @@ export const fakeSpeechSdk = () => {
     ResultReason: { SynthesizingAudioCompleted: 1, RecognizedSpeech: 2 },
     AudioConfig: { fromDefaultMicrophoneInput: () => ({}), fromSpeakerOutput: (d: any) => ({ dest: d }) },
     SpeakerAudioDestination: function (this: any) { this.pause = () => {}; this.close = () => {}; },
-    SpeechSynthesizer: function (this: any, c: any, a: any) { this.close = () => {}; this.speakTextAsync = (t: string, ok: any) => { w.__azure.voices.push(c.speechSynthesisVoiceName); w.__azure.texts.push(t); ok({ reason: 1 }); setTimeout(() => a.dest.onAudioEnd(), 30); }; },
+    SpeechSynthesizer: function (this: any, c: any, a: any) { this.close = () => {}; this.speakTextAsync = (t: string, ok: any) => { w.__azure.voices.push(c.speechSynthesisVoiceName); w.__azure.texts.push(t); ok({ reason: 1 }); setTimeout(() => a.dest.onAudioEnd(), 30); }; this.speakSsmlAsync = (ssml: string, ok: any) => this.speakTextAsync(ssml.replace(/<[^>]+>/g, ''), ok); },
     SpeechRecognizer: function (this: any) { this.close = () => {}; this.recognizeOnceAsync = (ok: any) => { w.__azure.heard++; ok({ reason: 2, text: 'who is on the ball' }); }; },
   };
   w.__spoken = [];
