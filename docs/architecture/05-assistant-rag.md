@@ -90,7 +90,7 @@ Rules:
 4. Every sentence ends with at least one citation. A number in the answer must come from a claim (live) or from a chunk (knowledge). Live numbers taken from chunks are rejected with reason `stale_state`.
 5. Conversation memory: the last 3 turns (question and verified answer) from Table `conversations`; at most 10 turns per browser session (**Planned**; each question is answered on its own today).
 6. Rate limit: 10 questions a minute per match `session_id` (a per-browser key is **Planned**). `/talk` has its own 10 a minute; 429 with `Retry-After: 60` for either.
-7. Live answers (ADR-0018): when the Foundry model is live, the Ask answer is written by the model from a fact sheet of this match (score, team and player counts, the last 15 events), recounted with the Verifier's code. It cites fact ids, and every number and name must be in a cited fact. A failed check, a 15 s timeout or a model error answers from the rules above instead. Ask never waits for the ingest lock.
+7. Live answers (ADR-0018): when the Foundry model is live, the Ask answer is written by the model from a fact sheet of this match (score, match state, team and player counts, every goal and card, the last 15 events), recounted with the Verifier's code. It cites fact ids; every number, scoreline, name and match-state word must be in a cited fact. A failed check, a 15 s timeout or a model error answers from the rules above instead. Ask never waits for the ingest lock.
 
 ## 6. Access and keys
 
