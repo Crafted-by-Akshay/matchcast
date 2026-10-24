@@ -126,5 +126,57 @@ def test_smoke_accepts_verifier_rejections_once_claims_stop_changing():
     assert not smoke.settled([], [])
 
 
-def test_smoke_waits_long_enough_for_live_model_calls():
-    assert _smoke().REQUEST_TIMEOUT_S >= 300
+def test_smoke_requests_fit_live_model_calls_under_the_ingress_cut_off():
+    smoke = _smoke()
+    # live: at most 101 s for 10 events; Container Apps ingress ends a request at 240 s
+    assert smoke.BATCH <= 10 and 101 < smoke.REQUEST_TIMEOUT_S < 240
+
+
+class _Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+
+def _poller(script):
+    """Answer each poll from a list of (processed, claims); the last entry repeats."""
+    polls = iter(script)
+    last = [None]
+
+    def get():
+        last[0] = next(polls, last[0])
+        return last[0]
+
+    return get
+
+
+def test_smoke_queued_pipeline_waits_out_the_last_moment():
+    """Event Hubs counts an event before its model calls finish: two equal polls are not enough."""
+    smoke, clock = _smoke(), _Clock()
+    early = [{"claim_id": "a", "verdict": "verified"}]
+    late = [*early, {"claim_id": "b", "verdict": "verified"}]
+    get = _poller([(137, early)] * 5 + [(137, late)])
+    ok, items, _ = smoke.wait_for_claims(get, 137, 600, inline=False, clock=clock,
+                                         sleep=clock.sleep)  # fmt: skip
+    assert ok and items == late and clock.now >= 10 + smoke.QUIET_S
+
+
+def test_smoke_inline_pipeline_passes_on_two_equal_polls_and_times_out_when_events_lag():
+    smoke, clock = _smoke(), _Clock()
+    claims = [{"claim_id": "a", "verdict": "verified"}]
+    ok, _, _ = smoke.wait_for_claims(_poller([(137, claims)]), 137, 60, inline=True, clock=clock,
+                                     sleep=clock.sleep)  # fmt: skip
+    assert ok and clock.now == 2
+    ok, _, processed = smoke.wait_for_claims(_poller([(90, claims)]), 137, 60, inline=True,
+                                             clock=clock, sleep=clock.sleep)  # fmt: skip
+    assert not ok and processed == 90
+
+
+def test_smoke_reports_a_network_error_instead_of_crashing():
+    status, reply = _smoke().call("GET", "http://127.0.0.1:9/v1/status")
+    assert status == 0 and "error" in reply
