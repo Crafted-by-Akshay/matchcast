@@ -28,7 +28,7 @@ def prompt(name: str) -> str:
 
 
 REASONING_EFFORT = "low"  # keeps a call well inside the 20 s wait
-MODEL_PRIORITY = 1  # moments up to this priority use the model; the rest use the rules twin
+MODEL_PRIORITY = 2  # moments up to this priority use the model: goals, red and yellow cards, shots on target, half time and full time; the rest use the rules twin
 
 
 def reasoning_effort() -> str:

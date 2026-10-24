@@ -40,3 +40,11 @@
     if (batch.length) { stats.sent += batch.length; MCS.send({ type: 'vision-events', batch }); }
   }, 500);
 })();
+// Vision is on by default in Watch: the pixel tracker runs from kick-off, and its passes reach the agents' .vision stream. The viewer can still turn it off with the Vision button.
+(() => {
+  const go = setInterval(() => {
+    if (!window.__mc || !window.__mc.vis || !$('load') || !$('load').hidden) return;
+    clearInterval(go);
+    if (!window.__mc.vis.VIS.on) window.__mc.vis.toggle(true);
+  }, 300);
+})();

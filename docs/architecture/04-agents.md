@@ -58,6 +58,7 @@ flowchart LR
 - Checkpointing: once per event (after the graph run, not after every executor) the processed sequence, the match state and the Producer's memory are saved as one checkpoint row per stream (`put_checkpoint`; Table `checkpoints`, PartitionKey the stream key), and a restart resumes from it, see AGT-13.
 - Concurrency: today events of one match are processed one at a time under a lock, so there is one run per moment and no pre-emption; overlapping runs (at most 2 per match, priority 1 first) are **Planned**.
 - Rate rule: at most one Producer task per 8 s of match time, except priority 1 (goal, red card, penalty, own goal).
+- Model gate: moments at priority 1 or 2 (goal, red or yellow card, shot on target, half time, full time) go to the model; quieter moments use the rules twin. `MATCHCAST_LIVE_MAX_PRIORITY` overrides the gate (1 to 3); the default is 2.
 
 ## 4. Packet shapes
 
