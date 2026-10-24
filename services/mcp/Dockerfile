@@ -13,6 +13,8 @@ COPY services/mcp services/mcp
 COPY data/season data/season
 COPY data/models data/models
 RUN uv sync --locked --no-dev --package matchcast-mcp
+# The runtime user is not root; a checkout made under a strict umask must still be readable.
+RUN chmod -R a+rX /app
 
 FROM python:3.12-slim
 RUN useradd --system --uid 10001 matchcast
