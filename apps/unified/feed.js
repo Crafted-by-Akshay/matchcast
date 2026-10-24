@@ -8,6 +8,7 @@ const CM = (() => {
   const LABEL = { rules: 'Rules · recounted', live: 'Live agents · verified' };
   const f2 = (x) => (+x || 0).toFixed(2);
   const trim = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+  const seenApi = new Set();
   let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, changed = () => {};
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
@@ -73,14 +74,15 @@ const CM = (() => {
   };
 
   // a line the agent api wrote (its Verifier checked it): it replaces the rules line for the same minute, or joins the feed
-  const api = (text, minute, kind) => {
+  const api = (text, minute, kind, key) => {
     if (!names || !String(text || '').trim()) return;
+    if (key) { if (seenApi.has(key)) return; seenApi.add(key); }   // a reconnect replays the stream's publications: each one joins the feed once
     const at = +minute || 0, prior = [...items].reverse().find((x) => x.source === 'rules' && !SKIP_UPGRADE.includes(x.kind) && Math.abs(x.minute - at) < 0.5);
     if (prior) { prior.text = trim(String(text), 240); prior.source = 'live'; prior.chain = CHAIN.concat('Live agents'); changed(); return; }
     push({ minute: at, kind: kind || 'line', text: String(text), source: 'live', chain: CHAIN.concat('Live agents') });
   };
 
-  const reset = (key, nm) => { names = nm || null; items = []; events = []; seen = new Set(); score = [0, 0]; lastLine = -99; n = 0; changed(); if (names) push({ minute: 0, kind: 'period', text: 'Players are out. ' + names.home + ' v ' + names.away + ' is about to start.' }); };
+  const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; n = 0; changed(); if (names) push({ minute: 0, kind: 'period', text: 'Players are out. ' + names.home + ' v ' + names.away + ' is about to start.' }); };
   // the feed the views draw: newest last, each with its label
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain }));
   return { fromWatch, api, reset, view, onChange: (fn) => { changed = fn; }, get count() { return items.length; } };

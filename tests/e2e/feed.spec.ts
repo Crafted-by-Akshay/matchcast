@@ -43,6 +43,12 @@ test('Ask counts from the event log and says so', async ({ page }) => {
   expect(answer.verdict).toBe('verified');
   expect(answer.text).toMatch(/has \d+ pass(es)? by \d+'/);
   expect(answer.citations.length).toBeGreaterThan(0);
+  // "scored" is a goal count, and a word that only contains a count word ("goalkeeper") is not one
+  const player = await page.evaluate(() => AG.run.events.find((e: any) => e.type === 'pass' && e.player).player);
+  const scored = await page.evaluate((n) => AG.ask('how many goals has ' + n + ' scored?'), player);
+  expect(scored.text).toMatch(/has \d+ goals? by \d+'/);
+  const keeper = await page.evaluate(() => AG.ask('who is the goalkeeper for ' + AG.run.names.home + '?'));
+  expect(keeper.verdict).toBe('abstained');
 });
 
 test('Broadcast draws the same feed', async ({ page }) => {

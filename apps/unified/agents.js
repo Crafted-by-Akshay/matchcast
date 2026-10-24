@@ -178,45 +178,54 @@ const AG = (() => {
   const CANT = "I can't confirm that from the match data yet.";
   const tally = (type) => { const m = new Map(); for (const e of run.events) if (e.type === type && e.player) { const k = e.player + '|' + e.team; m.set(k, (m.get(k) || []).concat(e.id)); } return [...m.entries()].map(([k, ids]) => ({ player: k.split('|')[0], team: k.split('|')[1], n: ids.length, ids })).sort((a, b) => b.n - a.n); };
   // Ask, counts (rules): "how many passes has Ana made", "shots for Ridgeview", "who has the most fouls". Counted from the event log, with the events it used cited.
-  const COUNTS = [[/goal/, ['goal'], 'goal', 'goals'], [/shot/, ['shot'], 'shot', 'shots'], [/pass/, ['pass'], 'pass', 'passes'], [/foul/, ['foul'], 'foul', 'fouls'],
-    [/corner/, ['corner'], 'corner', 'corners'], [/tackle/, ['slide_tackle'], 'tackle', 'tackles'], [/card|booking|booked/, ['yellow_card', 'red_card'], 'card', 'cards']];
+  const COUNTS = [[/\b(goals?|scored|scorers?)\b/, ['goal'], 'goal', 'goals'], [/\bshots?\b/, ['shot'], 'shot', 'shots'], [/\bpass(es)?\b/, ['pass'], 'pass', 'passes'], [/\bfouls?\b/, ['foul'], 'foul', 'fouls'],
+    [/\bcorners?\b/, ['corner'], 'corner', 'corners'], [/\btackles?\b/, ['slide_tackle'], 'tackle', 'tackles'], [/\b(cards?|booked|booking|bookings)\b/, ['yellow_card', 'red_card'], 'card', 'cards']];
   // a qualifier the counts do not model (long balls, set pieces, halves, a span of minutes): the answer abstains rather than counting everything
-  const QUALIFIED = /long|short|cross|header|free kick|corner|penalty|inside|outside|first half|second half|last \d+|since/;
+  const QUALIFIED = /\b(long|short|crosses?|cross|headers?|free kicks?|penalty|penalties|inside|outside|first half|second half|since)\b|\blast \d+/;
   const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const mentioned = (s, name) => new RegExp('(^|[^\\p{L}])' + escapeRe(name.toLowerCase()) + '($|[^\\p{L}])', 'u').test(s);
   const countOf = (s, last) => {
     const hit = COUNTS.find(([re]) => re.test(s)); if (!hit) return null;
     const [, types, one, many] = hit, ended = min(last);
     if (QUALIFIED.test(s)) return null;
-    if (/on target/.test(s) && !types.includes('shot')) return null;
-    const pool = /on target/.test(s) ? run.events.filter((e) => e.type === 'shot' && e.data && (e.data.fate === 'goal' || e.data.fate === 'save')) : run.events.filter((e) => types.includes(e.type));
+    if (/\bon target\b/.test(s) && !types.includes('shot')) return null;
+    const pool = /\bon target\b/.test(s) ? run.events.filter((e) => e.type === 'shot' && e.data && (e.data.fate === 'goal' || e.data.fate === 'save')) : run.events.filter((e) => types.includes(e.type));
     const players = [...new Set(run.events.map((e) => e.player).filter(Boolean))];
     const full = players.find((p) => mentioned(s, p));
     const bySurname = players.filter((p) => mentioned(s, p.split(' ').slice(-1)[0]));
     const named = full || (bySurname.length === 1 ? bySurname[0] : null);
     if (!named && bySurname.length > 1) return null;   // two players share the surname: ask again with the full name
+    const concede = /\bconcede[sd]?\b/.test(s), lead = /\b(most|top|leads?|leading|who)\b/.test(s);
+    const sides = [0, 1].filter((i) => mentioned(s, teamName(i)));
     if (named) {
+      if (concede) return null;   // a player does not concede goals
       const club = run.events.find((e) => e.player === named), team = club ? teamName(teamIx(club.team)) : '';
-      if (/concede|against/.test(s)) return null;   // a player does not concede goals
       const ids = pool.filter((e) => e.player === named).map((e) => e.id);
       return { text: named + (team ? ' (' + team + ')' : '') + ' has ' + ids.length + ' ' + (ids.length === 1 ? one : many) + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: ids };
     }
-    const side = [0, 1].find((i) => mentioned(s, teamName(i)));
-    if (side != null) {
-      if (/concede|against/.test(s)) {   // goals a side conceded are the other side's goals
-        if (!types.includes('goal')) return null;
-        const ids = run.events.filter((e) => e.type === 'goal' && teamIx(e.team) === 1 - side).map((e) => e.id);
-        return { text: teamName(side) + ' have conceded ' + ids.length + ' ' + (ids.length === 1 ? one : many) + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: ids };
-      }
+    if (sides.length > 1) return null;   // two clubs named: the question is about a pairing, which the counts do not answer
+    const side = sides.length ? sides[0] : null;
+    if (side != null && concede) {   // goals a side conceded are the other side's goals
+      if (!types.includes('goal')) return null;
+      const ids = run.events.filter((e) => e.type === 'goal' && teamIx(e.team) === 1 - side).map((e) => e.id);
+      return { text: teamName(side) + ' have conceded ' + ids.length + ' ' + (ids.length === 1 ? one : many) + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: ids };
+    }
+    if (side != null && !lead) {
       const ids = pool.filter((e) => teamIx(e.team) === side).map((e) => e.id);
       return { text: teamName(side) + ' have ' + ids.length + ' ' + (ids.length === 1 ? one : many) + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: ids };
     }
-    if (/most|top|leads?|who/.test(s)) {
-      const m = new Map(); for (const e of pool) if (e.player) { const k = e.player + '|' + e.team; m.set(k, (m.get(k) || []).concat(e.id)); }
-      const best = [...m.entries()].sort((a, b) => b[1].length - a[1].length)[0];
-      if (best) { const [p, t] = best[0].split('|'); return { text: p + ' (' + teamName(teamIx(t)) + ') leads with ' + best[1].length + ' ' + many + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: best[1] }; }
+    if (!lead) return null;
+    if (side == null && /\bteams?\b/.test(s)) {   // "which team has the most goals": the club totals decide
+      const totals = [0, 1].map((i) => pool.filter((e) => teamIx(e.team) === i).map((e) => e.id));
+      const top = totals[0].length === totals[1].length ? null : totals[0].length > totals[1].length ? 0 : 1;
+      if (top == null) return null;
+      return { text: teamName(top) + ' have the most ' + many + ' by ' + ended + ': ' + totals[top].length + '.', verdict: 'verified', source: 'rules', citations: totals[top] };
     }
-    return null;
+    const m = new Map(); for (const e of pool) if (e.player && (side == null || teamIx(e.team) === side)) { const k = e.player + '|' + e.team; m.set(k, (m.get(k) || []).concat(e.id)); }
+    const best = [...m.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+    if (!best) return null;
+    const [p, t] = best[0].split('|');
+    return { text: p + ' (' + teamName(teamIx(t)) + ') leads with ' + best[1].length + ' ' + many + ' by ' + ended + '.', verdict: 'verified', source: 'rules', citations: best[1] };
   };
   const ask = (q) => {
     if (!run || !run.events.length) return { text: CANT, verdict: 'abstained', source: 'rules', citations: [] };
@@ -226,10 +235,10 @@ const AG = (() => {
     if (/shots?/.test(s) && /(most|top|more|leads?|who)/.test(s) && (top = tally('shot')).length) {
       const t = top[0]; return { text: t.player + ' (' + ix(t.team) + ') has the most shots: ' + t.n + ' by ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: t.ids };
     }
-    if (/(goal|scor)/.test(s) && /(most|top|who|scorer)/.test(s) && (top = tally('goal')).length) {
+    if (/\bgoals?\b|\bscor(e|er|ers)\b/.test(s) && /\b(most|top|who|scorer)\b/.test(s) && (top = tally('goal')).length) {
       const t = top[0]; return { text: t.player + ' (' + ix(t.team) + ') leads the scoring with ' + t.n + ' by ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: t.ids };
     }
-    if (/score|winning|leading/.test(s)) { const g = run.roll.score; return { text: run.names.home + ' ' + g[0] + '–' + g[1] + ' ' + run.names.away + ' at ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: run.events.filter((e) => e.type === 'goal').map((e) => e.id) }; }
+    if (/\bscore\b|\bwinning\b|\bleading\b/.test(s)) { const g = run.roll.score; return { text: run.names.home + ' ' + g[0] + '–' + g[1] + ' ' + run.names.away + ' at ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: run.events.filter((e) => e.type === 'goal').map((e) => e.id) }; }
     if (/xg|expected goals/.test(s)) { const x = run.roll.xg; return { text: 'xG so far: ' + run.names.home + ' ' + f2(x[0]) + ', ' + run.names.away + ' ' + f2(x[1]) + ' at ' + min(last) + '.', verdict: 'verified', source: 'rules', citations: run.events.filter((e) => e.type === 'shot').map((e) => e.id) }; }
     return { text: CANT, verdict: 'abstained', source: 'rules', citations: [] };
   };
@@ -291,7 +300,7 @@ const AG = (() => {
       c.tr = c.tr || {};
       for (const l of ['es', 'hi']) if (typeof d.variants[l] === 'string' && d.variants[l].trim()) c.tr[l] = { ok: true, text: d.variants[l], reason: 'api: translated and re-checked', api: true };
     }
-    if (d.text) { c.text = d.text; run.stat.lines++; say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, last, d.metric); }   // the api's checked line also joins the continuous feed (feed.js)
+    if (d.text) { c.text = d.text; run.stat.lines++; say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, d.event_time_ms != null ? +d.event_time_ms / 60000 : last, d.metric, d.publication_id); }   // the api's checked line also joins the continuous feed (feed.js)
     if (d.status === 'approved') c.route = 'fan';
     c.source = src; changed();
   };
