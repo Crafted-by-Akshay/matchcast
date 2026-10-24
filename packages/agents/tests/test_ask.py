@@ -40,6 +40,13 @@ def test_knowledge_question_cites_the_kb(assistant, flow) -> None:
     assert result.citations and result.citations[0]["id"].startswith("metrics:xg")
 
 
+def test_what_is_questions_get_the_definition(assistant, flow) -> None:
+    xg = ask(assistant, flow, "what does xG mean?")
+    assert xg.citations[0]["id"] == "metrics:xg:1"  # not a page that happens to say "mean"
+    offside = ask(assistant, flow, "what is offside?")
+    assert offside.citations[0]["id"] == "laws:offside:1"  # the rule, before its exceptions
+
+
 def test_both_question_mixes_claim_and_kb(assistant, flow) -> None:
     result = ask(assistant, flow, "How many shots on target so far, and what counts as one?")
     assert result.intent == "both"
