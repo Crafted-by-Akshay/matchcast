@@ -20,7 +20,7 @@ from ..tools import InProcessTools, ToolError
 from ..verify.checks import extract_numbers, run_checks
 from ..workflow import _stamp
 from .azure_search import AzureSearchClient, SearchError
-from .retrieval import ENTITY_CORPORA, Bm25Index, Hit, analyse
+from .retrieval import ENTITY_CORPORA, Bm25Index, Hit, analyse, defines
 
 MAX_QUESTION = 300
 WORD_LIMIT = {"casual": 80, "broadcast": 60, "analyst": 200}
@@ -299,6 +299,10 @@ class Assistant:
             return local[:top], "search_fallback"
         allowed = {h.chunk.id: h for h in local if h.score >= min_score}
         hits = [allowed[i] for i, _score in ranked if i in allowed][:top]
+        # the index ranks, except that the definition of the very term asked comes first
+        defining = [h for h in hits if defines(h.chunk, set(analyse(query)))]
+        if defining:
+            hits = [defining[0], *(h for h in hits if h is not defining[0])]
         if not hits and allowed:  # an empty or unloaded index must not silence Ask
             self.search_fallbacks += 1
             log.warning("AI Search returned no usable chunk; using BM25")

@@ -219,3 +219,10 @@ def test_the_search_client_starts_a_fresh_connection_pool_for_each_event_loop() 
     assert c._client is first  # first loop adopts the initial client
     asyncio.run(touch())
     assert c._client is not first
+
+
+def test_remote_ranking_still_puts_the_asked_definition_first(index) -> None:
+    local = index.search("what is offside?", k=5)
+    ids = ["tactics:offside-trap:1", "laws:offside:3", "laws:offside:1"]
+    hits, source = run(Assistant(index, FakeRemote(ids))._retrieve("what is offside?"))
+    assert source == "search" and hits[0].chunk.id == "laws:offside:1" and local
