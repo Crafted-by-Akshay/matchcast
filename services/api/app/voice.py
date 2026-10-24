@@ -20,7 +20,7 @@ from collections import OrderedDict, deque
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from urllib.request import Request, urlopen
 from xml.sax.saxutils import escape
 
@@ -36,6 +36,10 @@ PER_MINUTE = 30  # new clips per client address per rolling minute; cache hits a
 _SYNTH_POOL = ThreadPoolExecutor(
     max_workers=4, thread_name_prefix="voice"
 )  # not shared with other work
+_STORE_POOL = ThreadPoolExecutor(
+    max_workers=2, thread_name_prefix="clipstore"
+)  # Blob calls get their own threads, so a slow Blob cannot starve Speech
+STORE_TIMEOUT_S = 3.0  # a Blob read or write that takes longer is skipped, never waited on
 MARKER = re.compile(r"\[(?:claim|kb|line):[^\]]+\]")
 
 AUDITION_SCRIPT = (
@@ -55,6 +59,44 @@ class VoiceError(Exception):
 
 
 Synthesiser = Callable[[str], bytes]  # SSML in, MP3 out
+KEY = re.compile(r"^[0-9a-f]{32}$")  # what clip_key makes; nothing else is looked up in the store
+CLIPS_CONTAINER = "audio"  # the storage account's audio container (infra/modules/storage.bicep)
+
+
+class ClipStore(Protocol):
+    """Where finished clips are kept so a restart does not lose them."""
+
+    def get(self, key: str) -> bytes | None: ...
+
+    def put(self, key: str, audio: bytes) -> None: ...
+
+
+class BlobClipStore:
+    """Clips as MP3 blobs in the `audio` container, written with the api's managed identity."""
+
+    def __init__(self, account_url: str | None = None) -> None:
+        self._account_url = account_url
+        self._container: Any = None
+
+    def _client(self, key: str) -> Any:
+        if self._container is None:
+            from matchcast_shared.azure_clients import blob_service_client
+
+            self._container = blob_service_client(self._account_url).get_container_client(
+                CLIPS_CONTAINER
+            )
+        return self._container.get_blob_client(f"clips/{key}.mp3")
+
+    def get(self, key: str) -> bytes | None:
+        from azure.core.exceptions import ResourceNotFoundError
+
+        try:
+            return bytes(self._client(key).download_blob().readall())
+        except ResourceNotFoundError:
+            return None
+
+    def put(self, key: str, audio: bytes) -> None:
+        self._client(key).upload_blob(audio, overwrite=True)
 
 
 class _AzureTts:
@@ -109,6 +151,11 @@ def _budget_from_env() -> int:
         return CHAR_BUDGET_DEFAULT
 
 
+def _store_from_env() -> ClipStore | None:
+    url = os.environ.get("STORAGE_BLOB_URL", "")
+    return BlobClipStore(url) if url.startswith("https://") else None
+
+
 def clip_key(text: str, voice: str) -> str:
     return hashlib.sha256(f"{voice}\n{text}".encode()).hexdigest()[:32]
 
@@ -122,6 +169,7 @@ class VoiceService:
         synthesiser: Synthesiser | None = None,
         voices: Mapping[str, Any] | None = None,
         char_budget: int | None = None,
+        store: ClipStore | None = None,
     ) -> None:
         endpoint = os.environ.get("SPEECH_ENDPOINT", "") if endpoint is None else endpoint
         if synthesiser is None and ENDPOINT.match(endpoint):
@@ -129,6 +177,7 @@ class VoiceService:
         self._synthesiser = synthesiser
         self.voices: Mapping[str, Any] = load_voices() if voices is None else voices
         self.char_budget = char_budget if char_budget is not None else _budget_from_env()
+        self.store = store if store is not None else _store_from_env()
         self.used = 0
         self._clips: OrderedDict[str, bytes] = OrderedDict()
         self._inflight: dict[
@@ -154,6 +203,35 @@ class VoiceService:
             if audio is not None:
                 self._clips.move_to_end(key)
             return audio
+
+    async def fetch(self, key: str) -> bytes | None:
+        """A clip by key: memory first, then the store (a clip made before a restart)."""
+        audio = self.get(key)
+        if audio is not None or self.store is None or not KEY.match(key):
+            return audio
+        audio = await self._stored(key)
+        if audio is not None:
+            self._remember(key, audio)
+        return audio
+
+    async def _stored(self, key: str) -> bytes | None:
+        store = self.store
+        if store is None:
+            return None
+        try:
+            return await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(_STORE_POOL, store.get, key),
+                STORE_TIMEOUT_S,
+            )
+        except Exception as error:  # noqa: BLE001 - a store problem only means a fresh synthesis
+            log.warning("clip store read failed: %s", type(error).__name__)
+            return None
+
+    def _remember(self, key: str, audio: bytes) -> None:
+        with self._lock:
+            self._clips[key] = audio
+            while len(self._clips) > CACHE_LIMIT:
+                self._clips.popitem(last=False)
 
     def allow(self, client: str, now: float | None = None) -> bool:
         """At most PER_MINUTE new clips per client address per rolling minute."""
@@ -196,6 +274,12 @@ class VoiceService:
         return await asyncio.shield(task)
 
     async def _make(self, key: str, text: str, voice: str) -> bytes:
+        saved = await self._stored(key)
+        if saved is not None:  # made before a restart: no Speech call, nothing charged
+            with self._lock:
+                self.used -= len(text)
+            self._remember(key, saved)
+            return saved
         try:
             loop = asyncio.get_running_loop()
             audio = await loop.run_in_executor(_SYNTH_POOL, self._synthesise, ssml(text, voice))
@@ -203,11 +287,21 @@ class VoiceService:
             with self._lock:
                 self.used -= len(text)  # nothing was voiced, so nothing is charged
             raise
-        with self._lock:
-            self._clips[key] = audio
-            while len(self._clips) > CACHE_LIMIT:
-                self._clips.popitem(last=False)
+        self._remember(key, audio)
+        await self._save(key, audio)
         return audio
+
+    async def _save(self, key: str, audio: bytes) -> None:
+        store = self.store
+        if store is None:
+            return
+        try:
+            await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(_STORE_POOL, store.put, key, audio),
+                STORE_TIMEOUT_S,
+            )
+        except Exception as error:  # noqa: BLE001 - the clip still plays; it just is not kept
+            log.warning("clip store write failed: %s", type(error).__name__)
 
     def _forget(self, key: str, task: asyncio.Task[bytes]) -> None:
         """Drop a finished synthesis; retrieve its error so asyncio does not log the detail."""

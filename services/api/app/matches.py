@@ -919,7 +919,7 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/audio/{audio_id}.mp3")
     async def audio_by_id(audio_id: str) -> Response:
-        audio = registry.voice.get(audio_id)
+        audio = await registry.voice.fetch(audio_id)
         if audio is None:
             raise Problem(404, "not_found", "no clip with that id")
         return Response(audio, media_type="audio/mpeg", headers=CLIP_HEADERS)
