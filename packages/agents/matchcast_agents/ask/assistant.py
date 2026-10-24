@@ -204,7 +204,9 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
         )  # "which player has most"
     )
     if metric is not None and cue and asks_now:
-        if PLAYER_Q.search(question) and metric[0] != "goals":
+        if PLAYER_Q.search(
+            question
+        ):  # a who-has-the-most question is a ranking: only the club shot count answers it
             if LEADER_ASK.match(question):
                 return Route("leader", metric, (), "")  # which club leads on this count
             return Route("abstain", None, teams, "")  # per-player rankings have no tool

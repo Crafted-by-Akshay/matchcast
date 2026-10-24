@@ -215,3 +215,12 @@ def test_a_no_goal_question_for_two_named_clubs_gives_both_goals_so_far(match) -
     run(flow.ingest(events))
     result = run(flow.ask("who scored for Northgate FC and Harbour United?", "casual"))
     assert result.answer.startswith("Goals so far: Northgate FC 0, Harbour United 0.")
+
+
+def test_a_ranking_of_goals_by_player_or_team_abstains(match) -> None:
+    for question in (
+        "Which player has the most goals?",
+        "Who has the most goals?",
+        "Which team has the most goals in football?",
+    ):
+        assert rules_answer(match, question).abstained, question
