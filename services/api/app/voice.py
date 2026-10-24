@@ -36,6 +36,10 @@ PER_MINUTE = 30  # new clips per client address per rolling minute; cache hits a
 _SYNTH_POOL = ThreadPoolExecutor(
     max_workers=4, thread_name_prefix="voice"
 )  # not shared with other work
+_STORE_POOL = ThreadPoolExecutor(
+    max_workers=2, thread_name_prefix="clipstore"
+)  # Blob calls get their own threads, so a slow Blob cannot starve Speech
+STORE_TIMEOUT_S = 3.0  # a Blob read or write that takes longer is skipped, never waited on
 MARKER = re.compile(r"\[(?:claim|kb|line):[^\]]+\]")
 
 AUDITION_SCRIPT = (
@@ -215,7 +219,10 @@ class VoiceService:
         if store is None:
             return None
         try:
-            return await asyncio.get_running_loop().run_in_executor(_SYNTH_POOL, store.get, key)
+            return await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(_STORE_POOL, store.get, key),
+                STORE_TIMEOUT_S,
+            )
         except Exception as error:  # noqa: BLE001 - a store problem only means a fresh synthesis
             log.warning("clip store read failed: %s", type(error).__name__)
             return None
@@ -289,7 +296,10 @@ class VoiceService:
         if store is None:
             return
         try:
-            await asyncio.get_running_loop().run_in_executor(_SYNTH_POOL, store.put, key, audio)
+            await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(_STORE_POOL, store.put, key, audio),
+                STORE_TIMEOUT_S,
+            )
         except Exception as error:  # noqa: BLE001 - the clip still plays; it just is not kept
             log.warning("clip store write failed: %s", type(error).__name__)
 

@@ -410,3 +410,20 @@ def test_only_clip_keys_reach_the_store() -> None:
 def test_a_store_that_fails_never_breaks_a_clip() -> None:
     svc = service(store=MemoryStore(fail=True))
     assert asyncio.run(svc.clip("Hello", "en-GB-RyanNeural")).startswith(b"fake-mp3")
+
+
+def test_a_slow_store_is_skipped_after_the_timeout(monkeypatch) -> None:
+    import time
+
+    class Slow(MemoryStore):
+        def get(self, key: str) -> bytes | None:
+            time.sleep(0.5)
+            return b"late"
+
+        def put(self, key: str, audio: bytes) -> None:
+            time.sleep(0.5)
+
+    monkeypatch.setattr(voice_module, "STORE_TIMEOUT_S", 0.05)
+    synth = FakeSynth()
+    audio = asyncio.run(service(synth, store=Slow()).clip("Hello", "en-GB-RyanNeural"))
+    assert audio.startswith(b"fake-mp3") and len(synth.calls) == 1
