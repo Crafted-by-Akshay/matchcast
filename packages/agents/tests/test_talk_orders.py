@@ -82,3 +82,35 @@ def test_the_player_prompt_is_given_the_orders_his_role_allows(match) -> None:
     facts = json.loads(model.calls[-1]["user"])
     assert sorted(facts["you"]["allowed_orders"]) == ["clear", "deep", "rest", "simple"]
     assert facts["you"]["position"] == "GK"
+
+
+def match_talk_names(match, flow) -> list[str]:
+    """Names of players in the last events of the match, recounted from the event log."""
+    events = flow._ctx().events[-8:]
+    return [
+        match["names"][e["payload"]["player_id"]] for e in events if "player_id" in e["payload"]
+    ]
+
+
+def test_the_player_can_talk_about_a_recent_event_by_a_teammate_or_opponent(match) -> None:
+    flow = flow_with(match)
+    other = match_talk_names(match, flow)[-1]
+    reply = f"Okay, boss. {other} had that pass, I saw it from here."
+
+    flow = flow_with(
+        match, ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    )
+    result = run(flow.talk("home1", "what happened just now?", position="GK"))
+    assert result["reply"] == reply and result["verdict"] == "verified"
+
+
+def test_a_name_that_is_not_in_the_recent_events_is_not_said_by_the_model(match) -> None:
+    reply = "Okay, boss. Zed Quorrin had that pass, I saw it from here."
+    flow = flow_with(
+        match, ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    )
+    result = run(flow.talk("home1", "what happened just now?", position="GK"))
+    assert (
+        result["reply"] != reply
+    )  # the rules answer replaces a model reply with a name it cannot cite
+    assert result["verdict"] == "verified"
