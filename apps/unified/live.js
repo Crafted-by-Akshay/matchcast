@@ -6,7 +6,7 @@ const LV = (() => {
   let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
-  const set = (s) => { if (s !== st) { st = s; onStatus(s); } };
+  const set = (s, again) => { if (s !== st || again) { st = s; onStatus(s); } };
 
   // Watch events to the contract's event payloads (docs/contracts.md). Types the contract has no fields for here return null:
   // tackles and pressure need a target player and a distance Watch does not record.
@@ -52,7 +52,7 @@ const LV = (() => {
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
     run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, sending: false };
-    set('warming');
+    set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the 45 s timer
     timer = setTimeout(() => { if (run && !run.claimed) set('fallback'); }, WARM_MS);
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
       players: roster.players.map((q) => ({ player_id: slug(q.name), team_id: slug(q.team) })) } : null;
