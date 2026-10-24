@@ -1,0 +1,45 @@
+import { test, expect, type Page } from './fixtures';
+import { collectErrors, openShell, viewFrame } from './helpers';
+
+// UX review 2026-10-24, Analyst findings 12, 13, 15 and 16: a source label on the recap, a live pill that stays off the page content,
+// a stacked indices table on a phone, and a named Copilot button on a phone.
+declare const post: (v: string, m: object) => void; declare const M: any;
+async function openPage(page: Page, route: string) {
+  await openShell(page, 'analyst');
+  const f = await viewFrame(page, 'analyst');
+  await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
+  await f.evaluate((r) => (window as any).go(r), route);
+  return f;
+}
+const feed = (page: Page) => page.evaluate(() => post('analyst', { src: 'matchcast-shell', type: 'feed', on: true, fixture: M.fixture, score: [1, 0], minute: 12, over: false, last: [], stats: null }));
+
+test('the recap line under the scoreboard says it is a simulated template recap', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await openPage(page, 'match');
+  await expect(f.locator('.mc-src').first()).toHaveText('Template recap · simulated');
+  expect(errs).toEqual([]);
+});
+
+test('the live pill sits bottom right, shows on the match page and hides on the Live match page', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const f = await openPage(page, 'match');
+  await feed(page);
+  await expect(f.locator('#mc-live')).toBeVisible();
+  const b = await f.locator('#mc-live').boundingBox();
+  expect(b!.x + b!.width, 'right aligned, clear of the nav').toBeGreaterThan(1440 - 30);
+  await f.evaluate(() => (window as any).go('live'));
+  await expect(f.locator('#mc-live')).toBeHidden();
+});
+
+test('on a phone the pill is hidden, the Copilot button has its name and the indices table stacks', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const f = await openPage(page, 'match');
+  await feed(page);
+  await expect(f.locator('#mc-live')).toBeHidden();
+  await expect(f.locator('#copbtn span')).toBeVisible();
+  await f.evaluate(() => { (window as any).MC_INDICES = { control: 61, chaos: 22, tempo: 7.5, passes: 40, series: [{ control: 50, chaos: 20, tempo: 6 }, { control: 61, chaos: 22, tempo: 7.5 }] }; (window as any).idxRefresh(); });
+  const m = await f.evaluate(() => { const row = document.querySelector('#idx-panel tr')!; const th = row.querySelector('th')!.getBoundingClientRect(), svg = row.querySelectorAll('td')[1].getBoundingClientRect(); return { thH: th.height, svgW: svg.width, hint: row.querySelectorAll('td')[2].getBoundingClientRect().width }; });
+  expect(m.hint, 'the explanation spans the row instead of a narrow column').toBeGreaterThan(250);
+  expect(m.thH).toBeLessThan(40);
+  expect(await f.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+});
