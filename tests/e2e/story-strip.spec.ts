@@ -56,3 +56,25 @@ test('Demo at 4x reloads Watch at four times speed and the strip then drops the 
   await expect(page.locator('#st-demo')).toBeHidden();
   await expect.poll(() => page.locator('#st-1 span').textContent(), { timeout: 60_000 }).toMatch(/\d+ events/);
 });
+
+test('the shell shows the saved mode before Watch loads, and the demo link keeps other query switches', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => { try { localStorage.setItem('mcx-mode', JSON.stringify({ mode: 'casual' })); } catch (e) { /* storage blocked */ } });
+  await page.goto('/index.html?foo=1#analyst', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await expect(page.locator('.story-who [data-persona=casual]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#st-who')).toHaveText('');
+  const href = await page.locator('#st-demo').getAttribute('href');
+  expect(href).toContain('foo=1');
+  expect(href).toMatch(/seed=2026/);
+  expect(href).toMatch(/speed=4#watch$/);
+});
+
+test('a season load error is readable on a 1280 px desktop, not an ellipsis', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.route('**/shared/fixtures.json*', (r) => r.abort());
+  await page.goto('/index.html#watch', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#meta')).toContainText('Could not load the season fixtures');
+  const m = await page.locator('#meta').evaluate((e) => ({ c: e.clientWidth, s: e.scrollWidth }));
+  expect(m.s, 'the error text is not clipped').toBeLessThanOrEqual(m.c + 1);
+});

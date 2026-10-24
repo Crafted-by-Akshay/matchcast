@@ -48,6 +48,7 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | `state` | shell → all views | score, clock, possession |
 | `status` | shell → all views | `live`, `rules_fallback`, `offline`, `warming_up` |
 | `persona`, `language` | any view → shell | viewer's choice, sent upstream as SSE query parameters |
+| `persona-set` | shell → Watch | `casual` or `analyst`, from the story strip's Fan / Analyst switch |
 | `ask`, `talk` | any view → shell | request; reply arrives as `ask_reply`, `talk_reply` |
 | `approve`, `edit`, `kill` | Broadcast or Analyst → shell | line ID (ADR-0013) |
 
@@ -142,6 +143,7 @@ The top bar has a Status button beside the api pill. It opens a dialog built by 
 
 ## UX review pass 1 (24 Oct): Analyst presentation
 `analyst-pages/80_polish.js` and `embed/analyst.js`: the recap sentence under the scoreboard carries a "Template recap · simulated" chip (the simulator's template writes it, no model). The "Live from Watch" pill sits bottom right and hides on the Live match page, while the Copilot drawer is open, and at ≤ 820 px, where the page or the shell's match bar already shows the score. On a phone the control, chaos and tempo table stacks label, value and sparkline (the sparkline keeps its own width), and the Copilot button shows a short "Ask" label (its accessible name is set to "Ask Copilot"). The pill also hides while the Copilot drawer is open. Test: `analyst-polish.spec.ts`.
+
 ## UX review pass 1 (24 Oct): the story strip, loading skeleton and demo pace
 - Under the match bar (hidden below 820 px) the story strip names the five stages of one moment with live counters from `AG.run.stat`: 1 Ingest (events), 2 Interpret (claims with evidence), 3 Explain (verified lines), 4 Render (the view on screen), 5 Personalise. The first four open the Agents tab or Watch; the counters read "waiting for kick-off" until Watch has started the shared match.
 - 5 Personalise holds a labelled Fan / Analyst switch. It posts `persona-set` (`casual` or `analyst`) to Watch, which calls `fanSet`; Watch's own picker still offers club, player and metric modes, and the strip then says "Showing: club · …" instead of lighting either button. The mode is also written to Watch's `mcx-mode` so a reload keeps it.

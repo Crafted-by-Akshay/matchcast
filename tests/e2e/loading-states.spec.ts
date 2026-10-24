@@ -11,6 +11,7 @@ test('loading: without WebGL, Watch and Broadcast say so, Agents still opens', a
   const wait = page.locator('#v-watch .wait');
   await expect(wait).toContainText('needs WebGL', { timeout: 10_000 });
   await expect(wait.locator('.bar')).toBeHidden();
+  await expect(wait.locator('.sk'), 'no skeleton for a view that cannot load').toBeHidden();
   await page.click('#tab-broadcast');
   await expect(page.locator('#v-broadcast .wait')).toContainText('needs WebGL', { timeout: 10_000 });
   await page.click('#tab-agents');
