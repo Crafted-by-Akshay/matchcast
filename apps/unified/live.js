@@ -56,6 +56,9 @@ const LV = (() => {
     timer = setTimeout(() => { if (run && !run.claimed) set('fallback'); }, WARM_MS);
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
       players: roster.players.map((q) => ({ player_id: slug(q.name), team_id: slug(q.team) })) } : null;
+    // the names go on create, so Ask knows the clubs and players by the names the fan sees
+    run.clubs = roster ? Object.fromEntries(roster.teams.map((t) => [slug(t), t])) : {};
+    run.names = roster ? Object.fromEntries(roster.players.map((q) => [slug(q.name), q.name])) : {};
     open();
   };
   const open = () => {
@@ -80,7 +83,7 @@ const LV = (() => {
     try {
       if (!r.created) {
         const bad = badClaim;   // the api takes the demo switch at match creation only
-        const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
+        const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
         if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; open(); } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
       }
       const batch = r.queue.slice(0, BATCH);
@@ -189,7 +192,7 @@ const LV = (() => {
     try {
       if (!v.created) {
         const res = await fetch(api() + '/v1/matches', json({ session_id: v.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1-vision', home_team_id: r.roster.team_ids[0], away_team_id: r.roster.team_ids[1], venue_id: 'v1',
-          kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: Object.assign({}, r.roster, { stream: v.key }) }));
+          kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: Object.assign({}, r.roster, { stream: v.key }) }));
         if (res.ok || res.status === 409) v.created = true; else throw new Error('create ' + res.status);
       }
       const batch = v.queue.slice(0, BATCH);
