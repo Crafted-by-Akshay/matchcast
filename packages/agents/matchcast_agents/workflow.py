@@ -576,7 +576,19 @@ class MatchWorkflow:
                     if metric in recount:
                         recount[metric] += 1
         named = [(float(m.group(1)), TALK_PHRASES[m.group(2)]) for m in TALK_RE.finditer(reply)]
-        return len(named) == len(numbers) and all(recount[k] == n for n, k in named)
+        upto = ctx.state.max_sequence
+
+        def from_the_log(n: float, metric: str) -> bool:
+            """His own count, or a club's total from the log when the reply names that club."""
+            if recount[metric] == n:
+                return True
+            return any(
+                recompute(ctx.events, f"{metric}:{team}", upto) == n
+                and ctx.club_name(team).casefold() in reply.casefold()
+                for team in (ctx.home, ctx.away)
+            )
+
+        return len(named) == len(numbers) and all(from_the_log(n, k) for n, k in named)
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 

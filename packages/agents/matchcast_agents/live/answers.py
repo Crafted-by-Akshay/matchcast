@@ -25,6 +25,7 @@ ANSWER_BUDGET_S = 15.0  # a viewer waits this long at most; the rules answer aft
 TALK_WORD_LIMIT = 60
 RECENT_EVENTS = 15
 MATCH_EVENTS = 8  # the last events of the match a player may talk about
+KEY_EVENT_TYPES = ("goal", "card")  # every goal and card of the match is known to any player
 KEY_EVENTS = ("goal", "card")  # every one of these is in the sheet, however long ago it was
 TEAM_METRICS = ("goals", "shots", "shots_on_target", "passes", "tackles_won", "fouls", "cards")
 PLAYER_METRICS = ("goals", "shots", "shots_on_target", "tackles_won", "fouls", "cards")
@@ -251,6 +252,15 @@ def _ask_problem(
     return None
 
 
+def _team_totals(ctx: MatchContext) -> list[str]:
+    upto = ctx.state.max_sequence
+    totals = []
+    for team in (ctx.home, ctx.away):
+        values = {m: recompute(ctx.events, f"{m}:{team}", upto) for m in TEAM_METRICS}
+        totals.append(f"{ctx.club_name(team)}: {_counts(values)}")
+    return totals
+
+
 def talk_fits(ctx: MatchContext, target: str, reply: str, match_names: Iterable[str] = ()) -> bool:
     """The reply as the Verifier sees it: short, digits only, and names only of the speaker, the
     two clubs and the players in the recent match events the model was given."""
@@ -324,11 +334,12 @@ class LiveAnswers:
             for e in ctx.events
             if e["payload"].get("player_id") == target and (line := _event_line(ctx, e))
         ][-8:]
+        key = [e for e in ctx.events if e["payload"]["type"] in KEY_EVENT_TYPES]
+        known = [*ctx.events[-MATCH_EVENTS:], *key]  # the players this reply may name
         match_events = [line for e in ctx.events[-MATCH_EVENTS:] if (line := _event_line(ctx, e))]
+        key_events = [line for e in key if (line := _event_line(ctx, e))]
         match_names = [
-            ctx.player_name(e["payload"]["player_id"])
-            for e in ctx.events[-MATCH_EVENTS:]
-            if "player_id" in e["payload"]
+            ctx.player_name(e["payload"]["player_id"]) for e in known if "player_id" in e["payload"]
         ]
         home, away = _score(ctx)
         facts = {
@@ -344,6 +355,8 @@ class LiveAnswers:
                 "score": f"{ctx.club_name(ctx.home)} {home}, {ctx.club_name(ctx.away)} {away}",
                 "minute": _minute(ctx.state.event_time_ms),
                 "recent_events": match_events,  # what you saw happen, with the players' names
+                "key_events": key_events,  # every goal and card of the match
+                "team_totals": _team_totals(ctx),  # the log's counts for each club
             },
             "instruction_from_the_manager": utterance,
         }

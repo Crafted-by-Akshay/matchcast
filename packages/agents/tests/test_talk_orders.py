@@ -114,3 +114,37 @@ def test_a_name_that_is_not_in_the_recent_events_is_not_said_by_the_model(match)
         result["reply"] != reply
     )  # the rules answer replaces a model reply with a name it cannot cite
     assert result["verdict"] == "verified"
+
+
+def log_goals(match, team: str) -> int:
+    """Goals for a team, counted from the fixture's events, not from the code under test."""
+    return sum(
+        1 for e in match["events"]
+        if e["payload"]["type"] == "goal" and e["payload"].get("team_id") == team
+    )  # fmt: skip
+
+
+def test_a_fan_can_hear_about_a_goal_by_any_player_in_the_match(match) -> None:
+    goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
+    scorer = match["names"][goal["payload"]["player_id"]]
+    reply = f"Okay, boss. {scorer} got that goal, I felt it was coming."
+    flow = flow_with(
+        match, ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    )
+    result = run(flow.talk("home1", "who scored?", position="GK"))
+    assert result["reply"] == reply and result["verdict"] == "verified"
+
+
+def test_a_team_total_is_checked_against_the_log(match) -> None:
+    flow = flow_with(match)
+    home = flow._ctx().home
+    club = flow._ctx().club_name(home)
+    true_total = log_goals(match, home)
+    right = f"Okay, boss. {club} have {true_total} goals, I reckon."
+    wrong = f"Okay, boss. {club} have {true_total + 1} goals, I reckon."
+    for reply, verdict in ((right, "verified"), (wrong, "rejected")):
+        flow = flow_with(
+            match, ScriptedModelClient(answers=lambda s, u, r=reply: {"reply": r, "order": "none"})
+        )
+        result = run(flow.talk("home1", "how many goals have we got?", position="GK"))
+        assert (result["reply"] == reply) == (verdict == "verified"), reply
