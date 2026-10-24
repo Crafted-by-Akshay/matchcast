@@ -173,6 +173,18 @@ def test_foundry_client_sends_a_json_schema_and_counts_tokens() -> None:
     )
 
 
+def test_foundry_client_sends_the_reasoning_model_parameters() -> None:
+    from matchcast_agents.live import FoundryModelClient
+    from matchcast_agents.live.client import REASONING_HEADROOM
+
+    fake, completions = fake_openai(message("{}"))
+    client = FoundryModelClient(deployment="gpt-5-mini", client=fake)
+    run(client.complete("sys", "user", {"type": "object"}, temperature=0.6, max_tokens=400))
+    sent = completions.kwargs
+    assert sent["max_completion_tokens"] == 400 + REASONING_HEADROOM >= 1500
+    assert "max_tokens" not in sent and "temperature" not in sent  # gpt-5-mini rejects both
+
+
 def test_foundry_client_maps_failures_to_the_resilience_vocabulary() -> None:
     import pytest
     from matchcast_agents.live import FoundryModelClient

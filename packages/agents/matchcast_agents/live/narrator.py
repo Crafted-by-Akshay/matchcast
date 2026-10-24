@@ -63,7 +63,6 @@ class LiveNarrator:
             prompt("narrator"),
             json.dumps(facts),
             SCHEMA,
-            temperature=0.6,
             max_tokens=400,
         )
         ids = tuple(c["claim_id"] for c in claims)

@@ -41,7 +41,7 @@ def main() -> int:
 
 
 def structured_check() -> int:
-    """The path the agents use: FoundryModelClient, max_tokens, temperature and a strict schema."""
+    """The path the agents use: FoundryModelClient, max_completion_tokens and a strict schema."""
     import asyncio
 
     from matchcast_agents.live.client import FoundryModelClient
