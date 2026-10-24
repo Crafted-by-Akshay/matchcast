@@ -1,11 +1,12 @@
 """The rules Ask: a knowledge example is not this match's score; a rebuilt match keeps its clubs."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.ask import Assistant, Bm25Index, load_kb
-from matchcast_agents.ask.assistant import _knowledge_sentences
+from matchcast_agents.ask.assistant import _knowledge_sentences, _leader_sentence
 from matchcast_agents.ask.chunking import Chunk
 from matchcast_agents.ask.retrieval import Hit
 from matchcast_agents.store import MemoryStore
@@ -122,3 +123,45 @@ def test_the_event_marker_is_protected_in_translation() -> None:
     from matchcast_agents.translate import _MARKER
 
     assert _MARKER.findall("Dev Hale scored [event:e10] today") == ["[event:e10]"]
+
+
+def test_the_judge_questions_on_a_named_match_are_answered(match) -> None:
+    # the Judge-test questions, on a match created with its club names
+    scored = rules_answer(match, "who scored for Northgate FC?")
+    assert scored.intent == "goals" and not scored.abstained
+    assert "Harbour" not in scored.answer and "[event:" in scored.answer
+    harbour = rules_answer(match, "how many goals did Harbour United score?")
+    assert harbour.answer.startswith("Score: Harbour United 2.")
+    shots = rules_answer(match, "how many shots on target does Northgate FC have?")
+    assert shots.answer.startswith("Shots on target so far: Northgate FC 9.")
+    most = rules_answer(match, "who has the most shots?")
+    assert most.intent == "leader" and most.answer.startswith(
+        "Northgate FC have the most shots, 15 to 4."
+    )
+
+
+def test_a_club_with_no_goal_yet_has_its_goals_so_far(match) -> None:
+    # the first half of the record without any Northgate goal
+    events = [
+        e for e in match["events"]
+        if not (e["payload"]["type"] == "goal" and e["payload"]["team_id"] == "home")
+    ]  # fmt: skip
+    flow = build(match)
+    run(flow.ingest(events))
+    result = run(flow.ask("who scored for Northgate FC?", "casual"))
+    assert result.intent == "live" and result.answer.startswith("Northgate FC haven't scored yet.")
+
+
+def test_who_has_the_most_with_a_player_named_still_abstains(match) -> None:
+    assert rules_answer(match, "which player has the most shots?").abstained
+
+
+def test_a_level_count_is_said_as_level_and_both_clubs_are_cited() -> None:
+    ctx = SimpleNamespace(home="home", away="away", club_name=lambda team: team.title())
+    claims = [
+        {"claim_id": "c1", "metric": "shots:home", "value": 3},
+        {"claim_id": "c2", "metric": "shots:away", "value": 3},
+    ]
+    assert (
+        _leader_sentence(ctx, "Shots", claims) == "Shots are level at 3 each. [claim:c1][claim:c2]"
+    )
