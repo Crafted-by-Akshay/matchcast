@@ -24,6 +24,7 @@ from .personas import MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
+from .season_clubs import season_code
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
@@ -198,8 +199,14 @@ class MatchWorkflow:
         self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
         self.extra_personas: list[str] = []
-        self.store.put_match(
-            self.sk, {"roster": self.roster, "names": self.names, "clubs": self.clubs}
+        self.store.put_match(  # keeps what the api stored at creation (approval mode, demo seed)
+            self.sk,
+            {
+                **(self.store.get_match(self.sk) or {}),
+                "roster": self.roster,
+                "names": self.names,
+                "clubs": self.clubs,
+            },
         )
         self._restore()
         self.stats = {
@@ -745,7 +752,9 @@ class MatchWorkflow:
         claim = next((c for c in claims if c["metric"].split(":")[0] in TEAM_METRICS), None)
         if claim is None:
             return
-        metric, _, team_id = claim["metric"].partition(":")
+        metric, _, side = claim["metric"].partition(":")
+        # the season is keyed by club code; a name it does not know falls through to league-wide
+        team_id = season_code(self.clubs.get(side), side) or side
         details: dict[str, Any] = {
             "skill": "compare_to_season",
             "metric": metric,
