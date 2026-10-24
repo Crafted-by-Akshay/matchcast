@@ -19,6 +19,17 @@ import uuid
 from pathlib import Path
 
 FIXTURE = Path(__file__).parents[1] / "packages/agents/tests/fixtures/match-short.json"
+# In live mode each events POST runs model calls in the request (direct pipeline): measured
+# 24 Oct at 21-101 s for 10 events, so one 50-event batch can take minutes.
+REQUEST_TIMEOUT_S = 300
+FINAL_VERDICTS = {"verified", "review", "rejected"}
+
+
+def settled(claims: list[dict]) -> bool:
+    """Every claim has a final verdict and at least one is verified. Live agents can produce
+    claims the Verifier rejects; that is the Verifier working, not a failed pipeline."""
+    verdicts = [c.get("verdict") for c in claims]
+    return bool(verdicts) and all(v in FINAL_VERDICTS for v in verdicts) and "verified" in verdicts
 
 
 def call(method: str, url: str, body: dict | None = None) -> tuple[int, dict]:
@@ -27,7 +38,7 @@ def call(method: str, url: str, body: dict | None = None) -> tuple[int, dict]:
         url, data, {"Content-Type": "application/json"} if data else {}, method=method
     )
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
             return response.status, json.loads(response.read() or b"{}")
     except urllib.error.HTTPError as error:
         return error.code, json.loads(error.read() or b"{}")
@@ -77,9 +88,12 @@ def main() -> int:
     while time.monotonic() < deadline:
         status, reply = call("GET", f"{base}/v1/matches/{name}/claims?session_id={name}")
         items = reply.get("items", []) if status == 200 else []
-        verified = [c for c in items if c.get("verdict") == "verified"]
-        if verified and len(items) == len(verified):
-            print(f"OK: {len(verified)} verified claims after {time.perf_counter() - started:.1f}s")
+        if settled(items):
+            verified = sum(c.get("verdict") == "verified" for c in items)
+            others = len(items) - verified
+            extra = f" ({others} rejected or held for review)" if others else ""
+            elapsed = time.perf_counter() - started
+            print(f"OK: {verified} verified claims{extra} after {elapsed:.1f}s")
             return 0
         time.sleep(2)
     print(f"FAIL: no verified claims in {args.timeout:.0f}s (status {status}, {len(items)} claims)")

@@ -97,3 +97,26 @@ def test_scale_down_covers_api_web_and_mcp() -> None:
     for app in ("ca-api-matchcast", "ca-web-matchcast", "ca-mcp-matchcast"):
         assert f"--name {app}" in out
         assert "--min-replicas 0" in out
+
+
+def _smoke():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "smoke_pipeline", ROOT / "scripts/smoke_pipeline.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_smoke_accepts_verifier_rejections_in_live_mode():
+    settled = _smoke().settled
+    assert settled([{"verdict": "verified"}, {"verdict": "rejected"}, {"verdict": "review"}])
+    assert not settled([{"verdict": "verified"}, {"verdict": None}])
+    assert not settled([{"verdict": "rejected"}])
+    assert not settled([])
+
+
+def test_smoke_waits_long_enough_for_live_model_calls():
+    assert _smoke().REQUEST_TIMEOUT_S >= 300

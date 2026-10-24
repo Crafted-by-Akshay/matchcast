@@ -161,6 +161,8 @@ After the sign-in run:
 - `/health` 200, `/ready` 200, `/v1/status` 200, overall `simulated`. Vision, Table Storage, Speech, Translator and Easy Auth are live.
 - The web app serves anonymously (200), which is the design: viewing stays open.
 - `POST /v1/lines/{id}/approve` without sign-in returns 401 `unauthenticated`, so the producer gate on approve, edit and kill works.
+Live agents (24 Oct, api `sha-569ea02`, `AGENT_MODE=live`, gpt-5-mini): `/v1/status` shows the agents live. In the direct pipeline each events POST runs the model calls in the request: `match-short.json` in 10-event batches took about 495 s for 137 events (17 moments, about 29 s a moment, single batches 21 to 101 s), against 8.6 s in rules mode. Of 50 claims, 12 were verified, 20 repaired and 14 abstained, and 12 lines were published. The smoke script now waits up to 300 s a request and passes when every claim has a final verdict and at least one is verified, because the Verifier rejecting a live claim is the design working. Latency is with the Agents lane.
+
 - Match create and the events POST are open without sign-in. The code applies the role gate only to the line routes, so smoke passes without a token: 137 events accepted, 45 verified claims.
 
 mcp: `services/mcp/Dockerfile` did not copy the workspace members `services/api`, `services/worker` and `services/recap`, so `uv sync --locked` failed the same way the api image did. It now copies them. The image `ghcr.io/crafted-by-akshay/matchcast-mcp:sha-f348755` is pushed for linux/amd64. At that point the GHCR package was still private and the app stayed on the placeholder; it has since been deployed with the others.
