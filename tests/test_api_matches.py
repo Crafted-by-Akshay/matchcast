@@ -360,6 +360,17 @@ def test_a_restarted_api_still_serves_the_stream_and_the_match_of_a_stored_match
     assert unknown.status_code == 404
 
 
+def test_an_unknown_match_is_a_point_read_not_a_hydrate() -> None:
+    client = TestClient(create_app())
+    calls: list[str] = []
+    store = client.app.state.matches.store
+    store.hydrate = lambda sk: calls.append(sk)  # type: ignore[attr-defined]
+    for _ in range(3):
+        stream = client.get("/v1/matches/nope/stream", params={**Q, "follow": "false"})
+        assert stream.status_code == 404
+    assert calls == []  # nothing was loaded for an id that is not stored
+
+
 def test_two_concurrent_creates_of_one_match_make_one_match(monkeypatch) -> None:
     import asyncio
     import time

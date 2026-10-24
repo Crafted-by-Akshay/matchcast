@@ -311,11 +311,15 @@ class Registry:
         key = (session_id, match_id)
         if (flow := self.flows.get(key)) is not None:
             return flow
+        stream = {"tenant_id": TENANT, "session_id": session_id, "match_id": match_id}
+        sk = stream_key(stream)
+        # one point read decides whether the match exists, so an unknown id costs no hydrate and
+        # no time under the lock (every stream retry for an id that is not there lands here)
+        if await asyncio.to_thread(self.store.get_match, sk) is None:
+            raise Problem(404, "not_found", f"unknown match {match_id}")
         async with self.create_lock:
             if (flow := self.flows.get(key)) is not None:
                 return flow
-            stream = {"tenant_id": TENANT, "session_id": session_id, "match_id": match_id}
-            sk = stream_key(stream)
 
             def stored() -> dict[str, Any] | None:
                 _is_stored(self.store, sk)  # hydrates a buffered store off the event loop

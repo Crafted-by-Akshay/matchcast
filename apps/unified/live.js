@@ -59,7 +59,9 @@ const LV = (() => {
     open();
   };
   const open = () => {
-    const r = run; if (!r || !r.created) return;   // the api only knows the match once it is created; flush opens the stream right after
+    const r = run; if (!r || !r.created) return;
+    if (r.es) r.es.close();   // one stream at a time: a pending retry must not add a second
+    // the api only knows the match once it is created; flush opens the stream right after
     try {
       const es = new EventSource(url('/v1/matches/' + r.id + '/stream', { persona, lang }));
       r.es = es;
@@ -68,7 +70,7 @@ const LV = (() => {
       on('claim', (d) => { r.claimed = true; if (st === 'warming') set('live'); onClaim(d, st); });
       on('line', (d) => onLine(d, st));
       on('publication', (d) => { r.claimed = true; if (st === 'warming') set('live'); onLine(d, st); });
-      es.onerror = () => { es.close(); if (run !== r) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
+      es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
     } catch (e) { set('fallback'); }
   };
 

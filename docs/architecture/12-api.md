@@ -47,7 +47,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 
 "Anyone" means unauthenticated access is allowed (judges can view without signing in). "Viewer" means any signed-in user. "Producer" means the `roles` claim contains `Producer` or `Admin`.
 
-Every match route rebuilds the workflow of a stored match from its roster when this process has not seen it (after a restart, or on another replica), so a stream or event call does not 404 for a match that exists in the store; an unknown match is still a 404.
+Every match route rebuilds the workflow of a stored match from its roster when this process has not seen it (after a restart of this single replica, ADR-0005; the stream replays nothing from before the restart), so a stream or event call does not 404 for a match that exists in the store; an unknown match is still a 404.
 
 ## 3. Server-Sent Events
 
