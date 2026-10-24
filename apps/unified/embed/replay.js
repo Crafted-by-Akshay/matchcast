@@ -29,7 +29,7 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   st.textContent = '@media (max-width:560px){'
     + '#mc-tele{left:8px!important;right:8px!important;top:8px!important;width:auto!important;max-height:2.4em!important;overflow:hidden!important}'
     + '#mc-replay{left:8px!important;right:8px!important;top:64px!important;flex-wrap:wrap!important}'
-    + '#mc-replay>span{flex:1 0 100%}#mc-replay button,#mc-replay label{white-space:nowrap;min-height:44px;display:inline-flex!important;align-items:center}'   // a heading row, then the buttons on one row: no label breaks ("Slow- / mo"), 44 px targets
+    + '#mc-replay>span{flex:1 0 100%}#mc-replay button,#mc-replay label{white-space:nowrap;min-height:44px}'   // a heading row, then the buttons on one row: no label breaks ("Slow- / mo"), 44 px targets
     + '#mc-l3{left:8px!important;right:8px!important;bottom:76px!important;max-width:none!important;font-size:13px!important}'
     + '#mc-onair{left:8px!important;right:8px!important;bottom:8px!important;flex-wrap:wrap}}';
   document.head.append(st);
