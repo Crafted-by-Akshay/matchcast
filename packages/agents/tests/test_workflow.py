@@ -209,6 +209,35 @@ def test_a_repaired_line_still_gets_its_desk_comparison(match, monkeypatch) -> N
     assert any(r["details"]["claim_id"] in repaired_claims for r in calls)
 
 
+def test_a_club_the_season_does_not_know_is_compared_with_every_team(match, monkeypatch) -> None:
+    from matchcast_agents.rules import producer
+    from matchcast_agents.statsdesk import StatsDeskError
+
+    original = producer.moment_score
+    monkeypatch.setattr(
+        producer, "moment_score", lambda payload: (original(payload)[0], 1, original(payload)[2])
+    )
+
+    class Unknown(FakeDesk):
+        async def compare(self, metric, scope, value, team_id=None):
+            if team_id:
+                self.calls.append((metric, scope, value, team_id))
+                raise StatsDeskError("invalid params: no team rows for team 'home'")
+            return await super().compare(metric, scope, value, team_id)
+
+    desk = Unknown()
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], stats_desk=desk,
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    records = flow.store.audit_records(flow.sk)
+    calls = [r for r in records if r["action"] == "a2a_call"]
+    assert calls and all(r["details"]["team_id"] is None for r in calls)
+    assert all(r["details"]["compared_with"] == "all season teams" for r in calls)
+    assert not [r for r in records if r["action"] == "a2a_failed"]
+
+
 def test_a_slow_desk_times_out_without_blocking_the_moment(match, monkeypatch) -> None:
     import asyncio
 

@@ -20,7 +20,7 @@ Observed 22 Oct on the local api in rules mode.
 ## 2. Duplicate batch
 Post the same first 50 fixture events twice.
 Expect: both calls return `202` with `last_sequence: 50`; the audit trail holds one set of `claim_created` / `line_*` records, not two (events are keyed by `stream_sequence`, so a replay is a no-op).
-Observed 22 Oct: both calls return 202, and the audit counts after two posts equal those after one post on a fresh match (16 `claim_created`, 12 each of `line_drafted`, `line_verified`, `line_approved`, `publication_created`). The two `a2a_failed` records in both runs are the Stats Desk season comparison with the error text "no team rows for team 'home'" (the cause is the text the audit records, not derived further); the line still publishes, so this is the designed degrade, not a duplicate.
+Observed 22 Oct: both calls return 202, and the audit counts after two posts equal those after one post on a fresh match (16 `claim_created`, 12 each of `line_drafted`, `line_verified`, `line_approved`, `publication_created`). After the Oct 24 change those two Stats Desk comparisons are `a2a_call` records with `compared_with: all season teams` and `requested_team_id: home` (the fixture's side keys are not season club codes); before it they were `a2a_failed` with "no team rows for team 'home'". The line publishes either way, so this is the designed degrade, not a duplicate.
 
 ## 3. Seeded bad claim
 Create a match with header `x-matchcast-seed-bad-claim: 1` (the value must be exactly `1`; or `seed_bad_claim: true` in the body, cue at `seed_bad_claim_at_ms`, default 12:00). The Producer drafts a line with a wrong number, the Verifier recounts from the stored events and rejects it, the line is repaired once or abstained (04-agents.md; F2).
