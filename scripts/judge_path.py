@@ -117,7 +117,8 @@ def main() -> int:
                 all((Path(dist) / v / "index.html").exists() for v in VIEWS),
             )
         smoke = subprocess.run(
-            [sys.executable, "scripts/smoke_pipeline.py", "--base", base, "--timeout", "60"],
+            [sys.executable, "scripts/smoke_pipeline.py", "--base", base, "--timeout", "60"]
+            + ["--quiet", "4"],  # rules agents on the memory pipeline: nothing runs for long
             cwd=ROOT,
             capture_output=True,
             text=True,
