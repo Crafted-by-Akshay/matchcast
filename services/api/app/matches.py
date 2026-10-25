@@ -24,7 +24,7 @@ from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agen
 from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.hub import StreamEvent
-from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
+from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, BOOTH, booth, normalise
@@ -155,6 +155,12 @@ class AskBody(BaseModel):
     surface: Literal["ask", "broadcast"] = "ask"
 
 
+class DrillBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    model_cut: bool  # true cuts the match's model calls, false restores them
+
+
 class ExportBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str = Field(pattern=ID)
@@ -238,6 +244,7 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
+        self.cuts: dict[tuple[str, str], ModelCut] = {}  # the failure drill's switch per match
         self.create_lock = asyncio.Lock()  # the stored-match check awaits, so creates take turns
         self.store = (
             build_store()
@@ -303,12 +310,22 @@ class Registry:
         if live:
             self.new_matches.add("live:*", "live:" + client_ip(request))
 
-    def agents_for(self, personas: tuple[str, ...], *, live: bool = True, **seed: Any) -> AgentSet:
-        """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
+    def agents_for(
+        self,
+        personas: tuple[str, ...],
+        *,
+        live: bool = True,
+        cut: ModelCut | None = None,
+        **seed: Any,
+    ) -> AgentSet:
+        """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules.
+        A match's cut (the failure drill) sits in front of its model calls only."""
         client = self.model_client() if live else None
         tool_call = self.tool_call()
         if client is None:
             return rules_agents(personas, tool_call=tool_call, **seed)
+        if cut is not None:
+            client = cut.guard(client)
         return live_agents(client, personas, tool_call=tool_call, **seed)
 
     def tool_call(self) -> ToolCall | None:
@@ -409,12 +426,13 @@ class Registry:
                     "seed_bad_claim": True,
                     "seed_bad_claim_at_ms": cue,
                 }
+            cut = self.cuts.setdefault(key, ModelCut(on=bool(info.get("model_cut", False))))
             flow = MatchWorkflow(
                 stream=stream,
                 roster=info["roster"],
                 names=info.get("names", {}),
                 clubs=info.get("clubs", {}),
-                agents=self.agents_for(config.personas, live=live, **seeds),
+                agents=self.agents_for(config.personas, live=live, cut=cut, **seeds),
                 config=config,
                 store=self.store,
                 stats_desk=self.stats_desk,
@@ -622,6 +640,7 @@ def build_router(registry: Registry) -> APIRouter:
                     422, "contract_invalid", "roster stream must match this match", "/roster/stream"
                 )
             config = WorkflowConfig(approval_mode=body.approval_mode, hold_booth=body.hold_booth)
+            cut = ModelCut()
             players = body.roster.get("players")
             teams = body.roster.get("team_ids")
             try:
@@ -635,6 +654,7 @@ def build_router(registry: Registry) -> APIRouter:
                     agents=registry.agents_for(
                         config.personas,
                         live=live,
+                        cut=cut,
                         seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
                         seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
                     ),
@@ -651,6 +671,7 @@ def build_router(registry: Registry) -> APIRouter:
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
             registry.flows[key] = flow
+            registry.cuts[key] = cut
             registry.count_new_match(request, live)
             # what a rebuilt match needs to behave as this one does after a restart
             seed = body.seed_bad_claim or x_matchcast_seed_bad_claim == "1"
@@ -672,6 +693,23 @@ def build_router(registry: Registry) -> APIRouter:
         flow = await registry.flow_for(session_id, match_id)
         return {"stream": flow.stream, "state": _state_json(flow), "stats": flow.stats,
                 "mode": flow.agents.mode, "approval_mode": flow.config.approval_mode}  # fmt: skip
+
+    @router.post("/matches/{match_id}/drill")
+    async def failure_drill(match_id: str, body: DrillBody) -> dict[str, Any]:
+        """The failure drill: cut or restore one match's model calls. While cut, each model call
+        fails at once and the rules twin answers; every refusal is audited as fallback_used."""
+        flow = await registry.flow_for(body.session_id, match_id)
+        cut = registry.cuts[(body.session_id, match_id)]
+        cut.on = body.model_cut
+        sk = flow.sk
+
+        def persist() -> None:
+            registry.store.put_match(
+                sk, {**(registry.store.get_match(sk) or {}), "model_cut": cut.on}
+            )
+
+        await asyncio.to_thread(persist)
+        return {"model_cut": cut.on, "mode": flow.agents.mode}
 
     @router.post("/matches/{match_id}/events", status_code=202)
     async def post_events(match_id: str, session_id: str, body: EventBatch) -> dict[str, int]:

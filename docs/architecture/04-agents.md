@@ -166,6 +166,6 @@ packages/agents/
 | --- | --- |
 | Distinct roles | Trace panel shows four agents with their own tools and outputs (EXP-6) |
 | Shared state and handoffs | Claims ledger: one claim, its Analyst evidence, Narrator lines, Verifier verdict (EXP-10) |
-| Failure recovery | Seeded bad claim repaired on cue (`?seedBadClaim=1`); rules fallback chip; kill-and-resume clip (QUA-5) |
+| Failure recovery | Seeded bad claim repaired on cue (`?seedBadClaim=1`); failure drill: "Cut the model" on the Agents tab cuts the match's model calls mid-match and the rules twins take over with no gap (`POST …/drill`, 12-api.md); rules fallback chip; kill-and-resume clip (QUA-5) |
 | Better than one agent | QUA-4: same 30 moments, one agent vs four, verified-claim rate and hallucinations per 100 lines, real numbers in the README |
 | Interoperability | MCP for tools and Copilot; A2A Stats Desk with an Agent Card |

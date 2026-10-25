@@ -310,6 +310,16 @@ def test_seed_bad_claim_defaults_to_minute_twelve(client: TestClient) -> None:
     assert not _rejections(client)
 
 
+def test_failure_drill_cuts_and_restores_a_match_model(client: TestClient) -> None:
+    create(client)
+    url = "/v1/matches/match-short/drill"
+    cut = client.post(url, json={"session_id": "short", "model_cut": True})
+    assert cut.status_code == 200 and cut.json()["model_cut"] is True
+    restored = client.post(url, json={"session_id": "short", "model_cut": False})
+    assert restored.json()["model_cut"] is False
+    assert client.post(url, json={"session_id": "nobody", "model_cut": True}).status_code == 404
+
+
 def test_recap_is_404_until_full_time_then_served_per_persona(client: TestClient) -> None:
     create(client)
     url = "/v1/matches/match-short/recap/casual"
