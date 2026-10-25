@@ -35,13 +35,42 @@ const TP = (() => {
     return '<p class="tp-line"><b>' + esc(c.id) + '</b> · ' + esc(c.text || '') + '</p>' + body
       + '<p class="note">Verdict: ' + esc(c.verdict) + (c.repaired ? ' (repaired once)' : '') + ' · Source: ' + (c.source === 'model' ? 'model' : 'rules') + (aud ? ' · Audit ' + esc(aud) : '') + '</p>';
   };
+  // CREW-6.2 (AB#444), behind ?evidence=1: the evidence behind a line. Agents and tool calls come from the claim's trace; data rows are the match events (or the moment) its
+  // evidence ids point at; history rows (CREW-2.2) are not built, so the panel says so; audit hashes are checked against the chain. A line from the api carries none of this
+  // yet (claim-level event ids arrive with AB#498), and the panel says that instead of showing a guess.
+  const FLAG = /[?&]evidence=1(&|$)/.test(location.search);
+  const evidence = (c) => {
+    const r = AG.run, chain = MCC.records();
+    const tr = c.trace || [];
+    const rows = (c.evidence || []).map((id) => {
+      const e = r.events.find((x) => x.id === id), m = !e && r.moments.find((x) => x.id === id);
+      return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') }
+        : m ? { id, text: Math.floor(m.minute) + "' moment · " + (m.title || m.type) } : { id, text: 'not in the event log' };
+    });
+    const audit = (c.audit || []).map((a) => { const rec = chain[a.seq - 1]; return { seq: a.seq, hash: a.hash, ok: !!rec && rec.ref === c.id && rec.hash.slice(0, a.hash.length) === a.hash, action: rec ? rec.agent + ' ' + rec.action : '' }; });
+    return { api: !!c.api, agents: [...new Set(tr.map((s) => s.agent))], tools: [...new Set(tr.flatMap((s) => s.tools || []))], rows, history: c.history || null, audit };
+  };
+  const evidenceHtml = (c) => {
+    const x = evidence(c);
+    const none = x.api && !x.rows.length;
+    return '<section class="tp-evidence"><h4>Evidence</h4>'
+      + '<p class="tp-agents"><b>Agents</b> ' + (x.agents.length ? x.agents.map(esc).join(' → ') : '<span class="m">not in the stream (Planned, AGT-3)</span>') + '</p>'
+      + '<p class="tp-tools"><b>Tool calls</b> ' + (x.tools.length ? x.tools.map(esc).join(', ') : '<span class="m">none reported</span>') + '</p>'
+      + '<p><b>Data rows</b></p>' + (x.rows.length ? '<ol class="tp-rows">' + x.rows.map((o) => '<li data-id="' + esc(o.id) + '">' + esc(o.text) + ' <span class="m">' + esc(o.id) + '</span></li>').join('') + '</ol>'
+        : '<p class="m">' + (none ? 'Planned (AB#498): the api does not send claim-level event ids yet.' : 'This line cites no single event (a running total over the whole match).') + '</p>')
+      + '<p class="tp-history"><b>History rows</b> ' + (x.history && x.history.length ? x.history.map((h) => esc(h.label) + ' ' + esc(h.value) + ' <span class="m">' + esc(h.dataset || '') + '</span>').join(' · ') : '<span class="m">none used. Planned (CREW-2.2): head-to-head and Elo rows are not built yet.</span>') + '</p>'
+      + '<p><b>Audit</b></p>' + (x.audit.length ? '<ol class="tp-audit">' + x.audit.map((a) => '<li class="' + (a.ok ? 'ok' : 'bad') + '">#' + a.seq + ' <code>' + esc(a.hash) + '</code> ' + esc(a.action) + ' · ' + (a.ok ? 'in the chain' : 'not in the chain') + '</li>').join('') + '</ol>' : '<p class="m">no audit record yet</p>')
+      + '<p class="tp-chain note">Checking the chain…</p></section>';
+  };
   const open = (id) => {
     const r = AG.run; if (!r) return false;
     const c = r.claims.find((x) => x.id === id); if (!c) return false;
     if (!dlg) build();
-    dlg.querySelector('.tp-b').innerHTML = html(c);
+    const body = dlg.querySelector('.tp-b');
+    body.innerHTML = html(c) + (FLAG ? evidenceHtml(c) : '');
+    if (FLAG) MCC.verify().then((v) => { const el = body.querySelector('.tp-chain'); if (el) el.textContent = v.ok ? 'Chain intact: ' + v.count + ' records (in-page chain, recomputed now)' : 'Chain broken at record #' + v.brokenAt; });
     if (!dlg.open) dlg.showModal();
     return true;
   };
-  return { open, steps, html };
+  return { open, steps, html, evidence };
 })();
