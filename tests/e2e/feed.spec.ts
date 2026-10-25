@@ -195,3 +195,17 @@ test('the booth voices a new match, even though its line ids start again', async
   });
   expect(spoken).toEqual(expect.arrayContaining(['First match colour.', 'Second match colour.']));
 });
+
+test('each feed line carries the numbers it was counted from', async ({ page }) => {
+  await openShell(page, 'agents');
+  const lines = await page.evaluate(() => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('numbers', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 0.9, type: 'shot', team: 'A', player: 'Dev', xg: 0.12, fate: 'miss' }, pass(1, 'H', 'Ana'), pass(1.05, 'H', 'Ben'), pass(1.1, 'H', 'Cal')], []);
+    return CM.view().filter((l: any) => l.kind === 'play' || l.kind === 'shot').map((l: any) => ({ kind: l.kind, numbers: l.numbers }));
+  });
+  expect(lines).toEqual([
+    { kind: 'shot', numbers: [{ name: 'xG', value: 0.12 }] },
+    { kind: 'play', numbers: [{ name: 'passes', value: 3 }] },
+  ]);
+});

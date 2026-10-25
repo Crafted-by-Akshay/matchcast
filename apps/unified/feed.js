@@ -15,7 +15,7 @@ const CM = (() => {
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
   const club = (ti) => (ti === 0 ? names.home : names.away);
   const push = (o) => {
-    const item = { id: 'l' + (++n), t: Date.now(), minute: o.minute, text: trim(o.text, 240), kind: o.kind, tone: o.tone || '', source: o.source || 'rules', chain: o.chain || CHAIN.slice(), persona };
+    const item = { id: 'l' + (++n), t: Date.now(), minute: o.minute, text: trim(o.text, 240), kind: o.kind, tone: o.tone || '', source: o.source || 'rules', chain: o.chain || CHAIN.slice(), persona, numbers: o.numbers || [] };
     items.push(item); if (items.length > KEEP) items.shift();
     lastLine = o.minute; changed(); return item;
   };
@@ -27,7 +27,7 @@ const CM = (() => {
       case 'shot': {
         const outcome = ev.fate === 'save' ? ', and the keeper saves' : ev.fate === 'miss' ? ', off target' : '';
         const big = (+ev.xg || 0) >= 0.25;
-        return { minute: ev.minute, kind: 'shot', tone: big ? 'big' : '', text: (big ? 'Big chance! ' : '') + who + ' shoots for ' + tc + outcome + '. xG ' + f2(ev.xg) + '.' };
+        return { minute: ev.minute, kind: 'shot', tone: big ? 'big' : '', numbers: [{ name: 'xG', value: +ev.xg || 0 }], text: (big ? 'Big chance! ' : '') + who + ' shoots for ' + tc + outcome + '. xG ' + f2(ev.xg) + '.' };
       }
       case 'yellow_card': return { minute: ev.minute, kind: 'card', text: 'Yellow card for ' + who + ' (' + tc + ')' + (ev.reason ? ': ' + ev.reason : '') + '.' };
       case 'corner': return { minute: ev.minute, kind: 'set_piece', text: 'Corner to ' + tc + '.' };
@@ -71,7 +71,7 @@ const CM = (() => {
       : act.type === 'interception' ? act.player + ' reads it and intercepts for ' + tc + '.'
       : act.player + ' challenges for ' + tc + '.';   // a tackle's outcome is not in the batch, so the line makes no claim about it
     playAt = at; playFrom = events.length;
-    push({ minute: act.minute, kind: 'play', text });
+    push({ minute: act.minute, kind: 'play', text, numbers: act.type === 'pass' && run >= 3 ? [{ name: 'passes', value: run }] : [] });
   };
 
   // Watch's batch: the events first (so the score and the window are current), then the moments, then a summary if the feed has gone quiet
@@ -109,7 +109,7 @@ const CM = (() => {
 
   const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playFrom = 0; n = 0; changed(); if (names) push({ minute: 0, kind: 'period', text: 'Players are out. ' + names.home + ' v ' + names.away + ' is about to start.' }); };
   // the feed the views draw: newest last, each with its label
-  const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona }));
+  const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under
   const setPersona = (p) => { persona = p && p !== 'fan' ? p : 'casual'; };
   return { fromWatch, api, reset, view, setPersona, onChange: (fn) => { changed = fn; }, get count() { return items.length; } };
