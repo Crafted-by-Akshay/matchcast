@@ -62,6 +62,7 @@ const LV = (() => {
     run.clubs = roster ? Object.fromEntries(roster.teams.map((t) => [slug(t), t])) : {};
     run.names = roster ? Object.fromEntries(roster.players.map((q) => [slug(q.name), q.name])) : {};
     open();
+    if (!badClaim) create(run).catch(() => { /* the first batch tries again */ });   // eager: the stream's 'live' status reaches the pill without waiting for the engine's first events
   };
   // the booth's own stream (persona=booth): only booth:pbp and booth:colour publications, in speaking order. Its persona is the speaker, which feed.js voices. It is not retried: if it drops, the rules booth carries on
   const openBooth = (r) => {
@@ -93,15 +94,21 @@ const LV = (() => {
     } catch (e) { set('fallback'); }
   };
 
+  // create the match on the api and open its stream. One create at a time; begin() starts it at once (so the pill can say 'Live agents' within seconds)
+  // and flush() waits for it. The demo bad-claim switch is read here, so begin() leaves the create to the first batch while that switch is on.
+  const create = (r) => r.creating || (r.creating = (async () => {
+    try {
+      const bad = badClaim;   // the api takes the demo switch at match creation only
+      const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
+      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
+    } finally { r.creating = null; }
+  })());
+
   const flush = async () => {
     const r = run; if (!r || r.sending || !r.queue.length) return;
     r.sending = true;
     try {
-      if (!r.created) {
-        const bad = badClaim;   // the api takes the demo switch at match creation only
-        const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
-      }
+      if (!r.created) await create(r);
       const batch = r.queue.slice(0, BATCH);
       const res = await post('/v1/matches/' + r.id + '/events', { events: batch });
       if (res.status === 404) { r.created = false; if (r.es) r.es.close(); }   // the api lost the match (a restart on a store that did not keep it): create it again with the next batch

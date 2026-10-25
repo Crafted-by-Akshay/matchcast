@@ -175,3 +175,15 @@ test('a stream that keeps failing stops reading Live agents', async ({ page }) =
   await expect(pill(page)).toHaveText('Rules fallback', { timeout: 30_000 });
   api.server.close();
 });
+
+test('eager: the match is created and the stream opened at begin, so the pill says Live agents before any event', async ({ page }) => {
+  const api = await mock('ok'); const errs = collectErrors(page);
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api.url) + ';' }));   // the default 90 s warm-up
+  await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await page.evaluate(() => { AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); LV.begin('k2', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }, { name: 'C One', team: 'cco' }] }); });
+  await expect(pill(page)).toHaveText('Live agents', { timeout: 10_000 });
+  expect(api.seen.matches).toBeGreaterThanOrEqual(1);
+  expect(api.seen.events.length, 'no event was sent yet').toBe(0);
+  expect(errs).toEqual([]); api.server.close();
+});
