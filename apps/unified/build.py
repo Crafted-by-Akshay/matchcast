@@ -420,6 +420,9 @@ NEUTRAL = [
     ("World Cup level", "top international level"),
     ("at a World Cup", "at a major tournament"),
     ("IFAB Law", "Law"),
+    # before kick-off the fixture's clubs are not applied yet, so the pre-match caption and kick-off line must not name a season club
+    ("Players are out. Harbor City kick off.", "Players are out. Kick-off to come."),
+    ("TEAMS[0].club + ' get us under way.'", "'Both sides get us under way.'"),
 ]
 BANNED = r"\b(FIFA|UEFA|IFAB|CONMEBOL|CONCACAF|World Cup|La Liga|Premier League|Champions League|Bundesliga|Serie A)\b"
 
@@ -500,7 +503,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-score.js"]
+        shell = ["index.html", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst.js", "crew-score.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)
