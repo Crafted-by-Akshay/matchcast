@@ -37,7 +37,7 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
   await expect(f.locator('#mc-pq')).not.toContainText('Northgate FC press');   // derived lines never reach the producer queue
 
   await f.locator('[data-feed="casual"] [data-kill]').click();
-  await expect(f.locator('[data-feed="casual"]')).toContainText('Killed');
+  await expect(f.locator('[data-feed="casual"]')).toContainText('Killed on this desk');
   await post(page, { type: 'feed-air', record: casual('P3', 'A line that must not count while the feed is killed.') });
   await post(page, { type: 'feed-air', record: { ...casual('S1', 'Sentinel for analyst again.'), feed: 'analyst' } });
   await expect(f.locator('[data-feed="analyst"]')).toContainText('2 aired');

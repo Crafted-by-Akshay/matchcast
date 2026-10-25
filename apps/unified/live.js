@@ -77,7 +77,7 @@ const LV = (() => {
       es.onerror = () => es.close();
     } catch (e) { /* the rules booth carries on */ }
   };
-  // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed, and its air gate airs nothing from a killed feed. Sent only once the match run exists
+  // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed, and its air gate airs nothing from a killed feed. Sent only once the match run exists and an api is configured
   const feedSwitch = (feed, killed) => {
     if (!run || !run.created || !api()) return Promise.resolve(null);
     return post('/v1/matches/' + run.id + '/feeds/' + feed + (killed ? '/kill' : '/resume'), { session_id: run.key.session_id }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
