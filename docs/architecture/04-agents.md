@@ -63,7 +63,8 @@ flowchart LR
   AN -- claims --> N[Narrator executor]
   N -- lines --> V[Verifier executor]
   V -- verified --> G{approval mode}
-  V -- review --> Q[(Producer queue)]
+  V -- review, booth line --> Q[(Producer queue)]
+  V -- review, derived line --> R[repair once, then abstain]
   V -- rejected, first time --> RP[Repair router]
   RP -- number or source --> AN
   RP -- wording --> N
@@ -121,7 +122,7 @@ Audit `action` values (closed list; add new ones here first): `event_rejected`, 
 | 6 | Citations (Ask only) | Every sentence carries `[kb:…]` or `[claim:…]` | exact |
 | 7 | Safety | Content Safety text:analyze, all categories severity < 2. The api calls Azure when `CONTENT_SAFETY_ENDPOINT` is a `*.cognitiveservices.azure.com` host (Entra token, `safety_from_env`); a failed call falls back to the local screen (a short word list, **Simulated** strength), is counted, is audited as `fallback_used`, and the result source says `local`; three failures in a row skip Azure for 60 s. `/v1/status` goes unavailable while the circuit is open or when 5 of the last 10 line screens in the last 2 minutes used the local list, and reads live again by itself once those age out or Azure answers; Prompt Shields calls are not counted. Without the variable only the local screen runs (**Simulated**) | as stated |
 | 8a | Adversarial pass (CREW-4.1) | Five deterministic attempts to falsify the line against its claims, each recorded as its own check (`adversary:<attempt>`) so the audit shows what was tried. `score_attribution`: a number written straight after a club's name must be a claim about that club (a swapped score fails). `named_minute`: a minute the line names ("minute 12", "12th minute", "12'") must be within a minute of a claim's time. `surname_alone`: a capitalised first name or surname of a roster player who is not in the moment fails (check 4 reads whole names only). `unclaimed_number` and `repeated_value`: every number is a claim value and no value is stated more often than the claims carry it (also check 3; recorded as their own attempts). An attempt that cannot decide fails closed. Not run on Ask answers or recaps; summaries and period ends are not put to `surname_alone` | exact; a refusal gives `number_mismatch` (the four number attempts) or `unknown_player` (`surname_alone`), so a redraft can repair it |
-| 8 | Meaning (model) | Does the line say only what the claims support? Returns supported, unclear or unsupported | unclear gives `review` |
+| 8 | Meaning (model) | Does the line say only what the claims support? Returns supported, unclear or unsupported | unclear gives `review` (a booth line waits for the producer; a derived line is refused and repaired once) |
 
 Checks 1 to 7 and the adversarial pass (8a) are deterministic and run first, with no model call. Check 8 runs only if they pass. In rules mode check 8 is skipped and the verdict is `verified` only if the line came from a template; otherwise `review`.
 
