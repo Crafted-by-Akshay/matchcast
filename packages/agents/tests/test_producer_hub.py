@@ -109,6 +109,28 @@ def test_the_newest_2000_feed_records_are_replayed_when_there_are_more() -> None
     assert len(ids) == 2000 and ids[0] == "onair:100" and ids[-1] == "onair:2099"
 
 
+def test_a_reconnect_from_an_evicted_feed_record_resumes_after_it() -> None:
+    # the record a client resumes from may itself be past the buffer: the feed records after it
+    # still replay, and it does not
+    hub = StreamHub(buffer=10)
+    hub.publish("onair", "onair:1", {"feed": "casual"})
+    hub.publish("onair", "onair:2", {"feed": "casual"})
+    for i in range(30):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    ids = [e.id for e in hub.replay_after("onair:1") if e.event == "onair"]
+    assert ids == ["onair:2"]
+
+
+def test_a_resume_point_on_either_side_of_the_kept_and_buffered_boundary() -> None:
+    # 0-19 are kept past the buffer, 20-29 are still in it: a cursor in either part resumes after it
+    hub = StreamHub(buffer=10)
+    for i in range(30):
+        hub.publish("onair", f"onair:{i}", {"feed": "casual"})
+    assert [e.id for e in hub.replay_after("onair:5")] == [f"onair:{i}" for i in range(6, 30)]
+    assert [e.id for e in hub.replay_after("onair:19")] == [f"onair:{i}" for i in range(20, 30)]
+    assert hub.replay_after("onair:29") == []
+
+
 def test_colour_moment_is_capped_by_wall_time_and_off_by_default(match) -> None:
     now = [100.0]
     producer = ProducerRules(colour_every_s=45, clock=lambda: now[0])
