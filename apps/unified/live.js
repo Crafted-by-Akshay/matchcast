@@ -77,7 +77,7 @@ const LV = (() => {
       es.onerror = () => es.close();
     } catch (e) { /* the rules booth carries on */ }
   };
-  // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed; the air gate reads it once the feeds wiring lands
+  // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed, and its air gate airs nothing from a killed feed. Sent only once the match run exists
   const feedSwitch = (feed, killed) => {
     if (!run || !run.created || !api()) return Promise.resolve(null);
     return post('/v1/matches/' + run.id + '/feeds/' + feed + (killed ? '/kill' : '/resume'), { session_id: run.key.session_id }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
@@ -94,7 +94,7 @@ const LV = (() => {
       on('status', (d) => { const s = d && d.status; r.apiFallback = s === 'rules_fallback'; if (s === 'live') set('live'); else if (s === 'rules_fallback') set('fallback'); else if (s === 'warming_up') set('warming'); });
       on('claim', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); onClaim(d, st); });   // a claim after the warm-up timed out means the api is live after all, unless the api itself said it is on rules
       on('line', (d) => onLine(d, st));
-      // contract 1.2.0 records for derived feeds (docs/contracts.md): the stream's event names are assumed to be the record kinds until the overlay stream (AB#499) fixes them
+      // contract 1.2.0 records for derived feeds (docs/contracts.md): the stream sends each record under its kind, onair or feed_drop (AB#499)
       on('onair', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'onair' }, d)); onAired(d && d.publication_id); });
       on('feed_drop', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'feed_drop' }, d)); onDrop(d, st); });
       on('publication', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); measure(r, d); onLine(d, st); });

@@ -228,7 +228,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const render = (k) => {
     const s = feeds[k], row = box.querySelector('[data-feed="' + k + '"]');
     row.dataset.off = String(!s.on);
-    row.querySelector('span').textContent = (s.on ? '' : 'Killed · stop sent to the api · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
+    row.querySelector('span').textContent = (s.on ? '' : 'Killed on this desk · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
     row.querySelector('[data-kill]').textContent = s.on ? 'Kill' : 'Resume';
   };
   FEEDS.forEach(([k]) => render(k));
