@@ -6,12 +6,13 @@ from matchcast_agents.feeds import (
     DERIVED_LANE,
     FEED_KEYS,
     FEEDS,
+    QUEUE_LANE,
     drops_on_failed_repair,
     feed_for,
     lane_for,
     waits_for_producer,
 )
-from matchcast_agents.personas import BOOTH, valid
+from matchcast_agents.personas import BOOTH, max_chars, max_numbers, valid
 
 
 def test_six_feeds_with_the_story_keys() -> None:
@@ -26,11 +27,12 @@ def test_six_feeds_with_the_story_keys() -> None:
     assert len(FEEDS) == 6
 
 
-def test_casual_and_analyst_map_to_their_existing_personas() -> None:
-    assert feed_for("casual").key == "casual"
-    assert feed_for("analyst").key == "analyst"
-    assert feed_for("casual").max_chars == 140 and feed_for("casual").max_numbers == 1
-    assert feed_for("analyst").max_numbers == 6
+def test_casual_and_analyst_take_their_limits_from_the_personas() -> None:
+    for key in ("casual", "analyst"):
+        feed = feed_for(key)
+        assert feed is not None and feed.persona == key
+        assert feed.max_chars == max_chars(key)
+        assert feed.max_numbers == max_numbers(key)
 
 
 def test_limits_come_from_the_stories() -> None:
@@ -42,7 +44,6 @@ def test_limits_come_from_the_stories() -> None:
 
 def test_only_persona_backed_feeds_have_a_writer_today() -> None:
     assert {feed.key for feed in FEEDS if feed.persona} == {"casual", "analyst"}
-    assert feed_for("broadcast") is None
 
 
 @pytest.mark.parametrize("persona", sorted(BOOTH))
@@ -51,16 +52,33 @@ def test_booth_lines_are_booth_lane(persona: str) -> None:
     assert lane_for(persona) == BOOTH_LANE
 
 
-@pytest.mark.parametrize("persona", ["casual", "analyst", "my-club:home", "one-metric:shots"])
-def test_everything_else_is_derived(persona: str) -> None:
+@pytest.mark.parametrize("persona", ["casual", "analyst"])
+def test_feed_personas_are_derived(persona: str) -> None:
     assert lane_for(persona) == DERIVED_LANE
+
+
+@pytest.mark.parametrize(
+    "persona", ["broadcast", "my-club:home", "player-focus:home9", "one-metric:shots"]
+)
+def test_broadcast_and_watch_modes_keep_the_queue(persona: str) -> None:
+    # not one of the six feeds: they neither skip the producer nor drop on failed repair
+    assert lane_for(persona) == QUEUE_LANE
+    assert not drops_on_failed_repair(persona)
+    assert waits_for_producer(persona, "producer")
+    assert not waits_for_producer(persona, "auto")
+
+
+@pytest.mark.parametrize("persona", ["booth:PBP", "booth", "booth:pbp ", "casual:x", ""])
+def test_malformed_personas_fail_closed_to_the_queue(persona: str) -> None:
+    assert lane_for(persona) == QUEUE_LANE
+    assert not drops_on_failed_repair(persona)
+    assert waits_for_producer(persona, "producer")
 
 
 @pytest.mark.parametrize("mode", ["auto", "producer"])
 def test_derived_lines_never_wait_for_the_producer(mode: str) -> None:
     assert not waits_for_producer("casual", mode)
     assert not waits_for_producer("analyst", mode)
-    assert not waits_for_producer("my-club:home", mode)
 
 
 def test_booth_waits_in_producer_mode_only() -> None:
@@ -69,7 +87,7 @@ def test_booth_waits_in_producer_mode_only() -> None:
     assert waits_for_producer("booth:colour", "producer")
 
 
-@pytest.mark.parametrize("persona", ["casual", "analyst", "my-club:home"])
+@pytest.mark.parametrize("persona", ["casual", "analyst"])
 def test_failed_repair_drops_derived_lines(persona: str) -> None:
     assert drops_on_failed_repair(persona)
 
