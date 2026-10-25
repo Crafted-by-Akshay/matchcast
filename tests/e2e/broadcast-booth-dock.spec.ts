@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { openShell, ready, viewFrame } from './helpers';
 
 // UX review pass 11: in the split next to Watch, the Broadcast pane's fixed Live commentary card covered its camera chips and the stats strip.
-// In a pane narrower than 700 px the card sits in the page flow under the live view, so it shares no pixels with the chips or the stats.
+// In a pane narrower than 700 px the card sits in the page flow under the live view and its camera chips, so it shares no pixels with the chips or the stats.
 for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 1280, 720], ['phone', 390, 844]] as const) {
   test(`Broadcast on ${name}: the Live commentary card does not cover the camera chips or the stats strip`, async ({ page }) => {
     test.setTimeout(420_000);
@@ -16,7 +16,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 128
       return { iw: innerWidth, mcf: r('#mcf'), cams: r('#bc-cams'), mini: r('#bc-mini'), view: r('#bc-view') };
     });
     // the card is moved into the flow on a one-second tick, so give it a moment
-    await expect.poll(async () => { const x = await measure(); return !!x.mcf && !!x.view && x.mcf.t >= x.view.b - 1; }, { timeout: 15_000, message: 'the card sits under the live view' }).toBe(true);
+    await expect.poll(async () => { const x = await measure(); return !!x.mcf && !!x.cams && x.mcf.t >= x.cams.b - 1; }, { timeout: 15_000, message: 'the card sits under the camera chips' }).toBe(true);
     const m = await measure();
     expect(m.iw, 'a pane narrower than 700 px').toBeLessThan(700);
     const hit = (a: any, b: any) => !!a && !!b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;

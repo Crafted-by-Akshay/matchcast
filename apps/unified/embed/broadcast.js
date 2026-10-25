@@ -170,14 +170,15 @@ if (MCS.framed) {
 })();
 
 // Pass 11: in a pane narrower than 700 px (the split next to Watch, or a phone) the fixed Live commentary card covered the camera chips and the stats strip.
-// There it sits in the page flow, right under the live view, so nothing is covered; a wider pane keeps the card over the view's corner.
+// There it sits in the page flow, under the live view and its camera chips, so nothing is covered; a wider pane keeps the card over the view's corner.
 (() => {
   const place = () => {
-    const m = document.getElementById('mcf'), left = document.querySelector('.bc-left'), view = document.getElementById('bc-view');
+    const m = document.getElementById('mcf'), left = document.querySelector('.bc-left'), view = document.getElementById('bc-view'), cams = document.getElementById('bc-cams');
     if (!m || !left || !view) return;
-    const narrow = innerWidth < 700, inFlow = m.previousElementSibling === view;
+    const anchor = cams && cams.parentElement === view.parentElement ? cams : view;   // under the camera chips when there are some: the camera modes stay near the fold, the card follows
+    const narrow = innerWidth < 700, inFlow = m.previousElementSibling === anchor;
     if (narrow && !inFlow) {
-      view.after(m);
+      anchor.after(m);
       for (const [k, v] of [['position', 'static'], ['width', 'auto'], ['max-height', 'none'], ['margin', '10px 0 0'], ['left', 'auto'], ['right', 'auto'], ['bottom', 'auto']]) m.style.setProperty(k, v, 'important');
     } else if (!narrow && inFlow) {
       view.append(m);
