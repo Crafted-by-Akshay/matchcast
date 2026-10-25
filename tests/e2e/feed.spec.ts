@@ -59,14 +59,12 @@ test('Broadcast draws the same feed', async ({ page }) => {
     { id: 'l1', minute: 3, text: 'Shot for Thames Rovers. xG 0.12.', kind: 'shot', tone: '', source: 'rules', label: 'Rules · recounted', chain: ['Producer', 'Analyst', 'Narrator', 'Verifier'] },
     { id: 'l2', minute: 4, text: 'GOAL! A header from the corner.', kind: 'goal', tone: 'big', source: 'live', label: 'Live agents · verified', chain: ['Producer', 'Analyst', 'Narrator', 'Verifier', 'Live agents'] },
   ];
-  // the shell's own feed can replace the card's lines after a post (the Watch view resets its feed when it loads), so post again until the card holds both
-  await expect.poll(async () => {
-    await page.evaluate((items) => post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items }), lines);
-    return f.locator('#mcf-list li').count();
-  }, { timeout: 15_000 }).toBe(2);
-  await expect(f.locator('#mcf-top')).toContainText('GOAL! A header from the corner.');
-  await f.click('#mcf-tog');
-  await expect(f.locator('#mcf-list li.big')).toContainText('Live agents');
+  // the message and the check run in one step inside the card, so the shell's own feed cannot replace the lines in between
+  await expect.poll(() => f.evaluate((items) => {
+    window.dispatchEvent(new MessageEvent('message', { data: { src: 'matchcast-shell', type: 'feed-lines', items } }));
+    const rows = [...document.querySelectorAll('#mcf-list li')];
+    return rows.length === 2 && rows.some((li) => li.classList.contains('big') && /Live agents/.test(li.textContent || '')) && /GOAL! A header/.test(document.getElementById('mcf-top')!.textContent || '');
+  }, lines), { timeout: 15_000 }).toBe(true);
 });
 
 test('a talk order always gets a reply in the chat, checked or not', async ({ page }) => {
