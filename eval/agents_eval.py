@@ -41,7 +41,7 @@ from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agen
 from matchcast_agents.ask import Assistant, Bm25Index, load_kb
 from matchcast_agents.personas import max_chars
 from matchcast_agents.safety import LocalSafetyScreen
-from matchcast_agents.verify.checks import extract_names, extract_numbers
+from matchcast_agents.verify.checks import extract_names, extract_numbers, is_generic
 from matchcast_agents.workflow import WorkflowError
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -70,8 +70,13 @@ def load_match() -> dict[str, Any]:
     return json.loads(FIXTURE.read_text())
 
 
-def make_flow(match: dict[str, Any], factory: AgentsFactory, **agent_kwargs: Any) -> MatchWorkflow:
-    config = WorkflowConfig(approval_mode="auto")
+def make_flow(
+    match: dict[str, Any],
+    factory: AgentsFactory,
+    personas: tuple[str, ...] | None = None,
+    **agent_kwargs: Any,
+) -> MatchWorkflow:
+    config = WorkflowConfig(approval_mode="auto", **({"personas": personas} if personas else {}))
     return MatchWorkflow(
         stream=match["roster"]["stream"],
         roster=match["roster"],
@@ -265,6 +270,25 @@ def eval_narrator(flow: MatchWorkflow, match: dict[str, Any]) -> dict[str, Any]:
         "first_draft_within_length_rate": rate(within, len(drafts)),
         "persona_pairs": len(pairs),
         "personas_differ_rate": rate(differ, len(pairs)),
+    }
+
+
+def eval_booth(match: dict[str, Any], factory: AgentsFactory) -> dict[str, Any]:
+    """The colour voice on first drafts: a reaction that names no player or club and carries no
+    number could be said of any match (generic), and a line said twice is not varied phrasing."""
+    flow = make_flow(match, factory, personas=("casual", "booth:pbp", "booth:colour"))
+    asyncio.run(flow.ingest(match["events"]))
+    ctx = flow._ctx()
+    drafts = [
+        ln
+        for ln in flow.store.lines(flow.sk)
+        if ln.persona == "booth:colour" and not ln.repair_of
+    ]
+    generic = sum(is_generic(ctx, ln.text) for ln in drafts)
+    return {
+        "colour_drafts": len(drafts),
+        "generic_colour_rate": rate(generic, len(drafts)),
+        "distinct_colour_rate": rate(len({ln.text for ln in drafts}), len(drafts)),
     }
 
 
@@ -505,6 +529,7 @@ def evaluate(factory: AgentsFactory, label: str) -> dict[str, Any]:
         "producer": eval_producer(flow, match),
         "analyst": eval_analyst(flow, match),
         "narrator": eval_narrator(flow, match),
+        "booth": eval_booth(match, factory),
         "verifier": eval_verifier(recorder),
         "seeded_bad_claim": seeded,
         "ask": eval_ask(flow),
@@ -518,6 +543,7 @@ def pct(x: float | None) -> str:
 def report(r: dict[str, Any]) -> str:
     p, a, n, v, s, k = (r[x] for x in ("producer", "analyst", "narrator", "verifier",
                                        "seeded_bad_claim", "ask"))  # fmt: skip
+    b = r["booth"]
 
     def mut_rows(structural: bool) -> str:
         return "\n".join(
@@ -570,6 +596,9 @@ Goals and red cards covered: {pct(p["must_cover_recall"])} of {p["must_cover_eve
 
 ## Narrator
 {n["first_drafts"]} first drafts, whatever the Verifier later did with them. Each number must be backed by its own claim, each name must be in the roster: {pct(n["first_draft_faithful_rate"])}. Inside the persona length limit: {pct(n["first_draft_within_length_rate"])}. Casual and analyst wording differ on {pct(n["personas_differ_rate"])} of {n["persona_pairs"]} shown moments. Offline this grades templates, so 100% is expected; the number matters for a model-written line.
+
+## Booth colour
+{b["colour_drafts"]} first drafts of the colour voice. Generic (no player, no club, no number, so it could be said of any match): {pct(b["generic_colour_rate"])}; the Verifier refuses these. Different wording from every other colour line: {pct(b["distinct_colour_rate"])}. Offline the colour lines are stock sentences, so repeats are expected; the number matters for a model-written line.
 
 ## Verifier
 The real checks, replayed on {v["pairs_replayed"]} lines the workflow verified, each changed in one way. A mutation counts as caught only when the Verifier gives the intended reason.
