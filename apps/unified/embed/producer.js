@@ -10,7 +10,8 @@
     + '#mc-pmode button[aria-pressed="true"]{background:#3aa0ff;color:#06182e}'
     + '#mc-pq{margin:0;padding:0;list-style:none}'
     + '.mcp-item{border-left:2px solid #F5B942;padding:2px 0 4px 8px;margin:0 0 4px}'
-    + '.mcp-v{font-size:11px;color:#9fb6d6}.mcp-v.bad{color:#F26B6B}';
+    + '.mcp-v{font-size:11px;color:#9fb6d6}.mcp-v.bad{color:#F26B6B}'
+    + '.mcp-esc{border-left-color:#F26B6B}.mcp-tag{color:#F26B6B;text-transform:uppercase;font-size:11px;letter-spacing:.06em}';
   document.head.append(style);
   const box = document.createElement('section');
   box.id = 'mc-producer'; box.setAttribute('aria-label', 'Producer: approve each line before it airs');
@@ -27,14 +28,15 @@
     if (x.verdict === 'verified') return 'Verifier: verified against the event log';
     return 'Verifier: ' + (x.verdict || 'not checked') + (x.reason ? ' · ' + x.reason : '');
   };
-  const item = (x) => '<li class="mcp-item" data-id="' + esc(x.id) + '"><div><b>' + esc(x.minute) + "'</b> " + esc(x.text) + '</div>'
+  const item = (x) => '<li class="mcp-item' + (x.escalated ? ' mcp-esc' : '') + '" data-id="' + esc(x.id) + '"><div>' + (x.escalated ? '<b class="mcp-tag">Escalated</b> ' : '') + '<b>' + esc(x.minute) + "'</b> " + esc(x.text) + '</div>'
+    + (x.escalated ? '<div class="mcp-v bad">The Verifier could not repair this line: ' + esc(x.reason || 'no reason given') + '</div>' : '')
     + '<div class="mcp-v' + (x.repaired ? ' bad' : '') + '">' + esc(verdict(x)) + '</div>'
     + (x.repaired && x.was ? '<div class="mcp-v">First wording: ' + esc(x.was) + '</div>' : '')
     + '<div><button type="button" data-act="approve">Approve</button> <button type="button" data-act="kill">Kill</button> <span class="mcp-v">waiting ' + Math.round((x.waiting_ms || 0) / 1000) + ' s</span></div></li>';
   let last = null;
   const render = (d) => {
     for (const b of box.querySelectorAll('#mc-pmode [data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === (d.mode === 'demo' ? 'demo' : 'producer')));
-    const items = Array.isArray(d.items) ? d.items : [];
+    const items = (Array.isArray(d.items) ? d.items : []).slice().sort((a, b) => !!b.alert - !!a.alert);   // priority 1 alerts first, as in the Agents queue
     list.innerHTML = items.length ? items.map(item).join('') : '<li class="mcp-v">' + (d.mode === 'demo' ? 'Auto-air: verified lines go straight to air.' : 'No lines waiting for approval.') + '</li>';
   };
   const showAired = () => {
@@ -48,4 +50,5 @@
     if (d.type === 'queue') render(d);
     if (d.type === 'air' && d.line) { last = d.line; showAired(); }
   });
+  MCS.send({ type: 'producer', action: 'sync' });   // the shell answers with the queue, so a desk that loads late shows it
 })();

@@ -721,6 +721,8 @@ function pushLines() {
   linesT = setTimeout(() => { linesT = 0; const items = CM.view(40); voiceFeed(items); const msg = { src: 'matchcast-shell', type: 'feed-lines', items }; post('watch', msg); post('broadcast', msg); }, 200);
 }
 CM.onChange(pushLines);
+// the Broadcast desk's producer section: the lines waiting for a person, and the mode (the approval gate lives here, not in the view)
+function postQueue() { post('broadcast', { src: 'matchcast-shell', type: 'queue', mode: AG.mode, items: AG.queue() }); }
 function pushCards() {
   const r = AG.run; if (!r) return;
   for (const c of r.claims) {
@@ -753,6 +755,7 @@ window.addEventListener('message', (e) => {
     if (d.action === 'mode') AG.setMode(d.mode === 'demo' ? 'demo' : 'producer');
     else if (d.action === 'approve') AG.approve(String(d.id || ''), PRODUCER);
     else if (d.action === 'kill') AG.kill(String(d.id || ''), PRODUCER, 'killed from Broadcast');
+    else if (d.action === 'sync') postQueue();
     return;
   }
   if (d.type === 'persona' && view === 'broadcast') {   // the desk's lens steers the shared commentary persona; the language stays. Fan and Analyst also move Watch's strip, so the two views agree
@@ -948,8 +951,6 @@ function init(list) {
     else { const t = prompt('Edit the line (numbers must already be in it)', c.text); if (t == null) return; res = AG.edit(id, PRODUCER, t); }
     $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
   };
-  // the Broadcast desk's producer section: the lines waiting for a person, and the mode (the approval gate lives here, not in the view)
-  const postQueue = () => post('broadcast', { src: 'matchcast-shell', type: 'queue', mode: AG.mode, items: AG.queue() });
   AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); postQueue(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
