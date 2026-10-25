@@ -210,7 +210,7 @@ A desk that joins mid-match is sent the approval queue and mode, the commentary 
 - Checked, no change needed: the Broadcast Script teleprompter is readable at 1440 and 390 px (30 px white on black), and the Vision boxes are drawn at kick-off in Watch panes of 835 and 742 px.
 
 ### Pass 11 and judge round 2 (25 Oct)
-- Broadcast in a pane under 700 px (the split next to Watch, or a phone): the Live commentary card sits in the page flow under the live view instead of floating over the camera chips and the stats strip (`embed/broadcast.js`). A wider pane keeps it over the view's corner. Spec: `broadcast-booth-dock.spec.ts`.
+- Broadcast in a pane under 700 px (the split next to Watch, or a phone): the Live commentary card sits in the page flow under the live view and its camera chips (the camera modes stay near the fold) instead of floating over the chips and the stats strip (`embed/broadcast.js`). A wider pane keeps it over the view's corner. Spec: `broadcast-booth-dock.spec.ts`.
 - The chosen camera chip in the Broadcast desk has dark text on its yellow fill (it was light on yellow, 1.4:1; axe reported it once the commentary card stopped covering it).
 - 12 px floor: the Verifier chip, the "Sound is off" line and the producer's verdict lines are 12 px.
 - Agents tab at 390 and 320 px: the claims ledger becomes one card per claim (the 600 px table made 17 elements run past the edge); the header row is visually hidden and the table keeps explicit ARIA table roles so a screen reader still hears the column names. Spec: `shell-layout.spec.ts`.
