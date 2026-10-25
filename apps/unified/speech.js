@@ -65,6 +65,18 @@ const SPX = (() => {
       return await new Promise((res) => rec.recognizeOnceAsync((r) => { rec.close(); res(r.reason === k.S.ResultReason.RecognizedSpeech ? r.text : ''); }, () => { rec.close(); res(''); }));
     } catch (e) { return null; }
   };
-  return { token, speak, stop, listen, get state() { return state; }, get reason() { return reason; } };
+  // a call (EXP-18): keep listening until the handle is stopped. onSpeech fires as soon as the fan's voice is heard (a cut-in);
+  // onText gets each finished phrase. Resolves a handle, or null when Azure is not available so the caller uses the browser.
+  const listenOn = async (lang, onSpeech, onText) => {
+    try {
+      const k = await config(lang || 'en-GB'); if (!k) return null;
+      const rec = new k.S.SpeechRecognizer(k.c, k.S.AudioConfig.fromDefaultMicrophoneInput());
+      rec.recognizing = (s, e) => { if (e.result.text && e.result.text.trim().split(/\s+/).length >= 2) onSpeech(); };
+      rec.recognized = (s, e) => { if (e.result.reason === k.S.ResultReason.RecognizedSpeech && e.result.text) onText(e.result.text); };
+      await new Promise((res, rej) => rec.startContinuousRecognitionAsync(res, rej));
+      return { stop: () => rec.stopContinuousRecognitionAsync(() => rec.close(), () => rec.close()) };
+    } catch (e) { return null; }
+  };
+  return { token, speak, stop, listen, listenOn, get state() { return state; }, get reason() { return reason; } };
 })();
 window.SPX = SPX;   // the Broadcast and Watch frames (same origin) reach it as window.parent.SPX
