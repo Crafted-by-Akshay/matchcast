@@ -456,9 +456,9 @@ class MatchWorkflow:
         """Start from the last checkpoint: state and Producer memory before any partial event."""
         row = self.store.get_checkpoint(self.sk)
         if row is None:
-            self._set_spent(
-                0, 0
-            )  # a replay from the first event starts this workflow's share at zero
+            # a replay from the first event starts this workflow's share and its ledger from zero
+            self._set_spent(0, 0)
+            self.rundown = []
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))

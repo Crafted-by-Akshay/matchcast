@@ -158,10 +158,26 @@ def test_two_workflows_of_one_match_draw_on_the_same_pools(match) -> None:
     assert shared.priority_one.used == 4
 
 
-def test_a_replay_from_the_first_event_gives_back_the_spend_it_made(match) -> None:
-    """Without a checkpoint the replay starts over, so its earlier spend is taken back first."""
+def test_a_restart_without_a_checkpoint_replays_to_one_clean_run(match) -> None:
+    """The process dies before its first save: the stored events are replayed from the start by a
+    fresh workflow, and the replay ends where one clean run ends, with no moment counted twice."""
+    clean = build(match, MemoryStore())
+    run(clean.ingest(match["events"]))
+    store = MemoryStore()
+    flow = build(match, store)
+    run(flow.ingest(match["events"]))
+    store._checkpoints.pop(flow.sk, None)  # the save never happened
+    restarted = build(match, store)
+    run(restarted.ingest([]))  # the catch-up replays the stored events from the first one
+    assert restarted.spawn_budget.used == clean.spawn_budget.used > 0
+    assert restarted.quiet_budget.used == clean.quiet_budget.used
+    assert restarted.rundown == clean.rundown
+
+
+def test_a_missing_checkpoint_clears_the_ledger_and_this_workflows_spend(match) -> None:
     flow = build(match, MemoryStore())
     flow._set_spent(3, 1)
-    assert flow.spawn_budget.used == 3 and flow.quiet_budget.used == 1
-    flow._set_spent(0, 0)
+    flow.rundown.append({"moment_id": "m-old", "called": [], "skipped": [], "why": "x"})
+    flow._restore()  # no checkpoint in the store: nothing of this run is kept
+    assert flow.rundown == []
     assert flow.spawn_budget.used == 0 and flow.quiet_budget.used == 0
