@@ -186,7 +186,7 @@ def test_foundry_client_sends_the_reasoning_model_parameters() -> None:
     sent = completions.kwargs
     assert sent["max_completion_tokens"] == 400 + REASONING_HEADROOM >= 1500
     assert "max_tokens" not in sent and "temperature" not in sent  # gpt-5-mini rejects both
-    assert sent["reasoning_effort"] == "low"
+    assert sent["reasoning_effort"] == "minimal"
 
 
 def test_a_reasoning_run_that_hits_the_budget_is_its_own_error() -> None:

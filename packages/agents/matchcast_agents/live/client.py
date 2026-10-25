@@ -27,7 +27,7 @@ def prompt(name: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.startswith("version:")).strip()
 
 
-REASONING_EFFORT = "low"  # keeps a call well inside the 20 s wait
+REASONING_EFFORT = "minimal"  # measured Oct 25: a live match took 92 s, against 321 s on low
 # moments up to this priority use the model: goals, cards, shots on target, half and full time
 MODEL_PRIORITY = 2
 
