@@ -223,6 +223,9 @@ def build_broadcast():
     main = sub(main, LANG_OLD, LANG_NEW, "broadcast language labels")
     main = sub(main, "bcNewMatch(q.get('seed'));", "bcEmbedStart(q);", "broadcast start")
     # the desk writes rules templates in Spanish and Hindi only (ADR-0023 keeps the other feed languages English on the desk); Tamil drafts are dropped (embed/bclang.js writes and re-checks es and hi)
+    # the fixture's clubs are read before the desk's TEAMS literal is used, so the first render names them (embed/boot-clubs.js)
+    main = sub(main, "const TEAMS = [", r(EMB + "boot-clubs.js") + "\nconst TEAMS = [", "broadcast boot clubs before TEAMS")
+    main = sub(main, "const SKIN = [", "if (MC_BOOT_CLUBS) mcBootNames(MC_BOOT_CLUBS);\nconst SKIN = [", "broadcast boot names before the lineups")
     for a, c, label in [
         ("bcEsc(BC.lang === 'ta' ? last.ta : last.en)", "bcEsc(bcTx(last))", "broadcast strip text"),
         ("const L = lang === 'ta' ? 'ta-IN' : 'en-GB', u =", "const L = ({ es: 'es-ES', hi: 'hi-IN' })[lang] || 'en-GB', u =", "broadcast speech language"),

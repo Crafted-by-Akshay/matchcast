@@ -57,26 +57,26 @@ test('the Broadcast scoreboard names the national clubs once the match runs', as
   await expect(f.locator('#bug .tm').nth(1)).toHaveText('BRA');
 });
 
-// Known gap, not yet fixed. Observed by probe: the desk's panels and some commentary are rendered at boot (before the fixture's clubs are
-// applied, the desk shows Harbor City) and are not rebuilt at kick-off, so season names stay visible for a while. Needs the desk to render with the fixture's clubs.
-test.fixme('no visible desk line names a season club on a national fixture', async ({ page }) => {
+// The desk names the fixture's clubs from its first render (embed/boot-clubs.js), so no season club shows in its visible text after kick-off.
+test('no visible desk line names a season club on a national fixture', async ({ page }) => {
   await openShell(page, 'broadcast', '?seed=2026&fx=N001');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('bc-strip')), { timeout: 120_000 }).toBe(true);
   await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 60_000 }).toMatch(/Kick-off/);
   await page.waitForTimeout(25_000);
   // every visible line of the desk, not one element: the ticker, the commentary and the Next-goal panel
-  const season = await f.evaluate(() => {
+  const season = await f.evaluate((src) => {
+    const SEASON = new RegExp(src);
     const out: string[] = [];
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       const t = (n.textContent || '').trim();
       const el = n.parentElement;
-      if (!el || !SEASON_CLUBS.test(t)) continue;
+      if (!el || !SEASON.test(t)) continue;
       const cs = getComputedStyle(el);
       if (cs.display !== 'none' && cs.visibility !== 'hidden' && el.getBoundingClientRect().width > 0 && !el.closest('[hidden]')) out.push(t.slice(0, 80));
     }
     return out;
-  });
+  }, SEASON_CLUBS.source);
   expect(season, 'no visible line names a season club on a national fixture').toEqual([]);
 });
