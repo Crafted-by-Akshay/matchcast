@@ -69,7 +69,7 @@ MCS.progress('Loading the stadium and players');
     if (fcOn) {
       const f = fc.getBoundingClientRect();
       fc.style.maxWidth = Math.max(240, edge - 14) + 'px';
-      if (phone) fc.style.bottom = Math.round(innerHeight - mr.top + 8) + 'px';   // a phone has one column: above the commentary card
+      if (phone) fc.style.bottom = Math.round(innerHeight - Math.min(mr.top, ...btns.map((b) => b.top)) + 8) + 'px';   // a phone has one column: above the commentary card and the Copilot and Talk buttons
       else {
         fc.style.bottom = '14px';   // the card's own bottom offset depends on the view's height; pin it to the corner so the arithmetic below holds
         if (hide) { /* the card keeps the corner */ }
