@@ -3,6 +3,9 @@ import { collectErrors, openShell, viewFrame } from './helpers';
 
 // A national-team fixture (fx.national) has synthetic squads and no recorded result: it is the default pick when present,
 // the match bar says "Synthetic squad" instead of "Recorded", and the Analyst is not routed to a run that does not exist.
+// every season club in apps/unified/shared/clubs.json: a national fixture must not show one of them
+const SEASON_CLUBS = /Harbor City|Ridgeview|Coloso Ciudad|Navigli United|Thames Rovers|Montaña CF|Guanabara FC|Lombardia Nord/;
+
 test('a national fixture is the default, says Synthetic squad, and is not routed to the Analyst', async ({ page }) => {
   const errs = collectErrors(page);
   await page.route('**/shared/fixtures.json', async (rt) => {
@@ -35,19 +38,45 @@ test('the shipped Argentina v Brazil fixture is the default and shows no score',
   await expect(page.locator('#score-l')).toHaveText('Synthetic squad');
 });
 
-// Before kick-off the Broadcast caption must not name a season club on a national fixture: the fixture's clubs are applied at kick-off.
+// The pre-kick-off caption must not name a season club on a national fixture. The wording is set at build time (build.py NEUTRAL), so this guards that text, not names().
 test('the Broadcast caption does not name a season club on a national fixture', async ({ page }) => {
-  await page.route('**/shared/fixtures.json', async (rt) => {
-    const res = await rt.fetch(); const list = await res.json();
-    const arr = Array.isArray(list) ? list : list.fixtures;
-    const n = JSON.parse(JSON.stringify(arr[0])); n.id = 'N001'; n.national = true; n.score = [0, 0]; n.matchday = 99;
-    n.home = Object.assign({}, n.home, { club: 'Argentina' }); n.away = Object.assign({}, n.away, { club: 'Brazil' });
-    arr.push(n);
-    await rt.fulfill({ response: res, json: list });
-  });
   await openShell(page, 'broadcast', '?seed=2026&fx=N001');
   const f = await viewFrame(page, 'broadcast');
-  await expect.poll(() => f.evaluate(() => !!document.getElementById('cap1')), { timeout: 120_000 }).toBe(true);
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 120_000 }).toMatch(/Kick-off|Players are out/);
   const caption = await f.locator('#cap1').textContent();
-  expect(caption, 'the caption names no season club').not.toContain('Harbor City');
+  expect(caption, 'the caption names no season club').not.toMatch(SEASON_CLUBS);
+});
+
+// Once the national match runs, the Broadcast scoreboard names the fixture's clubs (the shipped N001 is Argentina v Brazil).
+test('the Broadcast scoreboard names the national clubs once the match runs', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026&fx=N001');
+  const f = await viewFrame(page, 'broadcast');
+  // the kick-off caption, not the pre-match "Kick-off to come."
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 120_000 }).toMatch(/^Kick-off at/);
+  await expect(f.locator('#bug .tm').first()).toHaveText('ARG');
+  await expect(f.locator('#bug .tm').nth(1)).toHaveText('BRA');
+});
+
+// Known gap, not yet fixed. Observed by probe: the desk's panels and some commentary are rendered at boot (before the fixture's clubs are
+// applied, the desk shows Harbor City) and are not rebuilt at kick-off, so season names stay visible for a while. Needs the desk to render with the fixture's clubs.
+test.fixme('no visible desk line names a season club on a national fixture', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026&fx=N001');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('bc-strip')), { timeout: 120_000 }).toBe(true);
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 60_000 }).toMatch(/Kick-off/);
+  await page.waitForTimeout(25_000);
+  // every visible line of the desk, not one element: the ticker, the commentary and the Next-goal panel
+  const season = await f.evaluate(() => {
+    const out: string[] = [];
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const t = (n.textContent || '').trim();
+      const el = n.parentElement;
+      if (!el || !SEASON_CLUBS.test(t)) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display !== 'none' && cs.visibility !== 'hidden' && el.getBoundingClientRect().width > 0 && !el.closest('[hidden]')) out.push(t.slice(0, 80));
+    }
+    return out;
+  });
+  expect(season, 'no visible line names a season club on a national fixture').toEqual([]);
 });

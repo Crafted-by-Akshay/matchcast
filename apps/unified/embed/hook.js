@@ -23,18 +23,24 @@ const MCS = (() => {
   const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
   const contrast = (hex) => { const n = parseInt(hex.slice(1), 16); const L = (((n >> 16) & 255) * 0.3 + ((n >> 8) & 255) * 0.59 + (n & 255) * 0.11) / 255; return L > 0.7 ? 0x1A1D22 : 0xF2F5F8; };
   const clubs = { list: null, ready: false };
-  clubs.load = fetch('../shared/clubs.json').then((r) => r.json()).then((j) => { clubs.list = j.clubs; clubs.ready = true; }).catch(() => { clubs.ready = true; });
-  const applyClubs = () => {
-    if (!want || !clubs.list) return;
-    const C = want.map((k) => clubs.list.find((c) => c.key === k));
-    if (!C[0] || !C[1]) return;
+  let kicked = false;   // the match has started: the fixture's clubs are applied, now or as soon as the club list arrives
+  clubs.load = fetch('../shared/clubs.json').then((r) => r.json()).then((j) => { clubs.list = j.clubs; clubs.ready = true; if (kicked) applyClubs(); }).catch(() => { clubs.ready = true; });
+  // the fixture's clubs as TEAMS (names, keys, kits), the desk labels and the events. Idempotent: the events are remapped from the keys in place before the call
+  const applyNames = (C) => {
     const old = TEAMS.map((T) => T.key);
     C.forEach((c, ti) => {
       const T = TEAMS[ti], shirt = parseInt(c.color.slice(1), 16);
       Object.assign(T, { key: c.key, club: c.club, css: c.color, kit: shirt, kitSocks: shirt, kitShorts: contrast(c.color), kit2: contrast(c.color) });
     });
-    const tm = document.querySelectorAll('#bug .tm'); if (tm.length === 2) { tm[0].textContent = TEAMS[0].key; tm[1].textContent = TEAMS[1].key; }
     for (const e of ENV.events) { if (e.team === old[0]) e.team = C[0].key; else if (e.team === old[1]) e.team = C[1].key; }
+    const tm = document.querySelectorAll('#bug .tm'); if (tm.length === 2) { tm[0].textContent = TEAMS[0].key; tm[1].textContent = TEAMS[1].key; }
+    const names = document.querySelectorAll('#intro .vs .club'); if (names.length === 3) { names[0].textContent = TEAMS[0].club.toUpperCase(); names[2].textContent = TEAMS[1].club.toUpperCase(); }   // the pre-match card names the same clubs
+  };
+  const fixtureClubs = () => { if (!want || !clubs.list) return null; const C = want.map((k) => clubs.list.find((c) => c.key === k)); return C[0] && C[1] ? C : null; };
+  // the squads too. Runs at kick-off, after the desk has built its match, as it always has
+  const applyClubs = () => {
+    const C = fixtureClubs(); if (!C) return;
+    applyNames(C);
     for (const p of players) {
       if (!p._base) p._base = { name: p.name, rating: p.rating, passS: p.passS, shotS: p.shotS, ctrl: p.ctrl, tackle: p.tackle, drib: p.drib, vmax: p.vmax, acc: p.acc };
       Object.assign(p, p._base);
@@ -47,8 +53,10 @@ const MCS = (() => {
       if (p.model) p.model.traverse((o) => { const pal = o.material && o.material.userData && o.material.userData.pal; if (pal && pal.length > 3) { pal[1].setHex(k.shirt); pal[2].setHex(k.shorts); pal[3].setHex(k.socks); } });
     }
   };
+  // before kick-off, on a national fixture: the names, keys and events the match starts with. Called before the desk builds its match
+  const names = () => { const C = fixtureClubs(); if (C) applyNames(C); };
   // call right after every kick-off: the engine has started, the fixture's clubs replace the defaults
-  const started = () => { applyClubs(); live('start'); const pitch = document.getElementById('mc-pitch'); if (pitch) pitch.textContent = '3D pitch: live'; };   // the desk's header says when the pitch is on
+  const started = () => { kicked = true; applyClubs(); live('start'); const pitch = document.getElementById('mc-pitch'); if (pitch) pitch.textContent = '3D pitch: live'; };   // the desk's header says when the pitch is on
   const progress = (text) => send({ type: 'progress', text });   // shown on the shell's loading card
   let sentOver = false;
   const loop = () => {
@@ -109,5 +117,5 @@ const MCS = (() => {
     b.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') stop(); });
     return b;
   };
-  return { view: '', framed, send, setup, live, apply, started, loop, emit, clubs, progress, ptt };
+  return { view: '', framed, send, setup, live, apply, names, started, loop, emit, clubs, progress, ptt };
 })();
