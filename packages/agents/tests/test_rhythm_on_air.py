@@ -3,7 +3,7 @@
 from conftest import run
 from matchcast_agents.specialists import Finding
 from matchcast_agents.specialists.base import SpecialistReport
-from matchcast_agents.specialists.rhythm import share_percent
+from matchcast_agents.specialists.rhythm import recount_share, share_percent
 from matchcast_agents.store import MemoryStore
 from test_rundown import build
 
@@ -78,3 +78,44 @@ def test_a_share_that_disagrees_with_the_log_is_refused(match, monkeypatch) -> N
     line = _analyst_line(flow, goal)
     assert line.status != "verified"
     assert any(check.name == "numbers" and not check.passed for check in line.checks)
+
+
+def _renamed(events: list[dict], names: dict[str, str]) -> list[dict]:
+    """The events with their team ids renamed, so a test can use a team key that has a hyphen."""
+    renamed = []
+    for event in events:
+        payload = dict(event["payload"])
+        for key in ("team_id", "to_team_id"):
+            if payload.get(key) in names:
+                payload[key] = names[payload[key]]
+        renamed.append({**event, "payload": payload})
+    return renamed
+
+
+def test_a_team_id_with_a_hyphen_still_recounts_to_the_same_share(match) -> None:
+    """The window end is the digits after the last hyphen, so a hyphen in the team id is safe."""
+    goal = _first_goal(match)
+    end_ms = goal["event_time_ms"]
+    renamed = _renamed(match["events"], {"home": "north-side"})
+    upto = max(e["stream_sequence"] for e in renamed)
+    share = share_percent(match["events"], "home", end_ms, "home", "away")
+    assert share_percent(renamed, "north-side", end_ms, "north-side", "away") == share
+    assert (
+        recount_share(renamed, f"rhythm_share:north-side-{end_ms}", upto, "north-side", "away")
+        == share
+    )
+
+
+def test_long_club_names_keep_the_goal_line_within_its_limit_with_a_swing(match) -> None:
+    """The swing clause is added only while the line fits: a long name never loses the line."""
+    goal = _first_goal(match)
+    flow = build(match, MemoryStore())
+    flow.clubs = {
+        flow.roster["team_ids"][0]: "Bosnia and Herzegovina",
+        flow.roster["team_ids"][1]: "Trinidad and Tobago",
+    }
+    flow._specialists["rhythm"] = _Swung(end_ms=goal["event_time_ms"])
+    run(flow.ingest(match["events"]))
+    line = _analyst_line(flow, goal)
+    assert len(line.text) <= 280
+    assert line.checks and all(check.passed for check in line.checks)
