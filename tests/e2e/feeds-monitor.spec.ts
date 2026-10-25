@@ -33,6 +33,11 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
 
   await post(page, { type: 'feed-drop', record: { feed: 'ticker', publication_id: 'P2', source_event_ids: ['E13'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'A9' } });
   await expect(f.locator('#mc-drop-list')).toContainText('Ticker · number_mismatch');
+  // a reconnect replays the drop it already showed: the same audit id shows once
+  await post(page, { type: 'feed-drop', record: { feed: 'ticker', publication_id: 'P2', source_event_ids: ['E13'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'A9' } });
+  await post(page, { type: 'feed-air', record: { ...casual('S2', 'Sentinel after the replayed drop.'), feed: 'analyst' } });
+  await expect(f.locator('[data-feed="analyst"]')).toContainText('2 aired');
+  await expect(f.locator('#mc-drop-list li', { hasText: 'Ticker · number_mismatch' })).toHaveCount(1);
 
   await expect(f.locator('#mc-pq')).not.toContainText('Northgate FC press');   // derived lines never reach the producer queue
 
@@ -40,8 +45,25 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
   await expect(f.locator('[data-feed="casual"]')).toContainText('Killed on this desk');
   await post(page, { type: 'feed-air', record: casual('P3', 'A line that must not count while the feed is killed.') });
   await post(page, { type: 'feed-air', record: { ...casual('S1', 'Sentinel for analyst again.'), feed: 'analyst' } });
-  await expect(f.locator('[data-feed="analyst"]')).toContainText('2 aired');
+  await expect(f.locator('[data-feed="analyst"]')).toContainText('3 aired');
   await expect(f.locator('[data-feed="casual"]')).toContainText('1 aired');
   await f.locator('[data-feed="casual"] [data-kill]').click();
   await expect(f.locator('[data-feed="casual"]')).not.toContainText('Killed');
 });
+
+test('the desk keys its dedupe by match: the same ids from another match both count', async ({ page }) => {
+  test.setTimeout(300_000);
+  await openShell(page, 'broadcast', '?seed=2026');
+  const f = await viewFrame(page, 'broadcast');
+  await expect(f.locator('#mc-feeds')).toBeVisible({ timeout: 240_000 });
+  const streamA = { session_id: 'match-a', match_id: 'm-a' };
+  const streamB = { session_id: 'match-b', match_id: 'm-b' };
+  await post(page, { type: 'feed-air', record: { ...casual('P1', 'Match A line.'), stream: streamA } });
+  await post(page, { type: 'feed-air', record: { ...casual('P1', 'Match B line.'), stream: streamB } });
+  await expect(f.locator('[data-feed="casual"]')).toContainText('2 aired');   // audit and publication ids restart per match
+  const drop = { feed: 'ticker', publication_id: 'P2', source_event_ids: ['E13'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'A9' };
+  await post(page, { type: 'feed-drop', record: { ...drop, stream: streamA } });
+  await post(page, { type: 'feed-drop', record: { ...drop, stream: streamB } });
+  await expect(f.locator('#mc-drop-list li', { hasText: 'Ticker · number_mismatch' })).toHaveCount(2);
+});
+

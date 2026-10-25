@@ -209,7 +209,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const FEEDS = [['casual', 'Casual'], ['analyst', 'Analyst'], ['audio_description', 'Audio description'], ['catch_me_up', 'Catch-me-up'], ['half_time', 'Half-time'], ['ticker', 'Ticker']];
   const feeds = Object.fromEntries(FEEDS.map(([k, label]) => [k, { label, on: true, aired: 0, last: '' }]));
-  const seen = new Set(), drops = [];
+  const seen = new Set(), drops = [], droppedIds = new Set();
   const feedOf = (k) => (Object.hasOwn(feeds, k) ? feeds[k] : null);
   const style = document.createElement('style');
   style.textContent = '#mc-feeds{display:flex;flex-direction:column;gap:4px;padding-bottom:6px;border-bottom:1px solid #22395c}'
@@ -238,15 +238,26 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
       : '<li class="mcp-v">Nothing dropped yet.</li>';
   };
   renderDrops();
-  // a feed line airs once per publication, in English this sprint, and only while its feed is on; a killed feed airs nothing
+  // ids are per match (each match's audit chain counts from 1), so a record is keyed by its match's stream too
+  const recKey = (rec, id) => (rec.stream ? JSON.stringify(rec.stream) : '') + '|' + id;
+  // a feed line airs once per publication, in English this sprint, and only while its feed is on; a killed feed airs nothing.
+  // A line is remembered even while its feed is off, so a replay after a resume does not count it
   const aired = (rec) => {
     const s = feedOf(rec.feed);
-    if (!s || !s.on || rec.lang !== 'en' || !rec.publication_id || seen.has(rec.publication_id)) return;
-    seen.add(rec.publication_id); s.aired++; s.last = rec.text || ''; render(rec.feed);
+    if (!s || rec.lang !== 'en' || !rec.publication_id) return;
+    const key = recKey(rec, rec.publication_id);
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (!s.on) return;
+    s.aired++; s.last = rec.text || ''; render(rec.feed);
   };
-  // the Verifier's drop shows the reason; the line text stays in the audit chain, so the desk shows no text here
+  // the Verifier's drop shows the reason; the line text stays in the audit chain, so the desk shows no text here.
+  // A reconnect replays the drops already shown, so each drop is shown once, by its audit id
   const dropped = (rec) => {
     if (!feedOf(rec.feed)) return;
+    const key = recKey(rec, rec.audit_id);
+    if (droppedIds.has(key)) return;
+    droppedIds.add(key);
     drops.unshift(rec); drops.length = Math.min(drops.length, 5); renderDrops();
   };
   box.querySelector('#mc-feed-list').onclick = (e) => {
