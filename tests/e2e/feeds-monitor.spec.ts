@@ -51,6 +51,7 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
   await f.locator('[data-feed="casual"] [data-kill]').click();
   await expect(f.locator('[data-feed="casual"]')).not.toContainText('Killed');
   await expect(f.locator('[data-feed="casual"] b')).toHaveText('Casual');
+  await expect(f.locator('[data-feed="casual"]')).toContainText('Northgate FC press high up the pitch.');   // the last line comes back on resume: it was kept while the feed was off
 });
 
 test('the desk keys its dedupe by match: the same ids from another match both count', async ({ page }) => {
