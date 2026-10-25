@@ -173,7 +173,7 @@ The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which W
 - Watch's talk-to-player mic uses Azure Speech through `window.parent.SPX` when the api has issued a token, otherwise the browser mic. Tests: `tests/e2e/language-selector.spec.ts`, `tests/e2e/speech.spec.ts`.
 
 ## Phone layout and Ask fixes (Broadcast)
-- At 560 px and below, buttons, selects and inputs in Broadcast and the Agents tab are at least 44 px (a checkbox is tapped through its 44 px label); the replay bar scrolls inside itself instead of wrapping. `tests/e2e/broadcast-mobile.spec.ts` checks no sideways scroll and 44 px targets at 390 px.
+- At 560 px and below, buttons, selects and inputs in Broadcast and the Agents tab are at least 44 px (a checkbox is tapped through its 44 px label); the replay bar is one row of buttons (Back to live takes the clips' place while a replay plays). `tests/e2e/broadcast-mobile.spec.ts` checks no sideways scroll and 44 px targets at 390 px.
 - Broadcast's Ask the producer: the hold-to-talk mic is on the desk's real question box (`#bcd-q`; the old `#dk-q` box is not wired in Broadcast). Only the newest question writes its answer, a rate limit shows its message ("Slow down"), the shell waits at most 8 s for the api, and Broadcast has its own 5-a-minute budget. An answer the Verifier does not confirm still falls back to the desk's labelled answer (a product call, flagged).
 
 ## Filming URL
