@@ -7,11 +7,21 @@ MatchCast
 
 ## Elevator pitch (what you built, which technologies, what it does, what problem it solves)
 
-Football data is everywhere; explanations are not. MatchCast turns a stream of synthetic football events into explainable match intelligence. Four agents with distinct roles (Producer, Analyst, Narrator, Verifier) read each event, write commentary and insight, and the Verifier recounts every number from the stored event log before a line reaches a screen. The same moment reads differently for a data-hungry analyst, a casual fan and a producer, and nothing goes to air without a producer's approval.
+Football data is everywhere; explanations are not. MatchCast turns a stream of synthetic football events into explainable match intelligence. Four agents with distinct roles (Producer, Analyst, Narrator, Verifier) read each event, write commentary and insight, and the Verifier recounts every number from the stored event log before a line reaches a screen. The same moment reads differently for a data-hungry analyst, a casual fan and a producer. Every line passes the Verifier first; in producer mode the lines then wait for one producer's approval, and the demo's auto mode airs them once verified.
 
-Built on Microsoft Foundry with the Microsoft Agent Framework for the agent workflow, an MCP tool server for verified match facts (Planned: a recorded run of GitHub Copilot Agent Mode calling it), Azure Container Apps, Event Hubs, Table and Blob Storage, Azure AI Speech, Azure AI Translator and Azure AI Search, defined as Bicep and deployed with `azd` and GitHub Actions using OIDC (no keys in the repo). All clubs, players and matches are fictional and come from our own seeded simulator.
+Built on Microsoft Foundry with the Microsoft Agent Framework for the agent workflow, an MCP tool server for verified match facts (Planned: a recorded run of GitHub Copilot Agent Mode calling it), Azure Container Apps, Event Hubs, Table and Blob Storage, Azure AI Speech, Azure AI Translator and Azure AI Search, defined as Bicep and deployed with `azd` from `scripts/deploy_cloud.sh` (the GitHub Actions workflows are manual-only, to save cost; no keys in the repo, the services use managed identity). All clubs, players and matches are fictional and come from our own seeded simulator.
 
-The problem: studios, broadcasters and streamers need live narratives and recaps they can trust and tailor per audience and language. A single model that writes fluent text can also write a wrong score. MatchCast makes every claim cite its evidence and checks it before air.
+## Customer and problem
+
+The customer is a rights holder that sells the same match to dozens of markets, with a small production team behind it. Every feed needs on-screen stats and commentary in its own language, and that team cannot double-check every number live. A single model that writes fluent text can also write a wrong score.
+
+MatchCast gives that team a production crew of AI agents on Microsoft Foundry. The agents pick the moments, write the line for each audience and language, and a separate Verifier recounts every number from the raw event log before the line can go on screen. Today the producer mode holds every line for one producer's approval and the auto mode airs lines once verified; each line keeps an audit record in a hash chain. Planned (the crew build decided on 25 Oct, labelled Planned until it ships): the booth's play-by-play and colour lines wait for the producer while six audience feeds (casual, analyst, audio description, catch-me-up, half-time explainer, news ticker) auto-air after the Verifier.
+
+Spanish and Hindi lines are on the Broadcast desk today, and the api adds Spanish and Hindi variants to published lines. Translation runs only on verified English, and a deterministic re-check of numbers and names runs on the translation; a line that fails drops to English (ADR-0011). The api's Azure AI Translator and Speech calls are live (`/v1/status`, 24 Oct); the Broadcast desk's Spanish and Hindi script and its Speak button are rules templates and a browser voice, labelled Simulated.
+
+What the Verifier catches, measured: in the offline evaluation (`docs/eval/agents-eval.md`, rules agents on one frozen match) it caught 99.3% of 151 planted errors, each rejected for the right reason, with 0 false rejects on 34 honest lines; the seeded bad claim was caught 7 times out of 7 and no wrong claim reached a screen. That is the floor every model-written line is checked against, not a claim about model quality.
+
+Evidence: we have not yet run this with a rights holder. The team above is a design target, not a named customer or pilot. We will say so in the video and the README rather than claim one.
 
 ## What is real today (22 Oct) and what is not
 
