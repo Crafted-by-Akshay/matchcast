@@ -42,6 +42,8 @@ TALK_PHRASES = {
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
+# a line that fails its repair on one of these goes to a person: the event log can settle it
+ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
 
 
 class WorkflowError(Exception):
@@ -220,6 +222,7 @@ class MatchWorkflow:
             "verified": 0,
             "repaired": 0,
             "abstained": 0,
+            "escalated": 0,
             "published": 0,
         }
 
@@ -938,7 +941,23 @@ class MatchWorkflow:
                 checks=[c.model_dump() for c in verdict.checks if not c.passed],
             )
             if attempt == 0:
-                await self._repair(ctx, task, claims, draft, verdict)
+                with _TRACER.start_as_current_span("handoff verifier to repair") as span:
+                    span.set_attribute("matchcast.reason_code", verdict.reason_code or "")
+                    span.set_attribute("matchcast.line_id", draft.line_id)
+                    await self._repair(ctx, task, claims, draft, verdict)
+            elif verdict.reason_code in ESCALATED_CODES:
+                # a repair that still fails on a checkable fact goes to the producer queue, not away
+                record.status = "review"
+                record.escalated = True
+                self._save_line(record)
+                self.stats["escalated"] += 1
+                self._agent(
+                    "line_review",
+                    a.verifier,
+                    draft.line_id,
+                    reason_code=verdict.reason_code,
+                    escalated=True,
+                )
             else:
                 record.status = "abstained"
                 self._save_line(record)
