@@ -12,9 +12,8 @@ const names = { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciuda
 test('the Agents tab states the agent mode honestly when no api is configured', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  const chip = page.locator('#ag-foundry');
-  await expect(chip).toHaveText('Rules · simulated (no api)');
-  await expect(page.locator('#v-agents')).not.toContainText('Foundry: not connected');
+  // the Foundry chip comes from /v1/status (paintFoundry); with no api it says so, and the cards name the rules run
+  await expect(page.locator('#ag-foundry')).toHaveText('Foundry: not connected');
   await expect(page.locator('#ag-cards .ag-card').first()).toContainText('Rules · simulated');
   expect(errs).toEqual([]);
 });

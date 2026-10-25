@@ -4,7 +4,7 @@ from typing import Any
 
 from ..context import MatchContext
 from ..messages import DraftLine, ProducerTask
-from ..personas import BASE, max_chars, slug, split
+from ..personas import BASE, BOOTH, max_chars, slug, split
 
 LABELS = {
     "goals": "Goals",
@@ -17,6 +17,19 @@ LABELS = {
     "xg": "xG",
 }
 
+
+# The colour voice in rules mode: a stock reading with no number, so there is nothing to verify.
+BOOTH_TAKE = {
+    "goal": "That changes how both sides have to play from here.",
+    "shot_on_target": "They are finding space in front of the defence.",
+    "yellow_card": "Now every challenge from that player will be watched closely.",
+    "red_card": "The whole shape of the match changes with that.",
+    "summary": "The balance of the game is getting clearer.",
+    "period_end": "Plenty to talk about at the break.",
+    "colour": "A small moment, but it shows where the game is being played.",
+    "buildup": "Both teams will want to settle quickly and set the tempo.",
+    "filler": "Patient football from both teams at the moment.",
+}
 
 # Why a goal matters, from the two goal claims alone (no new number, so nothing new to verify).
 GOAL_CONTEXT = {
@@ -139,6 +152,8 @@ class NarratorRules:
         for persona in task.personas:
             if persona not in BASE:
                 text = self._mode_text(ctx, persona, kind, payload, who, club, claims)
+                if text is None and persona in BOOTH:
+                    text = self._booth(ctx, persona, kind, texts, v)
                 if text:
                     texts[persona] = text
         lines = []
@@ -154,6 +169,22 @@ class NarratorRules:
                     )
                 )
         return lines
+
+    @staticmethod
+    def _booth(
+        ctx: MatchContext, persona: str, kind: str, texts: dict[str, str], v: dict[str, Any]
+    ) -> str | None:
+        """The booth in rules mode: the call is the broadcast line, the reading is stock."""
+        if persona == "booth:colour":
+            return BOOTH_TAKE.get(kind)
+        home, away = ctx.club_name(ctx.home), ctx.club_name(ctx.away)
+        if kind == "buildup":
+            return f"Welcome to {home} against {away}, and we are about to get under way."
+        if kind == "filler":
+            return (
+                f"Shots so far: {home} {v[f'shots:{ctx.home}']}, {away} {v[f'shots:{ctx.away}']}."
+            )
+        return texts.get("broadcast") or texts.get("analyst") or texts.get("casual")
 
     @staticmethod
     def _colour(play: str, club: str, v: dict[str, Any], team: str) -> str:

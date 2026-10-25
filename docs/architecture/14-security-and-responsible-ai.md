@@ -68,7 +68,7 @@ Red-team set: `eval/redteam.jsonl` with 20 prompts (instruction override, reques
 ## 5. Responsible AI notes (`docs/responsible-ai.md`)
 
 The public page covers:
-1. Synthetic data only; no real people, clubs or matches.
+1. Synthetic data only; no real people, clubs or simulated matches. National team names and real past results are allowed as reference facts (ADR-0020).
 2. What the Verifier checks, and what it cannot check (for example, whether a tactical opinion is wise).
 3. Content Safety settings and thresholds.
 4. Human approval in producer mode.

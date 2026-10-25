@@ -1,6 +1,6 @@
 # ADR-0012: Synthetic data, CC0 assets, aggregate-only calibration
 
-- **Status:** Accepted
+- **Status:** Accepted; fictional-names part superseded by ADR-0020
 - **Date:** 2026-10-18 (assets), 2026-10-22 (data sources)
 - **Decided by:** Akshay
 
