@@ -273,6 +273,7 @@ def build_broadcast():
         + r(EMB + "onair.js")
         + "\n"
         + r(EMB + "copilot.js")
+        + r(EMB + "producer.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
