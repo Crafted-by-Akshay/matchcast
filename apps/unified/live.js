@@ -222,9 +222,14 @@ const LV = (() => {
     }
     return null;
   };
+  // Vision -> Agents (ADR-0020): the Vision stream's summary for this match (passes in, lines the Verifier passed, the latest such line, agreement with the engine); null with no match or no api
+  const visionSummary = async () => {
+    const r = run; if (!r || !api()) return null;
+    try { const res = await fetch(url('/v1/matches/' + r.id + '/vision/summary'), { cache: 'no-store' }); return res.ok ? await res.json() : null; } catch (e) { return null; }
+  };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, stop, talk, recap, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, visionEvents, visionSummary, stop, talk, recap, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

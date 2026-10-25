@@ -13,7 +13,7 @@ import os
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 from urllib.parse import urlencode
@@ -34,6 +34,7 @@ from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
+from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
@@ -353,6 +354,20 @@ class Registry:
         window.append(now)
         return True
 
+    def truth_feed_for(
+        self, session_id: str, match_id: str
+    ) -> Callable[[], list[dict[str, Any]]] | None:
+        """A Vision stream's truth: the engine match's own events, from the store (ADR-0020)."""
+        if not is_vision_stream({"session_id": session_id}):
+            return None
+        engine = {
+            "tenant_id": TENANT,
+            "session_id": engine_stream_of(session_id),
+            "match_id": match_id,
+        }
+        sk = stream_key(engine)
+        return lambda: self.store.events(sk)
+
     async def flow_for(self, session_id: str, match_id: str) -> MatchWorkflow:
         """The workflow of a match, rebuilt from its stored roster after a restart (F1)."""
         key = (session_id, match_id)
@@ -400,6 +415,7 @@ class Registry:
                 # Ask and talk answer on the model when live
                 answer_model=self.model_client("answers") if live else None,
                 knowledge=self.knowledge,
+                truth_feed=self.truth_feed_for(session_id, match_id),
             )
             self.flows[key] = flow
             return flow
@@ -621,6 +637,7 @@ def build_router(registry: Registry) -> APIRouter:
                     safety=registry.safety,
                     answer_model=registry.model_client("answers") if live else None,
                     knowledge=registry.knowledge,
+                    truth_feed=registry.truth_feed_for(stream["session_id"], stream["match_id"]),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
@@ -673,6 +690,22 @@ def build_router(registry: Registry) -> APIRouter:
             "accepted": len(body.events),
             "last_sequence": max(e["stream_sequence"] for e in body.events),
         }
+
+    @router.get("/matches/{match_id}/vision/summary")
+    async def vision_summary(match_id: str, session_id: str) -> dict[str, Any]:
+        """What Vision contributes to the agents on this match (ADR-0020): passes in, the lines the
+        Verifier passed on them, the latest such line, and agreement with the engine's passes."""
+        await registry.flow_for(session_id, match_id)  # the engine match must exist
+        try:
+            vision = await registry.flow_for(f"{session_id}.vision", match_id)
+        except Problem:  # no Vision has been sent for this match yet
+            return {
+                "passes_in": 0,
+                "lines_verified": 0,
+                "latest_line": None,
+                "agreement": agreement([], []),
+            }
+        return vision.vision_summary()
 
     @router.get("/matches/{match_id}/stream")
     async def stream(

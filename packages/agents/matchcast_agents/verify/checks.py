@@ -9,6 +9,7 @@ from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
 from ..personas import max_numbers
 from ..state import counted
+from ..vision import engine_count
 from ..xg import team_xg
 
 FRESH_REVISIONS = 5
@@ -213,11 +214,36 @@ REASON: dict[str, ReasonCode] = {
 }
 
 
+def check_vision(ctx: MatchContext, claims: list[dict[str, Any]]) -> Check:
+    """Vision's pass counts against the engine's own passes (ADR-0020). It reports the agreement
+    and does not block the line: the number itself was recounted from Vision's passes by check 3."""
+    counts = [c for c in claims if c["metric"].startswith("passes:")]
+    if not counts:
+        return Check(name="vision", passed=True, detail="no Vision count in this line")
+    if not ctx.truth:
+        return Check(name="vision", passed=True, detail="no engine truth on this stream")
+    parts = []
+    for claim in counts:
+        team = claim["metric"].split(":", 1)[1]
+        cut = claim["source"]["to_event_time_ms"]
+        seen, real = claim["value"], engine_count(ctx.truth, team, cut)
+        top = max(seen, real)
+        share = 100 if top == 0 else round(100 * min(seen, real) / top)
+        parts.append(
+            f"Vision counted {seen:g} passes for {team}, the engine {real} ({share}% agree)"
+        )
+    return Check(name="vision", passed=True, detail="; ".join(parts))
+
+
 def run_checks(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]) -> list[Check]:
-    return [
+    checks = [
         check_sources(ctx, claims),
         check_freshness(ctx, claims),
         check_numbers(ctx, line, claims),
         check_names(ctx, line, claims),
         check_persona(line),
     ]
+    # only a line that carries a Vision count gets the check
+    if any(c["metric"].startswith("passes:") for c in claims):
+        checks.append(check_vision(ctx, claims))
+    return checks

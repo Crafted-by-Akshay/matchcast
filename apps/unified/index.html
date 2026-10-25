@@ -315,6 +315,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
           <span class="chip" id="ag-src">Source: waiting for Watch</span>
         </div>
       </div>
+      <p class="ag-vis" id="ag-vis" role="status"></p>
       <div class="ag-cards" id="ag-cards"></div>
       <section class="ag-panel" id="aq"><h3>Approval queue <span class="muted" id="aq-n"></span></h3>
         <div class="ag-filters"><label>Mode <select id="aq-mode"><option value="demo">Demo: verified lines air at once</option><option value="producer">Producer: a person approves each line</option></select></label>
@@ -631,12 +632,29 @@ function renderQueue() {
     : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';
   if ($('aq-list').dataset.html !== qhtml) { $('aq-list').innerHTML = qhtml; $('aq-list').dataset.html = qhtml; }   // redrawing an unchanged list detaches the buttons mid-click
 }
+// Vision -> Agents (ADR-0020): the Vision stream's counts, polled while a match runs. The same summary goes to Watch's "From pixels" chip.
+let VIS = null;
+function renderVision() {
+  const el = $('ag-vis'); if (!el) return;
+  const s = VIS;
+  el.textContent = !s ? 'Vision -> Agents: waiting for Vision. Watch sends the tracker\'s passes once a match runs.'
+    : 'Vision -> Agents: ' + s.passes_in + ' passes in · ' + s.lines_verified + ' lines verified by the Verifier · engine ' + ((s.agreement && s.agreement.engine) || 0) + ' passes, ' + (s.agreement && s.agreement.precision != null ? Math.round(s.agreement.precision * 100) + '% of Vision\'s passes match one' : 'no passes to match yet') + (s.latest_line ? ' · latest: ' + s.latest_line : '');
+}
+async function pollVision() {
+  const s = await LV.visionSummary();
+  if (!s || typeof s.passes_in !== 'number') return;
+  VIS = s; renderVision();
+  post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: s });
+}
+setInterval(pollVision, 3000);
+renderVision();   // the strip says what it waits for before any match
 function renderAgents() {
   renderQueue();
   if (current !== 'agents') return;
   const r = AG.run, st = r ? r.stat : { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 };
   const sel = picked || (r && r.claims.length ? r.claims[r.claims.length - 1].id : null);
   const card = (name, role, line, tag) => '<article class="ag-card"><div class="ag-top"><b>' + name + '</b><span class="tag">' + tag + '</span></div><small>' + role + '</small><p>' + line + '</p></article>';
+  renderVision();
   $('ag-cards').innerHTML = [
     card('Producer', 'Picks moments and routes lines', st.moments + ' moments seen · ' + st.verified + ' approved · ' + st.abstained + ' held', 'Rules · simulated'),
     card('Analyst', 'Turns events into claims with evidence', st.claims + ' claims from ' + st.events + ' events', 'Rules · simulated'),
