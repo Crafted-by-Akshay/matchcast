@@ -8,7 +8,7 @@ function bcEmbedStart(q) {
   if (MCS.clubs.ready) go(); else MCS.clubs.load.then(go);
 }
 MCS.ptt($('dk-q'), $('dk-askf'));   // EXP-16: push-to-talk for Ask the producer
-$('bc-new').addEventListener('click', () => setTimeout(() => MCS.started(), 0));   // after the desk's own handler has set the new seed
+$('bc-new').addEventListener('click', () => setTimeout(() => { window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); }, 0));   // after the desk's own handler has set the new seed
 MCS.loop();
 
 // the shared score: while Watch runs the shared match, the scoreboard shows Watch's score and minute.

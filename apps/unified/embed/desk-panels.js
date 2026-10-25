@@ -18,7 +18,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     + '#mc-desk button:disabled{opacity:.55;cursor:default}'
     + '#mc-desk-body{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto}'
     + '#mc-desk-body[hidden]{display:none}'
-    + '@media (max-width:480px){#mc-desk{top:64px!important;bottom:auto!important;width:calc(100% - 20px)!important;background:none!important;padding:0!important;overflow:visible!important}#mc-desk>div:first-child,#mc-desk-body{display:none!important}#mc-replay{order:-1}}'   // a phone stage is about 180 px tall: only the replay row shows there, where it was before the desk; the Copilot and the strip need a wider pane
+    + '@media (max-width:480px){#mc-desk{top:64px!important;bottom:auto!important;width:calc(100% - 20px)!important;background:none!important;padding:0!important;overflow:visible!important}#mc-desk>div:first-child,#mc-desk-body{display:none!important}}'   // a phone stage is about 180 px tall: only the replay row shows there, where it was before the desk; the Copilot and the strip need a wider pane
     + '#mc-desk ol,#mc-desk ul{margin:0;padding-left:18px}'
     + '.mcd-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}'
     + '.mcd-ch{padding:2px 6px;border-radius:999px;background:#17283F;border:1px solid #2c4a72;font-size:11px}'

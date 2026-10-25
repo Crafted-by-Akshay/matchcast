@@ -6,7 +6,8 @@ declare const AG: any;
 
 test('the desk panels and the approval queue show while three.js never loads, and the loading card lifts', async ({ page }) => {
   test.setTimeout(300_000);
-  await page.route('**/node_modules/three/**', (route) => route.abort());   // the 3D engine stays down for this whole test
+  // the 3D engine stays down for this whole test: the local test copy, or the CDN when the page loads that
+  await page.route(/node_modules\/three\/|cdn\.jsdelivr\.net\/npm\/three@/, (route) => route.abort());
   await openShell(page, 'broadcast', '?seed=2026');
   await expect(page.locator('#v-broadcast'), 'the card lifts on the panels signal, not the pitch start').toHaveClass(/panels/, { timeout: 60_000 });
   const f = await viewFrame(page, 'broadcast');

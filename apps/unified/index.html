@@ -478,7 +478,7 @@ function ensure(view) {
     FR[view] = { el, key: want, ready: false, live: null, sent: null };
   } else if (FR[view].key !== want) {
     FR[view].key = want; FR[view].live = null; FR[view].sent = null; FR[view].el.src = url(view);
-    $('v-' + view).classList.remove('ready'); waitText(view, 'Loading the 3D engine'); restartWait(view);
+    $('v-' + view).classList.remove('ready', 'panels'); waitText(view, 'Loading the 3D engine'); restartWait(view);
   }
 }
 
@@ -891,7 +891,7 @@ window.addEventListener('message', (e) => {
     if (AG.run && AG.run.key === keyOf(d.setup)) { LV.events(d.batch); post('broadcast', { src: 'matchcast-shell', type: 'events', batch: d.batch }); pushFeed(); }
     return;
   }   // Watch's live events and moments
-  if (d.type === 'panels') { $('v-' + view).classList.add('panels'); return; }   // the desk's panels render before its 3D module loads (desk-panels.js)
+  if (d.type === 'panels') { if (view === 'broadcast' && hasGL) $('v-' + view).classList.add('panels'); return; }   // the desk's panels render before its 3D module loads (desk-panels.js); without WebGL the card keeps its message
   if (d.type === 'progress') { waitText(view, d.text); return; }
   const f = FR[view];
   if (d.setup) f.live = { setup: d.setup, started: !!d.started, over: !!d.over, score: d.score || [0, 0], minute: d.minute || 0 };

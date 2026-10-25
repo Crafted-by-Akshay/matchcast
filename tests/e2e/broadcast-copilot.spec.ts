@@ -30,7 +30,7 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
         });
         return;
       }
-      if (!/\/events/.test(q.url!)) { r.writeHead(404, cors); return r.end(); }   // any other GET (the status poll) is answered at once: a stream that never ends holds one of the browser's few connections
+      if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end(); }   // a GET that is not the event stream (the status poll) is answered at once: a stream that never ends holds one of the browser's few connections
       r.writeHead(200, { 'Content-Type': 'text/event-stream', ...cors }); r.write('event: status\ndata: {"status":"live"}\n\n');
     }).listen(0, () => resolve(s));
   });
@@ -115,7 +115,7 @@ test('a plain question on the Watch view keeps the Ask request exactly as it was
         });
         return;
       }
-      if (!/\/events/.test(q.url!)) { r.writeHead(404, cors); return r.end(); }   // any other GET (the status poll) is answered at once: a stream that never ends holds one of the browser's few connections
+      if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end(); }   // a GET that is not the event stream (the status poll) is answered at once: a stream that never ends holds one of the browser's few connections
       r.writeHead(200, { 'Content-Type': 'text/event-stream', ...cors }); r.write('event: status\ndata: {"status":"live"}\n\n');
     }).listen(0, () => resolve(s));
   });
