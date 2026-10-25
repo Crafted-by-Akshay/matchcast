@@ -141,7 +141,15 @@ const CM = (() => {
   };
 
   // the pre-match exchange: the play-by-play caller opens, then the colour voice reads the match (rules lines, no claims beyond the fixture)
-  const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playFrom = 0; n = 0; filledAt = -1; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); } };
+  // the real head to head for a national fixture (ADR-0020), from the results file; none for a fictional one
+const historyLine = (names) => {
+  const h = names.history && names.history.h2h;
+  if (!h || !h.played) return null;
+  const m = h.last_meeting;
+  const last = m ? ' Last meeting: ' + m.date + ', ' + names.home + ' ' + m.score + ' ' + names.away + ' (' + m.competition + ').' : '';
+  return { minute: 0, kind: 'buildup', speaker: 'colour', text: 'Real results: ' + h.played + ' meetings, ' + names.home + ' ' + h.home_wins + ' wins, ' + h.draws + ' draws, ' + names.away + ' ' + h.away_wins + ' wins.' + last };
+};
+const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playFrom = 0; n = 0; filledAt = -1; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); const hl = historyLine(names); if (hl) push(hl); } };
   // the feed the views draw: newest last, each with its label
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers, speaker: x.speaker || (x.source === 'live' || x.kind === 'summary' ? 'colour' : 'pbp') }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under
