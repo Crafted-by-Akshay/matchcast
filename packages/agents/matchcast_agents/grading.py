@@ -86,13 +86,27 @@ def _engine_value(events: Sequence[Mapping[str, Any]], claim: Mapping[str, Any])
 
 
 def _attributed_numbers(text: str, clubs: Mapping[str, str]) -> list[tuple[str, float]]:
-    """Each number written straight after a club's name, with that club's side. The Verifier's
-    score attribution uses the same rule, but this grader does not import it, so the two checks
-    stay independent: "Harbour United 2" is a claim about the away side."""
+    """Each number with the side of the club named before it in the same clause, where a clause
+    ends at a comma, semicolon, full stop not inside a number, ! or ?. "Harbour United shots: 2"
+    and "Harbour United have 2 shots" are both the away side's; "Northgate FC 2, Harbour United 1"
+    gives each number its own club. The Verifier's score attribution is a narrower rule, and this
+    grader does not import it, so the two checks stay independent."""
+    names = sorted(((club, side) for side, club in clubs.items()), key=lambda p: -len(p[0]))
+    if not names:
+        return []
+    side_of = {club.casefold(): side for club, side in names}
+    token = re.compile(
+        "(" + "|".join(re.escape(club) for club, _ in names) + r")|(?<![\w.])(\d+(?:\.\d+)?)(?!\w)",
+        re.IGNORECASE,
+    )
     found: list[tuple[str, float]] = []
-    for side, club in clubs.items():
-        pattern = rf"(?<!\w){re.escape(club)}\s+(\d+(?:\.\d+)?)(?!\w)(?!\.\d)"
-        found += [(side, float(m.group(1))) for m in re.finditer(pattern, text)]
+    for clause in re.split(r"[,;!?]|\.(?!\d)", text):
+        side = None
+        for hit in token.finditer(clause):
+            if hit.group(1):
+                side = side_of[hit.group(1).casefold()]
+            elif side is not None:
+                found.append((side, float(hit.group(2))))
     return found
 
 

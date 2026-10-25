@@ -252,3 +252,22 @@ def test_a_number_is_judged_against_the_club_it_follows() -> None:
 
 def test_the_run_clock_is_pinned_to_the_run_date() -> None:
     assert _pinned_clock("2026-10-25")() == datetime(2026, 10, 25, tzinfo=UTC)
+
+
+CLUBS = {"home": "Northgate FC", "away": "Harbour United"}
+
+
+def test_a_number_in_the_clause_of_a_club_is_judged_against_that_club() -> None:
+    # the away side had 1 shot: a 2 in its clause is wrong, whatever the phrasing
+    claims = [claim("shots:home", 2, 3, cid="c-home"), claim("shots:away", 1, 3, cid="c-away")]
+    for text in ("Harbour United shots: 2.", "Harbour United have 2 shots."):
+        grade = grade_line(text, claims, LOG, ALLOWED, clubs=CLUBS)
+        assert grade["wrong_numbers"] == 1, text
+        assert grade["verdict"] == "incorrect", text
+
+
+def test_a_club_name_is_matched_in_any_case_and_each_number_is_counted_once() -> None:
+    claims = [claim("shots:home", 2, 3, cid="c-home"), claim("shots:away", 1, 3, cid="c-away")]
+    grade = grade_line("harbour united 2 shots.", claims, LOG, ALLOWED, clubs=CLUBS)
+    assert grade["numbers_stated"] == 1
+    assert grade["wrong_numbers"] == 1
