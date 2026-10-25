@@ -86,7 +86,7 @@ All positions are metres on the ground (z=0) inside the roster pitch. Types mark
 | `pressure` | 1.1 | `player_id` (presser), `team_id`, `target_player_id` (opposing team), `position`, `distance_m` (at least 0), `closing_speed_mps` (at least 0) |
 
 Both versions are accepted by the validators, so old packets stay valid. `schema_version`
-in the contract above is a set (`SUPPORTED_VERSIONS`), and `SCHEMA_VERSION` is the newest.
+in the contract above is a set (`SUPPORTED_VERSIONS`). `AUDIT_SCHEMA_VERSION` is the version the audit writer stamps, currently 1.1.0; it is not the newest version.
 
 `fixtures/manifest.json` indexes shared positive/negative fixtures. `contexts.json`
 contains publication and correction reference-validation cases. These are small

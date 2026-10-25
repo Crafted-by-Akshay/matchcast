@@ -11,7 +11,7 @@ export type * from "./generated.js";
 export * from "./audit.js";
 export const SUPPORTED_VERSIONS: readonly string[] = schema.definitions.SchemaVersion.enum;
 // What the audit writer stamps. It stays on 1.1.0; 1.2.0 is for onair and feed_drop.
-export const SCHEMA_VERSION = "1.1.0";
+export const AUDIT_SCHEMA_VERSION = "1.1.0";
 const V1_0_PAYLOADS = new Set(["goal", "pass", "shot", "period_boundary", "correction", "retraction"]);
 
 const ajv = new Ajv({ strict: true, allErrors: false, coerceTypes: false, useDefaults: false });
