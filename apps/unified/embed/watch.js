@@ -32,9 +32,34 @@ MCS.progress('Loading the stadium and players');
   st.textContent += '#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
   st.textContent += '@media (max-width:1100px){#third{display:none !important}}';   // phone and small laptop: there is no room beside the commentary card, which says the same and used to cover this card
   document.head.appendChild(st);
-  // desktop: the On-the-ball card and the Live commentary card both docked bottom left, one under the other; keep the card to the right of the commentary card
-  const beside = () => { const t = document.getElementById('third'), m = document.getElementById('mcf'); if (t && m && m.getBoundingClientRect().width) t.style.left = Math.round(m.getBoundingClientRect().right + 12) + 'px'; };
-  beside(); setInterval(beside, 1000); addEventListener('resize', beside);
+  // desktop: the Live commentary card, the followed-player card and the On-the-ball card all dock bottom left. They sit side by side instead of one on top of another,
+  // and the commentary card (opened or closed) never covers Match Pulse: if it would, it moves to the right of the Pulse column (wide screens) or its list is shortened (narrower ones).
+  const dock = () => {
+    const m = document.getElementById('mcf'), l = document.getElementById('mcf-list'), pu = document.getElementById('pulse');
+    const t = document.getElementById('third'), fc = document.getElementById('fan-pcard');
+    if (!m || !m.getBoundingClientRect().width) { if (fc) { fc.style.left = ''; fc.style.bottom = ''; } return; }
+    const wide = innerWidth > 1100, phone = innerWidth <= 560;
+    m.style.left = ''; if (l) l.style.maxHeight = '';
+    let shifted = false;
+    const pr = pu && pu.getBoundingClientRect();
+    if (!phone && pr && pr.width) {
+      const mr = m.getBoundingClientRect();
+      if (mr.top < pr.bottom + 8 && mr.left < pr.right) {
+        if (wide && pr.right + 12 + mr.width <= innerWidth - 14) { m.style.left = Math.round(pr.right + 12) + 'px'; shifted = true; }
+        else if (l && !l.hidden) l.style.maxHeight = Math.max(72, Math.floor(innerHeight - 14 - (pr.bottom + 8) - (mr.height - l.getBoundingClientRect().height))) + 'px';
+      }
+    }
+    const mr = m.getBoundingClientRect();
+    const fcOn = !!fc && getComputedStyle(fc).display !== 'none' && fc.getBoundingClientRect().width > 0;
+    if (fc) {
+      fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = 'calc(100vw - 28px)';
+      if (!shifted && wide) { fc.style.left = Math.round(mr.right + 12) + 'px'; fc.style.maxWidth = Math.max(240, innerWidth - mr.right - 26) + 'px'; }
+      else if (!shifted) fc.style.bottom = Math.round(innerHeight - mr.top + 8) + 'px';
+    }
+    if (t && wide) { const fr = fcOn && !shifted && fc.getBoundingClientRect().width; t.style.left = Math.round(fr ? fc.getBoundingClientRect().right + 12 : mr.right + 12) + 'px'; }
+  };
+  dock(); setInterval(dock, 1000); addEventListener('resize', dock);
+  document.addEventListener('click', () => setTimeout(dock, 0), true);
   // UX review pass 8: talking to a player used to start only from a name tag. A visible control sits beside the Copilot button and opens the Copilot Talk tab.
   { const tb = document.createElement('button'); tb.id = 'mcx-talk'; tb.type = 'button';
     tb.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false" style="margin-right:6px;flex:none"><path d="M8 1.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V4A2.5 2.5 0 0 0 8 1.5zM3.5 7.5v.5a4.5 4.5 0 0 0 9 0v-.5h-1.2v.5a3.3 3.3 0 0 1-6.6 0v-.5H3.5zM7.4 12.4h1.2V15H7.4z" fill="currentColor"/></svg>Talk to a player';

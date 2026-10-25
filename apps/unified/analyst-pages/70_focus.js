@@ -58,6 +58,7 @@ function drawLive(el, arg) {
     ? '<ol class="list">' + focusEvents(f).map((e) => '<li>' + minLbl(e.minute) + ' ' + esc(String(e.type).replace(/_/g, ' ')) + (e.player ? ' · ' + esc(e.player) : '') + '</li>').join('') + '</ol>'
     : '<div class="empty">' + (f ? (focusWaiting(f) ? 'Waiting for kick-off. Events appear here as Watch plays.' : 'No events yet.') : 'The live feed is off. Start a match in Watch to follow it here.') + '</div>';
   el.innerHTML = pgHead('Live match', esc(clubName(m.home)) + ' v ' + esc(clubName(m.away)) + ' · ' + esc(m.title), '<button class="btn" data-go="ask">Ask the match</button><button class="btn" data-go="match.' + m.id + '">Match centre</button>') +
+    (f ? '' : '<p id="live-recorded"><span class="chip warn">Recorded match · not live</span> Full-time numbers from the season run. Open Watch to follow a match as it plays.</p>') +
     '<p id="live-source" class="note">' + esc(source) + '</p>' + (focusWaiting(f) ? WAIT_NOTE(false) : '') +
     '<div class="kpis">' + kpi('Score', esc(score), esc(clubName(m.home)) + ' – ' + esc(clubName(m.away))) + kpi('Time', esc(when), f ? 'Watch clock' : 'Season run') + '</div>' +
     '<div class="grid"><div class="s7">' + card('Stats, explained', 'Each line says what the number means', '<dl class="kv" id="live-stats">' + rows.map((r) => '<dt>' + esc(r[0]) + ' <b>' + esc(r[2]) + '</b></dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl>') + '</div>' +
