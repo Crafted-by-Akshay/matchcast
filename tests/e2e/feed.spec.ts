@@ -74,11 +74,11 @@ test('a talk order always gets a reply in the chat, checked or not', async ({ pa
   await expect(f.locator('#tk-note')).toContainText('Rules fallback', { timeout: 20_000 });
 });
 
-test('a typed question with no agent api says plainly that it cannot answer, and gives no "I hear you"', async ({ page }) => {
+test('a typed question with no agent api says plainly that it cannot answer here, and gives no "I hear you"', async ({ page }) => {
   test.setTimeout(300_000);
   const f = await openWatch(page);
   await f.evaluate(() => { const w = window as any; w.__tp = w.__mc.players[0]; w.mcTalkApi(w.__tp, 'Where should you pass next?'); });
-  await expect.poll(() => f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).join('|')), { timeout: 20_000 }).toContain("can't answer that without the agent api");
+  await expect.poll(() => f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).join('|')), { timeout: 20_000 }).toContain("can't act on or answer that here");
   expect(await f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).join('|'))).not.toContain('I hear you');
 });
 

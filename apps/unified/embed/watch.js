@@ -31,8 +31,8 @@ MCS.progress('Loading the stadium and players');
   st.textContent += '@media (max-width:640px){#fan-strip,#fan-metric{display:none !important}}';   // phone: the live stats strip sat under the Match Pulse bar; Match data holds the numbers (UX review, finding 14)
   st.textContent += '#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
   st.textContent += '@media (max-width:1100px){#third{display:none !important}}';
-  // Watch shares the stage with Broadcast, so its pane is 761 to 1100 px wide on most laptops: the Copilot button centred at the top then lands on the camera chips, so it takes its narrow-pane place at the right, above the bottom cards
-  st.textContent += '@media (min-width:761px) and (max-width:1100px){#cpbtn{left:auto !important;transform:none !important;right:14px !important;top:auto !important;bottom:152px !important}}';   // 152 px keeps it above the caption card, which is up to 125 px tall in the right corner   // phone and small laptop: there is no room beside the commentary card, which says the same and used to cover this card
+  // Watch shares the stage with Broadcast, so its pane is 561 to 1100 px wide on most laptops: the Copilot button centred at the top then lands on the camera chips, so it takes its narrow-pane place at the right, above the bottom cards
+  st.textContent += '@media (min-width:561px) and (max-width:1100px){#cpbtn{left:auto !important;transform:none !important;right:14px !important;top:auto !important;bottom:152px !important}}';   // 152 px keeps it above the caption card, which is up to 125 px tall in the right corner   // phone and small laptop: there is no room beside the commentary card, which says the same and used to cover this card
   document.head.appendChild(st);
   // The Live commentary card, the followed-player card and the On-the-ball card all dock bottom left. Keyed on the width of this Watch pane (the frame, which is narrower than the window
   // since Watch and Broadcast share the stage) less a Copilot drawer that opens at its right. They sit side by side instead of one on top of another; the commentary card never covers Match Pulse:
@@ -41,7 +41,8 @@ MCS.progress('Loading the stadium and players');
     const m = document.getElementById('mcf'), l = document.getElementById('mcf-list'), pu = document.getElementById('pulse');
     const t = document.getElementById('third'), fc = document.getElementById('fan-pcard'), dr = document.getElementById('copilot');
     if (!m) return;
-    m.style.visibility = ''; m.style.left = ''; m.style.width = ''; if (l) l.style.maxHeight = '';
+    m.style.clipPath = ''; m.style.pointerEvents = ''; delete m.dataset.dockHidden; const tog = document.getElementById('mcf-tog'); if (tog) tog.removeAttribute('tabindex');
+    m.style.left = ''; m.style.width = ''; if (l) l.style.maxHeight = '';
     if (fc) { fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = ''; }
     if (!m.getBoundingClientRect().width) return;
     const phone = innerWidth <= 560, wide = innerWidth > 1100;
@@ -50,12 +51,13 @@ MCS.progress('Loading the stadium and players');
     const hit = (a, b) => !!a && !!b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
     const pr = pu && pu.getBoundingClientRect(), hasP = !!pr && pr.width > 0;
     const onPulse = (r) => hasP && r.top < pr.bottom + 8 && r.left < pr.right;
+    const btns = ['cpbtn', 'mcx-talk'].map((id) => document.getElementById(id)).filter((e) => e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width).map((e) => e.getBoundingClientRect()).filter((b) => b.bottom > innerHeight * 0.4);
+    const edge = phone ? U - 14 : Math.min(U - 14, ...btns.map((b) => b.left - 12));   // the right limit for the bottom-left cards: the pane's edge, a Copilot drawer, or the Copilot and Talk buttons
     let mr = m.getBoundingClientRect(), hide = false, shifted = false;
     if (!phone) {
       if (onPulse(mr)) {
         // where the card would land: right of Pulse, narrowed (never under 280 px) so it stops short of the Copilot and Talk buttons and the pane's edge
-        const btns = ['cpbtn', 'mcx-talk'].map((id) => document.getElementById(id)).filter((e) => e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width).map((e) => e.getBoundingClientRect()).filter((b) => b.right > pr.right + 12 && b.bottom > mr.top - 200);
-        const edge = Math.min(U - 14, ...btns.map((b) => b.left - 12)), avail = edge - (pr.right + 12);
+        const avail = edge - (pr.right + 12);
         if (avail >= 280) { m.style.left = Math.round(pr.right + 12) + 'px'; m.style.width = Math.floor(Math.min(mr.width, avail)) - 2 + 'px'; shifted = true; }
         else if (l && !l.hidden) l.style.maxHeight = Math.max(48, Math.floor(innerHeight - 14 - (pr.bottom + 8) - (mr.height - l.getBoundingClientRect().height))) + 'px';
       }
@@ -66,17 +68,17 @@ MCS.progress('Loading the stadium and players');
     let fcRight = 0;
     if (fcOn) {
       const f = fc.getBoundingClientRect();
-      fc.style.maxWidth = Math.max(240, U - 28) + 'px';
+      fc.style.maxWidth = Math.max(240, edge - 14) + 'px';
       if (phone) fc.style.bottom = Math.round(innerHeight - mr.top + 8) + 'px';   // a phone has one column: above the commentary card
       else {
         fc.style.bottom = '14px';   // the card's own bottom offset depends on the view's height; pin it to the corner so the arithmetic below holds
         if (hide) { /* the card keeps the corner */ }
-        else if (mr.right + 12 + f.width <= U - 14) { fc.style.left = Math.round(mr.right + 12) + 'px'; fcRight = mr.right + 12 + f.width; }
-        else if (shifted || !hasP || mr.top - 8 - f.height >= pr.bottom + 8) { fc.style.left = Math.round(mr.left) + 'px'; fc.style.bottom = Math.round(innerHeight - mr.top + 8) + 'px'; }   // above it, clear of Pulse
+        else if (mr.right + 12 + f.width <= edge) { fc.style.left = Math.round(mr.right + 12) + 'px'; fcRight = mr.right + 12 + f.width; }
+        else if (mr.top - 8 - f.height >= (hasP && !shifted ? pr.bottom + 8 : 8)) { fc.style.left = Math.round(mr.left) + 'px'; fc.style.bottom = Math.round(innerHeight - mr.top + 8) + 'px'; }   // above it, clear of Pulse
         else hide = true;   // no room for both: the player the viewer chose to follow wins, the commentary stays in the caption card
       }
     }
-    m.style.visibility = hide ? 'hidden' : '';
+    if (hide) { m.style.clipPath = 'inset(50%)'; m.style.pointerEvents = 'none'; m.dataset.dockHidden = '1'; if (tog) tog.tabIndex = -1; }   // out of sight and out of the tab order, but still in the page, so its live region keeps announcing the lines
     // the caption card (#cap) is centred in the pane and shows for a few seconds: it never sits on the commentary card (which shows the same line) or the followed-player card (it rises above that one)
     const cap = document.getElementById('cap');
     if (cap) {
@@ -103,7 +105,7 @@ MCS.progress('Loading the stadium and players');
       if (!r || !r.width || getComputedStyle(cp).visibility === 'hidden' || (dr && !dr.hidden) || typeof window.openTalk !== 'function') { tb.style.display = 'none'; return; }
       tb.style.display = 'inline-flex'; tb.style.height = r.height + 'px';
       const left = Math.round(r.left - tb.offsetWidth - 8);
-      if (innerWidth > 760 && innerWidth <= 1100) { tb.style.left = Math.max(8, Math.round(r.right - tb.offsetWidth)) + 'px'; tb.style.top = Math.round(r.top - r.height - 8) + 'px'; }   // the Copilot button sits at the bottom right in this pane: stack the Talk control above it, clear of the caption card
+      if (innerWidth > 560 && innerWidth <= 1100) { tb.style.left = Math.max(8, Math.round(r.right - tb.offsetWidth)) + 'px'; tb.style.top = Math.round(r.top - r.height - 8) + 'px'; }   // the Copilot button sits at the bottom right in this pane: stack the Talk control above it, clear of the caption card
       else if (innerWidth > 560 && innerWidth <= 1200) { tb.style.left = Math.max(8, Math.round(r.right - tb.offsetWidth)) + 'px'; tb.style.top = Math.round(r.bottom + 8) + 'px'; }   // laptop widths: the camera chips already crowd the Copilot button's left, so stack under it
       else if (left >= 8) { tb.style.left = left + 'px'; tb.style.top = r.top + 'px'; }
       else { tb.style.left = Math.max(8, Math.round(r.right - tb.offsetWidth)) + 'px'; tb.style.top = Math.round(r.top - r.height - 8) + 'px'; }   // no room beside it (a very narrow phone, big text): stack above it, never on top of it
@@ -184,7 +186,7 @@ MCS.progress('Loading the stadium and players');
   const MC_RULES = [['clear', /forget|as you were|cancel|\bnormal\b|\breset\b/], ['rest', /\brest\b|\blegs\b|breath|\btired\b|\beasy\b|conserve/], ['shoot', /\bshoot|shot on sight|\btake (a |the |your )?shots?\b|\bstrike\b|hit it|\brange\b/], ['mark', /\bmark|\bfollow\b|\btrack\b|shadow|man.?to.?man/], ['press', /\bpress|\bhunt\b|close down|harass|win (it|the ball) back/], ['runs', /\brun|behind|channel|over the top|\bspace\b/], ['simple', /simple|\bsafe\b|keep (the )?ball|possession|\bcalm\b/], ['wide', /\bwide|width|touchline|stretch/], ['inside', /inside|\btuck|narrow|half.?space|\bcentre\b|\bcenter\b/], ['deep', /\bdeep|\bback\b|\bdrop\b|defend|\bsit\b/], ['push', /\bpush|higher|up the pitch|forward|attack|squeeze/]];
   const MC_NEGATED = /\b(\w+n'?t|do not|stop|never|no need to|not)\b/;
   const mcKeyword = (text) => { const t = text.toLowerCase().replace(/’/g, "'"); if (t.includes('?') || MC_NEGATED.test(t)) return 'none'; const hit = MC_RULES.find(([, re]) => re.test(t)); return hit ? hit[0] : 'none'; };
-  const MC_NO_ANSWER = 'I can\'t answer that without the agent api: this is the rules fallback, which only acts on orders such as press, mark or shoot.';
+  const MC_NO_ANSWER = 'I can\'t act on or answer that here: this is the rules fallback (no checked answer from the agent api), which only follows plain orders such as press, mark or shoot.';
   const mcRulesFallback = (p, text) => { const k = mcKeyword(text); if (k === 'none') { talkLine(p, 'pl', MC_NO_ANSWER); renderTalk(); } else mcRulesOrder(p, k, text); $('tk-note').textContent = 'Rules fallback: the agent api did not answer for this match, so orders follow the keyword rules.'; };
   window.mcTalk = (p, text, quick) => (quick ? mcRulesOrder(p, quick, text) : window.mcTalkApi(p, text));   // called by sendToPlayer (build.py) for every line: a quick order is checked here, a typed line goes to the api
   window.mcTalkApi = (p, text) => { const id = ++talkN; talks.set(id, { p, text }); MCS.send({ type: 'talk', id, player: p.name, position: p.pos, utterance: text }); setTimeout(() => { if (talks.delete(id)) mcRulesFallback(p, text); }, 24000); };

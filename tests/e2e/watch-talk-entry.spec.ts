@@ -4,7 +4,7 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 // UX review pass 8: talking to a player has a visible entry point, "Talk to a player", beside the Copilot button. It opens the Copilot Talk tab
 // (roster, Follow, message box), gets out of the way while the drawer is open, comes back when it closes, and never sits on top of the Copilot button
 // or the other HUD pieces. The tour's Watch step names it (see tour.spec.ts).
-for (const [name, width, height] of [['desktop', 1440, 900], ['laptop', 1024, 768], ['phone', 390, 844], ['small phone', 320, 640]] as const) {
+for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 1280, 720], ['laptop', 1024, 768], ['phone', 390, 844], ['small phone', 320, 640]] as const) {
   test(`Watch on ${name}: a visible Talk to a player control opens the Talk tab and clears the other controls`, async ({ page }) => {
     test.setTimeout(300_000);
     const errs = collectErrors(page);
