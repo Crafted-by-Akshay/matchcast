@@ -30,7 +30,7 @@ def test_a_goal_gets_an_entry_naming_the_agents_it_called(match) -> None:
     entry = entry_for(flow, goal)
     spawned = {s["name"] for s in entry["spawns"]}
     assert set(entry["called"]) == {"analyst", "narrator", "verifier"} | spawned
-    assert spawned == {"replay", "tactics", "stats", "rhythm"}
+    assert spawned == {"replay", "tactics", "stats", "rhythm", "history"}
     assert entry["skipped"] == ["stats_desk"]  # no Stats Desk is wired into this build
     assert entry["why"] == "goal"
     assert entry["routed_by"] == "rules"

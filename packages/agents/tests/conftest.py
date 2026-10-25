@@ -35,8 +35,12 @@ def colour_producer(personas):
 
 @pytest.fixture
 def make_workflow(match):
-    def build(*, approval_mode: str = "auto", seed_bad_claim: bool = False) -> MatchWorkflow:
-        config = WorkflowConfig(approval_mode=approval_mode)
+    def build(
+        *, approval_mode: str = "auto", seed_bad_claim: bool = False, personas=None
+    ) -> MatchWorkflow:
+        config = WorkflowConfig(
+            approval_mode=approval_mode, **({"personas": personas} if personas else {})
+        )
         return MatchWorkflow(
             stream=match["roster"]["stream"],
             roster=match["roster"],

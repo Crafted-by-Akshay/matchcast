@@ -6,6 +6,7 @@ import httpx
 import pytest
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.personas import BOOTH
 from matchcast_agents.safety import AzureContentSafety, LocalSafetyScreen
 from matchcast_agents.workflow import (
     NOT_SHOWN,
@@ -19,7 +20,10 @@ from matchcast_contracts.audit import verify_chain
 
 
 def build(match, **kwargs) -> MatchWorkflow:
-    config = WorkflowConfig(approval_mode=kwargs.pop("approval_mode", "auto"))
+    config = WorkflowConfig(
+        approval_mode=kwargs.pop("approval_mode", "auto"),
+        **({"personas": kwargs.pop("personas")} if "personas" in kwargs else {}),
+    )
     return MatchWorkflow(
         stream=match["roster"]["stream"],
         roster=match["roster"],
@@ -63,7 +67,7 @@ def test_unsafe_line_is_blocked_audited_and_never_published(match) -> None:
 
 
 def test_prompt_attack_in_a_producer_edit_is_refused(match) -> None:
-    flow = build(match, approval_mode="producer")
+    flow = build(match, approval_mode="producer", personas=BOOTH)
     run(flow.ingest(match["events"][:60]))
     line = flow.store.lines(flow.sk)[-1]
     with pytest.raises(WorkflowError) as error:
@@ -73,7 +77,7 @@ def test_prompt_attack_in_a_producer_edit_is_refused(match) -> None:
 
 
 def test_unsafe_edit_text_is_rejected_not_aired(match) -> None:
-    flow = build(match, approval_mode="producer")
+    flow = build(match, approval_mode="producer", personas=BOOTH)
     run(flow.ingest(match["events"][:60]))
     line = flow.store.lines(flow.sk)[-1]
     _line, verdict = run(flow.edit(line.line_id, "That referee is an idiot."))
