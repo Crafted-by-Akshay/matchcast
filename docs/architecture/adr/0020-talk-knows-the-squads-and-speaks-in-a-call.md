@@ -1,6 +1,6 @@
 # ADR-0020: Talk knows both squads and the knowledge base, and can run as a voice call
 
-- **Status:** Accepted
+- **Status:** Accepted; the voice call is **Planned** (written, frozen this release behind `CALL_ENABLED`)
 - **Date:** 2026-10-25
 - **Decided by:** Akshay (judge test: the player refused "Who are the forward players?", and he wants a call, not push-to-talk)
 
@@ -16,10 +16,10 @@ The player's talk had only his own counts and the last events, so a basic questi
 
 ## Decision
 
-- **Team knowledge.** Each talk carries `team_sheet`: both squads as `name, position` lines in words, from the club pages in `kb/clubs/`. Shirt numbers and ratings stay out, so the model has no digit that the Verifier cannot tie to the log. It also carries `knowledge`: the three kb passages that best match his name and the manager's words (BM25 over `kb/`, the same index Ask uses). Passages are words; the model copies no digit from them.
-- **Names.** A name in the reply must be a name on either squad, a club, or a player in the recent events (the existing Verifier rule, widened to the squads).
+- **Team knowledge.** Each talk carries `team_sheet`: both squads as `name, position` lines in words, from the club pages in `kb/clubs/`. Shirt numbers and ratings stay out, so the model has no digit that the Verifier cannot tie to the log. It also carries `knowledge`: the three kb passages that best match his name and the manager's words (BM25 over `kb/`, built the same way as Ask's index). Passages are words: digits are dropped, season records and results are left out, and the model copies no digit or name from them.
+- **Names.** A name in the reply must be a whole name on either squad, a club, or a player in the recent events. A run of two or more capitalised words must equal one of those names, so "N. Morinari" is refused even when both parts are on the sheet. Names in the passages are not accepted: a coach named only in the kb is refused until he is on a squad.
 - **Numbers.** Unchanged: a count must be his own, or a club total from the log, with the club named (ADR-0016, ADR-0018).
-- **Voice call.** A **Call** button beside the mic keeps the microphone open. Each finished phrase is sent as a talk. A verified reply plays in his own voice (the api's clip, else the browser voice). A fan who speaks cuts the reply off. Azure Speech continuous recognition is used when the api has a Speech resource; otherwise the browser's speech recognition, labelled **Simulated**. A short quiet window after each reply keeps his own voice from cutting him off through the speakers.
+- **Voice call (Planned).** A **Call** button beside the mic keeps the microphone open. Each finished phrase is sent as a talk. A verified reply plays in his own voice (the api's clip, else the browser voice). A fan who speaks cuts the reply off. Azure Speech continuous recognition is used when the api has a Speech resource; otherwise the browser's speech recognition, labelled **Simulated**. A short quiet window after each reply keeps his own voice from cutting him off through the speakers.
 - **Layout.** The Pulse log hides while the Copilot drawer is open, so it no longer covers the Talk input.
 
 ## Consequences

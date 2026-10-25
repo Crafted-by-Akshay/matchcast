@@ -572,6 +572,7 @@ def build_router(registry: Registry) -> APIRouter:
                     stats_desk=registry.stats_desk,
                     safety=registry.safety,
                     answer_model=registry.model_client(),
+                    knowledge=registry.knowledge,
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(

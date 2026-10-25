@@ -261,14 +261,38 @@ def _team_totals(ctx: MatchContext) -> list[str]:
     return totals
 
 
+NAME_RUN = re.compile(r"\b(?:[A-Z]\.\s+)?[A-Z][\w'’-]*(?:\s+(?:[A-Z]\.\s+)?[A-Z][\w'’-]*)*")
+
+
+def _whole(name: str) -> str:
+    return " ".join(name.split()).casefold()
+
+
+def _talk_names_fit(reply: str, whole: set[str], words: set[str]) -> bool:
+    """Each run of capitalised words is a whole name the match gives, or one known word.
+
+    A run of two or more words must equal a whole name, so "N. Morinari" is refused even when both
+    of its parts are on the sheet.
+    """
+    for run in NAME_RUN.findall(reply):
+        if len(run.split()) == 1:
+            if run not in words | COMMON_WORDS:
+                return False
+        elif _whole(run) not in whole:
+            return False
+    return True
+
+
 def talk_fits(ctx: MatchContext, target: str, reply: str, match_names: Iterable[str] = ()) -> bool:
-    """The reply as the Verifier sees it: short, digits only, and names only of the speaker, the
-    two clubs and the players in the recent match events the model was given."""
+    """The reply as the Verifier sees it: short, digits only, and names only whole names of the
+    speaker, the two clubs and the squads and players the model was given (the knowledge passages
+    are words, not names)."""
     if not reply or len(reply.split()) > TALK_WORD_LIMIT or not _words_fit(reply):
         return False
     sides = (ctx.player_name(target), ctx.club_name(ctx.home), ctx.club_name(ctx.away))
-    names = {w for n in (*sides, *match_names) for w in _capitalised(n)}
-    return _names_fit(reply, names)
+    known = (*sides, *match_names)
+    words = {w for n in known for w in _capitalised(n)}
+    return _talk_names_fit(reply, {_whole(n) for n in known}, words)
 
 
 class LiveAnswers:
@@ -332,7 +356,8 @@ class LiveAnswers:
 
         The order is the one he says he heard, from the list his role allows; the role guard in the
         workflow still decides whether it reaches the sim. `sheet` is both squads as
-        `name, position` lines and `passages` is knowledge-base background: their names may be said.
+        `name, position` lines; `passages` is knowledge-base background in words, and the names
+        in it are not accepted as names of anyone.
         """
         stats = player_stats(ctx, target)
         if stats is None:
@@ -351,7 +376,7 @@ class LiveAnswers:
         match_names = [
             ctx.player_name(e["payload"]["player_id"]) for e in known if "player_id" in e["payload"]
         ]
-        match_names += [*squad_names, *(passages or [])]
+        match_names += squad_names
         home, away = _score(ctx)
         facts = {
             "you": {

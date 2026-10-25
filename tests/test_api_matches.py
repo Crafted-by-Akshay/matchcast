@@ -714,3 +714,11 @@ def test_the_api_and_mcp_images_ship_the_knowledge_base() -> None:
     for name in ("api", "mcp"):
         dockerfile = (root / "services" / name / "Dockerfile").read_text()
         assert "COPY kb kb" in dockerfile.splitlines(), name
+
+
+def test_a_match_created_over_the_api_is_given_the_knowledge_base(client: TestClient) -> None:
+    # Watch creates its match with POST /v1/matches; the player's talk must see the squads too
+    create(client)
+    flow = client.app.state.matches.flows[("short", "match-short")]
+    assert flow._knowledge is not None
+    assert flow._knowledge.squads and flow._knowledge.index is not None

@@ -119,3 +119,32 @@ def test_without_a_knowledge_base_the_facts_are_empty_lists(match) -> None:
     run(flow_with(match, model).talk("home1", "how are you", position="GK"))
     facts = json.loads(model.calls[-1]["user"])
     assert facts["team_sheet"] == {} and facts["knowledge"] == []
+
+
+def har_knowledge(match) -> TalkKnowledge:
+    """The Harbor City squad, given to the fixture's home club, so kb names meet the Verifier."""
+    squad = parse_squad(HAR_PAGE)
+    return TalkKnowledge(
+        squads={match["teams"]["home"]: Squad(club=match["teams"]["home"], players=squad.players)},
+        index=Bm25Index(kb_chunks()),
+    )
+
+
+def test_two_squad_names_joined_into_one_name_are_refused(match) -> None:
+    # "N. Morinari" joins a Navlano initial to a Morinari surname: a name nobody has
+    reply = "Okay, boss. N. Morinari and me up front, I reckon."
+    model = ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    result = run(flow_with(match, model, har_knowledge(match)).talk(
+        "home1", "who are the forwards?", position="GK"
+    ))  # fmt: skip
+    assert result["reply"] != reply
+
+
+def test_a_name_only_in_the_knowledge_base_is_not_said(match) -> None:
+    # the coach is on a kb page, not on either squad: the reply is not accepted as his name
+    reply = "Okay, boss. Elena Marsh is the one who picks us, I reckon."
+    model = ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    result = run(flow_with(match, model, har_knowledge(match)).talk(
+        "home1", "who picks the team?", position="GK"
+    ))  # fmt: skip
+    assert result["reply"] != reply

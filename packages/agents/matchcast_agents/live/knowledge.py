@@ -29,6 +29,7 @@ SQUAD_ROW = re.compile(r"^\|\s*\d+\s*\|\s*([^|]+?)\s*\|\s*([A-Z]{1,3})\s*\|", re
 TITLE = re.compile(r"^title:\s*(.+?)\s*$", re.MULTILINE)
 PASSAGES = 3  # knowledge passages a reply may draw on
 PASSAGE_CHARS = 420  # a passage is a paragraph for the model, not a page
+FIGURE_SECTIONS = re.compile(r"record|result", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -78,8 +79,14 @@ class TalkKnowledge:
         return {club: self.squads[club].lines() for club in clubs if club in self.squads}
 
     def passages(self, query: str) -> list[str]:
-        """The knowledge passages that best match the speaker's name and the manager's words."""
-        return [_passage(hit.chunk.text) for hit in self.index.search(query, k=PASSAGES)]
+        """The knowledge passages that best match the speaker's name and the manager's words.
+
+        Season records and results are left out: they are figures, and a figure the log does not
+        give would be said as fact.
+        """
+        hits = self.index.search(query, k=PASSAGES * 3)
+        kept = [hit for hit in hits if not FIGURE_SECTIONS.search(hit.chunk.section)]
+        return [_passage(hit.chunk.text) for hit in kept[:PASSAGES]]
 
     @classmethod
     def from_kb(cls, root: Path) -> "TalkKnowledge":
