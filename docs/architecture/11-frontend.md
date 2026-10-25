@@ -219,6 +219,9 @@ A desk that joins mid-match is sent the approval queue and mode, the commentary 
 - Agents tab at 390 and 320 px: the claims ledger becomes one card per claim (the 600 px table made 17 elements run past the edge); the header row is visually hidden and the table keeps explicit ARIA table roles so a screen reader still hears the column names. Spec: `shell-layout.spec.ts`.
 - The header pill (this match's agents: live, rules fallback, warming) and the Foundry chip (the api's deployment from `/v1/status`) can differ: Foundry can be live while one match is on rules. Their tooltips now say so.
 
+## Crew accuracy scoreboard (AB#442, flagged `?crew=1`)
+`apps/unified/crew-score.js` mounts into `#crew-score` in the Agents tab, only when `CREW.enabled`. It reads `CREW.state.score` (`{method, arms:{full_crew, single_agent, crew_no_verifier}}`) and nothing else, so the real endpoint plugs in through `CREW.ingest` later. Each arm shows accuracy against simulator truth as the headline bar, with catch rate, latency, cost per match and lines graded as small figures, plus the method text. The panel says **Simulated** while `CREW.state.simulated` is true, and **Precomputed** (with `run_id`) on any arm whose data sets `precomputed`. Bars are DOM blocks with a different fill pattern per arm (solid, stripes, dots) so colour is never the only cue; every value is text, a "Show as table" fallback repeats them, and the bar transition is off under reduced motion. Spec: `tests/e2e/crew-score.spec.ts`.
+
 ## Evidence trace (CREW-6.2, AB#444), behind `?evidence=1`
 The trace panel ("How was this made?", `trace-panel.js`) gets an **Evidence** section when the page is opened with `?evidence=1`. For a line from the rules agents it lists:
 - **Agents**: the agents in the claim's trace, in order (Producer, Analyst, Narrator, Verifier).
