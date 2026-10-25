@@ -52,13 +52,15 @@ const ALV = (() => {
   function feedPanel(r) {
     const ver = [], sim = [];
     if (r) for (const c of r.claims) if (c.verdict === 'verified' && c.text) ver.push({ m: +c.minute || 0, text: c.text, tag: c.source === 'model' ? 'Live agents' : 'Rules' });
-    for (const l of (window.CREW.state.feeds.analyst || [])) sim.push({ m: (+l.match_time_ms || 0) / 60000, text: l.text });
+    for (const l of (window.CREW.state.feeds.analyst || [])) sim.push({ m: (+l.match_time_ms || 0) / 60000, text: l.text, verdict: l.verdict });
     ver.sort((a, b) => b.m - a.m); sim.sort((a, b) => b.m - a.m);
     const lv = ver.slice(0, 8).map((x) => '<li><b>' + mn(x.m) + '</b> ' + esc(x.text) + ' <span class="m"><span class="ok">&#10003; verified</span> · ' + esc(x.tag) + ', recounted from the event log</span></li>').join('');
-    const ls = sim.slice(0, 5).map((x) => '<li><b>' + mn(x.m) + '</b> ' + esc(x.text) + ' <span class="m">Simulated, not recounted</span></li>').join('');
+    const real = !window.CREW.state.simulated;   // real crew frames carry the Verifier's verdict; only the fixture is labelled Simulated
+    const ls = sim.slice(0, 5).map((x) => '<li><b>' + mn(x.m) + '</b> ' + esc(x.text) + ' <span class="m">' + (!real ? 'Simulated, not recounted'
+      : x.verdict === 'verified' ? '<span class="ok">&#10003; verified</span> · Crew, recounted by the Verifier' : 'Crew line, no Verifier verdict') + '</span></li>').join('');
     return '<section data-panel="feed" class="wide"><h3>Analyst feed <small>Simulated match</small></h3>'
       + (lv ? '<ul data-group="verified">' + lv + '</ul>' : '<p class="empty">No verified lines yet. They appear after the kick-off in Watch.</p>')
-      + (ls ? '<h4>Crew fixture <small>Simulated, not checked by the Verifier</small></h4><ul data-group="fixture">' + ls + '</ul>' : '') + '</section>';
+      + (ls ? (real ? '<h4>Crew lines <small>from the live crew</small></h4><ul data-group="crew">' : '<h4>Crew fixture <small>Simulated, not checked by the Verifier</small></h4><ul data-group="fixture">')  + ls + '</ul>' : '') + '</section>';
   }
 
   function controlPanel(r, cl, f) {

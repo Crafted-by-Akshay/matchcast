@@ -27,6 +27,7 @@
     '.ct-node[data-status="running"]{border-color:var(--accent)}.ct-node[data-status="running"] small::before{content:"\\25CF  ";color:var(--accent)}' +
     '.ct-node[data-status="failed"]{border-color:var(--bad)}.ct-node[data-status="failed"] small::before{content:"\\2717  ";color:var(--bad)}' +
     '.ct-node[data-status="done"]{border-color:var(--ok)}.ct-node[data-status="done"] small::before{content:"\\2713  ";color:var(--ok)}' +
+    '.ct-node[data-status="no_data"],.ct-node[data-status="budget_exhausted"]{border-style:dashed;border-color:var(--warn)}.ct-node[data-status="no_data"] small::before,.ct-node[data-status="budget_exhausted"] small::before{content:"\\2013  ";color:var(--warn)}' +
     '#ct-more[hidden]{display:none}#ct-more{margin-top:8px}' +
     '.ct-empty{margin:0;color:var(--muted);font-size:13px}' +
     '#crew-tree button{min-height:32px}' +
@@ -45,7 +46,7 @@
     '<p id="ct-announce" aria-live="polite" class="muted"></p>' +
     '</section>';
   var $ = function (id) { return document.getElementById(id); };
-  var CAP = 12, DEPTH = 8, LABELS = { running: 'running', done: 'done', failed: 'failed', queued: 'queued' };
+  var CAP = 12, DEPTH = 8, LABELS = { running: 'running', done: 'done', failed: 'failed', queued: 'queued', no_data: 'no data', budget_exhausted: 'budget exhausted' };
   var nodes = {}, shownMoment = null, expanded = false, pending = [], flushT = null, lastStatus = {}, doneSaid = {};
 
   $('crew-play').addEventListener('click', function () { C.reset(); C.play(); });   // reset first: a replay of the same moment fans out again
