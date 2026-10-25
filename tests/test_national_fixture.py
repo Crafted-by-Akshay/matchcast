@@ -15,18 +15,34 @@ def _load(path: Path, name: str):
 
 build = _load(ROOT / "apps/unified/build.py", "unified_build")
 guard = _load(ROOT / "tests/test_synthetic_names.py", "test_synthetic_names")
-TEMPLATE = {
-    "setup": {
-        "stadium": "Stadium",
-        "city": "City",
-        "month": 5,
-        "kickoff": "15:00",
-        "seed": 1,
-        "half": 45,
+SEASON = [
+    {
+        "stIndex": 4,
+        "setup": {
+            "stadium": "Venue Four",
+            "city": "City Four",
+            "month": 5,
+            "kickoff": "15:00",
+            "seed": 1,
+            "half": 45,
+        },
+        "formations": ["4-3-3", "4-4-2"],
+        "styles": ["balanced", "press"],
     },
-    "formations": ["4-3-3", "4-4-2"],
-    "styles": ["balanced", "press"],
-}
+    {
+        "stIndex": 0,
+        "setup": {
+            "stadium": "Venue One",
+            "city": "City One",
+            "month": 6,
+            "kickoff": "18:00",
+            "seed": 2,
+            "half": 45,
+        },
+        "formations": ["4-2-3-1", "3-5-2"],
+        "styles": ["counter", "balanced"],
+    },
+]
 
 
 def test_national_clubs_are_argentina_and_brazil_with_23_synthetic_players_each() -> None:
@@ -47,10 +63,18 @@ def test_national_players_have_no_real_footballer_surnames() -> None:
 
 
 def test_argentina_v_brazil_is_one_flagged_fixture_on_a_known_stadium() -> None:
-    (fx,) = build.national_fixtures(TEMPLATE)
+    (fx,) = build.national_fixtures(SEASON)
     assert fx["id"] == "N001" and fx["national"] is True
     assert fx["home"]["club"] == "Argentina" and fx["away"]["club"] == "Brazil"
     assert fx["label"] == "synthetic squad"
-    assert fx["stIndex"] == build.MSI_STADIUM["mexico"]
+    assert fx["stIndex"] == build.MSI_STADIUM["mexico"] == 4
+    assert fx["setup"]["stadium"] == "Venue Four" and fx["setup"]["city"] == "City Four"
     assert fx["setup"]["seed"] == build.NATIONAL_SEED
-    assert fx["formations"] == TEMPLATE["formations"] and fx["styles"] == TEMPLATE["styles"]
+    assert fx["formations"] == SEASON[0]["formations"] and fx["styles"] == SEASON[0]["styles"]
+
+
+def test_no_recorded_match_is_claimed_for_argentina_v_brazil() -> None:
+    # the shell needs a score array, so [0, 0] is a placeholder; no result is recorded
+    (fx,) = build.national_fixtures(SEASON)
+    assert fx["score"] == [0, 0]
+    assert fx["result"] is None

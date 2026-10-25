@@ -302,7 +302,6 @@ MSI_STADIUM = {"london": 0, "madrid": 1, "rio": 2, "milan": 3, "mexico": 4}
 def fixtures():
     L = json.load(open(AD + "league.json"))
     clubs = {c["key"]: c for c in L["clubs"]}
-    MSI = MSI_STADIUM
     out = []
     for k in range(len(L["fixtures"])):
         mid = "M%03d" % (k + 1)
@@ -321,7 +320,7 @@ def fixtures():
                 },
                 "away": {"key": a["key"], "club": a["club"], "color": a["color"]},
                 "score": m["score"],
-                "stIndex": MSI[h["stadium"]],
+                "stIndex": MSI_STADIUM[h["stadium"]],
                 "setup": {
                     "stadium": m["setup"]["stadium"],
                     "city": m["setup"]["city"],
@@ -377,25 +376,27 @@ def national_clubs():
     return out
 
 
-def national_fixtures(template):
-    """One Argentina v Brazil fixture. No recorded match exists, so the score and result stay empty
-    and the fixture is flagged; the tactics come from an existing fixture, so the vocabulary matches."""
+def national_fixtures(season):
+    """One Argentina v Brazil fixture. No recorded match exists: the score is [0, 0] only because the
+    shell needs an array, so it is not a result, and the fixture is flagged. The venue name, city and
+    tactics come from a season fixture at the same stadium index, so the labels match the 3D stadium."""
     home, away = national_clubs()
-    setup = dict(template["setup"], seed=NATIONAL_SEED)
+    venue = next(fx for fx in season if fx["stIndex"] == MSI_STADIUM[home["stadium"]])
+    setup = dict(venue["setup"], seed=NATIONAL_SEED)
     return [
         {
             "id": "N001",
             "matchday": "National",
             "date": "",
             "national": True,
-            "label": "synthetic squad",
+            "label": home["label"],
             "home": {k: home[k] for k in ("key", "club", "color", "stadium")},
             "away": {k: away[k] for k in ("key", "club", "color", "stadium")},
             "score": [0, 0],
             "stIndex": MSI_STADIUM[home["stadium"]],
             "setup": setup,
-            "formations": template["formations"],
-            "styles": template["styles"],
+            "formations": venue["formations"],
+            "styles": venue["styles"],
             "result": None,
         }
     ]
@@ -431,9 +432,7 @@ def build(out_root):
     season = fixtures()
     write(
         out_root + "shared/fixtures.json",
-        json.dumps(
-            season + national_fixtures(season[0]), ensure_ascii=False, separators=(",", ":")
-        ),
+        json.dumps(season + national_fixtures(season), ensure_ascii=False, separators=(",", ":")),
     )
     clubs = json.load(open(AD + "league.json"))["clubs"] + national_clubs()
     keys = [c["key"] for c in clubs]
