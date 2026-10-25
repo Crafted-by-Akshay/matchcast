@@ -4,8 +4,16 @@
  * MatchCast wire contracts v1.1.0. Contextual validation is specified in docs/contracts.md.
  */
 export type MatchCastContract =
-  Roster | EventEnvelope | TrackingFrame | StateRevisionPacket | ClaimPacket | PublicationPacket | AuditRecord;
-export type SchemaVersion = "1.0.0" | "1.1.0";
+  | Roster
+  | EventEnvelope
+  | TrackingFrame
+  | StateRevisionPacket
+  | ClaimPacket
+  | PublicationPacket
+  | AuditRecord
+  | OnAirPacket
+  | FeedDropPacket;
+export type SchemaVersion = "1.0.0" | "1.1.0" | "1.2.0";
 export type Identifier = string;
 export type Sequence = number;
 export type Counter = number;
@@ -25,8 +33,12 @@ export type ClaimPacket = {
   snapshot: StateRevisionReference;
   max_evidence_sequence: Counter;
   approval_status: "pending" | "approved" | "rejected" | "retracted";
+  trace_id?: Identifier;
+  tool_call_ids?: Identifier[];
+  evidence_ids?: Identifier[];
 };
 export type Sha256 = string;
+export type FeedKey = "casual" | "analyst" | "audio_description" | "catch_me_up" | "half_time" | "ticker";
 
 export interface Roster {
   kind: "roster";
@@ -303,11 +315,55 @@ export interface AuditRecord {
     | "a2a_call"
     | "a2a_failed"
     | "ds_answered"
-    | "ds_unverified";
+    | "ds_unverified"
+    | "feed_killed"
+    | "feed_resumed";
   subject_id: Identifier;
   details: {
     [k: string]: unknown;
   };
   prev_hash: Sha256;
   hash: Sha256;
+}
+export interface OnAirPacket {
+  kind: "onair";
+  schema_version: "1.2.0";
+  stream: StreamIdentity;
+  publication_id: Identifier;
+  feed: FeedKey;
+  lang: string;
+  text: string;
+  /**
+   * @minItems 1
+   */
+  source_event_ids: [Identifier, ...Identifier[]];
+  claim_ids: Identifier[];
+  match_time_ms: Counter;
+  aired_at: Timestamp;
+  repair_count: number;
+}
+export interface FeedDropPacket {
+  kind: "feed_drop";
+  schema_version: "1.2.0";
+  stream: StreamIdentity;
+  publication_id: Identifier;
+  feed: FeedKey;
+  /**
+   * @minItems 1
+   */
+  source_event_ids: [Identifier, ...Identifier[]];
+  reason_code:
+    | "number_mismatch"
+    | "unknown_player"
+    | "unknown_source"
+    | "stale_state"
+    | "unsupported_statement"
+    | "unsafe_content"
+    | "length_exceeded"
+    | "citation_missing"
+    | "repeat"
+    | "translation";
+  repair_count: number;
+  audit_id: Identifier;
+  match_time_ms: Counter;
 }

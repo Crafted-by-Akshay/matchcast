@@ -65,6 +65,8 @@ Every top-level packet has `kind`, `schema_version`, and `stream`.
 | `claim` | Source references/interval, numeric metric and units, derivation version, snapshot, evidence limit, approval status |
 | `audit_record` | One agent, person or system decision: `audit_id`, per-stream `sequence`, `time`, `actor_kind`/`actor_id`, `action` (closed list in `docs/architecture/04-agents.md` §4), `subject_id`, `details`, `prev_hash`, `hash` |
 | `publication` | Stable publication ID, claim IDs, state reference, persona/language, match time, wall-clock expiry, audio generation ID, text |
+| `onair` (1.2.0) | One verified derived-feed line that aired: `publication_id`, `feed`, `lang`, `text`, `source_event_ids`, `claim_ids`, `match_time_ms`, `aired_at`, `repair_count` |
+| `feed_drop` (1.2.0) | One derived-feed line dropped after repair: `publication_id`, `feed`, `source_event_ids`, `reason_code`, `repair_count`, `audit_id` (the audit record of the drop), `match_time_ms` |
 
 ### Event payload types
 
@@ -84,7 +86,7 @@ All positions are metres on the ground (z=0) inside the roster pitch. Types mark
 | `pressure` | 1.1 | `player_id` (presser), `team_id`, `target_player_id` (opposing team), `position`, `distance_m` (at least 0), `closing_speed_mps` (at least 0) |
 
 Both versions are accepted by the validators, so old packets stay valid. `schema_version`
-in the contract above is a set (`SUPPORTED_VERSIONS`), and `SCHEMA_VERSION` is the newest.
+in the contract above is a set (`SUPPORTED_VERSIONS`). `AUDIT_SCHEMA_VERSION` is the version the audit writer stamps, currently 1.1.0; it is not the newest version.
 
 `fixtures/manifest.json` indexes shared positive/negative fixtures. `contexts.json`
 contains publication and correction reference-validation cases. These are small
@@ -254,6 +256,43 @@ Duplicate supplied claim IDs and stale revisions fail. The caller must select
 trusted current state/approval records. This is reference validation, not a
 publication service or authorization check. Semantic fast-path and model-draft
 review remain mandatory before actual publication/synthesis under v1.1.
+
+## Derived feed lines (1.2.0)
+
+Six fan feeds air derived lines: `casual`, `analyst`, `audio_description`,
+`catch_me_up`, `half_time` and `ticker`. A verified line on a derived feed airs with
+no human step. A line that fails repair is dropped and is never queued for a person.
+The booth voices are not derived feed lines and keep their own publication path.
+
+`onair` records a line that aired. `source_event_ids` is a nonempty list of event IDs
+only, without origin sequence or revision. `claim_ids` may be empty for a line that
+cites events alone. `repair_count` is 0 for a line that verified first time and 1 for
+one that verified after its single repair. `lang` is a BCP 47-style tag. Version 1.2.0
+carries English only. A translated row reuses the same `publication_id` and adds a
+row; it never edits the English text. `text` is plain text, not HTML.
+
+`feed_drop` records a line that did not air. `reason_code` uses the Verifier's codes,
+plus `repeat` (a claim already aired in the last three match minutes) and `translation`
+(a translated line whose numbers, names or neutral wording no longer match). The text
+of a dropped line stays in the audit chain, and `audit_id` names that audit record.
+
+Claims gain three optional fields in 1.2.0. None of them changes an existing 1.0.0
+or 1.1.0 claim, and claim `source` keeps its `EventSources` shape:
+
+- `trace_id`: the Showrunner run that produced the claim. Until that run ID exists,
+  `match_id` plus `moment_id`.
+- `tool_call_ids`: the IDs of the tool calls that produced the claim, as IDs only.
+- `evidence_ids`: history rows the claim cites, written `results:<row>`. The row is
+  1-based and the header row is excluded.
+
+The feed records carry `source_event_ids`, so a 1.1.0 claim needs no change.
+
+Audit actions `feed_killed` and `feed_resumed` record a desk kill or resume of one
+feed. The audit writer stays on schema version 1.1.0; only the feed packets use 1.2.0.
+
+Validation here is schema-level only. Checking that a feed line's persona matches its
+feed, that its `claim_ids` are approved, and that `audit_id` exists are consumer
+obligations, as for publications.
 
 ## Audit records and the hash chain
 

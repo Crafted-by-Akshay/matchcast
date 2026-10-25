@@ -4,7 +4,7 @@
  * spaces, UTF-8) of the record without `hash`; the first record uses GENESIS_HASH.
  */
 import type { AuditRecord, StreamIdentity } from "./generated.js";
-import { ContractError, SCHEMA_VERSION, validateContract } from "./index.js";
+import { ContractError, AUDIT_SCHEMA_VERSION, validateContract } from "./index.js";
 
 export const GENESIS_HASH = "0".repeat(64);
 export const MAX_DETAILS_BYTES = 2048;
@@ -110,7 +110,7 @@ export function appendAudit(previous: AuditRecord | null, input: AppendAuditInpu
   const sequence = previous ? previous.sequence + 1 : 1;
   const record: Omit<AuditRecord, "hash"> = {
     kind: "audit_record",
-    schema_version: SCHEMA_VERSION as AuditRecord["schema_version"],
+    schema_version: AUDIT_SCHEMA_VERSION as AuditRecord["schema_version"],
     stream: input.stream,
     audit_id: input.audit_id ?? `audit-${sequence}`,
     sequence,
