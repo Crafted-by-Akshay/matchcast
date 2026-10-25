@@ -37,9 +37,9 @@ const VC = (() => {
   const say = (text, o) => {
     o = o || {}; const at = o.at || Date.now();
     caption(text);
-    if (on && o.tone === 'big') swell();
     source = o.audio ? 'azure' : 'browser'; onChange();
     if (on && !(o.id && spoken.has(o.id))) {
+      if (o.tone === 'big') swell();
       if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' }); next(); }
   };
   // the crowd bed (simulated): low noise under the commentary while Voice is on. It is synthesised here, not a recording, and it swells for a big moment.
@@ -51,7 +51,7 @@ const VC = (() => {
       let last = 0; for (let i = 0; i < len; i++) { last = (last + (Math.random() * 2 - 1) * 0.02) / 1.02; d[i] = last * 3.5; }   // brown noise: a murmur, not hiss
       const src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
       src.buffer = buf; src.loop = true; lp.type = 'lowpass'; lp.frequency.value = 900; g.gain.value = 0.04;
-      src.connect(lp); lp.connect(g); g.connect(ctx.destination); src.start(); if (ctx.state === 'suspended') ctx.resume();
+      src.connect(lp); lp.connect(g); g.connect(ctx.destination); src.start(); if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       crowd = { ctx, src, g };
     } catch (e) { crowd = null; }   // no audio here: the commentary still plays
   };

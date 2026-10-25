@@ -175,3 +175,23 @@ test('Voice on starts the crowd bed, labelled simulated, and Voice off stops it'
   await page.click('#voice-btn');
   expect(await page.evaluate(() => VC.crowd)).toBe(false);
 });
+
+test('the booth voices a new match, even though its line ids start again', async ({ page }) => {
+  // the Agents view runs no Watch match, so nothing resets the feed between the two calls below
+  await openShell(page, 'agents');
+  await page.evaluate(() => { VC.set(true); });
+  const spoken = await page.evaluate(async () => {
+    const calls: string[] = [];
+    const say = VC.say;
+    VC.say = (text: string, o: any) => { calls.push(text); return say(text, o); };
+    CM.reset('first', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.api('First match colour.', 2, 'summary', 'first-1');
+    await new Promise((r) => setTimeout(r, 400));
+    CM.reset('second', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.api('Second match colour.', 2, 'summary', 'second-1');
+    await new Promise((r) => setTimeout(r, 400));
+    VC.say = say;
+    return calls;
+  });
+  expect(spoken).toEqual(expect.arrayContaining(['First match colour.', 'Second match colour.']));
+});

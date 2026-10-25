@@ -668,12 +668,15 @@ async function answerAsk(id, q, to = 'watch') {
 // the continuous feed goes to both views, at most every 200 ms: Watch and Broadcast draw the newest line and the list
 let linesT = 0;
 // the booth: each feed line is voiced once, when it arrives (VC drops a line older than 5 s). Play-by-play is the first voice; summaries and the agents' lines are the analyst's colour.
-const voiced = new Set();
+const voiced = new Set();   // keyed by id and arrival time: line ids start again with each match
 function voiceFeed(items) {
+  const keys = new Set(items.map((x) => x.id + '@' + x.t));
+  for (const k of voiced) if (!keys.has(k)) voiced.delete(k);   // a line that left the feed is never needed again
   for (const x of items) {
-    if (voiced.has(x.id)) continue;
-    voiced.add(x.id);
-    if (VC.on) VC.say(x.text, { id: 'feed-' + x.id, at: x.t, role: x.source === 'live' || x.kind === 'summary' ? 'analyst' : 'playByPlay', tone: x.tone });
+    const key = x.id + '@' + x.t;
+    if (voiced.has(key)) continue;
+    voiced.add(key);
+    if (VC.on) VC.say(x.text, { id: 'feed-' + key, at: x.t, role: x.source === 'live' || x.kind === 'summary' ? 'analyst' : 'playByPlay', tone: x.tone });
   }
 }
 function pushLines() {
