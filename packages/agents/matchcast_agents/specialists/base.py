@@ -34,6 +34,8 @@ class SpecialistReport:
     status: Status
     findings: tuple[Finding, ...] = ()
     why: str | None = None  # one line for the why-this-matters, when the specialist has one
+    # the event ids or results rows the numbers in the why line came from
+    why_evidence: tuple[str, ...] = ()
 
 
 class Specialist(Protocol):

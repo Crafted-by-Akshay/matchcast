@@ -3,7 +3,7 @@
 It answers from the martj42 CC0 results file (ADR-0020) and never from a fictional squad. Each
 finding cites the results rows it counted, as ``results:<row>``, so the Verifier can recount it
 against the file. A pair with no past meeting gets ``no_data`` and no why line, so the Narrator
-writes no history claim.
+writes no history claim. A results file missing from the image is a ``failed`` report, not a guess.
 """
 
 from datetime import date
@@ -19,15 +19,19 @@ class HistorySpecialist:
     async def run(self, ctx: MatchContext, request: SpawnRequest) -> SpecialistReport:
         home_name = ctx.club_name(ctx.home)
         away_name = ctx.club_name(ctx.away)
-        if resolve_team(home_name) is None or resolve_team(away_name) is None:
-            return SpecialistReport(self.name, request.moment_id, "no_data")
+        try:
+            if resolve_team(home_name) is None or resolve_team(away_name) is None:
+                return SpecialistReport(self.name, request.moment_id, "no_data")
+            today = date.today()
+            block = pre_match(home_name, away_name, on=today)
+            rows = tuple(f"results:{n}" for n in meeting_rows(home_name, away_name, on=today))
+        except OSError:
+            return SpecialistReport(self.name, request.moment_id, "failed")
 
-        block = pre_match(home_name, away_name, on=date.today())
         h2h = block["h2h"]
-        if h2h["played"] == 0:
+        if h2h["played"] == 0 or len(rows) != h2h["played"]:
             return SpecialistReport(self.name, request.moment_id, "no_data")
 
-        rows = tuple(f"results:{n}" for n in meeting_rows(home_name, away_name, on=date.today()))
         last = h2h["last_meeting"]
         last_home, last_away = (int(x) for x in last["score"].split("-"))
         findings = (
@@ -58,4 +62,11 @@ class HistorySpecialist:
             f"{home_name} and {away_name} last met on {last['date']}, {last['score']} "
             f"({last['competition']})"
         )
-        return SpecialistReport(self.name, request.moment_id, "ok", findings=findings, why=why)
+        return SpecialistReport(
+            self.name,
+            request.moment_id,
+            "ok",
+            findings=findings,
+            why=why,
+            why_evidence=(rows[-1],),
+        )

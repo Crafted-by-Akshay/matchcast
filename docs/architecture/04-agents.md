@@ -37,12 +37,12 @@ The Showrunner (CREW-1.1) spawns specialists for one moment through `plan_spawns
 
 | Specialist | Story | Input | Output | Model call | Fallback |
 | --- | --- | --- | --- | --- | --- |
-| History | CREW-2.2 (AB#391) | Real past meetings of two nations (martj42 CC0 results file, ADR-0020), cut at today | Head-to-head counts, last meeting, each finding citing `results:<row>` of the file it counted | none, deterministic | `no_data` for a fictional squad or a pair with no past meeting; no why line, so the Narrator writes no history claim |
-| Rhythm | CREW-2.3 (AB#486) | Raw events in a trailing five-minute window ending at the moment | Control index per minute (-1 to 1, positive means home), control team when the index passes 0.2, chaos per minute, and swings (a sign flip within three minutes, both readings at least 0.1) written to `ctx.extra["rhythm"]`; a `why` line naming the latest swing | none, deterministic | `no_data` report when the window is empty; the rules twin still writes the line |
+| History | CREW-2.2 (AB#391) | Real past meetings of two nations (martj42 CC0 results file, ADR-0020), cut at today | Head-to-head counts, last meeting, each finding citing `results:<row>`, the data row of the file it counted (header excluded) | none, deterministic | `no_data` for a fictional squad or a pair with no past meeting; `failed` if the results file is missing; no why line in either case, so the Narrator writes no history claim |
+| Rhythm | CREW-2.3 (AB#486) | Raw events in a trailing five-minute window ending at the moment | Whole-minute control index (-1 to 1, positive means home), the control team when the index passes 0.2 and at least 10 on-ball actions are in the window, and swings (a sign flip within three minutes, both readings at least 0.1, at most one per team per span) written to `ctx.extra["rhythm"]`; a `why` line naming a swing from the last five minutes, with the event ids of the window that ends at the swing | none, deterministic | `no_data` report when the window is empty; the rules twin still writes the line |
 
 `plan_spawns` (CREW-2.1, AB#385) sizes the call: a priority-1 moment gets up to four specialists in parallel, any other moment at most one, and the per-match `SpawnBudget` (60 spawns, a cost guard) is shared by every moment. When the budget is spent, or no specialist is available, it spawns nothing and gives the reason, which the ledger records and the rules twin covers.
 
-Rhythm weights on-ball actions (passes and carries) and pass tempo at 0.6 of the index, and territory, pressure, shots and turnovers won at 0.4. The engine emits no possession time, so possession is the share of on-ball actions. The sides swap at half time, the usual convention, which the fixture does not cover.
+Rhythm weights on-ball actions (passes and carries) and pass tempo at 0.6 of the index, and territory, pressure, shots and turnovers won at 0.4. The engine emits no possession time, so possession is the share of on-ball actions. The sides swap at half time, the usual convention; the fixture has only one period, so the swap is not checked against engine data.
 
 ## 3. Workflow graph (Microsoft Agent Framework)
 
