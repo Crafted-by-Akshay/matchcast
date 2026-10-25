@@ -204,7 +204,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   #api-pill{order:-1}
   .matchbar .chips{display:none}
   .matchbar .meta:not(.err){display:none}   /* the first screen belongs to the match: fixture, score, then the view; a load error still shows */
-  .toast{bottom:auto;top:var(--toast-top,150px)}   /* just under the story row (toast() sets --toast-top): clear of the brand and of the pitch controls at the bottom of the view */
+  .toast{bottom:auto;top:var(--toast-top,150px);left:0;right:0;transform:none;max-width:none;height:var(--toast-h,48px);display:flex;align-items:center;justify-content:center;border-radius:0;border-width:1px 0}   /* it takes the place of the Viewing-as row for its 2.6 s (toast() sets --toast-top and --toast-h): clear of the brand, the scoreboard and the pitch controls */
   #src{display:none}   /* the engine chip repeats what the view itself shows; the sync chip stays */
   .fx label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .brand small{display:block}
@@ -375,7 +375,7 @@ const fixtureOf = (s) => { const f = FX.find((x) => keyOf(setupOf(x)) === keyOf(
 const byId = (id) => FX.find((x) => x.id === id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 { const st = document.querySelector('.status'); if (st) { const edge = () => st.classList.toggle('end', st.scrollLeft + st.clientWidth >= st.scrollWidth - 2); st.addEventListener('scroll', edge, { passive: true }); addEventListener('resize', edge); edge(); } }
-const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) el.style.setProperty('--toast-top', Math.round(sb.getBoundingClientRect().bottom + 8) + 'px'); el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 // the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
 let RECAP = { gen: 0, closed: false };
 const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };

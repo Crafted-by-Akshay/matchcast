@@ -47,16 +47,16 @@
     clearInterval(go);
     if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
     if (!window.__mc.vis.VIS.on) window.__mc.vis.toggle(true);
-    if (narrow()) { $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false'); }   // phone: the tracker runs, the panel stays closed until asked for (UX review, finding 1)
+    // the tracker runs, but the panel (debug-style accuracy numbers) and the detection boxes (which sit on top of the 3D name tags) stay closed until asked for (UX review, finding 1 on a phone, pass 7 on every width)
+    const bx = $('visp-box'); if (bx && window.__mc.vis.VIS.boxes) bx.click();
+    $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false');
   }, 300);
 })();
-// Phone (≤ 640 px): the Vision panel would cover most of the pitch, so the Vision button and the panel's close button only show or hide the panel.
-// The tracker keeps running for the agents; a desktop viewer still turns it off with the same button.
-function narrow() { return window.matchMedia('(max-width:640px)').matches; }
+// The Vision button and the panel's close button only show or hide the panel; the tracker keeps running for the agents at every width.
 (() => {
   const panelOnly = (e) => {
     const v = window.__mc && window.__mc.vis, vp = $('visp');
-    if (!narrow() || !v || !v.VIS.on || !vp) return;
+    if (!v || !v.VIS.on || !vp) return;
     e.stopImmediatePropagation(); e.preventDefault();
     vp.hidden = !vp.hidden;
     const b = $('visb'); if (b) b.setAttribute('aria-pressed', vp.hidden ? 'false' : 'true');
