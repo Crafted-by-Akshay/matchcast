@@ -727,6 +727,53 @@ def test_the_call_socket_refuses_an_unknown_match_or_a_bad_session(client: TestC
         assert refused.value.code == 1008
 
 
+def test_a_call_turn_counts_against_the_address_question_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create(client)
+    post_all(client)
+    monkeypatch.setattr(matches, "ASK_PER_IP_MINUTE", 0)
+    talk = {"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"}
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json(talk)
+        assert ws.receive_json() == {"type": "error", "id": 1, "code": "rate_limited"}
+
+
+def test_the_call_speaks_a_reply_only_while_the_voice_allowance_lasts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create(client)
+    post_all(client)
+    voice = client.app.state.matches.voice
+    monkeypatch.setattr(type(voice), "ready", property(lambda self: True))
+    monkeypatch.setattr(voice, "get", lambda key: None)
+    monkeypatch.setattr(voice, "voice_for", lambda role, player=None: "voice-" + role)
+
+    async def clip(text: str, name: str) -> bytes:
+        return b"mp3"
+
+    monkeypatch.setattr(voice, "clip", clip)
+    talk = {"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"}
+    url = "/v1/matches/match-short/call?session_id=short"
+
+    monkeypatch.setattr(voice, "allow", lambda client_ip, now=None: False)  # allowance spent
+    with client.websocket_connect(url) as ws:
+        ws.send_json(talk)
+        assert ws.receive_json()["verdict"] == "verified"
+        assert ws.receive_json() == {"type": "audio_end", "id": 1, "cancelled": False}
+
+    monkeypatch.setattr(voice, "allow", lambda client_ip, now=None: True)
+    with client.websocket_connect(url) as ws:
+        ws.send_json(talk)
+        assert ws.receive_json()["type"] == "reply"
+        header = ws.receive_json()
+        assert header["type"] == "audio" and header["seq"] == 0
+        assert ws.receive_bytes() == b"mp3"
+        while (frame := ws.receive_json())["type"] != "audio_end":
+            ws.receive_bytes()
+        assert frame == {"type": "audio_end", "id": 1, "cancelled": False}
+
+
 @pytest.fixture(autouse=True)
 def _no_live_search(monkeypatch):
     """PR checks make no Azure call: a developer's SEARCH_* settings must not reach the tests."""

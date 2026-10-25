@@ -502,6 +502,7 @@ try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applyS
 function show(view) {
   if (!PANES.includes(view)) view = 'watch';
   current = view;
+  if (view !== 'watch' && window.callLeave) window.callLeave();
   const on = shownViews(view);
   for (const v of PANES) {
     const shown = on.includes(v);
@@ -740,14 +741,18 @@ function pushCards() {
 // ---- EXP-18: the voice call. Watch shows the Call button; the shell owns the call: one socket to the api (LV.openCall), the fan's
 // voice (Azure Speech, or the browser's recogniser labelled Simulated), and the player's checked reply in his own voice, sentence by
 // sentence. A cut-in stops the reply and cancels the turns in flight. Headphones give the cleanest cut-in: the speakers' echo can reach the mic.
-const CALL = { on: false, sock: null, n: 0, turns: new Map(), muted: new Set(), parts: [], el: null, quiet: 0, stop: null, rec: null };
+const CALL = { on: false, sock: null, n: 0, turns: new Map(), muted: new Set(), parts: [], el: null, src: null, quiet: 0, stop: null, rec: null };
 const callPost = (on, note) => post('watch', { src: 'matchcast-shell', type: 'call-state', on, note: note || '' });
-const callSilence = () => { CALL.parts = []; if (CALL.el) { CALL.el.pause(); CALL.el = null; } };
+const callSilence = () => {
+  CALL.parts = [];
+  if (CALL.el) { CALL.el.pause(); CALL.el = null; }
+  if (CALL.src) { URL.revokeObjectURL(CALL.src); CALL.src = null; }   // a paused clip never ends, so its URL is freed here
+};
 const callPlay = () => {   // the next sentence starts when the one before has ended
   if (CALL.el || !CALL.parts.length) return;
-  const src = URL.createObjectURL(CALL.parts.shift()), el = new Audio(src);
-  CALL.el = el; CALL.quiet = Date.now() + 1200;   // the player's own first words can come back through the mic: no cut-in for a moment
-  const done = () => { URL.revokeObjectURL(src); if (CALL.el === el) CALL.el = null; callPlay(); };
+  const src = URL.createObjectURL(CALL.parts.shift().blob), el = new Audio(src);
+  CALL.el = el; CALL.src = src; CALL.quiet = Date.now() + 1200;   // the player's own first words can come back through the mic: no cut-in for a moment
+  const done = () => { URL.revokeObjectURL(src); if (CALL.el === el) { CALL.el = null; CALL.src = null; } callPlay(); };
   el.onended = done; el.onerror = done;
   el.play().catch(done);
 };
@@ -770,10 +775,14 @@ const callBrowser = (lang) => {   // Simulated: the browser's own recogniser, wh
 const callOpen = () => {
   const s = LV.openCall({
     reply: (turn, r) => { const id = CALL.turns.get(turn); if (id != null) post('watch', { src: 'matchcast-shell', type: 'talk-reply', id, reply: r }); },
-    audio: (turn, blob) => { if (CALL.turns.has(turn) && !CALL.muted.has(turn)) { CALL.parts.push(blob); callPlay(); } },
+    audio: (turn, blob) => {
+      if (!CALL.turns.has(turn) || CALL.muted.has(turn)) return;
+      CALL.parts = CALL.parts.filter((p) => p.turn >= turn);   // a newer answer does not wait behind an older one's sentences
+      CALL.parts.push({ turn, blob }); callPlay();
+    },
     end: (turn) => { CALL.turns.delete(turn); CALL.muted.delete(turn); },
     error: (turn) => { const id = CALL.turns.get(turn); CALL.turns.delete(turn); if (id != null) post('watch', { src: 'matchcast-shell', type: 'talk-reply', id, reply: null }); },
-    close: () => { if (CALL.sock === s) callEnd('The call dropped. You can still type.'); },
+    close: (opened) => { if (CALL.sock === s) callEnd(opened ? 'The call dropped. You can still type.' : 'The call could not start: the match is not on the api, or the session is not. You can still type.'); },
   });
   if (!s) return false;
   CALL.sock = s; return true;
@@ -787,7 +796,7 @@ const callMic = async () => {
   else callEnd('Calls need speech recognition, which this browser does not have. You can still type.');
 };
 const callStart = () => {
-  if (CALL.on) return;
+  if (CALL.on) { callPost(true); return; }   // a reloaded Watch asks again: tell it the call is still on
   if (!callOpen()) { callPost(false, 'Calls need a match on the api. You can still type.'); return; }
   CALL.on = true;
   callMic();
@@ -802,6 +811,7 @@ const callEnd = (note) => {
   CALL.turns.clear(); CALL.muted.clear();
   callPost(false, note || 'Call ended.');
 };
+window.callLeave = () => { if (CALL.on) callEnd('Call ended: you left Watch.'); };   // the mic must not stay open on another view
 
 window.addEventListener('message', (e) => {
   const d = e.data || {};

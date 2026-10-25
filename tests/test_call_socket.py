@@ -1,6 +1,7 @@
 """The voice call socket (EXP-18): turns, sentence-by-sentence audio, cancel and bad frames."""
 
 import asyncio
+import json
 
 from app.call import CallSocket, sentences
 from fastapi import WebSocketDisconnect
@@ -14,11 +15,13 @@ class FakeSocket:
         self.inbox: asyncio.Queue = asyncio.Queue()
         self.sent: list = []
 
-    async def receive_json(self) -> dict:
+    async def receive_text(self) -> str | None:
         item = await self.inbox.get()
         if item is DISCONNECT:
             raise WebSocketDisconnect()
-        return item
+        if isinstance(item, bytes):
+            return None  # a binary frame has no text, as in Starlette
+        return json.dumps(item) if isinstance(item, dict) else item
 
     async def send_json(self, payload: dict) -> None:
         self.sent.append(payload)
@@ -43,7 +46,13 @@ async def until_turn_ends(ws: FakeSocket, turn_id: int) -> None:
 
 
 def verified(reply: str = REPLY) -> dict:
-    return {"verdict": "verified", "reply": reply, "order": "none", "audio_url": "/v1/audio/x.mp3"}
+    return {
+        "verdict": "verified",
+        "reply": reply,
+        "order": "none",
+        "facts": {"shots": 2},
+        "audio_url": "/v1/audio/x.mp3",
+    }
 
 
 async def talk_once(result: dict, *, speak=None, allow=lambda: True) -> FakeSocket:
@@ -205,7 +214,7 @@ def test_a_bad_frame_is_answered_and_the_call_stays_open() -> None:
     asyncio.run(scenario())
     assert ws.sent == [
         {"type": "error", "id": 3, "code": "bad_frame"},
-        {"type": "error", "id": "not-a-number", "code": "bad_frame"},
+        {"type": "error", "id": None, "code": "bad_frame"},  # an id that is not an int: no echo
     ]
 
 
@@ -231,3 +240,109 @@ def test_a_talk_error_with_a_code_is_sent_with_that_code() -> None:
 
     asyncio.run(scenario())
     assert ws.sent == [{"type": "error", "id": 4, "code": "not_found"}]
+
+
+def test_a_verified_reply_without_facts_is_shown_and_not_spoken() -> None:
+    # Watch shows a reply by its facts only; the call speaks the same replies and no others
+    ws = asyncio.run(talk_once({**verified(), "facts": {}}))
+    assert ws.types() == ["reply", "audio_end"]
+
+
+def test_frames_that_are_not_json_objects_are_refused_and_the_call_stays_open() -> None:
+    ws = FakeSocket()
+
+    async def scenario() -> None:
+        socket = CallSocket(
+            ws, talk=None, speak=None, voice_for=lambda r, t: "v", allow_talk=lambda: True
+        )
+        server = asyncio.create_task(socket.serve())
+        for frame in ("not json", "[1, 2]", "42", b"\x00\x01"):
+            await ws.inbox.put(frame)
+        await ws.inbox.put({"type": "shout", "id": 3})
+        while len(ws.sent) < 5:
+            await asyncio.sleep(0.001)
+        await ws.inbox.put(DISCONNECT)
+        await server
+
+    asyncio.run(scenario())
+    assert ws.sent == [{"type": "error", "id": None, "code": "bad_frame"}] * 4 + [
+        {"type": "error", "id": 3, "code": "bad_frame"}
+    ]
+
+
+def test_a_talk_whose_id_is_in_flight_is_refused_and_the_first_still_answers() -> None:
+    ws = FakeSocket()
+
+    async def talk(target: str, utterance: str, position: str | None) -> dict:
+        await asyncio.sleep(0.02)
+        return verified()
+
+    async def scenario() -> None:
+        socket = CallSocket(
+            ws,
+            talk=talk,
+            speak=lambda sentence, voice: asyncio.sleep(0, b"mp3"),
+            voice_for=lambda r, t: "v",
+            allow_talk=lambda: True,
+        )
+        server = asyncio.create_task(socket.serve())
+        await ws.inbox.put({"type": "talk", "id": 5, "target": "home9", "utterance": "one"})
+        await ws.inbox.put({"type": "talk", "id": 5, "target": "home9", "utterance": "two"})
+        await until_turn_ends(ws, 5)
+        await ws.inbox.put(DISCONNECT)
+        await server
+
+    asyncio.run(scenario())
+    assert {"type": "error", "id": 5, "code": "bad_frame"} in ws.sent
+    assert sum(1 for p in ws.sent if isinstance(p, dict) and p["type"] == "reply") == 1
+
+
+def test_a_disconnect_cancels_the_turn_in_flight() -> None:
+    ws = FakeSocket()
+    cancelled: list[str] = []
+
+    async def talk(target: str, utterance: str, position: str | None) -> dict:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.append(target)
+            raise
+        return verified()
+
+    async def scenario() -> None:
+        socket = CallSocket(
+            ws, talk=talk, speak=None, voice_for=lambda r, t: "v", allow_talk=lambda: True
+        )
+        server = asyncio.create_task(socket.serve())
+        await ws.inbox.put({"type": "talk", "id": 1, "target": "home9", "utterance": "x"})
+        await asyncio.sleep(0.01)
+        await ws.inbox.put(DISCONNECT)
+        await server
+        await asyncio.sleep(0.01)  # the cancelled turn runs its handler
+
+    asyncio.run(scenario())
+    assert cancelled == ["home9"]
+
+
+def test_a_cancel_for_a_finished_turn_is_ignored() -> None:
+    ws = FakeSocket()
+
+    async def scenario() -> None:
+        socket = CallSocket(
+            ws,
+            talk=lambda t, u, p: asyncio.sleep(0, verified()),
+            speak=lambda s, v: asyncio.sleep(0, b"mp3"),
+            voice_for=lambda r, t: "v",
+            allow_talk=lambda: True,
+        )
+        server = asyncio.create_task(socket.serve())
+        await ws.inbox.put({"type": "talk", "id": 1, "target": "home9", "utterance": "x"})
+        await until_turn_ends(ws, 1)
+        await ws.inbox.put({"type": "cancel", "id": 1})  # a cut-in that races the end
+        await asyncio.sleep(0.01)
+        await ws.inbox.put(DISCONNECT)
+        await server
+
+    asyncio.run(scenario())
+    assert not [p for p in ws.sent if isinstance(p, dict) and p["type"] == "error"]
+    assert ws.sent[-1] == {"type": "audio_end", "id": 1, "cancelled": False}

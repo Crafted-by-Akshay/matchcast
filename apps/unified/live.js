@@ -240,7 +240,9 @@ const LV = (() => {
       else if (d.type === 'audio_end') h.end(d.id);
       else if (d.type === 'error') h.error(d.id, d.code);
     };
-    ws.onclose = () => h.close();
+    let opened = false;
+    ws.onopen = () => { opened = true; };
+    ws.onclose = () => h.close(opened);   // a socket that never opened was refused at the handshake (no match, or a bad session)
     return {
       talk: (id, target, position, utterance) => {
         if (ws.readyState !== 1) return false;
