@@ -241,7 +241,7 @@ def test_half_the_recent_screens_on_the_local_word_list_is_degraded_and_recovers
 
 
 def test_a_refused_lines_text_never_leaves_the_workflow(match) -> None:
-    from matchcast_agents.workflow import WITHHELD, public_line
+    from matchcast_agents.workflow import UNCHECKED, WITHHELD, public_line
 
     flow = build(match, safety=UnsafeScreen())
     run(flow.ingest(match["events"]))
@@ -257,8 +257,8 @@ def test_a_refused_lines_text_never_leaves_the_workflow(match) -> None:
     seen = [e.data for e in flow.hub.history() if e.event == "line"]
     refused = [d for d in seen if d["reason_code"] == "unsafe_content"]
     assert refused and all(d["text"] == WITHHELD for d in refused)
-    # the verdict itself never reaches a viewer with the text; the draft event that came before
-    # the check is the producer desk's working copy and is not covered here
+    # no event of a refused line shows its text: not the verdict, and not the draft before it
     assert not [
-        d for d in seen if d["status"] in ("rejected", "abstained") and "scores" in d["text"]
+        d for d in seen if "scores" in d["text"] and d["line_id"] in {u.line_id for u in unsafe}
     ]
+    assert all(d["text"] == UNCHECKED for d in seen if d["status"] in ("drafted", "verifying"))

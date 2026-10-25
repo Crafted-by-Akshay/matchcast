@@ -52,14 +52,18 @@ AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 
 
 WITHHELD = "[withheld: refused by Content Safety]"
+UNCHECKED = "[awaiting checks]"
 
 
 def public_line(line: LineRecord) -> dict[str, Any]:
-    """The line as a viewer or the producer desk may read it: the text of a line Content Safety
-    refused is withheld (the store keeps it for the audit chain), its status and reason stay."""
+    """The line as a viewer or the producer desk may read it. Its text is withheld while it has
+    not passed its checks (drafted, verifying: Content Safety has not run yet) and for good once
+    Content Safety refused it; status and reason stay. The store keeps the text for the audit."""
     out = line.model_dump()
     if line.reason_code == "unsafe_content":
         out["text"] = WITHHELD
+    elif line.status in ("drafted", "verifying"):
+        out["text"] = UNCHECKED
     return out
 
 
