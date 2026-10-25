@@ -655,7 +655,7 @@ def test_booth_status_registers_both_voices_or_says_why_not(client: TestClient) 
     assert full["ready"] is False and full["reason"] == "watch_mode_cap"
 
 
-def test_a_persona_stream_gets_no_line_records_of_other_personas(client: TestClient) -> None:
+def test_a_persona_stream_gets_no_publications_of_other_personas(client: TestClient) -> None:
     create(client)
     got = client.get(
         "/v1/matches/match-short/stream", params={**Q, "persona": "analyst", "follow": "false"}
@@ -668,10 +668,10 @@ def test_a_persona_stream_gets_no_line_records_of_other_personas(client: TestCli
     events = [
         e for e in body.split("\n\n") if '"persona": "casual"' in e or '"persona":"casual"' in e
     ]
-    assert not [e for e in events if e.startswith(("event: line", "event: publication"))], events[
+    assert not [e for e in events if e.startswith("event: publication")], events[
         :1
     ]
-    assert "event: line" in body or "event: publication" in body
+    assert "event: line" in body or "event: publication" in body  # producer queue keeps lines
 
 
 def test_stream_refuses_a_persona_that_is_not_real_for_this_match(client: TestClient) -> None:

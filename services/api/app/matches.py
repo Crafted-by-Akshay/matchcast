@@ -703,8 +703,9 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
-            # publications and their line records belong to the persona they were written for
-            own = item.event in ("publication", "line") and keep
+            # publications belong to the persona they were written for; line records stay on
+            # every stream because the Broadcast producer queue reads all personas' lines
+            own = item.event == "publication" and keep
             return not (own and item.data["persona"] not in keep)
 
         async def localised(item: StreamEvent) -> StreamEvent:
