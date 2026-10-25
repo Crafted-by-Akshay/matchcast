@@ -1,9 +1,11 @@
 """Cost guard: what anonymous callers can make the model spend (docs/architecture/14 §5).
 
 The live app has no sign-in for viewers, so a loop of new matches or questions could spend the
-Azure budget. Every model call goes through ``ModelBudget``: a daily cap per api replica, and the
-``MATCHCAST_MODEL_OFF`` kill switch. A refused call raises ``ModelError``, so the agents answer with
-their rules twins (ADR-0014) and the app keeps publishing; only model spend stops.
+Azure budget. Every model call goes through a ``ModelBudget``: a daily cap per api replica, with
+one pool for the match agents and one for Ask and Talk answers (so a question loop cannot turn
+everyone's commentary to rules), and the ``MATCHCAST_MODEL_OFF`` kill switch. A refused call
+raises ``ModelError``, so the agents answer with their rules twins (ADR-0014) and the app keeps
+publishing; only model spend stops.
 """
 
 import logging
@@ -15,9 +17,12 @@ from typing import Any
 
 from matchcast_agents.resilience import ModelError
 
-CALLS_PER_DAY = 4000  # about 25 live matches; a judged day uses a few
+CALLS_PER_DAY = 3000  # match agents: about 20 live matches; a judged day uses a few
+ANSWERS_PER_DAY = 1000  # Ask and Talk answers, a pool of their own
 LIVE_MATCHES_PER_IP_HOUR = 10  # past it, one address's new matches run on the rules
-MATCHES_PER_HOUR = 300  # every address together; past it, new matches are refused (memory too)
+LIVE_MATCHES_PER_HOUR = 100  # every address together; past it, new matches run on the rules
+MATCHES_PER_HOUR = 2000  # a memory guard only: past it, new matches are refused
+QUESTIONS_PER_IP_HOUR = 100  # asks and talks from one address, so one caller cannot empty the pool
 HOUR_S = 3600.0
 DAY_S = 86400.0
 
@@ -29,18 +34,24 @@ def model_off() -> bool:
     return os.environ.get("MATCHCAST_MODEL_OFF", "").strip().lower() == "true"
 
 
-def calls_per_day() -> int:
-    """MATCHCAST_MODEL_CALLS_PER_DAY overrides the daily cap (0 keeps every match on the rules)."""
+def per_day(name: str, default: int) -> int:
+    """An env override of a daily cap (0 keeps that pool on the rules)."""
     try:
-        return max(0, int(os.environ.get("MATCHCAST_MODEL_CALLS_PER_DAY", CALLS_PER_DAY)))
+        return max(0, int(os.environ.get(name, default)))
     except ValueError:
-        return CALLS_PER_DAY
+        return default
 
 
 class ModelBudget:
     """Model calls per UTC day; ``take`` is False past the cap or with the kill switch on."""
 
-    def __init__(self, clock: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self,
+        env: str = "MATCHCAST_MODEL_CALLS_PER_DAY",
+        default: int = CALLS_PER_DAY,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        self.env, self.default = env, default
         self._clock = clock
         self.day = -1
         self.used = 0
@@ -52,12 +63,10 @@ class ModelBudget:
         day = int(self._clock() // DAY_S)
         if day != self.day:
             self.day, self.used, self._warned = day, 0, False
-        if self.used >= calls_per_day():
+        if self.used >= per_day(self.env, self.default):
             if not self._warned:
                 self._warned = True
-                log.warning(
-                    "daily model budget used up; agents answer on the rules until 00:00 UTC"
-                )
+                log.warning("%s used up; the rules answer until 00:00 UTC", self.env)
             return False
         self.used += 1
         return True
@@ -89,14 +98,25 @@ class HourlyWindows:
         self._clock = clock
         self._windows: dict[str, deque[float]] = {}
 
-    def allow(self, key: str, limit: int) -> bool:
+    def _window(self, key: str) -> deque[float]:
         now = self._clock()
         for stale in [k for k, w in self._windows.items() if not w or now - w[-1] >= HOUR_S]:
             del self._windows[stale]
         window = self._windows.setdefault(key, deque())
         while window and now - window[0] >= HOUR_S:
             window.popleft()
-        if len(window) >= limit:
+        return window
+
+    def full(self, key: str, limit: int) -> bool:
+        return len(self._window(key)) >= limit
+
+    def add(self, *keys: str) -> None:
+        for key in keys:
+            self._window(key).append(self._clock())
+
+    def allow(self, key: str, limit: int) -> bool:
+        """Counts one use unless the window is full."""
+        if self.full(key, limit):
             return False
-        window.append(now)
+        self.add(key)
         return True

@@ -107,11 +107,11 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | Route | Limit | Key |
 | --- | --- | --- |
 | `/events` | 20 batches a second (**Planned**, not enforced yet) | stream key |
-| `POST /matches` | 300 new matches an hour in all, then 429; from one address the first 10 an hour run live, later ones on the rules | one api process; client address |
+| `POST /matches` | live for the first 10 created an hour from one address and 100 an hour in all, later ones run on the rules (the page works as before, labelled "Rules fallback"); 2,000 an hour in all is a memory guard, then 429 and the page falls back to its local simulation | client address; one api process |
 | `/ask` | 20 a minute | `browser_session_id` (or IP) |
 | `/talk` | 20 a minute, a budget of its own | `browser_session_id` (or IP) |
-| `/ask` and `/talk` together | 60 a minute, whatever session ids are sent | client address |
-| every model call | 4,000 a UTC day (`MATCHCAST_MODEL_CALLS_PER_DAY`); `MATCHCAST_MODEL_OFF=true` stops them all | one api process; a refused call falls back to the rules twin (ADR-0014) |
+| `/ask` and `/talk` together | 60 a minute and 100 an hour, whatever session ids are sent | client address |
+| model calls | match agents 3,000 a UTC day (`MATCHCAST_MODEL_CALLS_PER_DAY`), Ask and Talk answers 1,000 (`MATCHCAST_ANSWER_CALLS_PER_DAY`), so a question loop cannot turn the commentary to rules; `MATCHCAST_MODEL_OFF=true` stops them all | one api process; a refused call falls back to the rules twin (ADR-0014) and is audited as `fallback_used` |
 | `/ds/ask` | 5 a minute | client address |
 | `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | one api process (a cost cap, shared by all callers) |
 | `/speech/token` | 10 a minute | IP |
