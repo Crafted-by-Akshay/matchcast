@@ -6,8 +6,8 @@ A live arm is its rules twin with the model in place (ADR-0014). Every model cal
 rules twin answers both, and so it answers any rejected answer or open circuit. Each arm reports
 how many calls it sent, how many failed or were refused, and how many agent calls a fallback
 answered (mode ``mixed``). A live run is recorded once by ``scripts/scoreboard_live.py``; the
-scoreboard route shows its arms as precomputed, labelled with the run id, and never calls a model
-(docs/architecture/16, section 4.1).
+scoreboard route shows its arms beside the rules arms, labelled with the run id, and never calls
+a model (docs/architecture/16, section 4.1).
 """
 
 from __future__ import annotations
@@ -247,13 +247,15 @@ def live_run(
     *,
     client: ModelClient,
     max_calls: int,
+    fixture: str,
     seed: int = DEFAULT_SEED,
     rate: float = SEED_RATE,
     run_date: str | None = None,
-    fixture: str = "N001",
 ) -> dict[str, Any]:
     """The three arms on the model, each with its own budget of ``max_calls``. Returns the run
-    record a scoreboard reads as precomputed arms."""
+    record the scoreboard route shows beside the rules arms. ``fixture`` names the fixture the
+    match is (its id in the fixture list, such as N001); it is required so a recording is never
+    labelled with a fixture it did not run on."""
     if not 1 <= max_calls <= MAX_CALLS_PER_ARM:
         raise ValueError(f"a live run needs 1 to {MAX_CALLS_PER_ARM} model calls per arm")
     as_of = run_date or datetime.now(UTC).date().isoformat()
@@ -308,12 +310,14 @@ def load_live_run(
     A match is judged by its teams, not its id: judges' sessions get fresh ids. A file that does
     not parse, or an arm that is not an object with a run id, is logged and treated as no run."""
     file = Path(path)
-    if not file.is_file():
-        return None
     try:
         record = json.loads(file.read_text())
+    except FileNotFoundError:
+        return None
     except (OSError, ValueError):
-        log.warning("scoreboard live run %s does not parse; showing rules arms", path)
+        log.warning(
+            "scoreboard live run %s does not parse or cannot be read; showing rules arms", path
+        )
         return None
     if not isinstance(record, dict) or record.get("kind") != RUN_KIND:
         return None
@@ -328,7 +332,8 @@ def load_live_run(
     if not isinstance(arms, dict) or not arms:
         return None
     if not all(
-        isinstance(arm, dict) and isinstance(arm.get("run_id"), str) for arm in arms.values()
+        isinstance(arm, dict) and isinstance(arm.get("run_id"), str) and arm["run_id"]
+        for arm in arms.values()
     ):
         log.warning("scoreboard live run %s has an arm without a run id; showing rules arms", path)
         return None

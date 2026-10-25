@@ -2,6 +2,7 @@
 budget, and answered by the rules twin when refused or failed. No test here reaches a model."""
 
 import json
+from pathlib import Path
 
 import pytest
 from conftest import run
@@ -55,7 +56,7 @@ def test_a_failed_call_is_counted_and_raised() -> None:
 
 def test_live_arms_that_always_fail_are_answered_by_the_rules(match) -> None:
     client = CountingClient(error=ModelError("no model in this test"))
-    record = live_run(match, client=client, max_calls=20, run_date="2026-10-25")
+    record = live_run(match, client=client, max_calls=20, fixture="M001", run_date="2026-10-25")
     assert set(record["arms"]) == {"full_crew", "single_agent", "crew_no_verifier"}
     for key, arm in record["arms"].items():
         assert arm["mode"] == "mixed", key  # every model call failed, so rules answered
@@ -65,6 +66,22 @@ def test_live_arms_that_always_fail_are_answered_by_the_rules(match) -> None:
         assert arm["cost"]["answered_by_rules"] > 0, key
         assert arm["run_id"], key
     assert client.calls <= 3 * 20
+
+
+def test_a_live_run_record_names_its_fixture_teams_and_events_and_loads_back(
+    match, tmp_path
+) -> None:
+    client = CountingClient(error=ModelError("no model in this test"))
+    record = live_run(match, client=client, max_calls=5, fixture="M001", run_date="2026-10-25")
+    assert record["fixture"] == "M001"
+    assert record["teams"] == sorted(match["teams"].values())
+    assert record["events_sha256"] == events_digest(match["events"])
+    path = tmp_path / "run.json"
+    path.write_text(json.dumps(record))
+    loaded = load_live_run(str(path), teams=list(match["teams"].values()))
+    assert loaded is not None and loaded["run_id"] == record["run_id"]
+    with pytest.raises(TypeError):  # the fixture is required: no record is labelled by a default
+        live_run(match, client=client, max_calls=5)
 
 
 def test_a_seeded_moment_the_crew_skipped_is_not_a_missed_claim(match) -> None:
@@ -79,7 +96,7 @@ def test_a_seeded_moment_the_crew_skipped_is_not_a_missed_claim(match) -> None:
 def test_a_live_run_is_bounded_per_arm(match) -> None:
     for bad in (0, 1001):
         with pytest.raises(ValueError):
-            live_run(match, client=CountingClient(), max_calls=bad)
+            live_run(match, client=CountingClient(), max_calls=bad, fixture="M001")
 
 
 def test_counting_a_fallback_leaves_it_for_the_workflow_audit() -> None:
@@ -170,6 +187,8 @@ def test_a_recorded_arm_without_a_run_id_is_no_run(tmp_path) -> None:
     # a recording whose arm has no run id, or is not an object, would make the route fail
     no_id = write_record(tmp_path, arms={"full_crew": {"mode": "live"}})
     assert load_live_run(no_id, teams=TEAMS) is None
+    empty_id = write_record(tmp_path, arms={"full_crew": {"run_id": "", "mode": "live"}})
+    assert load_live_run(empty_id, teams=TEAMS) is None
     not_obj = write_record(tmp_path, arms={"full_crew": "not an object"})
     assert load_live_run(not_obj, teams=TEAMS) is None
 
@@ -187,7 +206,7 @@ def test_a_recording_missing_a_field_the_route_reads_is_no_run(tmp_path) -> None
     # reach the route as a KeyError
     for key in ("fixture", "run_id", "run_date", "events_sha256"):
         path = write_record(tmp_path)
-        record = json.loads(open(path).read())
+        record = json.loads(Path(path).read_text())
         del record[key]
-        open(path, "w").write(json.dumps(record))
+        Path(path).write_text(json.dumps(record))
         assert load_live_run(path, teams=TEAMS) is None, key

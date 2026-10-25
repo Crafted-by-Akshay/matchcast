@@ -1004,7 +1004,7 @@ def recording(tmp_path, teams, events_sha256="abc") -> str:
     record = {
         "kind": "crew_live_run",
         "run_id": "live0001",
-        "fixture": "N001",
+        "fixture": "M001",
         "run_date": "2026-10-25",
         "teams": sorted(teams),
         "events_sha256": events_sha256,
@@ -1031,7 +1031,7 @@ def test_a_recorded_benchmark_sits_beside_the_rules_arms(
     assert all(arm["mode"] == "rules" for arm in board["arms"].values())
     recorded = board["recorded"]
     assert recorded["same_events"] is False
-    assert recorded["label"].startswith("Recorded live benchmark: N001, seed 2026")
+    assert recorded["label"].startswith("Recorded live benchmark: M001, seed 2026")
     assert recorded["label"].endswith("not this match")
     assert recorded["arms"]["full_crew"]["run_id"] == "full_crew-live"
 
