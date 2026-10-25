@@ -35,6 +35,9 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     + '<div id="mc-cop" role="group" aria-label="Ask the Broadcast Copilot">'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" data-cop="highlights">Highlights</button><button type="button" data-cop="focus">Where to focus</button><button type="button" data-cop="plan">Production plan</button></div>'
     + '<div id="mc-cop-out" aria-live="polite" style="margin-top:6px"></div>'
+    + '<section id="mc-overlay" aria-label="Overlay feed preview, simulated"><div class="mcp-row"><b>Overlay feed preview</b> <span class="mcp-v">simulated</span></div>'
+    + '<p class="mcp-v">What a rendering partner would take: the on-air export, matchcast.onair/1. The timed stream endpoint is not built yet.</p>'
+    + '<div id="mc-overlay-n" class="mcp-v">Nothing aired yet.</div><pre id="mc-overlay-pre" style="margin:4px 0 0;max-height:120px;overflow:auto;font:11px ui-monospace,monospace;white-space:pre-wrap"></pre></section>'
     + '</div></div>';
   (document.getElementById('bc-view') || document.body).append(box);
   const $ = (id) => box.querySelector('#' + id);
@@ -88,6 +91,19 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     send({ type: 'persona', persona: more.value });
     box.querySelectorAll('[data-lens]').forEach((x) => x.setAttribute('aria-pressed', 'false'));
   };
+
+  // the overlay feed preview: the last lines of the on-air export (onair.js), refreshed after each line airs
+  const overlayN = box.querySelector('#mc-overlay-n'), overlayPre = box.querySelector('#mc-overlay-pre');
+  const renderOverlay = () => {
+    if (!window.MCOnair) return;   // the desk module has not run yet
+    const lines = JSON.parse(window.MCOnair.doc()).lines;
+    overlayN.textContent = lines.length ? lines.length + (lines.length === 1 ? ' line' : ' lines') + ' in the export' : 'Nothing aired yet.';
+    overlayPre.textContent = JSON.stringify(lines.slice(-2), null, 2);
+  };
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source === window.parent && d.src === 'matchcast-shell' && d.type === 'air') setTimeout(renderOverlay, 0);   // after onair.js has logged the line
+  });
 
   // the Broadcast Copilot: each question is asked of the api with surface "broadcast"; only the newest answer is shown
   const QUESTIONS = { highlights: 'What are the highlights so far?', focus: 'Where should the camera go next?', plan: 'What is the production plan for the next few minutes?' };

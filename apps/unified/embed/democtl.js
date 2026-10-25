@@ -3,6 +3,7 @@
 (() => {
   const ctrl = document.getElementById('ctrl');
   if (!ctrl || document.getElementById('bc-view') || document.getElementById('mc-demo')) return;
+  const hidePresets = document.createElement('style'); hidePresets.textContent = '#cams{display:none!important}'; document.head.appendChild(hidePresets);   // the seven camera presets are off the screen for the sprint (AB#497); the buttons stay in the page
   const st = document.createElement('style');
   st.textContent = '#ctrl.mc-folded>.grp:not(.mc-demo){display:none}#mc-demo{font:600 12px system-ui,sans-serif}';
   document.head.appendChild(st);

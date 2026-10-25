@@ -70,7 +70,7 @@ test('Camera presets, speed and names sit behind Demo controls, one click away',
   await expect(f.locator('#mc-pause')).toBeVisible();          // Pause stays one tap away while the speed group is folded (it presses the real button)
   await btn.click();
   await expect(btn).toHaveAttribute('aria-expanded', 'true');
-  await expect(f.locator('#cams')).toBeVisible();
+  await expect(f.locator('#cams'), 'the camera presets stay off the screen (AB#497)').toBeHidden();
   await expect(f.locator('#play')).toBeVisible();
   await expect(f.locator('#cpbtn')).toBeVisible();   // Copilot stays on the first screen
   expect(errs).toEqual([]);

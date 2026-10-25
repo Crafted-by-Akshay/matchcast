@@ -60,23 +60,15 @@ test('a phone shows one view at a time, with no divider and no sideways scroll',
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test('Watch opens alone; the Broadcast desk joins on request and its second 3D view loads only then', async ({ page }) => {
+test('Watch opens alone; the second 3D view is not offered on the first screen, and ?split=1 still opens it', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/index.html#watch', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
-  await expect(page.locator('#stage')).not.toHaveClass(/split/);
-  await expect(page.locator('#v-watch')).toBeVisible();
-  await expect(page.locator('#v-broadcast')).toBeHidden();
   expect(await page.locator('#v-broadcast iframe').count(), 'no second 3D view is loaded until asked').toBe(0);
-  const t = page.locator('#bc-toggle');
-  await expect(t).toBeVisible();
-  await t.click();
+  await expect(page.locator('#bc-toggle'), 'the second 3D view is off the first screen for the sprint (AB#497)').toBeHidden();
+  await page.goto('/index.html?split=1#watch', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
   await expect(page.locator('#stage')).toHaveClass(/split/);
   await expect(page.locator('#v-broadcast')).toBeVisible();
   expect(await page.locator('#v-broadcast iframe').count()).toBe(1);
-  await expect(t).toHaveAttribute('aria-pressed', 'true');
-  await t.click();
-  await expect(page.locator('#v-broadcast')).toBeHidden();
   await page.locator('.switch [data-view="broadcast"]').click();   // the Broadcast tab still shows both
   await expect(page.locator('#stage')).toHaveClass(/split/);
 });
