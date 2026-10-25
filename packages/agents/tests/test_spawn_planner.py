@@ -75,3 +75,16 @@ def test_no_available_specialist_means_no_spawn_and_no_budget_used() -> None:
     plan = plan_spawns(priority=1, moment_id="m-7", available=(), budget=budget)
     assert plan.requests == ()
     assert budget.remaining == 10
+
+
+def test_every_specialist_in_the_workflow_pool_is_planned_for_some_moment() -> None:
+    """A name the planner can never reach is a spawn the docs promise and the match never makes."""
+    from matchcast_agents.workflow import SPAWN_POOL
+
+    planned: set[str] = set()
+    for priority in (1, 3):
+        plan = plan_spawns(
+            priority=priority, moment_id="m-1", available=SPAWN_POOL, budget=SpawnBudget(50)
+        )
+        planned |= {r.name for r in plan.requests}
+    assert planned == set(SPAWN_POOL)

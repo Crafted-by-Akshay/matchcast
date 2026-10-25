@@ -29,6 +29,7 @@ from .rules.analyst import ClaimResult
 from .rules.producer import BOOTH_MOMENTS
 from .safety import LocalSafetyScreen, SafetyScreen
 from .season_clubs import season_code
+from .specialists import SpawnBudget, default_registry, plan_spawns, run_all
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
@@ -76,6 +77,20 @@ ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale
 RUNDOWN_KEEP = 400
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
+# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1).
+# History is built but not in the pool: a goal's four slots go to the four above, so it has no slot
+# until the planner's cap is decided (see 04-agents.md §2.1).
+SPAWN_POOL = ("replay", "tactics", "stats", "rhythm")
+QUIET_SPAWNS_PER_MATCH = 40  # the quiet moments' own allowance, apart from the priority-1 pool
+
+
+@dataclass
+class MatchSpawnBudgets:
+    """The specialist pools of one match. Every workflow that runs the match (its engine stream and
+    its Vision stream) draws on the same two pools, so the caps hold per match, not per stream."""
+
+    priority_one: SpawnBudget = field(default_factory=SpawnBudget)
+    quiet: SpawnBudget = field(default_factory=lambda: SpawnBudget(QUIET_SPAWNS_PER_MATCH))
 
 
 class WorkflowError(Exception):
@@ -223,6 +238,7 @@ class MatchWorkflow:
         knowledge: "TalkKnowledge | None" = None,
         truth_feed: Callable[[], list[dict[str, Any]]] | None = None,
         vision_feed: Callable[[], list[dict[str, Any]]] | None = None,
+        spawn_budgets: MatchSpawnBudgets | None = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
@@ -278,6 +294,16 @@ class MatchWorkflow:
         )
         self.rundown: list[dict[str, Any]] = []  # the Showrunner ledger, see _record_rundown
         self._routing: dict[str, Any] | None = None  # the entry of the moment being run
+        # the match's cost guard for specialists, in two pools: quiet moments cannot use up
+        # a goal's specialists. The pools are the match's; this workflow's share of them is
+        # checkpointed, so a restart adds back exactly what this workflow spent
+        pools = spawn_budgets or MatchSpawnBudgets()
+        self.spawn_budgets = pools  # the engine stream's pools are handed to its Vision stream
+        self.spawn_budget = pools.priority_one  # priority-1 moments
+        self.quiet_budget = pools.quiet  # every other moment
+        self._spent = {"priority_one": 0, "quiet": 0}  # what this workflow took from each pool
+        self._saved_once = False  # this workflow has written a checkpoint of its own
+        self._specialists = default_registry()
         self._restore()
         self.stats = {
             "events": 0,
@@ -432,14 +458,23 @@ class MatchWorkflow:
         """Start from the last checkpoint: state and Producer memory before any partial event."""
         row = self.store.get_checkpoint(self.sk)
         if row is None:
+            # a replay from the first event decides every moment again: this workflow's share of
+            # the pools, its ledger and the Producer's memory start at zero: nothing counts twice
+            self._set_spent(0, 0)
+            self.rundown = []
+            reset = getattr(self.agents.producer, "reset", None)
+            if reset:
+                reset()
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
+        self._set_spent(row.get("spawn_used", 0), row.get("quiet_used", 0))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
             restore(row["producer"])
 
     def _checkpoint(self, sequence: int) -> None:
+        self._saved_once = True
         snapshot = getattr(self.agents.producer, "snapshot", None)
         self.store.put_checkpoint(
             self.sk,
@@ -448,6 +483,8 @@ class MatchWorkflow:
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
                 "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
+                "spawn_used": self._spent["priority_one"],
+                "quiet_used": self._spent["quiet"],
             },
         )
 
@@ -456,10 +493,15 @@ class MatchWorkflow:
         row = self.store.get_checkpoint(self.sk)
         done = row["processed_sequence"] if row else 0
         pending = [e for e in self.store.events(self.sk) if e["stream_sequence"] > done]
+        if pending and row is None and self._saved_once:
+            # this workflow already ran the match, so a replay would write its audit records again
+            raise WorkflowError(
+                "conflict", "no checkpoint for a match this workflow has already run"
+            )
         if pending and row is None:
             self.store.put_state(self.sk, MatchState())
         if pending:
-            self._restore()  # drop the half-applied state of the interrupted event
+            self._restore()  # drop the half-applied state and spawn spend of the interrupted event
         for event in pending:
             await self._process(event)
 
@@ -579,7 +621,39 @@ class MatchWorkflow:
             return None
         self.stats["moments"] += 1
         self._record_rundown(decision)
+        await self._spawn(ctx, decision)
         return decision
+
+    def _set_spent(self, priority_one: int, quiet: int) -> None:
+        """Make this workflow's share of the match's pools exactly these counts. The shared pool
+        moves by the difference, so a restore or a replay adds nothing twice and refills nothing."""
+        self.spawn_budget.used += priority_one - self._spent["priority_one"]
+        self.quiet_budget.used += quiet - self._spent["quiet"]
+        self._spent = {"priority_one": priority_one, "quiet": quiet}
+
+    async def _spawn(self, ctx: MatchContext, task: ProducerTask) -> None:
+        """The specialists for this moment: planned inside the match budget, run in parallel, and
+        written into the moment's rundown entry (names in ``called``, and a ``spawns`` list). A
+        refused moment gets ``spawn_reason`` and no ``spawns`` key."""
+        priority_one = task.priority == 1
+        plan = plan_spawns(
+            priority=int(task.priority),
+            moment_id=task.moment_id,
+            available=SPAWN_POOL,
+            budget=self.spawn_budget if priority_one else self.quiet_budget,
+        )
+        entry = self.rundown[-1]
+        if not plan.requests:
+            entry["spawn_reason"] = plan.reason
+            return
+        pool = "priority_one" if priority_one else "quiet"
+        self._spent[pool] += len(plan.requests)
+        entry["spawns"] = []
+        for report in await run_all(ctx, plan.requests, self._specialists):
+            entry["spawns"].append(
+                {"name": report.name, "status": report.status, "findings": len(report.findings)}
+            )
+            self._note_called(report.name)
 
     def _record_rundown(self, task: ProducerTask) -> None:
         """One rundown entry per moment the crew takes: the agents it calls, skips and why."""

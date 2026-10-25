@@ -1,10 +1,11 @@
 """Spawn planner: how many specialists the Showrunner calls for one moment (CREW-2.1, AB#385).
 
-Importance sets the number. A priority-1 moment (a goal, a red card, a high score) gets up to four
-specialists, all run in parallel. Any other moment gets at most one, so a quiet pass costs less
-than a goal. The per-match budget is shared by every moment: when it is spent, the planner spawns
-nothing and the rules twin takes the moment. The planner is a pure function, so the Showrunner can
-record its reason in the ledger as it is.
+Importance sets the number. A priority-1 moment (a goal or a red card) gets up to four specialists,
+all run in parallel. Any other moment gets at most one, so a quiet pass costs less than a goal.
+Two budgets stop the spawns: priority-1 moments draw on one pool, every other moment on a quiet
+pool, so quiet play cannot use up a goal's specialists. When the pool it draws on is spent, the
+planner spawns nothing and the rules twin takes the moment. The planner is a pure function, so the
+Showrunner can record its reason in the ledger as it is.
 """
 
 from dataclasses import dataclass
