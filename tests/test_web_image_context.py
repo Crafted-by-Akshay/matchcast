@@ -13,7 +13,8 @@ def test_build_py_runs_with_only_the_web_build_context(tmp_path: Path) -> None:
         ["git", "archive", "HEAD", "apps/unified"], cwd=ROOT, capture_output=True, check=True
     ).stdout
     subprocess.run(["tar", "-x", "-C", str(tmp_path)], input=archive, check=True)
-    # the committed tree (an uncommitted build.py edit is not covered), as a clean checkout has it, with nothing of the repo around it
+    # the committed tree as a clean checkout has it (an uncommitted build.py edit is not
+    # covered), with nothing of the repo around it
     app = tmp_path / "context"
     (tmp_path / "apps/unified").rename(app)
     run = subprocess.run(
