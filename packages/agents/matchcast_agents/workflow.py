@@ -48,6 +48,22 @@ TALK_PHRASES = {
 }  # fmt: skip
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
+
+
+def repair_feedback(draft: DraftLine, verdict: Verdict) -> str:
+    """What to tell the Narrator on its one redraft, in words: no figure from the failed check
+    (a limit or a number named there would be echoed into the line)."""
+    said = {
+        "persona": f"the {draft.persona} line was too long or had too many numbers: shorten it",
+        "numbers": "a number was not backed by a claim: use only the claim values, each once",
+        "names": "a name was not in the roster or not on the team in this moment",
+        "sources": "a claim was not usable",
+        "specific": "the colour line must name a player or club",
+    }
+    parts = [said.get(c.name) or c.detail[:200] for c in verdict.checks if not c.passed]
+    return "; ".join(dict.fromkeys(parts))
+
+
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 # a booth line that fails its repair on one of these goes to the producer queue: the event log can
 # settle it. The six derived feeds that fail are dropped from air instead (CREW-4.3).
@@ -1237,6 +1253,7 @@ class MatchWorkflow:
                         task,
                         fresh_claims,
                         attempt=1,
+                        feedback=repair_feedback(draft, verdict),
                     )
                     if fresh_claims
                     else []

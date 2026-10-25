@@ -18,7 +18,7 @@ class BadNarrator(NarratorRules):
     def __init__(self, breaks) -> None:
         self.breaks = breaks
 
-    async def write(self, ctx, task, claims, *, attempt=0):
+    async def write(self, ctx, task, claims, *, attempt=0, feedback=""):
         lines = await super().write(ctx, task, claims, attempt=attempt)
         return [
             DraftLine(

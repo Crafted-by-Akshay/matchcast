@@ -310,7 +310,7 @@ def test_a_repeated_value_is_sent_to_the_narrator_not_the_analyst(make_workflow,
     from matchcast_agents.rules.narrator import NarratorRules
 
     class Repeats(NarratorRules):
-        async def write(self, ctx, task, claims, *, attempt=0):
+        async def write(self, ctx, task, claims, *, attempt=0, feedback=""):
             drafts = await super().write(ctx, task, claims, attempt=attempt)
             if attempt or task.reason != "goal":
                 return drafts
