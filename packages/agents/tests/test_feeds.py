@@ -4,6 +4,7 @@ import pytest
 from matchcast_agents.feeds import (
     BOOTH_LANE,
     DERIVED_LANE,
+    DERIVED_PERSONAS,
     FEED_KEYS,
     FEEDS,
     QUEUE_LANE,
@@ -27,12 +28,28 @@ def test_six_feeds_with_the_story_keys() -> None:
     assert len(FEEDS) == 6
 
 
-def test_casual_and_analyst_take_their_limits_from_the_personas() -> None:
-    for key in ("casual", "analyst"):
-        feed = feed_for(key)
-        assert feed is not None and feed.persona == key
-        assert feed.max_chars == max_chars(key)
-        assert feed.max_numbers == max_numbers(key)
+def test_casual_and_analyst_limits_are_pinned_and_match_the_personas() -> None:
+    casual, analyst = feed_for("casual"), feed_for("analyst")
+    assert (casual.max_chars, casual.max_numbers) == (140, 1)  # the story's casual limits
+    assert (analyst.max_chars, analyst.max_numbers) == (280, 6)
+    for feed in (casual, analyst):
+        assert feed.persona == feed.key
+        assert feed.max_chars == max_chars(feed.key)
+        assert feed.max_numbers == max_numbers(feed.key)
+
+
+@pytest.mark.parametrize(
+    "persona", ["booth:pbp", "booth:colour", "broadcast", "my-club:home", "one-metric:shots"]
+)
+def test_only_feed_personas_map_to_a_feed(persona: str) -> None:
+    assert feed_for(persona) is None
+
+
+@pytest.mark.parametrize("key", ["audio_description", "catch_me_up", "half_time", "ticker"])
+def test_feeds_without_a_writer_have_no_persona_and_no_lane(key: str) -> None:
+    feed = next(f for f in FEEDS if f.key == key)
+    assert feed.persona is None
+    assert feed.persona not in DERIVED_PERSONAS
 
 
 def test_limits_come_from_the_stories() -> None:

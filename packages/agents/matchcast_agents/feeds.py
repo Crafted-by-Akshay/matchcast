@@ -3,12 +3,13 @@
 Three lanes decide what a verified line does next:
 
 - booth: the two commentary voices. They wait in the producer queue in producer mode.
-- derived: the six fan feeds. They never wait for a person, and a line that fails repair
-  is dropped with its reason in the audit chain (CREW-4.3).
-- queue: every other persona (broadcast, the watch modes). These keep today's behaviour.
+- derived: the fan feeds that have a persona today (casual, analyst). They never wait for
+  a person, and a line that fails repair is dropped, not escalated (CREW-4.3).
+- queue: every other persona (broadcast, the watch modes, anything malformed). These keep
+  today's behaviour and fail closed: they wait for the producer in any mode but auto.
 
-Casual and analyst are the two feeds that exist today as personas; the other four are new
-and join DERIVED_PERSONAS when their writers land.
+The other four feeds (audio description, catch-me-up, half-time, ticker) have no writer yet.
+They join DERIVED_PERSONAS when their writers land. Until then they are not in any lane.
 """
 
 from dataclasses import dataclass
@@ -75,9 +76,9 @@ def lane_for(persona: str) -> str:
 def waits_for_producer(persona: str, approval_mode: str) -> bool:
     """Whether a verified line waits in the producer queue before it airs.
 
-    Derived lines never wait, whatever the approval mode (CREW-4.3 criterion 2). The booth
-    waits in producer mode (decision of 25 Oct). Queue lines wait in producer mode as they
-    do today.
+    Derived lines never wait, whatever the approval mode (CREW-4.3 criterion 2). Every other
+    line waits in any mode except "auto". That includes booth lines, which wait in producer
+    mode (decision of 25 Oct). An unknown mode therefore fails closed: the line waits.
     """
     if lane_for(persona) == DERIVED_LANE:
         return False
