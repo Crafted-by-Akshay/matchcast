@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import { openShell } from './helpers';
+declare const AG: any;
 
 // UX review 2026-10-24, shell items: one utility row on a phone, 32 px chips on a desktop, no stray
 // control beside Voice, no clipped subtitle, and a fixture list that says its score is a recorded one.
@@ -43,10 +44,12 @@ test('desktop chips are at least 32 px tall and the live-region pill is not draw
 });
 
 test('the fixture list says its score is recorded, and the score label says so too', async ({ page }) => {
+  await page.route(/\/(watch|broadcast)\/index\.html/, (rt) => rt.abort());   // no 3D view, so no live score replaces the label
   await openShell(page, 'analyst');
   const labels = await page.$$eval('#fx option', (os) => os.map((o) => o.title || '').filter((t) => /\d–\d/.test(t)));   // the score moved from the label to the title (quiet first screen)
   expect(labels.length).toBeGreaterThan(20);
   for (const t of labels) expect(t).toMatch(/^Recorded result \d+–\d+/);
+  await page.selectOption('#fx', { index: 1 });   // a season fixture (the default is the national-team one, which says Synthetic squad)
   await expect(page.locator('#score-l')).toHaveText('Recorded');
 });
 
@@ -57,3 +60,26 @@ test('a season load error is still visible on a phone', async ({ page }) => {
   await expect(page.locator('#meta')).toContainText('Could not load the season fixtures');
   await expect(page.locator('#meta')).toBeVisible();
 });
+
+// Judge re-test (live sha-ee90607): 17 elements of the Agents pane ran past the right edge at 390 px (the claims table was 600+ px wide).
+// With some claims in the ledger, nothing in the pane may reach past the screen, and the page does not scroll sideways.
+for (const width of [390, 320]) {
+  test(`Agents tab at ${width} px: no element runs past the right edge, with claims in the ledger`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await openShell(page, 'agents');
+    await page.waitForFunction(() => typeof AG !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+    await page.evaluate(() => {
+      const names = { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' };
+      AG.reset('k1', names);
+      AG.onWatch('k1', [{ minute: 12.3, type: 'shot', team: 'thr', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'open play', data: {} }, { minute: 12.4, type: 'goal', team: 'thr', player: 'A One', score: '1-0' }], []);
+    });
+    await expect.poll(() => page.locator('#ag-claims tr[data-id]').count(), { timeout: 15_000 }).toBeGreaterThan(0);
+    const m = await page.evaluate(() => {
+      const vw = document.documentElement.clientWidth;
+      const past = [...document.getElementById('v-agents')!.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5); }).map((e) => (e.id ? '#' + e.id : e.tagName.toLowerCase() + '.' + String((e as HTMLElement).className).slice(0, 24)));
+      return { past, over: document.documentElement.scrollWidth - vw };
+    });
+    expect(m.past, 'elements past the screen edges').toEqual([]);
+    expect(m.over).toBeLessThanOrEqual(0);
+  });
+}

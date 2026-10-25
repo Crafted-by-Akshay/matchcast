@@ -219,6 +219,7 @@ test('a live booth line keeps the speaker its persona gives it', async ({ page }
 });
 
 test('the booth speaks each new feed line once, play-by-play and colour on different voices', async ({ page }) => {
+  await page.route(/\/(watch|broadcast)\/index\.html/, (rt) => rt.abort());   // no 3D view: its own kick-off would reset the feed (and add a pre-match build-up) under the test
   await openShell(page, 'watch', '?seed=2026');
   await page.evaluate(() => { VC.set(true); });
   const spoken = await page.evaluate(async () => {
