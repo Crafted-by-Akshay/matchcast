@@ -328,6 +328,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   </section>
   <section class="view gone" id="v-agents" data-view="agents" aria-label="Agents: the shared pipeline" hidden>
     <div class="ag">
+      <div id="crew-mount" hidden></div>
       <div class="ag-head">
         <div><h2>Agent pipeline</h2><p>One pipeline for Watch, Analyst and Broadcast. Every claim is recounted by the Verifier and written to the audit chain.</p></div>
         <div class="chips">
@@ -394,6 +395,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="crew.js"></script>
 <script src="crew-analyst.js"></script>
 <script src="crew-score.js"></script>
+<script src="crew-tree.js"></script>
 <dialog id="status-dlg" aria-labelledby="status-h"><h2 id="status-h">What is running</h2><div id="status-box"></div><form method="dialog"><button class="pill">Close</button></form></dialog>
 <script src="speech.js"></script>
 <script src="status.js"></script>
