@@ -25,6 +25,11 @@
     "persona_pairs": 17,
     "personas_differ_rate": 1.0
   },
+  "booth": {
+    "colour_drafts": 17,
+    "generic_colour_rate": 0.0,
+    "distinct_colour_rate": 0.412
+  },
   "verifier": {
     "pairs_replayed": 34,
     "honest_lines_checked": 34,
