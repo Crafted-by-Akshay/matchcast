@@ -214,11 +214,13 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const style = document.createElement('style');
   style.textContent = '#mc-feeds{display:flex;flex-direction:column;gap:4px;padding-bottom:6px;border-bottom:1px solid #22395c}'
     + '#mc-feeds ul{margin:0;padding:0;list-style:none}'
-    + '#mc-feed-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px}'   // six feeds in two columns, so the drops are nearer the top of the desk; a cell takes the column's width, the label wraps and the status line ellipsises
+    + '#mc-feed-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px}'   // six feeds in two columns, so the drops are nearer the top of the desk; a cell takes the column's width and the label wraps
     + '#mc-feeds li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #22395c}'
     + '#mc-feeds li>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    + '#mc-feeds li[data-off="true"]{opacity:.85;flex-wrap:wrap}'   // a killed feed is the step the viewer must read: its label says so, and its status wraps onto a line of its own
-    + '#mc-feeds li[data-off="true"]>span{flex-basis:100%;white-space:normal;order:3}'
+    + '#mc-feeds li[data-off="true"]{opacity:.85;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}'   // a killed feed is the step the viewer must read: the label and the Resume button share the first line, and the status takes a line of its own
+    + '#mc-feeds li[data-off="true"]>b{grid-row:1;grid-column:1}'
+    + '#mc-feeds li[data-off="true"]>button{grid-row:1;grid-column:2}'
+    + '#mc-feeds li[data-off="true"]>span{grid-row:2;grid-column:1/-1}'   // the status takes the full row and stays one line (the base rule ellipsises it), so the Dropped list keeps its place
     + '#mc-feeds .mcp-v{font-size:12px;color:#c3d4ee}';   // on camera the monitor is read at 1080p: 12 px, not the 11 px of the other notes
   document.head.append(style);
   const box = document.createElement('section');
@@ -230,8 +232,10 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const render = (k) => {
     const s = feeds[k], row = box.querySelector('[data-feed="' + k + '"]');
     row.dataset.off = String(!s.on);
-    row.querySelector('b').textContent = s.label + (s.on ? '' : ' · killed');   // the label carries the kill: the status text beside it is cut to fit a half-width cell
-    row.querySelector('span').textContent = (s.on ? '' : 'Killed on this desk · ') + s.aired + ' aired' + (s.last && s.on ? ' · ' + s.last : '');   // a killed feed airs nothing, so its last line is left out and the status fits two lines
+    row.querySelector('b').textContent = s.label + (s.on ? '' : ' · killed');   // the label carries the kill at a glance; the status line below it has the count and the last line
+    const status = row.querySelector('span');
+    status.textContent = (s.on ? '' : 'Killed on this desk · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');   // the last line stays on a killed row: if the api's stop failed, it still shows what aired
+    status.title = status.textContent;   // the full line, when the one-line status is cut
     row.querySelector('[data-kill]').textContent = s.on ? 'Kill' : 'Resume';
   };
   FEEDS.forEach(([k]) => render(k));
