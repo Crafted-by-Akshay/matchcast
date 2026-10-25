@@ -35,15 +35,21 @@
   var subs = [];
   function emit() { subs.forEach(function (fn) { try { fn(S); } catch (e) { console.error(e); } }); }
 
-  function moment(id) {
-    for (var i = 0; i < S.moments.length; i++) if (S.moments[i].id === id) return S.moments[i];
+  function moment(id, match) {   // keyed by match_id + moment_id when the frame has a match_id, by id alone otherwise
+    for (var i = 0; i < S.moments.length; i++) if (S.moments[i].id === id && (!match || S.moments[i].match_id === match)) return S.moments[i];
     var m = { id: id, minute: 0, why: '', routed_by: 'rules', status: 'open', agents: [], claims: [] };
+    if (match) m.match_id = match;
     S.moments.push(m);
     return m;
   }
 
   var SHOW = ':show';           // id suffix of a moment's Showrunner node
+  var TERMINAL = { done: 1, failed: 1, no_data: 1, budget_exhausted: 1 };
+  var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
   function minuteOf(ms) { return Math.floor((+ms || 0) / 60000); }
+  function idOf(v) { return typeof v === 'string' && v ? v : (typeof v === 'number' && isFinite(v) ? String(v) : null); }
+  function obj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
+  function strs(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === 'string'; }) : []; }
   function showrunner(m) {
     var id = m.id + SHOW;
     for (var i = 0; i < m.agents.length; i++) if (m.agents[i].id === id) return m.agents[i];
@@ -51,72 +57,104 @@
     m.agents.unshift(a);
     return a;
   }
+  // merge a frame's fields into an existing item: an omitted (undefined) field never erases a value already held
+  function merge(dst, src) { Object.keys(src).forEach(function (k) { if (src[k] !== undefined) dst[k] = src[k]; }); }
   function upsert(list, item) {
-    for (var i = 0; i < list.length; i++) if (list[i].id === item.id) { Object.assign(list[i], item); return; }
+    for (var i = 0; i < list.length; i++) if (list[i].id === item.id) { merge(list[i], item); return list[i]; }
     list.push(item);
+    return item;
   }
-  function seen(m, f) { if (!m.minute && f.at_ms != null) m.minute = minuteOf(f.at_ms); }
-  function reasonOf(f) { return f.verifier && f.verifier.reason_code || null; }
 
-  /* PROPOSAL shapes (AB#498). crew_ledger: one per moment, after its run ends. */
+  /* PROPOSAL shapes (AB#498). Each handler validates first and returns an apply function, or null for a malformed frame:
+     nothing is touched until the whole frame is known good. */
+  /* crew_ledger: one per moment, after its run ends. */
   function ledger(f) {
-    var m = moment(f.moment_id);
-    m.minute = minuteOf(f.at_ms); m.why = f.why || m.why; m.routed_by = f.routed_by || m.routed_by;
-    m.called = f.called || []; m.skipped = f.skipped || [];
-    m.status = 'done';          // sent once the run ends, so the moment is over
-    var sh = showrunner(m);
-    if (sh.status === 'running') sh.status = 'done';
+    var id = idOf(f.moment_id);
+    if (!id) return null;
+    return function () {
+      var m = moment(id, idOf(f.match_id));
+      m.minute = minuteOf(f.at_ms); m.why = typeof f.why === 'string' ? f.why : m.why; m.routed_by = typeof f.routed_by === 'string' ? f.routed_by : m.routed_by;
+      m.called = strs(f.called); m.skipped = strs(f.skipped);
+      m.status = 'done';          // sent once the run ends, so the moment is over
+      var sh = showrunner(m);
+      if (sh.status === 'running') sh.status = 'done';
+    };
   }
-  /* crew_spawn: one per specialist per status change. The raw status is kept (running, done, no_data, failed, budget_exhausted). */
+  /* crew_spawn: one per specialist per status change. The raw status is kept (running, done, no_data, failed, budget_exhausted);
+     a terminal status never goes back to running on a late or duplicate frame. */
   function spawn(f) {
-    var m = moment(f.moment_id); seen(m, f);
-    var sh = showrunner(m);
-    var parent = !f.parent_id || f.parent_id === 'showrunner' ? sh.id : f.parent_id;
-    var a = { id: f.spawn_id, role: f.role || f.agent_id, parent: parent, status: f.status || 'running', started: f.started_ms, ended: f.ended_ms, tokens: f.tokens || 0 };
-    for (var i = 0; i < m.agents.length; i++) if (m.agents[i].id === a.id && !f.why) a.why = m.agents[i].why;   // an empty why keeps the earlier one
-    if (f.why) a.why = f.why;
-    upsert(m.agents, a);
+    var mid = idOf(f.moment_id), sid = idOf(f.spawn_id);
+    if (!mid || !sid) return null;
+    return function () {
+      var m = moment(mid, idOf(f.match_id));
+      if (!m.minute && f.at_ms != null) m.minute = minuteOf(f.at_ms);
+      var sh = showrunner(m), pid = idOf(f.parent_id);
+      var a = { id: sid, role: idOf(f.role) || idOf(f.agent_id) || undefined, parent: !pid || pid === 'showrunner' ? sh.id : pid,
+        status: typeof f.status === 'string' ? f.status : 'running', started: f.started_ms, ended: f.ended_ms, tokens: f.tokens, why: f.why || undefined };
+      var old = m.agents.filter(function (x) { return x.id === sid; })[0];
+      if (old && TERMINAL[old.status] && !TERMINAL[a.status]) { delete a.status; delete a.ended; }
+      if (a.tokens == null) delete a.tokens;
+      if (!old) { if (!a.role) a.role = sid; if (a.ended === undefined) a.ended = null; if (a.tokens === undefined) a.tokens = 0; }
+      upsert(m.agents, a);
+    };
   }
-  /* crew_trace: one per line at a terminal state. Every claim is recorded; only published derived-feed lines air. */
+  /* crew_trace: one per line at a terminal state. Every claim is recorded; only published derived-feed lines air.
+     Text is kept for published and review lines only; a dropped line keeps its reason and no text. */
   function trace(f) {
-    var m = moment(f.moment_id); seen(m, f);
-    var v = f.verifier || {}, reason = reasonOf(f);
-    var base = { verdict: v.verdict, reason: reason, repair_of: f.repair_of || null, audit_hash: f.audit_hash, state: f.state, line_id: f.line_id, feed: f.feed };
-    if (f.text != null) base.text = f.text;     // a dropped line has no text
-    var cs = f.claims && f.claims.length ? f.claims : [{ claim_id: f.line_id }];   // a line with no claims still records its reason
-    cs.forEach(function (c) {
-      upsert(m.claims, Object.assign({ id: c.claim_id, sources: c.source_event_ids || [], history: c.history_row_ids || [], metric: c.metric, value: c.value }, base));
-    });
-    if (f.state === 'published' && f.text != null && S.feeds[f.feed]) {
-      var line = { publication_id: f.line_id, text: f.text, match_time_ms: f.at_ms, source_event_ids: [].concat.apply([], (f.claims || []).map(function (c) { return c.source_event_ids || []; })), verdict: v.verdict };
-      var list = S.feeds[f.feed], k = -1;
-      list.forEach(function (x, i) { if (x.publication_id === line.publication_id) k = i; });
-      if (k < 0) list.push(line); else list[k] = line;
-    }
+    var mid = idOf(f.moment_id), lid = idOf(f.line_id);
+    if (!mid || !lid) return null;
+    if (f.claims != null && !Array.isArray(f.claims)) return null;
+    var cs = f.claims && f.claims.length ? f.claims : [{ claim_id: lid }];   // a line with no claims still records its reason
+    for (var i = 0; i < cs.length; i++) if (!obj(cs[i]) || !idOf(cs[i].claim_id)) return null;
+    return function () {
+      var m = moment(mid, idOf(f.match_id)); seenMin(m, f);
+      var v = obj(f.verifier) ? f.verifier : {}, st = f.state;
+      var base = { verdict: v.verdict, reason: v.reason_code, repair_of: f.repair_of, audit_hash: f.audit_hash, state: st, line_id: lid, feed: f.feed };
+      var text = (st === 'published' || st === 'review') && typeof f.text === 'string' ? f.text : undefined;
+      var srcAll = [];
+      cs.forEach(function (c) {
+        var src = strs(c.source_event_ids);
+        srcAll = srcAll.concat(src);
+        upsert(m.claims, Object.assign({ id: idOf(c.claim_id), sources: src, history: strs(c.history_row_ids), metric: c.metric, value: c.value, text: text }, base));
+      });
+      if (st === 'published' && text !== undefined && typeof f.feed === 'string' && has(S.feeds, f.feed)) {
+        var line = { publication_id: lid, text: text, match_time_ms: f.at_ms, source_event_ids: srcAll, verdict: v.verdict }, list = S.feeds[f.feed], k = -1;
+        list.forEach(function (x, j) { if (x.publication_id === lid) k = j; });
+        if (k < 0) list.push(line); else list[k] = line;
+      }
+    };
   }
-  var REAL = { crew_ledger: ledger, crew_spawn: spawn, crew_trace: trace };
+  function seenMin(m, f) { if (!m.minute && f.at_ms != null) m.minute = minuteOf(f.at_ms); }
+  var REAL = Object.create(null);
+  REAL.crew_ledger = ledger; REAL.crew_spawn = spawn; REAL.crew_trace = trace;
   var fixtureLoaded = false;
 
   /* frame kinds: crew_ledger, crew_spawn, crew_trace (proposal) and the older fixture kinds moment, spawn, claim, publish, score.
-     opts.simulated marks the fixture's own crew_* frames, which must not clear S.simulated. */
+     opts.simulated marks the fixture's own crew_* frames, which must not clear S.simulated. Inert while the flag is off.
+     Never throws: a malformed frame is skipped whole. */
   function ingest(f, opts) {
-    if (!f || !f.kind) return;
-    if (REAL[f.kind]) {
-      if (!(opts && opts.simulated) && S.simulated) {
-        S.simulated = false;      // the first real frame: from here the data is not the fixture
-        if (fixtureLoaded) { stop(); resetData(); }   // drop fixture moments, lines and score so none shows under a real label
-      }
-      REAL[f.kind](f);
-    } else if (f.kind === 'moment') Object.assign(moment(f.id), f.data || {});
-    else if (f.kind === 'spawn') {
-      var m = moment(f.moment), a = m.agents.filter(function (x) { return x.id === f.agent.id; })[0];
-      if (a) Object.assign(a, f.agent); else m.agents.push(Object.assign({ status: 'running' }, f.agent));
-    } else if (f.kind === 'claim') {
-      var mm = moment(f.moment), c = mm.claims.filter(function (x) { return x.id === f.claim.id; })[0];
-      if (c) Object.assign(c, f.claim); else mm.claims.push(f.claim);
-    } else if (f.kind === 'publish') {
-      (S.feeds[f.feed] = S.feeds[f.feed] || []).push(f.line);
-    } else if (f.kind === 'score') S.score = f.score;
+    if (!on || !obj(f) || typeof f.kind !== 'string') return;
+    try {
+      if (REAL[f.kind]) {
+        var apply = REAL[f.kind](f);
+        if (!apply) return;
+        if (!(opts && opts.simulated) && S.simulated) {
+          S.simulated = false;      // the first valid real frame: from here the data is not the fixture
+          if (fixtureLoaded) { stop(); resetData(); }   // drop fixture moments, lines and score so none shows under a real label
+        }
+        apply();
+      } else if (f.kind === 'moment') Object.assign(moment(f.id), f.data || {});
+      else if (f.kind === 'spawn') {
+        var m = moment(f.moment), a = m.agents.filter(function (x) { return x.id === f.agent.id; })[0];
+        if (a) Object.assign(a, f.agent); else m.agents.push(Object.assign({ status: 'running' }, f.agent));
+      } else if (f.kind === 'claim') {
+        var mm = moment(f.moment), c = mm.claims.filter(function (x) { return x.id === f.claim.id; })[0];
+        if (c) Object.assign(c, f.claim); else mm.claims.push(f.claim);
+      } else if (f.kind === 'publish') {
+        (S.feeds[f.feed] = S.feeds[f.feed] || []).push(f.line);
+      } else if (f.kind === 'score') S.score = f.score;
+      else return;
+    } catch (e) { console.warn('CREW.ingest skipped a malformed ' + f.kind + ' frame'); return; }
     emit();
   }
 
@@ -155,7 +193,7 @@
   var timers = [];
   function play(minute) {
     stop();
-    S.simulated = true; fixtureLoaded = true;
+    resetData(); S.simulated = true; fixtureLoaded = true; emit();   // never merge fixture lines with real data
     // the fixture goes through the same ingest path as real frames; opts.simulated keeps S.simulated true
     fixtureGoal(minute || 23).forEach(function (s) { timers.push(setTimeout(function () { ingest(s[1], { simulated: true }); }, s[0])); });
   }
