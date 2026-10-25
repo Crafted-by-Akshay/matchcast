@@ -5,6 +5,7 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 declare const LV: any;
 
 const summary = {
+  ready: true,
   passes_in: 41,
   lines_verified: 9,
   latest_line: 'Vision has tracked Northgate FC 41 passes and Harbour United 33.',

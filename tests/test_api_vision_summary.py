@@ -57,6 +57,7 @@ def test_the_summary_is_empty_until_vision_is_sent() -> None:
     response = client.get("/v1/matches/match-short/vision/summary", params={"session_id": "short"})
     assert response.status_code == 200
     body = response.json()
+    assert body["ready"] is False
     assert body["passes_in"] == 0 and body["lines_verified"] == 0 and body["latest_line"] is None
 
 
@@ -71,6 +72,7 @@ def test_vision_passes_are_counted_and_checked_against_the_engine() -> None:
     body = client.get(
         "/v1/matches/match-short/vision/summary", params={"session_id": "short"}
     ).json()
+    assert body["ready"] is True
     assert body["passes_in"] == len(sent)
     assert body["lines_verified"] >= 1
     assert body["latest_line"] and "Vision" in body["latest_line"]
@@ -93,7 +95,9 @@ def test_the_engine_record_is_the_same_with_or_without_vision() -> None:
     assert before == after  # the engine's claims never see the vision stream
 
 
-def test_an_unknown_engine_match_is_a_404() -> None:
+def test_an_unknown_match_is_an_answer_not_an_error() -> None:
+    """The page polls this before the match exists: a 200 with ready false, never a 404."""
     client = TestClient(create_app())
     response = client.get("/v1/matches/nope/vision/summary", params={"session_id": "short"})
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json()["ready"] is False and response.json()["passes_in"] == 0
