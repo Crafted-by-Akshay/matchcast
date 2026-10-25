@@ -711,7 +711,7 @@ function voiceFeed(items) {
     const key = x.id + '@' + x.t;
     if (voiced.has(key)) continue;
     voiced.add(key);
-    if (VC.on) VC.say(x.text, { id: 'feed-' + key, at: x.t, role: x.source === 'live' || x.kind === 'summary' ? 'analyst' : 'playByPlay', tone: x.tone });
+    if (VC.on) VC.say(x.text, { id: 'feed-' + key, at: x.t, role: x.speaker === 'colour' ? 'analyst' : 'playByPlay', tone: x.tone });
   }
 }
 function pushLines() {

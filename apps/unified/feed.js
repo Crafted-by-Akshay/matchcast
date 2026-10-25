@@ -15,7 +15,7 @@ const CM = (() => {
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
   const club = (ti) => (ti === 0 ? names.home : names.away);
   const push = (o) => {
-    const item = { id: 'l' + (++n), t: Date.now(), minute: o.minute, text: trim(o.text, 240), kind: o.kind, tone: o.tone || '', source: o.source || 'rules', chain: o.chain || CHAIN.slice(), persona, numbers: o.numbers || [] };
+    const item = { id: 'l' + (++n), t: Date.now(), minute: o.minute, text: trim(o.text, 240), kind: o.kind, tone: o.tone || '', source: o.source || 'rules', chain: o.chain || CHAIN.slice(), persona, numbers: o.numbers || [], speaker: o.speaker || '' };
     items.push(item); if (items.length > KEEP) items.shift();
     lastLine = o.minute; changed(); return item;
   };
@@ -107,9 +107,10 @@ const CM = (() => {
     push({ minute: at, kind: kind || 'line', text: String(text), source: 'live', chain: CHAIN.concat('Live agents') });
   };
 
-  const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playFrom = 0; n = 0; changed(); if (names) push({ minute: 0, kind: 'period', text: 'Players are out. ' + names.home + ' v ' + names.away + ' is about to start.' }); };
+  // the pre-match exchange: the play-by-play caller opens, then the colour voice reads the match (rules lines, no claims beyond the fixture)
+  const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playFrom = 0; n = 0; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Good evening, and welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); } };
   // the feed the views draw: newest last, each with its label
-  const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers }));
+  const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers, speaker: x.speaker || (x.source === 'live' || x.kind === 'summary' ? 'colour' : 'pbp') }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under
   const setPersona = (p) => { persona = p && p !== 'fan' ? p : 'casual'; };
   return { fromWatch, api, reset, view, setPersona, onChange: (fn) => { changed = fn; }, get count() { return items.length; } };

@@ -165,6 +165,26 @@ test('a run of passes is counted across calls, within one minute', async ({ page
   expect(text.at(-1)).toBe('Ridgeview keep the ball: 9 passes, last from Cal.');
 });
 
+test('the pre-match build-up is a play-by-play call and a colour line, each on its own voice', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  await page.evaluate(() => { VC.set(true); });
+  const spoken = await page.evaluate(async () => {
+    const calls: [string, string][] = [];
+    const say = VC.say;
+    VC.say = (text: string, o: any) => { calls.push([text, o.role]); return say(text, o); };
+    CM.reset('kick', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    await new Promise((r) => setTimeout(r, 600));
+    VC.say = say;
+    return { calls, lines: CM.view().filter((l: any) => l.kind === 'buildup').map((l: any) => ({ text: l.text, speaker: l.speaker })) };
+  });
+  expect(spoken.lines.map((l) => l.speaker), 'the build-up has a call, then a colour line').toEqual(['pbp', 'colour']);
+  expect(spoken.lines[0].text).toContain('Ridgeview');
+  expect(spoken.calls, 'each line is spoken once, on the voice its speaker has').toEqual([
+    [spoken.lines[0].text, 'playByPlay'],
+    [spoken.lines[1].text, 'analyst'],
+  ]);
+});
+
 test('the booth speaks each new feed line once, play-by-play and colour on different voices', async ({ page }) => {
   await openShell(page, 'watch', '?seed=2026');
   await page.evaluate(() => { VC.set(true); });
