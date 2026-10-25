@@ -956,6 +956,7 @@ window.addEventListener('message', (e) => {
   if (d.type === 'goto' && view === 'watch' && ['agents', 'analyst', 'broadcast'].includes(d.view)) { show(d.view); return; }   // a view asks the shell to open another tab (the Verifier chip opens the Agents tab)
   if (d.type === 'vision-events' && view === 'watch') { LV.visionEvents(d.batch); return; }   // the tracker's derived passes, on the separate .vision stream (DAT-11)
   if (d.type === 'ask' && (view === 'watch' || view === 'broadcast' || view === 'analyst')) { answerAsk(d.id, d.q, view, view === 'broadcast' && d.surface === 'broadcast' ? 'broadcast' : 'ask'); return; }
+  if (d.type === 'feed-kill' && view === 'broadcast') { LV.feedSwitch(String(d.feed), !d.on); return; }   // the desk's per-feed kill: the api audits it (AB#499)
   if (d.type === 'producer' && view === 'broadcast') {   // the desk approves, kills or changes the mode; the shell's agents do the work
     if (d.action === 'mode') AG.setMode(d.mode === 'demo' ? 'demo' : 'producer');
     else if (d.action === 'approve') AG.approve(String(d.id || ''), PRODUCER);
@@ -1207,7 +1208,7 @@ function init(list) {
   const boothState = (j) => { boothLast = { src: 'matchcast-shell', type: 'booth-state', ready: !j || !!j.ready, reason: (j && j.reason) || '' }; post('watch', boothLast); post('broadcast', boothLast); };   // no answer yet (null): the card shows nothing
   // event to on air, measured in this page: hidden until the api publishes a line for events this page sent (live.js measure)
   const paintLatency = (l) => { const p = $('lat-pill'); p.hidden = !l.n; if (l.n) p.textContent = 'Event → on air ' + (l.median_ms / 1000).toFixed(1) + ' s' + (l.n < 5 ? ' (' + l.n + ' line' + (l.n === 1 ? '' : 's') + ')' : ''); };
-  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, booth: boothState, latency: paintLatency });
+  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, booth: boothState, latency: paintLatency, feed: (type, record) => post('broadcast', { src: 'matchcast-shell', type, record }) });   // derived feed records go to the desk only (AB#499)
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
   renderAgents();
