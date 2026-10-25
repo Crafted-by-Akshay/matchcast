@@ -742,6 +742,7 @@ window.addEventListener('message', (e) => {
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
+  if (d.type === 'feed-ready') { post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on }); return; }   // the commentary card asks once on load, so it shows the right Voice state at once
   if (d.type === 'vision-crop' && view === 'watch') {   // the tracker's OCR second opinion (DAT-11); only when the agent api is live
     const reply = (extra) => post('watch', Object.assign({ src: 'matchcast-shell', type: 'vision-ocr', id: d.id }, extra));
     if (!(LV.enabled && LV.status === 'live')) { reply({ error: 'unavailable' }); return; }
@@ -928,6 +929,7 @@ function init(list) {
     vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
     $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') + (VC.crowd ? ' · crowd bed (simulated)' : '') : '';
     vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
+    post('watch', { src: 'matchcast-shell', type: 'voice-state', on: VC.on }); post('broadcast', { src: 'matchcast-shell', type: 'voice-state', on: VC.on });   // the commentary card says "Sound off" while Voice is off
   };
   const vd = $('voice-demo'), vdShow = () => { vd.hidden = !LV.enabled; };
   let demo = null;   // the playing sample; clicking again stops it
