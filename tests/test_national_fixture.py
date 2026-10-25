@@ -1,6 +1,7 @@
 """Watch can play Argentina v Brazil: national clubs and one flagged fixture, synthetic squads."""
 
 import importlib.util
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,3 +79,28 @@ def test_no_recorded_match_is_claimed_for_argentina_v_brazil() -> None:
     (fx,) = build.national_fixtures(SEASON)
     assert fx["score"] == [0, 0]
     assert fx["result"] is None
+
+
+def test_the_web_build_reads_only_files_inside_apps_unified() -> None:
+    # the web image's Docker context is apps/unified, so data/history is not there at build time
+    for path in (build.NATIONAL_SQUADS, build.NATIONAL_HISTORY):
+        assert Path(path).is_relative_to(build.U) and Path(path).exists(), path
+
+
+def test_the_web_copies_match_the_builder() -> None:
+    builder = _load(ROOT / "scripts/build_national_squads.py", "build_national_squads")
+    squads = json.loads(Path(build.NATIONAL_SQUADS).read_text(encoding="utf-8"))
+    assert squads == builder.build()
+    history = json.loads(Path(build.NATIONAL_HISTORY).read_text(encoding="utf-8"))
+    assert history == builder.fixture_history()
+
+
+def test_the_fixture_carries_the_real_head_to_head() -> None:
+    (fx,) = build.national_fixtures(SEASON)
+    assert fx["history"]["h2h"]["played"] > 0
+    assert (
+        fx["history"]["h2h"]["home_wins"]
+        + fx["history"]["h2h"]["draws"]
+        + fx["history"]["h2h"]["away_wins"]
+        == fx["history"]["h2h"]["played"]
+    )

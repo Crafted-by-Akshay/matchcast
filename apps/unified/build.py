@@ -337,10 +337,12 @@ def fixtures():
     return out
 
 
-# Real national teams with synthetic squads (ADR-0020). The squads and the style come from
-# data/history/national_squads.json (scripts/build_national_squads.py, CC0 results). Every player is
-# fictional; the clubs and the fixture say so with the "synthetic squad" label.
-NATIONAL_SQUADS = U + "../../data/history/national_squads.json"
+# Real national teams with synthetic squads (ADR-0020). The squads and the head-to-head block come from
+# national/ (copies made by scripts/build_national_squads.py from the CC0 results). The web image builds
+# from apps/unified alone, so the files must live here. Every player is fictional; the clubs and the
+# fixture say so with the "synthetic squad" label.
+NATIONAL_SQUADS = U + "national/squads.json"
+NATIONAL_HISTORY = U + "national/history.json"
 NATIONAL = [
     # key, nation (the results-file name), kit colour, stadium (one of the 3D engine's stadiums)
     ("ARG", "Argentina", "#75AADB", "mexico"),
@@ -383,6 +385,7 @@ def national_fixtures(season):
     home, away = national_clubs()
     venue = next(fx for fx in season if fx["stIndex"] == MSI_STADIUM[home["stadium"]])
     setup = dict(venue["setup"], seed=NATIONAL_SEED)
+    history = json.load(open(NATIONAL_HISTORY, encoding="utf-8"))
     return [
         {
             "id": "N001",
@@ -395,6 +398,7 @@ def national_fixtures(season):
             "score": [0, 0],
             "stIndex": MSI_STADIUM[home["stadium"]],
             "setup": setup,
+            "history": history,
             "formations": venue["formations"],
             "styles": venue["styles"],
             "result": None,
