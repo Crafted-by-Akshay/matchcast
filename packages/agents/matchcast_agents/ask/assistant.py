@@ -191,18 +191,14 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     clauses = [c for c in CLAUSE.split(question) if c and c.strip()]
     metric = _metric_in(question)
     cue = bool(LIVE_CUE.search(question))
-    if RANKING_Q.search(question):
-        if metric is None:
-            return Route(
-                "out_of_scope", None, teams, ""
-            )  # a ranking of people or clubs, not counts
-        if LEADER_ASK.match(question):
-            return Route("leader", metric, (), "")  # the plain club shot comparison
-        return Route("abstain", None, teams, "")  # a ranking by a player or club: no tool
     if (SCORER_Q.search(question) or WHAT_GOALS_Q.search(question)) and (
         metric is None or metric[0] == "goals"
     ):
         return Route("goals", ("goals", "Goals"), teams, "")  # each goal, from the stored events
+    if RANKING_Q.search(question) and metric is not None:  # a ranking by a count
+        if LEADER_ASK.match(question):
+            return Route("leader", metric, (), "")  # the plain club shot comparison
+        return Route("abstain", None, teams, "")  # a ranking by a player or club: no tool
     which = _goal_ordinal(question)
     if IMPACT_Q.search(question) and GOAL_WORD.search(question) and which:
         return Route("goal_impact", ("goals", which), teams, "")  # the score change at one goal
