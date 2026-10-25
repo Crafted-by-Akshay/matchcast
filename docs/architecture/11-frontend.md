@@ -73,12 +73,12 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | Watch mode | Casual, Analyst, My club, Player focus, One metric | Persona sent to the agents; layout and density |
 | My club | one of the two clubs | Lines framed from that club's angle |
 | Player focus | any player on the pitch | Lines lead with that player; their name tag is highlighted |
-
-Other views can move Watch's camera with `window.MCWatch.focus({ player_id })` (the contract slug of a player's name) or `window.MCWatch.focus({ zone: 'box' | 'midfield' | 'wide' })` (the player in that zone nearest the ball). It uses Player focus mode and returns `true` only when the camera moved (`false` for an unknown player or zone, or before kick-off). Broadcast's "Go to it" button is meant to call it.
 | One metric | xG, pass quality, pressure, speed, control | Only that metric's lines |
 | Language | English, Spanish, Hindi | Captions, voice, Ask and Talk replies |
 | Voice | on or off | TTS playback |
 | Playback | 0.25x to 2x | Live passages; quiet spells always fast-forward |
+
+Other views can move Watch's camera with `window.MCWatch.focus({ player_id })` (the contract slug of a player's name) or `window.MCWatch.focus({ zone: 'box' | 'midfield' | 'wide' })` (the player in that zone nearest the ball). It uses Player focus mode and returns `true` only when the camera moved (`false` for an unknown player or zone, or before kick-off). Broadcast's "Go to it" button is meant to call it.
 
 ## 5. Rules for every view
 
