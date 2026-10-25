@@ -6,6 +6,7 @@ a hash-chained audit record (ADR-0013: lines carry verdicts and approvals).
 """
 
 import asyncio
+import copy
 import os
 import re
 from collections.abc import Callable
@@ -32,7 +33,7 @@ from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .tools import InProcessTools, ToolCall, ToolError
-from .vision import agreement, is_vision_stream, pass_facts
+from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
 if TYPE_CHECKING:
     from .live.client import ModelClient
@@ -51,6 +52,10 @@ NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 # a booth line that fails its repair on one of these goes to the producer queue: the event log can
 # settle it. The six derived feeds that fail are dropped from air instead (CREW-4.3).
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
+# the rundown ledger keeps this many moments (it is checkpointed with the match)
+RUNDOWN_KEEP = 400
+# the agents a moment's rundown entry records as called (the producer decides, it is not routed)
+ROUTED_AGENTS = ("analyst", "narrator", "verifier")
 
 
 class WorkflowError(Exception):
@@ -131,6 +136,8 @@ class WorkflowConfig:
     hold_booth: bool = False  # producer mode also holds the booth voices (dead air if it does)
     publication_ttl_s: int = 30
     personas: tuple[Persona, ...] = ("casual", "analyst")
+    # the engine clock at which the one Vision moment is due (ADR-0022); 0 turns it off
+    vision_moment_ms: int = 900_000
     # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
     orchestrator: str = field(
         default_factory=lambda: os.environ.get("MATCHCAST_ORCHESTRATOR", "af")
@@ -194,12 +201,16 @@ class MatchWorkflow:
         history: dict[str, Any] | None = None,
         knowledge: "TalkKnowledge | None" = None,
         truth_feed: Callable[[], list[dict[str, Any]]] | None = None,
+        vision_feed: Callable[[], list[dict[str, Any]]] | None = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
         self.stats_desk = stats_desk
         # a Vision stream reads the engine match's events here, to check them (ADR-0022)
         self._truth_feed = truth_feed
+        # the engine match's Vision passes as pass facts: its one Vision moment counts them
+        self._vision_feed = vision_feed
+        self._vision_moment_tried = False
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
@@ -244,6 +255,8 @@ class MatchWorkflow:
                 "history_on": self.history_on.isoformat(),
             },
         )
+        self.rundown: list[dict[str, Any]] = []  # the Showrunner ledger, see _record_rundown
+        self._routing: dict[str, Any] | None = None  # the entry of the moment being run
         self._restore()
         self.stats = {
             "events": 0,
@@ -270,7 +283,10 @@ class MatchWorkflow:
             events=tuple(self.store.events(self.sk)),
             personas=self.config.personas,
             truth=tuple(self._truth_feed()) if self._truth_feed else (),
-            extra={"history": self.history} if self.history else {},
+            extra={
+                **({"history": self.history} if self.history else {}),
+                **({"vision_passes": self._vision_feed} if self._vision_feed else {}),
+            },
         )
         if all(p in (*self.config.personas, *self.extra_personas) for p in BOOTH):
             ctx.extra["booth"] = (
@@ -332,6 +348,8 @@ class MatchWorkflow:
             finally:
                 self._sync_status(agent, subject)
             _annotate(span, method, result)
+            if agent.agent_id in ROUTED_AGENTS:
+                self._note_called(agent.agent_id)
             return result
 
     def _sync_status(self, agent: Any, subject: str) -> None:
@@ -395,6 +413,7 @@ class MatchWorkflow:
         if row is None:
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
+        self.rundown = copy.deepcopy(row.get("rundown", []))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
             restore(row["producer"])
@@ -407,6 +426,7 @@ class MatchWorkflow:
                 "processed_sequence": sequence,
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
+                "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
             },
         )
 
@@ -423,7 +443,10 @@ class MatchWorkflow:
             await self._process(event)
 
     async def _process(self, event: dict[str, Any]) -> None:
-        await self._process_event(event)
+        try:
+            await self._process_event(event)
+        finally:
+            self._routing = None  # calls after the event (an edit, a talk) are not this moment's
         self._checkpoint(event["stream_sequence"])
 
     def add_persona(self, persona: str) -> bool:
@@ -464,9 +487,48 @@ class MatchWorkflow:
 
             await run_event(self, ctx, event)
             return
+        task = await self._decide_moment(ctx, event)
+        if task is not None:
+            await self._run_moment(ctx, task)
+
+    async def _decide_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
+        """The Producer's task for this event, else the one Vision moment if it is due."""
         decision = await self._decide(ctx, event)
         if isinstance(decision, ProducerTask):
-            await self._run_moment(ctx, decision)
+            return decision
+        return self._vision_moment(ctx, event)
+
+    def _vision_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
+        """The one Vision moment on the engine feed (ADR-0022): Vision's pass count for each team
+        beside the engine's, once the engine clock reaches the config time and a pass is due.
+        It is a moment of its own, not a Producer decision, so it works the same in both modes."""
+        if (
+            self._vision_moment_tried
+            or self._vision_feed is None
+            or not self.config.vision_moment_ms
+            or is_vision_stream(ctx.stream)
+            or event["payload"]["type"] != "pass"
+            or event["event_time_ms"] < self.config.vision_moment_ms
+        ):
+            return None
+        home, away = ctx.home, ctx.away
+        passes = self._vision_feed()
+        if any(
+            vision_value("vision_precision", team, passes, ctx.events, event["event_time_ms"])
+            is None
+            for team in (home, away)
+        ):
+            return None  # no Vision pass is covered by the engine yet: try on a later pass
+        self._vision_moment_tried = True
+        return ProducerTask(
+            moment_id=f"v-{ctx.stream['match_id']}",
+            match_id=ctx.stream["match_id"],
+            event_ids=(event["event_id"],),
+            up_to_sequence=event["stream_sequence"],
+            priority=3,
+            personas=ctx.personas,
+            reason="vision",
+        )
 
     async def _decide(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
         """The Producer: one task for a moment worth a line, or None after auditing a skip."""
@@ -495,7 +557,28 @@ class MatchWorkflow:
                 )
             return None
         self.stats["moments"] += 1
+        self._record_rundown(decision)
         return decision
+
+    def _record_rundown(self, task: ProducerTask) -> None:
+        """One rundown entry per moment the crew takes: the agents it calls, skips and why."""
+        desk = self._wants_desk(task)
+        self.rundown.append(
+            {
+                "moment_id": task.moment_id,
+                "called": [],  # filled in as each agent actually runs, see _note_called
+                "skipped": [] if desk else ["stats_desk"],
+                "why": task.why or task.reason,
+                "routed_by": task.routed_by,
+            }
+        )
+        del self.rundown[:-RUNDOWN_KEEP]
+        self._routing = self.rundown[-1]
+
+    def _note_called(self, agent_id: str) -> None:
+        """An agent of the current moment actually ran: it goes into that moment's entry."""
+        if self._routing is not None and agent_id not in self._routing["called"]:
+            self._routing["called"].append(agent_id)
 
     def _state_json(self, state: MatchState) -> dict[str, Any]:
         return {
@@ -902,6 +985,7 @@ class MatchWorkflow:
     async def _desk_after_verify(self, task: ProducerTask) -> None:
         if not self._wants_desk(task):
             return
+        self._note_called("stats_desk")
         # After verification: only a claim that backs a verified line is ever sent to the desk.
         checked = list(self._verified_claims.values())
         try:

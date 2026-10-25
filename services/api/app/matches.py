@@ -10,6 +10,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from collections import deque
@@ -18,13 +19,13 @@ from contextlib import asynccontextmanager
 from typing import Any, Literal
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, WebSocket
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.hub import StreamEvent
-from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
+from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, BOOTH, booth, normalise
@@ -34,17 +35,18 @@ from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
-from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream
+from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
 from matchcast_mcp.server import create_server
 from mcp import Client
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app import budget
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
+from app.call import CallSocket
 from app.pipeline import Pipeline
 from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
@@ -155,6 +157,12 @@ class AskBody(BaseModel):
     surface: Literal["ask", "broadcast"] = "ask"
 
 
+class DrillBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    model_cut: bool  # true cuts the match's model calls, false restores them
+
+
 class ExportBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str = Field(pattern=ID)
@@ -238,6 +246,7 @@ class Registry:
 
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
+        self.cuts: dict[tuple[str, str], ModelCut] = {}  # the failure drill's switch per match
         self.create_lock = asyncio.Lock()  # the stored-match check awaits, so creates take turns
         self.store = (
             build_store()
@@ -303,13 +312,28 @@ class Registry:
         if live:
             self.new_matches.add("live:*", "live:" + client_ip(request))
 
-    def agents_for(self, personas: tuple[str, ...], *, live: bool = True, **seed: Any) -> AgentSet:
-        """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
+    def agents_for(
+        self,
+        personas: tuple[str, ...],
+        *,
+        live: bool = True,
+        cut: ModelCut | None = None,
+        **seed: Any,
+    ) -> AgentSet:
+        """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules.
+        A match's cut (the failure drill) sits in front of its model calls only."""
         client = self.model_client() if live else None
         tool_call = self.tool_call()
         if client is None:
             return rules_agents(personas, tool_call=tool_call, **seed)
+        if cut is not None:
+            client = cut.guard(client)
         return live_agents(client, personas, tool_call=tool_call, **seed)
+
+    def answers_for(self, live: bool, cut: ModelCut) -> ModelClient | None:
+        """Ask and Talk answer on the model when live; the failure drill cuts them too."""
+        client = self.model_client("answers") if live else None
+        return cut.guard(client) if client is not None else None
 
     def tool_call(self) -> ToolCall | None:
         """With MATCHCAST_TOOLS=mcp the Analyst calls the MCP tools in memory, against this
@@ -354,6 +378,21 @@ class Registry:
             return False
         window.append(now)
         return True
+
+    def vision_feed_for(
+        self, session_id: str, match_id: str
+    ) -> Callable[[], list[dict[str, Any]]] | None:
+        """An engine match's Vision passes, as pass facts, from the store: its one Vision moment
+        counts them beside its own (ADR-0022). None for a Vision stream."""
+        if is_vision_stream({"session_id": session_id}):
+            return None
+        vision = {
+            "tenant_id": TENANT,
+            "session_id": f"{session_id}.vision",
+            "match_id": match_id,
+        }
+        sk = stream_key(vision)
+        return lambda: pass_facts(self.store.events(sk))
 
     def truth_feed_for(
         self, session_id: str, match_id: str
@@ -409,20 +448,22 @@ class Registry:
                     "seed_bad_claim": True,
                     "seed_bad_claim_at_ms": cue,
                 }
+            cut = self.cuts.setdefault(key, ModelCut(on=bool(info.get("model_cut", False))))
             flow = MatchWorkflow(
                 stream=stream,
                 roster=info["roster"],
                 names=info.get("names", {}),
                 clubs=info.get("clubs", {}),
-                agents=self.agents_for(config.personas, live=live, **seeds),
+                agents=self.agents_for(config.personas, live=live, cut=cut, **seeds),
                 config=config,
                 store=self.store,
                 stats_desk=self.stats_desk,
                 safety=self.safety,
                 # Ask and talk answer on the model when live
-                answer_model=self.model_client("answers") if live else None,
+                answer_model=self.answers_for(live, cut),
                 knowledge=self.knowledge,
                 truth_feed=self.truth_feed_for(session_id, match_id),
+                vision_feed=self.vision_feed_for(session_id, match_id),
             )
             self.flows[key] = flow
             return flow
@@ -622,6 +663,7 @@ def build_router(registry: Registry) -> APIRouter:
                     422, "contract_invalid", "roster stream must match this match", "/roster/stream"
                 )
             config = WorkflowConfig(approval_mode=body.approval_mode, hold_booth=body.hold_booth)
+            cut = ModelCut()
             players = body.roster.get("players")
             teams = body.roster.get("team_ids")
             try:
@@ -635,6 +677,7 @@ def build_router(registry: Registry) -> APIRouter:
                     agents=registry.agents_for(
                         config.personas,
                         live=live,
+                        cut=cut,
                         seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
                         seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
                     ),
@@ -642,15 +685,17 @@ def build_router(registry: Registry) -> APIRouter:
                     store=registry.store,
                     stats_desk=registry.stats_desk,
                     safety=registry.safety,
-                    answer_model=registry.model_client("answers") if live else None,
+                    answer_model=registry.answers_for(live, cut),
                     knowledge=registry.knowledge,
                     truth_feed=registry.truth_feed_for(stream["session_id"], stream["match_id"]),
+                    vision_feed=registry.vision_feed_for(stream["session_id"], stream["match_id"]),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
             registry.flows[key] = flow
+            registry.cuts[key] = cut
             registry.count_new_match(request, live)
             # what a rebuilt match needs to behave as this one does after a restart
             seed = body.seed_bad_claim or x_matchcast_seed_bad_claim == "1"
@@ -663,6 +708,7 @@ def build_router(registry: Registry) -> APIRouter:
                     "live": live,
                     "seed_bad_claim": seed,
                     "seed_bad_claim_at_ms": body.seed_bad_claim_at_ms,
+                    "model_cut": cut.on,  # a drill that landed first is not overwritten
                 },
             )
         return {"stream": stream, "approval_mode": body.approval_mode, "mode": flow.agents.mode}
@@ -672,6 +718,23 @@ def build_router(registry: Registry) -> APIRouter:
         flow = await registry.flow_for(session_id, match_id)
         return {"stream": flow.stream, "state": _state_json(flow), "stats": flow.stats,
                 "mode": flow.agents.mode, "approval_mode": flow.config.approval_mode}  # fmt: skip
+
+    @router.post("/matches/{match_id}/drill")
+    async def failure_drill(match_id: str, body: DrillBody) -> dict[str, Any]:
+        """The failure drill: cut or restore one match's model calls. While cut, each model call
+        fails at once and the rules twin answers; every refusal is audited as fallback_used."""
+        flow = await registry.flow_for(body.session_id, match_id)
+        cut = registry.cuts.setdefault((body.session_id, match_id), ModelCut())
+        cut.on = body.model_cut
+        sk = flow.sk
+
+        def persist() -> None:
+            registry.store.put_match(
+                sk, {**(registry.store.get_match(sk) or {}), "model_cut": cut.on}
+            )
+
+        await asyncio.to_thread(persist)
+        return {"model_cut": cut.on, "mode": flow.agents.mode}
 
     @router.post("/matches/{match_id}/events", status_code=202)
     async def post_events(match_id: str, session_id: str, body: EventBatch) -> dict[str, int]:
@@ -702,18 +765,21 @@ def build_router(registry: Registry) -> APIRouter:
     @router.get("/matches/{match_id}/vision/summary")
     async def vision_summary(match_id: str, session_id: str) -> dict[str, Any]:
         """What Vision contributes to the agents on this match (ADR-0022): passes in, the lines the
-        Verifier passed on them, the latest such line, and agreement with the engine's passes."""
-        await registry.flow_for(session_id, match_id)  # the engine match must exist
+        Verifier passed on them, the latest such line, and agreement with the engine's passes.
+        ``ready`` is false until the match and its Vision stream exist; the page polls this before
+        a match starts, so that is an answer, not an error."""
         try:
+            await registry.flow_for(session_id, match_id)  # the engine match must exist
             vision = await registry.flow_for(f"{session_id}.vision", match_id)
-        except Problem:  # no Vision has been sent for this match yet
+        except Problem:  # no engine match yet, or no Vision has been sent for this match
             return {
+                "ready": False,
                 "passes_in": 0,
                 "lines_verified": 0,
                 "latest_line": None,
                 "agreement": agreement([], []),
             }
-        return vision.vision_summary()
+        return {"ready": True, **vision.vision_summary()}
 
     @router.get("/matches/{match_id}/stream")
     async def stream(
@@ -1032,6 +1098,60 @@ def build_router(registry: Registry) -> APIRouter:
                 except VoiceError:
                     pass  # the reply is still shown, just not spoken
         return result
+
+    @router.websocket("/matches/{match_id}/call")
+    async def call(websocket: WebSocket, match_id: str) -> None:
+        """The voice call (EXP-18): talks and their spoken replies over one socket, both ways."""
+        session_id = websocket.query_params.get("session_id", "")
+        if not re.fullmatch(ID, session_id):
+            await websocket.close(code=1008)
+            return
+        try:
+            flow = await registry.flow_for(session_id, match_id)
+        except Problem:
+            await websocket.close(code=1008)
+            return
+        await websocket.accept()
+        voice = registry.voice
+        ip = client_ip(websocket)
+
+        async def talk(target: str, utterance: str, position: str | None) -> dict[str, Any]:
+            try:  # the talk route's own limits, so a turn never reaches the model unchecked
+                TalkBody(
+                    session_id=session_id, target=target, utterance=utterance, position=position
+                )
+            except ValidationError as error:
+                raise Problem(
+                    422,
+                    "bad_frame",
+                    "a talk needs a player, 1 to 300 characters, and a position code",
+                ) from error
+            registry.allow_question(websocket)  # a turn counts as a question, as in the talk route
+            try:
+                result = await flow.talk(target, utterance, position=position)
+            except WorkflowError as error:
+                raise Problem(STATUS[error.code], error.code, str(error)) from error
+            result["lang"] = "en"
+            return result
+
+        async def speak(sentence: str, voice_name: str) -> bytes | None:
+            if not voice.ready:
+                return None
+            # a new clip uses the caller's voice allowance; once spent, the reply is written only
+            if voice.get(clip_key(sentence, voice_name)) is None and not voice.allow(ip):
+                return None
+            try:
+                return await voice.clip(sentence, voice_name)
+            except VoiceError:
+                return None
+
+        await CallSocket(
+            websocket,
+            talk=talk,
+            speak=speak,
+            voice_for=voice.voice_for,
+            allow_talk=lambda: registry.allow_talk(session_id),
+        ).serve()
 
     @router.get("/voice/audition.mp3")
     async def audition(request: Request) -> Response:

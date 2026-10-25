@@ -29,7 +29,7 @@ MCS.progress('Loading the stadium and players');
   st.textContent += '@media (max-width:560px){button:not(.sw):not(.dk-grab),select,input:not([type=checkbox]),textarea,#px-head{min-height:44px !important;min-width:44px !important}input[type=checkbox]{width:24px;height:24px}label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}';   // phone: 44 px tap targets
   st.textContent += '#pulse,#visp,#datap,#fan-strip{--panel:rgb(9,13,19)}#px-body .px-row{flex-wrap:wrap;gap:0 8px}#px-ctlv{margin-left:auto}';   // panels fully opaque so player labels do not show through (pass 4; 96 percent in pass 3 still showed a ghost); the control line wraps instead of running into its label (UX review pass 3)
   st.textContent += '@media (max-width:640px){#fan-strip,#fan-metric{display:none !important}}';   // phone: the live stats strip sat under the Match Pulse bar; Match data holds the numbers (UX review, finding 14)
-  st.textContent += '#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
+  st.textContent += '#mcf-sound,#mc-trust,#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
   st.textContent += '@media (max-width:1100px){#third{display:none !important}}';
   // Watch shares the stage with Broadcast, so its pane is 561 to 1100 px wide on most laptops: the Copilot button centred at the top then lands on the camera chips, so it takes its narrow-pane place at the right, above the bottom cards
   st.textContent += '@media (min-width:561px) and (max-width:1100px){#cpbtn{left:auto !important;transform:none !important;right:14px !important;top:auto !important;bottom:152px !important}}';   // 152 px keeps it above the caption card, which is up to 125 px tall in the right corner   // phone and small laptop: there is no room beside the commentary card, which says the same and used to cover this card
@@ -205,7 +205,6 @@ MCS.progress('Loading the stadium and players');
     const r = d.reply;
     if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) {   // the player's own answer, checked against the match record
       talkLine(p, 'pl', r.text);
-      if (window.mcCallSpeak) window.mcCallSpeak(r.audioUrl, r.text);   // on a call the checked reply is spoken, and a cut-in stops it (EXP-18)
       if (r.order && r.order.accepted) setOrder(p, r.order.key, text);   // the api's role guard passed this order
       renderTalk(); return;
     }
@@ -320,62 +319,24 @@ window.addEventListener('message', (e) => {
 // resource; otherwise the browser's speech recognition, labelled as Simulated.
 (() => {
   const mic = document.getElementById('tk-mic'), q = document.getElementById('tk-q'), form = document.getElementById('tk-form');
-  const CALL_ENABLED = false;   // frozen for this release (scope, Oct 25): set to true to show the Call button
-  if (!CALL_ENABLED || !mic || !q || !form || !mic.parentNode) return;
+  if (!mic || !q || !form || !mic.parentNode) return;
   const btn = document.createElement('button');
   btn.type = 'button'; btn.id = 'tk-call'; btn.textContent = 'Call'; btn.setAttribute('aria-pressed', 'false');
-  btn.title = 'Start a voice call: the player listens, answers in his own voice, and stops when you speak';
+  btn.title = 'Start a voice call: the player listens, answers in his own voice, and stops when you cut in';
   btn.style.cssText = 'font:600 12px var(--f-body,system-ui,sans-serif);padding:0 10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap';
   mic.parentNode.insertBefore(btn, mic);
-  let on = false, handle = null, audio = null, quietUntil = 0, via = '';
+  // the shell opens the call (its socket, the fan's mic and the player's voice); Watch shows the state and the fan's finished phrases
+  let on = false;
   const say = (t) => { const n = document.getElementById('tk-note'); if (n) n.textContent = t; };
-  const cutIn = () => {   // the fan spoke: stop the player's voice (his own echo on the speakers is ignored for a moment)
-    if (Date.now() < quietUntil) return;
-    if (audio) { audio.pause(); audio = null; }
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-  };
-  const send = (text) => { if (on && text) { q.value = text.slice(0, 300); form.requestSubmit(); } };
+  const paint = (live) => { on = live; btn.textContent = live ? 'End call' : 'Call'; btn.setAttribute('aria-pressed', String(live)); q.placeholder = live ? 'Listening…' : 'Talk to the player…'; };
   window.mcCallOn = () => on;
-  // the reply in his voice: the api's clip when there is one, else the browser voice
-  window.mcCallSpeak = (url, text) => {
-    if (!on) return;
-    cutIn(); quietUntil = Date.now() + 1500;
-    if (url) { audio = new Audio(url); audio.onended = () => { audio = null; }; audio.play().catch(() => { audio = null; }); return; }
-    if ('speechSynthesis' in window && text) window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-  };
-  const browserListen = (lang) => {
-    const R = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!R) return false;
-    const rec = new R(); rec.continuous = true; rec.interimResults = true; rec.lang = lang;
-    rec.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i], t = r[0].transcript.trim();
-        if (r.isFinal) send(t); else if (t.split(/\s+/).length >= 2) cutIn();
-      }
-    };
-    rec.onend = () => { if (on && handle === rec) rec.start(); };   // the browser stops after a pause: keep the call open
-    rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { say('The mic is blocked. Allow it for this page to call, or type.'); stopCall(); } };
-    handle = rec; via = 'browser speech (Simulated: the api has no Speech resource)';
-    rec.start();
-    return true;
-  };
-  const stopCall = () => {
-    on = false;
-    if (handle) { const h = handle; handle = null; h.stop(); }
-    cutIn();
-    btn.textContent = 'Call'; btn.setAttribute('aria-pressed', 'false'); q.placeholder = 'Talk to the player…';
-  };
-  const startCall = async () => {
-    const lang = FAN.lang === 'es' ? 'es-ES' : FAN.lang === 'hi' ? 'hi-IN' : 'en-US';
-    on = true; btn.textContent = 'End call'; btn.setAttribute('aria-pressed', 'true'); q.placeholder = 'Listening…';
-    let az = null; try { az = window.parent !== window && window.parent.SPX && typeof window.parent.SPX.listenOn === 'function' ? window.parent.SPX : null; } catch (e) { /* cross-origin parent */ }
-    const h = az ? await az.listenOn(lang, cutIn, send) : null;
-    if (!on) { if (h) h.stop(); return; }   // ended while the Speech resource was being reached
-    if (h) { handle = h; via = 'Azure Speech'; }
-    else if (!browserListen(lang)) { say('Calls need speech recognition, which this browser does not have. You can still type.'); stopCall(); return; }
-    say('Call on, via ' + via + '. Speak to the player; he stops when you cut in. The transcript stays below.');
-  };
-  btn.addEventListener('click', () => { if (on) { stopCall(); say('Call ended.'); } else startCall(); });
+  btn.addEventListener('click', () => { const next = !on; paint(next); MCS.send({ type: 'call', on: next }); say(next ? 'Calling…' : 'Call ended.'); });
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source !== window.parent || d.src !== 'matchcast-shell') return;
+    if (d.type === 'call-state') { paint(!!d.on); if (d.note) say(d.note); }
+    else if (d.type === 'call-said' && on && d.text) { q.value = String(d.text).slice(0, 300); form.requestSubmit(); }
+  });
 })();
 
 // ---- EXP-17: the shell's language selector (EN, ES, HI) sets Watch's language too; Watch's own picker keeps the others (Tamil, French, Arabic).
