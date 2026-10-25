@@ -16,7 +16,7 @@ from app.voice import (
 )
 from fastapi.testclient import TestClient
 from matchcast_agents.safety import SafetyResult, ShieldResult
-from test_api_matches import Q, create, post_all
+from test_api_matches import Q, create, post_all, register_booth, waiting_lines
 
 VOICES = {
     "commentary": "en-GB-RyanNeural",
@@ -167,8 +167,9 @@ def test_only_a_line_on_air_is_voiced() -> None:
     producer = {"X-MatchCast-Role": "Producer"}
     ids = {"session_id": "short", "match_id": "match-short"}
     create(client, approval_mode="producer")
+    register_booth(client)
     post_all(client)
-    queue = client.get("/v1/matches/match-short/lines", params=Q, headers=producer).json()["items"]
+    queue = waiting_lines(client, producer)
     waiting, approved, killed = queue[0]["line_id"], queue[1]["line_id"], queue[2]["line_id"]
     line_audio = "/v1/matches/match-short/lines/{}/audio.mp3"
 
