@@ -233,6 +233,37 @@ def test_quiet_moments_use_the_rules_and_skip_the_model(match, monkeypatch) -> N
     assert default < model_calls()
 
 
+def test_a_quiet_play_gets_one_verified_analyst_colour_line(match) -> None:
+    seen: list[dict] = []
+
+    def record(system, user):
+        facts = json.loads(user)
+        if facts.get("moment") == "colour" and "personas" in facts:
+            seen.append(facts)
+        return answer(system, user)
+
+    flow = build(match, ScriptedModelClient(record))  # default gate: quiet plays stay on rules
+    run(flow.ingest(match["events"]))
+    assert len(seen) == 1  # the 45 s cap holds in a match that ingests in well under 45 s
+    assert seen[0]["personas"] == ["analyst"] and seen[0]["play"] in ("shot", "tackle", "foul")
+    assert seen[0]["claims"][0]["metric"].split(":")[0] in ("shots", "tackles_won", "fouls")
+    colour = [ln for ln in flow.store.lines(flow.sk) if ln.line_id.endswith("-analyst-0")]
+    lines = [ln for ln in colour if ln.origin == "model" and ln.persona == "analyst"]
+    assert lines and all(ln.status == "published" for ln in lines if ln.persona == "analyst")
+
+
+def test_colour_falls_back_to_a_rules_line_when_the_model_fails(match) -> None:
+    class Down:
+        async def complete(self, system, user, schema, **_):
+            raise ModelError("down")
+
+    flow = build(match, Down())
+    run(flow.ingest(match["events"]))
+    assert flow.store.lines(flow.sk) and all(
+        ln.origin == "template" for ln in flow.store.lines(flow.sk)
+    )
+
+
 def test_a_moments_lines_are_checked_together_and_redrafted_once(match, monkeypatch) -> None:
     import asyncio
 
