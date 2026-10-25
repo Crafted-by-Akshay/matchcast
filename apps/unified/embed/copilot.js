@@ -12,13 +12,15 @@
     + '#mc-desk-body{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto}'
     + '#mc-desk ol,#mc-desk ul{margin:0;padding-left:18px}'
     + '.mcd-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}'
-    + '.mcd-ch{padding:2px 6px;border-radius:999px;background:#17283F;border:1px solid #2c4a72;font-size:11px}';
+    + '.mcd-ch{padding:2px 6px;border-radius:999px;background:#17283F;border:1px solid #2c4a72;font-size:11px}'
+    + '.mcd-line{padding:4px 0;border-bottom:1px solid #22395c}';
   document.head.append(style);
   const box = document.createElement('section');
   box.id = 'mc-desk'; box.setAttribute('aria-label', 'Production desk: orchestration and Broadcast Copilot');
   box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center"><b>Production desk</b>'
     + '<button type="button" id="mc-desk-hide" aria-expanded="true" aria-controls="mc-desk-body">Hide</button></div>'
     + '<div id="mc-desk-body">'
+    + '<div id="mc-lens" role="group" aria-label="Steer the agents: who the commentary is written for"><span>Lens</span><button type="button" data-lens="casual">Casual</button><button type="button" data-lens="analyst">Analyst</button><button type="button" data-lens="broadcast">Broadcast</button><select id="mc-lens-more" aria-label="More lenses: a club, a player or a metric" style="max-width:150px;padding:3px;border-radius:4px;background:#12294a;color:#fff;border:1px solid #3aa0ff;font:inherit"></select></div>'
     + '<div id="mc-orch" aria-live="polite"><b>On air</b> <span>Nothing aired yet.</span></div>'
     + '<div id="mc-cop" role="group" aria-label="Ask the Broadcast Copilot">'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" data-cop="highlights">Highlights</button><button type="button" data-cop="focus">Where to focus</button><button type="button" data-cop="plan">Production plan</button></div>'
@@ -27,16 +29,45 @@
   (document.getElementById('bc-view') || document.body).append(box);
   const $ = (id) => box.querySelector('#' + id);
 
-  // the orchestration strip: the last aired line, and one chip per agent that acted on it
+  // the production strip: the last five lines on air, newest first. Each shows the numbers it was built on and one chip per agent that acted on it
+  const flow = [];
+  const lineHtml = (line) => {
+    const seen = new Map();
+    for (const s of line.steps || []) seen.set(s.agent, s);   // one chip per agent, in the order it first acted, with its last step
+    const chips = [...seen.values()].map((s) => '<span class="mcd-ch">' + esc(s.agent) + ' · ' + esc(s.step) + ' · ' + (s.mode === 'model' ? 'model' : 'rules') + '</span>').join('');
+    const nums = (line.numbers || []).map((n) => '<span class="mcd-ch">' + esc(n.name) + ' ' + esc(n.value) + '</span>').join('');
+    return '<div class="mcd-line"><b>' + esc(line.minute) + "'" + (line.verdict ? ' · ' + esc(line.verdict) : '') + '</b> ' + esc(line.text || '')
+      + '<div class="mcd-chips">' + (chips || '<span class="mcd-ch">No agent trace for this line.</span>') + nums + '</div></div>';
+  };
   window.addEventListener('message', (e) => {
     const d = e.data || {};
     if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'air' || !d.line) return;
-    const line = d.line, seen = new Map();
-    for (const s of line.steps || []) seen.set(s.agent, s);   // one chip per agent, in the order it first acted, with its last step
-    const chips = [...seen.values()].map((s) => '<span class="mcd-ch">' + esc(s.agent) + ' · ' + esc(s.step) + ' · ' + (s.mode === 'model' ? 'model' : 'rules') + '</span>').join('');
-    $('mc-orch').innerHTML = '<b>On air' + (line.verdict ? ' · ' + esc(line.verdict) : '') + '</b> <span>' + esc(line.text || '') + '</span>'
-      + '<div class="mcd-chips">' + (chips || '<span class="mcd-ch">No agent trace for this line.</span>') + '</div>';
+    flow.unshift(d.line); flow.length = Math.min(flow.length, 5);
+    $('mc-orch').innerHTML = '<b>On air, newest first</b>' + flow.map(lineHtml).join('');
   });
+  // the lens steers what the agents write for: the same personas the api takes (casual, analyst, broadcast)
+  box.querySelectorAll('[data-lens]').forEach((b) => { b.onclick = () => { MCS.send({ type: 'persona', persona: b.dataset.lens }); box.querySelectorAll('[data-lens]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }; });
+  // the other lenses: each club of the match, each player, and the metrics the api can follow (the same grammar Watch uses: club:<key>, player:<name>, metric:<name>)
+  const METRIC_LENSES = [['xg', 'xG'], ['shots', 'Shots'], ['shots_on_target', 'Shots on target'], ['tackles_won', 'Tackles won'], ['fouls', 'Fouls']];
+  const more = $('mc-lens-more');
+  function fillLenses() {
+    const list = typeof players !== 'undefined' ? players : [];
+    const clubs = [...new Set(list.map((q) => q.T.key))], names = [...new Set(list.map((q) => q.name))].sort();
+    const key = clubs.join('|') + '#' + names.length;
+    if (more.dataset.key === key) return;
+    more.dataset.key = key;
+    const opt = (value, label) => '<option value="' + esc(value) + '">' + esc(label) + '</option>';
+    more.innerHTML = '<option value="">More lenses…</option>'
+      + '<optgroup label="Club">' + clubs.map((c) => opt('club:' + c, c)).join('') + '</optgroup>'
+      + '<optgroup label="Player">' + names.map((x) => opt('player:' + x, x)).join('') + '</optgroup>'
+      + '<optgroup label="Metric">' + METRIC_LENSES.map(([m, l]) => opt('metric:' + m, l)).join('') + '</optgroup>';
+  }
+  more.onfocus = fillLenses; fillLenses();
+  more.onchange = () => {
+    if (!more.value) return;
+    MCS.send({ type: 'persona', persona: more.value });
+    box.querySelectorAll('[data-lens]').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+  };
 
   // the Broadcast Copilot: each question is asked of the api with surface "broadcast"; only the newest answer is shown
   const QUESTIONS = { highlights: 'What are the highlights so far?', focus: 'Where should the camera go next?', plan: 'What is the production plan for the next few minutes?' };

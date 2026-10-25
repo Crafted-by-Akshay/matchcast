@@ -14,7 +14,7 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   }, true);
   const bar = document.createElement('div');
   bar.id = 'mc-replay'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Instant replay');
-  bar.style.cssText = 'position:absolute;left:10px;top:44px;z-index:8;display:flex;gap:6px;align-items:center;padding:6px 8px;background:rgba(10,20,40,.92);border-radius:6px;font:600 12px system-ui,sans-serif;color:#e8eefc';
+  bar.style.cssText = 'position:absolute;left:10px;top:44px;z-index:8;max-width:50%;flex-wrap:wrap;display:flex;gap:6px;align-items:center;padding:6px 8px;background:rgba(10,20,40,.92);border-radius:6px;font:600 12px system-ui,sans-serif;color:#e8eefc';
   bar.innerHTML = '<span>Instant replay</span>'
     + [10, 20, 30].map((n) => '<button type="button" data-sec="' + n + '" style="padding:4px 8px;border-radius:4px;border:1px solid #3aa0ff;background:#12294a;color:#fff;font:inherit;cursor:pointer">Last ' + n + ' s</button>').join('')
     + '<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mc-replay-slow">Slow-mo</label>'

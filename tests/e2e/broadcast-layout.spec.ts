@@ -20,7 +20,7 @@ for (const [name, size] of [['desktop', { width: 1440, height: 900 }], ['phone',
     for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
       const a = boxes[i], b = boxes[j];
       const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-      expect(overlap, `${a.id} overlaps ${b.id}`).toBe(false);
+      expect(overlap, `${a.id} overlaps ${b.id} ${JSON.stringify([a, b])}`).toBe(false);
     }
     expect(errs).toEqual([]);
   });

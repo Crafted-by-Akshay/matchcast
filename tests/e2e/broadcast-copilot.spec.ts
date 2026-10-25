@@ -73,12 +73,19 @@ test('the production strip shows which agents acted on the last aired line', asy
     frame.contentWindow!.postMessage({ src: 'matchcast-shell', type: 'air', line: {
       id: 'L1', minute: 12, text: 'Goal for Northgate FC.', verdict: 'verified', alert: null, tr: null,
       steps: [{ agent: 'producer', step: 'pick', mode: 'rules' }, { agent: 'analyst', step: 'claim', mode: 'rules' }, { agent: 'narrator', step: 'draft', mode: 'model' }, { agent: 'verifier', step: 'verdict', mode: 'rules' }],
+      numbers: [{ name: 'shots', value: 4 }],
     } }, '*');
   });
   await expect(desk.locator('#mc-orch')).toContainText('Goal for Northgate FC.');
   for (const agent of ['producer', 'analyst', 'narrator', 'verifier']) {
     await expect(desk.locator('#mc-orch .mcd-ch', { hasText: agent })).toBeVisible();
   }
+  await expect(desk.locator('#mc-orch .mcd-ch', { hasText: 'shots 4' })).toBeVisible();
+  await desk.locator('[data-lens="analyst"]').click();
+  await expect(desk.locator('[data-lens="analyst"]')).toHaveAttribute('aria-pressed', 'true');
+  await desk.locator('#mc-lens-more').focus();
+  await expect(desk.locator('#mc-lens-more optgroup')).toHaveCount(3);
+  await expect(desk.locator('#mc-lens-more option[value="metric:xg"]')).toHaveCount(1);
 });
 
 test('a plain question on the Watch view keeps the Ask request exactly as it was', async ({ page }) => {
