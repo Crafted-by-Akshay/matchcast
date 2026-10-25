@@ -44,10 +44,12 @@ test('desktop chips are at least 32 px tall and the live-region pill is not draw
 });
 
 test('the fixture list says its score is recorded, and the score label says so too', async ({ page }) => {
+  await page.route(/\/(watch|broadcast)\/index\.html/, (rt) => rt.abort());   // no 3D view, so no live score replaces the label
   await openShell(page, 'analyst');
   const labels = await page.$$eval('#fx option', (os) => os.map((o) => o.title || '').filter((t) => /\d–\d/.test(t)));   // the score moved from the label to the title (quiet first screen)
   expect(labels.length).toBeGreaterThan(20);
   for (const t of labels) expect(t).toMatch(/^Recorded result \d+–\d+/);
+  await page.selectOption('#fx', { index: 1 });   // a season fixture (the default is the national-team one, which says Synthetic squad)
   await expect(page.locator('#score-l')).toHaveText('Recorded');
 });
 
