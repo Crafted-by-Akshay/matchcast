@@ -295,16 +295,14 @@ def build_analyst():
     return r(AS + "head.html") + '<script>\n"use strict";\n' + js + "</script>\n"
 
 
+# same stadium order as the 3D engine's STADIUMS
+MSI_STADIUM = {"london": 0, "madrid": 1, "rio": 2, "milan": 3, "mexico": 4}
+
+
 def fixtures():
     L = json.load(open(AD + "league.json"))
     clubs = {c["key"]: c for c in L["clubs"]}
-    MSI = {
-        "london": 0,
-        "madrid": 1,
-        "rio": 2,
-        "milan": 3,
-        "mexico": 4,
-    }  # same stadium order as the 3D engine's STADIUMS
+    MSI = MSI_STADIUM
     out = []
     for k in range(len(L["fixtures"])):
         mid = "M%03d" % (k + 1)
@@ -340,6 +338,69 @@ def fixtures():
     return out
 
 
+# Real national teams with synthetic squads (ADR-0020). The squads and the style come from
+# data/history/national_squads.json (scripts/build_national_squads.py, CC0 results). Every player is
+# fictional; the clubs and the fixture say so with the "synthetic squad" label.
+NATIONAL_SQUADS = U + "../../data/history/national_squads.json"
+NATIONAL = [
+    # key, nation (the results-file name), kit colour, stadium (one of the 3D engine's stadiums)
+    ("ARG", "Argentina", "#75AADB", "mexico"),
+    ("BRA", "Brazil", "#F2C400", "mexico"),
+]
+NATIONAL_SEED = 2026
+
+
+def national_clubs():
+    squads = json.load(open(NATIONAL_SQUADS, encoding="utf-8"))
+    out = []
+    for key, nation, color, stadium in NATIONAL:
+        s = squads[nation]
+        out.append(
+            {
+                "key": key,
+                "club": nation,
+                "color": color,
+                "stadium": stadium,
+                "label": s["label"],
+                "squad": [
+                    {
+                        "name": p["name"],
+                        "num": p["shirt"],
+                        "pos": p["position"],
+                        "rating": p["rating"],
+                        "synthetic": True,
+                    }
+                    for p in s["players"]
+                ],
+            }
+        )
+    return out
+
+
+def national_fixtures(template):
+    """One Argentina v Brazil fixture. No recorded match exists, so the score and result stay empty
+    and the fixture is flagged; the tactics come from an existing fixture, so the vocabulary matches."""
+    home, away = national_clubs()
+    setup = dict(template["setup"], seed=NATIONAL_SEED)
+    return [
+        {
+            "id": "N001",
+            "matchday": "National",
+            "date": "",
+            "national": True,
+            "label": "synthetic squad",
+            "home": {k: home[k] for k in ("key", "club", "color", "stadium")},
+            "away": {k: away[k] for k in ("key", "club", "color", "stadium")},
+            "score": [0, 0],
+            "stIndex": MSI_STADIUM[home["stadium"]],
+            "setup": setup,
+            "formations": template["formations"],
+            "styles": template["styles"],
+            "result": None,
+        }
+    ]
+
+
 def write(path, text):
     if path.endswith(".html") and not text.lstrip().lower().startswith("<!doctype"):
         text = (
@@ -367,17 +428,19 @@ def build(out_root):
     # optional Data platform assets (EXP-13): fabric-dashboard.mp4/.png, model-card.json
     for f in sorted(glob.glob(U + "platform-assets/*")):
         shutil.copy(f, out_root + "shared/" + os.path.basename(f))
+    season = fixtures()
     write(
         out_root + "shared/fixtures.json",
-        json.dumps(fixtures(), ensure_ascii=False, separators=(",", ":")),
+        json.dumps(
+            season + national_fixtures(season[0]), ensure_ascii=False, separators=(",", ":")
+        ),
     )
+    clubs = json.load(open(AD + "league.json"))["clubs"] + national_clubs()
+    keys = [c["key"] for c in clubs]
+    assert len(keys) == len(set(keys)), "a national key clashes with a season club"
     write(
         out_root + "shared/clubs.json",
-        json.dumps(
-            {"clubs": json.load(open(AD + "league.json"))["clubs"]},
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ),
+        json.dumps({"clubs": clubs}, ensure_ascii=False, separators=(",", ":")),
     )
 
 
