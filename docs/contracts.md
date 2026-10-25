@@ -291,9 +291,10 @@ Metric-name conventions (no schema change; they are names, the packet keeps its 
 
 - `<metric>:<team_id>` names a team's count, e.g. `goals:home`.
 - `h2h_played:<team_id>` is the head-to-head meetings count, recounted from the match history.
-- `rhythm_share:<team_id>@<end_ms>` is the share of on-ball actions the team made over the five
+- `rhythm_share:<team_id>-<end_ms>` is the share of on-ball actions the team made over the five
   minutes that end at `end_ms` (match time, milliseconds), recounted from the events up to that
-  time. The `@<end_ms>` suffix is the window end; a consumer parses it with a split on `@`.
+  time. The `-<end_ms>` suffix is the window end, the digits after the last hyphen; `@` is not
+  used because the claim metric pattern does not allow it.
 
 Audit actions `feed_killed` and `feed_resumed` record a desk kill or resume of one
 feed. The audit writer stays on schema version 1.1.0; only the feed packets use 1.2.0.

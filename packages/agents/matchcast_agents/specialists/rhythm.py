@@ -123,6 +123,29 @@ def reading(events: list[dict[str, Any]], home: str, away: str, end_ms: int) -> 
     )
 
 
+def share_percent(
+    events: list[dict[str, Any]], team: str, end_ms: int, home: str, away: str
+) -> int:
+    """The team's share of the on-ball actions over the five minutes that end at ``end_ms``.
+
+    The Analyst's ``rhythm_share`` claim and its Verifier recount both use this function, so the
+    figure a line quotes is the figure the log gives. ``events`` are the events up to the claim.
+    """
+    on_ball = reading(events, home, away, end_ms).counts["on_ball"]
+    return _percent(on_ball[team], sum(on_ball.values()))
+
+
+def recount_share(
+    events: list[dict[str, Any]], metric: str, upto: int, home: str, away: str
+) -> int:
+    """Recount a ``rhythm_share:<team>-<end_ms>`` claim from the stored events up to ``upto``."""
+    name, subject = metric.split(":", 1)
+    team, end_ms = subject.rsplit("-", 1)  # the end is digits, so a hyphen in a team id is safe
+    assert name == "rhythm_share"
+    visible = [e for e in events if e["stream_sequence"] <= upto]
+    return share_percent(visible, team, int(end_ms), home, away)
+
+
 def readings(events: list[dict[str, Any]], home: str, away: str, end_ms: int) -> list[Reading]:
     """One reading per whole minute up to ``end_ms``, so the swing span is always three minutes."""
     return [reading(events, home, away, end) for end in range(STEP_MS, end_ms + 1, STEP_MS)]
@@ -174,7 +197,7 @@ class RhythmSpecialist:
         ctx.extra["rhythm"] = {
             "index": [(r.minute, r.index) for r in series],
             "swings": [{"minute": s.minute, "from": s.from_team, "to": s.to_team} for s in found],
-        }
+        }  # "swing" is added below when the why line cites one
 
         now = reading(events, home, away, end_ms)
         window_ids = tuple(e["event_id"] for e in window(events, end_ms))
@@ -211,6 +234,8 @@ class RhythmSpecialist:
                 f"with {share}% of the on-ball actions over the five minutes to that minute"
             )
             why_evidence = tuple(e["event_id"] for e in window(events, swing.end_ms))
+            # the Analyst's claim cites this swing: the side it went to, and the window's end
+            ctx.extra["rhythm"]["swing"] = {"team": swing.to_team, "end_ms": swing.end_ms}
         return SpecialistReport(
             self.name,
             request.moment_id,
