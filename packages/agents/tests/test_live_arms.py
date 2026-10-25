@@ -106,3 +106,32 @@ def test_a_live_run_is_bounded_per_arm(match) -> None:
     for bad in (0, 1001):
         with pytest.raises(ValueError):
             live_run(match, client=CountingClient(), max_calls=bad)
+
+
+def test_counting_a_fallback_leaves_it_for_the_workflow_audit() -> None:
+    # the tally reads a fallback and puts it back, so the workflow still audits it (fallback_used)
+    from matchcast_agents.grading_live import _Tallied, _Tally
+    from matchcast_agents.resilience import ResilientAgent
+
+    class FailingAnalyst:
+        async def analyse(self, ctx, task, *, repair=False):
+            raise ModelError("no model here")
+
+    class RulesAnalyst:
+        mode = "rules"
+        agent_id = "analyst"
+
+        async def analyse(self, ctx, task, *, repair=False):
+            return []
+
+    tally = _Tally()
+    agent = _Tallied(ResilientAgent(FailingAnalyst(), RulesAnalyst()), tally)
+
+    async def one_task():  # the workflow awaits its agents in one task, so the context carries
+        result = await agent.analyse(None, None)
+        return result, agent.take_fallbacks()
+
+    result, taken = run(one_task())
+    assert result == []
+    assert (tally.agent_calls, tally.answered_by_rules) == (1, 1)
+    assert taken == ["model_error"]  # still there for the workflow

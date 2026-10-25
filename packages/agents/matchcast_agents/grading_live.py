@@ -121,8 +121,11 @@ class _Tallied:
         async def call(*args: Any, **kwargs: Any) -> Any:
             result = await attr(*args, **kwargs)
             tally.agent_calls += 1
-            if hasattr(inner, "take_fallbacks") and inner.take_fallbacks():
-                tally.answered_by_rules += 1
+            if hasattr(inner, "take_fallbacks"):
+                taken = inner.take_fallbacks()
+                if taken:
+                    tally.answered_by_rules += 1
+                inner.keep_fallbacks(taken)  # the workflow's audit still reads them
             return result
 
         return call
@@ -222,7 +225,7 @@ def _live_arm(
         "model_calls": budget.attempted,
         "model_errors": budget.failed,
         "budget_refused": budget.refused,
-        "agent_calls": tally.agent_calls,
+        "agent_calls": tally.agent_calls,  # every agent call, rules-only ones included
         "answered_by_rules": tally.answered_by_rules,
         "max_calls": max_calls,
         "basis": "model calls through the budget, one per complete() call (the SDK may retry one "
@@ -306,4 +309,11 @@ def load_live_run(
     if record.get("seed_rate") != rate:
         return None
     arms = record.get("arms")
-    return arms if isinstance(arms, dict) else None
+    if not isinstance(arms, dict) or not arms:
+        return None
+    if not all(
+        isinstance(arm, dict) and isinstance(arm.get("run_id"), str) for arm in arms.values()
+    ):
+        log.warning("scoreboard live run %s has an arm without a run id; showing rules arms", path)
+        return None
+    return arms

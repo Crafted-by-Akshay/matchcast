@@ -1057,7 +1057,10 @@ def build_router(registry: Registry) -> APIRouter:
         events = flow.store.events(flow.sk)
         run_date = datetime.now(UTC).date().isoformat()
         live_path = os.environ.get("MATCHCAST_SCOREBOARD_LIVE_RUN", "")
-        live_stamp = os.path.getmtime(live_path) if live_path and os.path.isfile(live_path) else 0
+        try:
+            live_stamp = os.path.getmtime(live_path) if live_path else 0
+        except OSError:  # no file, or removed since it was set: the rules arms show
+            live_stamp = 0
         key = (flow.sk, len(events), run_date, live_path, live_stamp)
         board = _SCOREBOARDS.get(key)
         if board is None:

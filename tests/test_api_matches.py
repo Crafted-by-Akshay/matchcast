@@ -8,6 +8,7 @@ from app import matches
 from app.main import create_app
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
+from matchcast_agents.grading import SEED_RATE
 from matchcast_contracts import validate
 from matchcast_contracts.audit import verify_chain
 
@@ -945,6 +946,8 @@ def test_a_recorded_live_run_replaces_the_rules_arms_with_its_run_id(
         "kind": "crew_live_run",
         "run_id": "live0001",
         "match_id": "match-short",
+        "seed": 2026,
+        "seed_rate": SEED_RATE,
         "arms": {
             key: {
                 "label": key,
