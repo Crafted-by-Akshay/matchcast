@@ -49,7 +49,7 @@ e2e-live:
 smoke-foundry:
 	uv run --locked --all-packages --group smoke python scripts/smoke_foundry.py
 
-# One command once the gpt-5-mini quota lands: smoke the deployment, then the live comparison and
+# One command against the deployed gpt-5-mini: smoke the deployment, then the live comparison and
 # the per-agent eval. Needs FOUNDRY_PROJECT_ENDPOINT and az login; costs tokens (eval/README.md).
 live-eval: smoke-foundry
 	uv run --locked --all-packages python eval/compare.py --live

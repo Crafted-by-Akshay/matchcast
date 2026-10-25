@@ -6,11 +6,11 @@ four-agent arm is not graded by its own checker.
 
     uv run --all-packages python eval/compare.py            # offline: rules arm vs fake model
     uv run --all-packages python eval/compare.py --runs 3 --out eval/results/offline.json
-    uv run --all-packages python eval/compare.py --live        # Foundry, once the quota exists
+    uv run --all-packages python eval/compare.py --live        # Foundry, against the deployed model
 
 The single-agent arm takes any `ModelClient` (prompt -> text). Offline it is `FakeModel`, a
 seeded stand-in with a configurable slip rate. Live runs pass a Foundry client once the
-gpt-5-mini quota exists; nothing here calls Azure.
+Live runs pass a Foundry client; nothing here calls Azure by default.
 """
 
 from __future__ import annotations
@@ -236,7 +236,7 @@ def compare(
         "runs": runs,
         "single_model": "FakeModel (offline stand-in)" if client_factory is None else "live",
         "note": "Offline numbers show the harness works, not model quality. "
-        "Live run needs gpt-5-mini quota.",
+        "Live run: compare.py --live.",
     }
 
 
@@ -266,7 +266,7 @@ def compare_frozen(runs: int = 3, slip: float = 0.15) -> dict[str, Any]:
         "matches": len(chosen),
         "single_model": "FakeModel (offline stand-in)",
         "note": "30 frozen moments from the season. Offline numbers show the harness works, "
-        "not model quality. Live run needs gpt-5-mini quota.",
+        "not model quality. Live run: compare.py --live.",
     }
 
 
