@@ -10,12 +10,15 @@ from matchcast_agents.workflow import MatchSpawnBudgets, WorkflowError
 
 
 def build(
-    match, store: MemoryStore, spawn_budgets: MatchSpawnBudgets | None = None
+    match,
+    store: MemoryStore,
+    spawn_budgets: MatchSpawnBudgets | None = None,
+    history: dict | None = None,
 ) -> MatchWorkflow:
     return MatchWorkflow(
         stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
         clubs=match["teams"], agents=rules_agents(), config=WorkflowConfig(), store=store,
-        clock=fixed_clock(), spawn_budgets=spawn_budgets,
+        clock=fixed_clock(), spawn_budgets=spawn_budgets, history=history,
     )  # fmt: skip
 
 

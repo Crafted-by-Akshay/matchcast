@@ -396,7 +396,11 @@ class MatchWorkflow:
             personas=self.config.personas,
             truth=tuple(self._truth_feed()) if self._truth_feed else (),
             extra={
-                **({"history": self.history} if self.history else {}),
+                **(
+                    {"history": self.history, "history_on": self.history_on.isoformat()}
+                    if self.history
+                    else {}
+                ),
                 **({"vision_passes": self._vision_feed} if self._vision_feed else {}),
             },
         )
@@ -727,7 +731,10 @@ class MatchWorkflow:
         entry["spawns"] = []
         for request in plan.requests:
             self._publish_spawn(request.moment_id, request.name, "running")
-        for report in await run_all(ctx, plan.requests, self._specialists):
+        reports = await run_all(ctx, plan.requests, self._specialists)
+        # this moment's Analyst reads the reports from here; the Narrator reads their claims
+        ctx.extra["specialists"] = {report.name: report for report in reports}
+        for report in reports:
             entry["spawns"].append(
                 {"name": report.name, "status": report.status, "findings": len(report.findings)}
             )
@@ -1462,6 +1469,9 @@ class MatchWorkflow:
                 fresh_ctx, fresh_claims = ctx, claims
                 if target == "analyst":
                     fresh_ctx = self._ctx()
+                    # the same specialist reports the first analysis read, not a new fan-out
+                    if "specialists" in ctx.extra:
+                        fresh_ctx.extra["specialists"] = ctx.extra["specialists"]
                     fresh_claims = await self._analyse(fresh_ctx, task, repair=True)
                 written = (
                     await self._call(

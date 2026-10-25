@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from ..context import MatchContext
 from ..messages import ProducerTask
+from ..metrics_spec import derivation_version
 from ..tools import InProcessTools, McpMetrics, ToolCall, ToolError
 from ..vision import is_vision_stream
 
@@ -147,4 +148,45 @@ class AnalystRules:
                     },
                 )
             )
+        if len(claims) < MAX_CLAIMS and (meetings := self._meetings(ctx, task, len(claims) + 1)):
+            claims.append(meetings)
         return claims
+
+    @staticmethod
+    def _meetings(ctx: MatchContext, task: ProducerTask, index: int) -> ClaimResult | None:
+        """The head-to-head count the History specialist found on a priority-1 moment. The Verifier
+        recounts it from the same history (history_metrics.py): checked, not trusted."""
+        report = ctx.extra.get("specialists", {}).get("history")
+        if report is None or report.status != "ok" or task.priority != 1:
+            return None
+        found = next((f for f in report.findings if "meetings" in f.figures), None)
+        if found is None:
+            return None
+        value = int(found.figures["meetings"])  # the Verifier recounts it from the same history
+        metric = f"h2h_played:{ctx.home}"
+        snapshot = ctx.state.snapshot()
+        packet = {
+            "kind": "claim",
+            "schema_version": "1.1.0",
+            "stream": ctx.stream,
+            "claim_id": f"claim-{task.moment_id}-{index}",
+            "source": {
+                "type": "interval",
+                "from_event_time_ms": 0,
+                "to_event_time_ms": snapshot["event_time_ms"],
+                "from_stream_sequence": 1,
+                "to_stream_sequence": snapshot["max_evidence_sequence"],
+            },
+            "metric": metric,
+            "value": value,
+            "units": "count",
+            "derivation_version": derivation_version("h2h_played"),
+            "snapshot": snapshot,
+            "max_evidence_sequence": snapshot["max_evidence_sequence"],
+            "approval_status": "pending",
+        }
+        return ClaimResult(
+            packet=packet,
+            tool_call_ids=(),  # no metric tool: the History specialist's finding is the source
+            formula_inputs={"metric": metric, "tool": "history", "value": value},
+        )
