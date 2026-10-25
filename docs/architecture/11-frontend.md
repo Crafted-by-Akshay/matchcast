@@ -33,7 +33,7 @@ flowchart TB
 ```
 
 - Three views, each an iframe built from its source folder by `apps/unified/build.py`, plus the shell.
-- **Broadcast pane (ADR-0019):** on a window at least 900 px wide, Watch and Broadcast share the stage with a draggable divider (arrow keys too), kept per viewer. The app opens there on the live match. On a phone one view shows at a time, and the Broadcast desk shows only its instant-replay row (the phone stage is about 180 px tall). The Copilot and the production strip need a wider pane. The Broadcast desk's production strip shows the agents' trace for the last five lines on air, newest first, and its Copilot asks the api for highlights, a camera focus and a production plan.
+- **Broadcast pane (ADR-0019):** on a window at least 900 px wide, Watch and Broadcast share the stage with a draggable divider (arrow keys too), kept per viewer. The app opens there on the live match. On a phone (under 480 px wide) one view shows at a time, and the Broadcast desk shows only its instant-replay row (the stage is about 180 px tall there). The Copilot and the production strip need a wider pane. The Broadcast desk's production strip shows the agents' trace for the last five lines on air, newest first, and its Copilot asks the api for highlights, a camera focus and a production plan.
 - **Watch is the only engine** (EXP-2). Broadcast and Analyst run in consumer mode and render from bus messages.
 - `live.js` is the only code that talks to the network. Views never call the API directly. The one exception is the vision crop upload, which goes through a `live.js` helper too.
 

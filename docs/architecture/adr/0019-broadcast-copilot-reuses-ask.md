@@ -29,5 +29,6 @@ Option 2, with code ranking.
 - Broadcast cues are narrow (a question must say highlights, camera, focus, production plan, strategy, rundown or what next), so a broadcast question never reaches the router's declines by accident. Plain questions on the same surface take the Ask path.
 - The audit action stays `ask_answered`, with a `surface` field, so the closed list in 04 §4 does not change.
 - Model-written wording for highlights and plans is a later step. Until then, the reasons are templates over event data.
+- The picks are English. The api skips translation when a reply carries `broadcast` (the desk reads only that block), so a Spanish or Hindi session gets English picks until the model-written step.
 - The front end is in the same PR: the split pane, the production strip (the agents' trace per aired line, from the shell's `air` message) and the Copilot panel in Broadcast, and the focus suggestion in Watch. See [11-frontend.md](../11-frontend.md).
 - The camera move is live for players. Watch's "Go to it" calls `MCWatch.focus` (player mode). Zone focus from the API is not wired to the camera yet; the pill stays disabled for a zone-only pick.

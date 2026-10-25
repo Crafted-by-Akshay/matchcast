@@ -25,6 +25,31 @@ def make(translator) -> TestClient:
     return TestClient(app)
 
 
+class Counting(Echo):
+    """Echo that counts the calls, so a test can see whether a text was sent to translation."""
+
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+
+    def translate(self, text_html, lang):
+        self.calls += 1
+        return super().translate(text_html, lang)
+
+
+def test_broadcast_picks_are_not_translated() -> None:
+    """Broadcast picks are not translated: the desk reads answer.broadcast, not variants."""
+    translator = Counting()
+    client = make(translator)
+    create(client)
+    post_all(client)
+    picked = ask(client, "What are the highlights so far?", surface="broadcast", lang="es").json()
+    assert picked["broadcast"]["highlights"], picked
+    assert "variants" not in picked and translator.calls == 0
+    plain = ask(client, "How many shots has Northgate FC had so far?", lang="es").json()
+    assert not plain["abstained"] and translator.calls > 0
+
+
 def pubs(client, lang):
     response = client.get(
         "/v1/matches/match-short/stream",

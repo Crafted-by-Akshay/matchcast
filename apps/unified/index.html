@@ -750,7 +750,7 @@ window.addEventListener('message', (e) => {
   if (d.type === 'ask' && (view === 'watch' || view === 'broadcast' || view === 'analyst')) { answerAsk(d.id, d.q, view, view === 'broadcast' && d.surface === 'broadcast' ? 'broadcast' : 'ask'); return; }
   if (d.type === 'persona' && view === 'broadcast') {   // the desk's lens steers the shared commentary persona; the language stays. Fan and Analyst also move Watch's strip, so the two views agree
     const p = String(d.persona || 'casual'); LV.persona(p, LV.language);
-    if (p === 'casual' || p === 'analyst') { M.persona = p; paintStory(); post('watch', { src: 'matchcast-shell', type: 'persona-set', mode: p }); CM.setPersona(p); }
+    if (p === 'casual' || p === 'analyst') { setPersona(p); CM.setPersona(p); }   // the same path as Watch's Fan and Analyst buttons: stored mode, strip, and Watch
     return;
   }
   if (d.type === 'focus' && view === 'broadcast') { post('watch', { src: 'matchcast-shell', type: 'focus', player_id: String(d.player_id || ''), reason: String(d.reason || '').slice(0, 200) }); return; }   // the Broadcast copilot suggests a camera focus; Watch decides

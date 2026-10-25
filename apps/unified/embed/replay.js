@@ -24,7 +24,7 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   tag.style.cssText = 'position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:9;padding:6px 14px;border-radius:999px;background:#c62828;color:#fff;font:800 13px system-ui,sans-serif;letter-spacing:.12em';
   // the desk hides every direct child of body except its own roots (bc.css), so the controls sit inside the live view
   (document.getElementById('bc-view') || document.body).append(bar, tag);
-if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and clear of the teleprompter and the lower-third (the group label stays)
+if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and clear of the teleprompter and the lower-third (the group keeps its aria-label)
   bar.querySelector('span').hidden = true;   // the slow-motion toggle stays on a phone: the phone spec keeps it on one row with the clips
   bar.querySelectorAll('button[data-sec]').forEach((b) => { b.textContent = b.dataset.sec + ' s'; });   // short labels keep the three buttons on one row
   bar.querySelectorAll('button').forEach((b) => { b.style.padding = '3px 5px'; b.style.fontSize = '11px'; });
