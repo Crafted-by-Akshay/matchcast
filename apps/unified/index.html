@@ -643,7 +643,10 @@ const PRODUCER = 'Sam Producer (simulated)';
 function renderQueue() {
   const r = AG.run, q = r ? r.claims.filter((c) => c.approval === 'pending').sort((a, b) => !!b.alert - !!a.alert) : [];   // priority 1 alerts first
   $('aq-mode').value = AG.mode; $('aq-n').textContent = q.length ? q.length + ' waiting' : '';
-  const qhtml = q.length ? q.map((c) => '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
+  // an escalated line (the Verifier could not repair it) is marked and says why; only Kill is offered, because nothing airs it
+  const qhtml = q.length ? q.map((c) => c.escalated
+    ? '<li data-id="' + esc(c.id) + '" style="border-left:3px solid #b3261e;padding-left:6px"><span class="m">' + mins(c.minute) + '</span> <b style="color:#b3261e">Escalated</b> <span class="aq-text">' + esc(c.text) + '</span><small style="display:block;color:#b3261e">The Verifier could not repair this line: ' + esc(c.escalation) + '.</small> <button type="button" data-act="kill">Kill</button></li>'
+    : '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
     : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';
   if ($('aq-list').dataset.html !== qhtml) { $('aq-list').innerHTML = qhtml; $('aq-list').dataset.html = qhtml; }   // redrawing an unchanged list detaches the buttons mid-click
 }
