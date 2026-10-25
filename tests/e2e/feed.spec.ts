@@ -176,6 +176,19 @@ test('Voice on starts the crowd bed, labelled simulated, and Voice off stops it'
   expect(await page.evaluate(() => VC.crowd)).toBe(false);
 });
 
+test('the commentary card says Sound is off until Voice is on', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
+  await page.evaluate(() => VC.set(false));
+  await expect(f.locator('#mcf-sound')).toBeVisible();
+  await expect(f.locator('#mcf-sound')).toContainText('Voice: off');
+  await page.click('#voice-btn');
+  await expect(f.locator('#mcf-sound')).toBeHidden();
+  await page.click('#voice-btn');
+  await expect(f.locator('#mcf-sound')).toBeVisible();
+});
+
 test('the booth voices a new match, even though its line ids start again', async ({ page }) => {
   // the Agents view runs no Watch match, so nothing resets the feed between the two calls below
   await openShell(page, 'agents');
