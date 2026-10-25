@@ -4,21 +4,28 @@ import { openShell } from './helpers';
 // UX review 2026-10-24, shell items: one utility row on a phone, 32 px chips on a desktop, no stray
 // control beside Voice, no clipped subtitle, and a fixture list that says its score is a recorded one.
 
-test('phone header keeps the utilities in one scrolling row under the view switcher', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await openShell(page, 'watch');
-  const m = await page.evaluate(() => {
-    const row = document.querySelector('.status') as HTMLElement;
-    const ids = ['tour-btn', 'voice-btn', 'status-btn', 'api-pill'];
-    const tops = ids.map((id) => Math.round(document.getElementById(id)!.getBoundingClientRect().top));
-    return { tops, stageH: document.getElementById('stage')!.getBoundingClientRect().height, rowBottom: row.getBoundingClientRect().bottom, over: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+// Judge re-test: on a phone nothing in the header runs past the right edge (it used to be one sideways-scrolling row). The utilities wrap:
+// language and Status share the wordmark's row, Tour, Voice, the agents pill and "Azure simulated" sit under the view switcher.
+for (const width of [390, 320]) {
+  test(`phone header at ${width} px wraps its utilities inside the screen, under 44 px targets`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await openShell(page, 'watch');
+    const m = await page.evaluate(() => {
+      const ids = ['tour-btn', 'voice-btn', 'status-btn', 'api-pill', 'lang-sel'];
+      const boxes = ids.map((id) => { const r = document.getElementById(id)!.getBoundingClientRect(); return { id, l: r.left, r: r.right, h: r.height }; });
+      const az = document.querySelector('.status .pill.warn')!.getBoundingClientRect();
+      const past = [...document.querySelectorAll('.top *')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > innerWidth + 0.5 || r.left < -0.5); }).map((e) => e.id || (e as HTMLElement).className || e.tagName);
+      return { boxes, az: { l: az.left, r: az.right, text: (document.querySelector('.status .pill.warn') as HTMLElement).innerText }, past, stageH: document.getElementById('stage')!.getBoundingClientRect().height, over: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    });
+    expect(m.past, 'nothing in the header runs past the screen edges').toEqual([]);
+    for (const b of m.boxes) { expect(b.l, b.id).toBeGreaterThanOrEqual(0); expect(b.r, b.id).toBeLessThanOrEqual(width); }
+    for (const b of m.boxes.filter((x) => x.id !== 'api-pill' && x.id !== 'lang-sel')) expect(b.h, b.id + ' tap target').toBeGreaterThanOrEqual(44);
+    expect(m.az.r, 'the Simulated label is on screen').toBeLessThanOrEqual(width);
+    expect(m.az.text).toMatch(/Azure .*simulated/);
+    expect(m.over).toBeLessThanOrEqual(0);
+    if (width === 390) expect(m.stageH, 'the view still gets about half of an 844 px phone').toBeGreaterThanOrEqual(420);
   });
-  expect(new Set(m.tops).size, 'Tour, Voice, Status and the agents pill share one row').toBe(1);
-  expect(m.rowBottom, 'the header leaves most of the first screen to the match').toBeLessThan(230);
-  expect(m.stageH, 'the view gets about 60 percent of an 844 px phone').toBeGreaterThanOrEqual(480);
-  await expect(page.locator('.status .more'), 'a visible cue that the utility row scrolls').toBeVisible();
-  expect(m.over).toBeLessThanOrEqual(1);
-});
+}
 
 test('desktop chips are at least 32 px tall and the live-region pill is not drawn', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });

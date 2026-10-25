@@ -106,7 +106,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .stage.dragging iframe{pointer-events:none}
 .foot{flex:none;padding:6px var(--gut);font-size:12px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
 .foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
-.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
+.toast{position:fixed;left:50%;top:var(--toast-dt,150px);transform:translate(-50%,-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
 .recap{max-height:40vh;overflow:auto;position:fixed;left:var(--gut);bottom:44px;z-index:4;max-width:min(420px,calc(100vw - 2*var(--gut)));background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:13px}
 .recap[hidden]{display:none}
@@ -216,13 +216,17 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .foot{display:none}
 }
 @media (max-width:560px){
-  /* one scrolling row of utilities instead of three or four wrapped rows */
-  .status{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:4px 2px;position:relative}
-  .status .more{display:flex;position:sticky;right:0;align-items:center;padding:0 4px 0 22px;margin-left:-22px;background:linear-gradient(90deg,transparent,var(--bg) 55%);color:var(--text);font-size:22px;line-height:1;pointer-events:none}   /* a visible cue that the row scrolls */
-  .status::-webkit-scrollbar{display:none}
-  .status.end .more{display:none}   /* the cue goes once the row is scrolled to its end */
-  .status>*{flex:none}
-  #api-pill{order:-1}
+  /* judge re-test: nothing runs past the right edge. The utilities wrap instead of scrolling: language and Status share the wordmark's row, the rest sit under the view switcher */
+  .status{display:contents}
+  .status .more{display:none}
+  .top>.brand{order:0}
+  #lang-sel{order:1;margin-left:auto}
+  #status-btn{order:1}
+  .switch{order:2}
+  .status>*{flex:none;order:3}
+  #lang-sel,#status-btn{order:1}
+  #api-pill{order:3}
+  .ph-x{display:none}   /* "Azure simulated" on a phone */
   .matchbar .chips{display:none}
   .matchbar .meta:not(.err){display:none}   /* the first screen belongs to the match: fixture, score, then the view; a load error still shows */
   .toast{bottom:auto;top:var(--toast-top,150px);left:0;right:0;transform:none;max-width:none;height:var(--toast-h,48px);display:flex;align-items:center;justify-content:center;border-radius:0;border-width:1px 0;padding:4px 12px;font-size:12px;line-height:1.3;overflow:hidden}   /* it takes the place of the Viewing-as row for its 2.6 s (toast() sets --toast-top and --toast-h): clear of the brand, the scoreboard and the pitch controls */
@@ -230,6 +234,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .fx label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .brand small{display:block}
 }
+@media (max-width:360px){.switch button{padding:7px 6px}#status-btn{order:3}#api-pill::before{content:none}}   /* a 320 px screen: the four view tabs fit without scrolling, Status joins Tour and Voice, and the agents pill drops its "Agents ·" prefix so it shares a row with the Azure label */
 @media (max-width:420px){
   .brand small{display:none}
   .switch button small{display:none}
@@ -402,7 +407,7 @@ const fixtureOf = (s) => { const f = FX.find((x) => keyOf(setupOf(x)) === keyOf(
 const byId = (id) => FX.find((x) => x.id === id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 { const st = document.querySelector('.status'); if (st) { const edge = () => st.classList.toggle('end', st.scrollLeft + st.clientWidth >= st.scrollWidth - 2); st.addEventListener('scroll', edge, { passive: true }); addEventListener('resize', edge); edge(); } }
-const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-dt', Math.round(r.top + r.height / 2) + 'px');   /* desktop: centred on the stage-steps row, off the views' cards and camera chips (UX pass 10) */ el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 // the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
 let RECAP = { gen: 0, closed: false };
 const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };

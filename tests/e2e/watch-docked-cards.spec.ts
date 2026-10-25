@@ -15,7 +15,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 128
     await f.waitForSelector('#mcf', { state: 'attached', timeout: 60_000 });
     const rects = () => f.evaluate(() => {
       const rect = (id: string) => { const e = document.getElementById(id); if (!e) return null; const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || (e as HTMLElement).dataset.dockHidden) return null; const r = e.getBoundingClientRect(); return r.width ? { l: r.left, t: r.top, r: r.right, b: r.bottom } : null; };
-      return { iw: innerWidth, pulse: rect('pulse'), mcf: rect('mcf'), card: rect('fan-pcard'), third: rect('third'), drawer: rect('copilot'), cap: rect('cap'), cp: rect('cpbtn'), talk: rect('mcx-talk') };
+      return { iw: innerWidth, pulse: rect('pulse'), mcf: rect('mcf'), card: rect('fan-pcard'), third: rect('third'), drawer: rect('copilot'), cap: rect('cap'), cp: rect('cpbtn'), talk: rect('mcx-talk'), note: rect('mcx-booth-note') };
     });
     const iw = (await rects()).iw;
     // open the list: when the frame has room for it the card moves right of the Pulse column; the list never reaches into Pulse
@@ -29,7 +29,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 128
     // the Copilot drawer: the commentary card never sits on top of it or on Pulse (it steps aside while the drawer is open)
     if (iw > 560) {
       await f.evaluate(() => (document.getElementById('cpbtn') as HTMLElement).click());
-      await expect.poll(async () => { const m = await rects(); return !!m.drawer && !overlap(m.mcf, m.drawer) && !overlap(m.mcf, m.pulse); }, { timeout: 15_000, message: 'with the Copilot drawer open the commentary card covers neither the drawer nor Pulse' }).toBe(true);
+      await expect.poll(async () => { const m = await rects(); return !!m.drawer && !overlap(m.mcf, m.drawer) && !overlap(m.mcf, m.pulse) && (!!m.mcf || !!m.note); }, { timeout: 15_000, message: 'with the Copilot drawer open the commentary card covers neither the drawer nor Pulse, and if it steps aside the drawer says so' }).toBe(true);
       await f.evaluate(() => (document.getElementById('cp-close') as HTMLElement | null)?.click());
       await expect.poll(async () => !!(await rects()).mcf, { timeout: 15_000, message: 'the commentary card is back once the drawer closes' }).toBe(true);
     }

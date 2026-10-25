@@ -43,7 +43,7 @@ MCS.progress('Loading the stadium and players');
     if (!m) return;
     m.style.clipPath = ''; m.style.pointerEvents = ''; delete m.dataset.dockHidden; const tog = document.getElementById('mcf-tog'); if (tog) tog.removeAttribute('tabindex');
     m.style.left = ''; m.style.width = ''; if (l) l.style.maxHeight = '';
-    if (fc) { fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = ''; }
+    if (fc) { fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = ''; fc.style.clipPath = ''; delete fc.dataset.dockHidden; }
     if (!m.getBoundingClientRect().width) return;
     const phone = innerWidth <= 560, wide = innerWidth > 1100;
     const dRect = dr && !dr.hidden && getComputedStyle(dr).display !== 'none' && dr.getBoundingClientRect().width ? dr.getBoundingClientRect() : null;
@@ -64,7 +64,8 @@ MCS.progress('Loading the stadium and players');
       mr = m.getBoundingClientRect();
       if (hit(mr, dRect) || (dRect && onPulse(mr))) hide = true;
     }
-    const fcOn = !!fc && getComputedStyle(fc).display !== 'none' && fc.getBoundingClientRect().width > 0;
+    let fcOn = !!fc && getComputedStyle(fc).display !== 'none' && fc.getBoundingClientRect().width > 0;
+    if (fcOn && dRect && !phone) { fc.style.clipPath = 'inset(50%)'; fc.dataset.dockHidden = '1'; fcOn = false; }   // the open Copilot shows the followed player in its Talk tab: the corner goes to the commentary card (UX pass 10)
     let fcRight = 0;
     if (fcOn) {
       const f = fc.getBoundingClientRect();
@@ -78,6 +79,10 @@ MCS.progress('Loading the stadium and players');
         else hide = true;   // no room for both: the player the viewer chose to follow wins, the commentary stays in the caption card
       }
     }
+    // say so in the drawer when the commentary card has stepped aside for it (UX pass 10: the booth must not just vanish)
+    let note = document.getElementById('mcx-booth-note');
+    if (!note && dr) { const tabs = document.getElementById('cp-tabs'); note = document.createElement('p'); note.id = 'mcx-booth-note'; note.hidden = true; note.style.cssText = 'margin:6px 14px;font-size:12px;color:var(--muted,#9fb0c8)'; note.textContent = 'The Live commentary card is hidden while Copilot is open. Close Copilot to see it again.'; if (tabs && tabs.parentNode) tabs.parentNode.insertBefore(note, tabs); else dr.appendChild(note); }
+    if (note) note.hidden = !(hide && dRect);
     if (hide) { m.style.clipPath = 'inset(50%)'; m.style.pointerEvents = 'none'; m.dataset.dockHidden = '1'; if (tog) tog.tabIndex = -1; }   // out of sight and out of the tab order, but still in the page, so its live region keeps announcing the lines
     // the caption card (#cap) is centred in the pane and shows for a few seconds: it never sits on the commentary card (which shows the same line) or the followed-player card (it rises above that one)
     const cap = document.getElementById('cap');

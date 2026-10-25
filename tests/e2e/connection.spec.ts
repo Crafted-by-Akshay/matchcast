@@ -7,8 +7,8 @@ import { collectErrors } from './helpers';
 declare const AG: any; declare const LV: any;
 
 type Mock = { server: Server; url: string; seen: { matches: number; events: any[]; sent?: boolean } };
-const mock = (mode: 'ok' | 'error') => new Promise<Mock>((resolve) => {
-  const seen: Mock['seen'] = { matches: 0, events: [] };
+const mock = (mode: 'ok' | 'error' | 'quiet') => new Promise<Mock>((resolve) => {
+  const seen: Mock['seen'] = { matches: 0, events: [], sent: mode === 'quiet' };   // 'quiet': the api says live but sends no claim
   const server = createServer((q, r) => {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
     if (q.method === 'OPTIONS') { r.writeHead(204, cors); return r.end(); }
@@ -128,4 +128,27 @@ test('chips: with no api the Foundry chip says not connected', async ({ page }) 
   await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="";' }));
   await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#ag-foundry')).toHaveText('Foundry: not connected', { timeout: 15_000 });
+
+// Judge re-test: Broadcast read "Rules fallback" while Analyst read "Live agents". An api that has said "live" stays live while it waits for events;
+// the warm-up timer only falls back for an api that never answered. And the Broadcast desk's line always matches the shell pill.
+test('an api that said live stays live through a quiet warm-up', async ({ page }) => {
+  const api = await mock('quiet');
+  await drive(page, api.url);
+  await expect(pill(page)).toHaveText('Live agents', { timeout: 15_000 });
+  await page.waitForTimeout(8000);   // past the 6 s warm-up of this test (MATCHCAST_WARM_MS)
+  await expect(pill(page)).toHaveText('Live agents');
+  api.server.close();
+});
+
+test('the Broadcast desk says the same agents state as the shell pill', async ({ page }) => {
+  test.setTimeout(300_000);
+  const api = await mock('ok');
+  await drive(page, api.url);
+  await expect(pill(page)).toHaveText('Live agents', { timeout: 20_000 });
+  await page.locator('#tab-broadcast').click();
+  await page.waitForFunction(() => document.getElementById('v-broadcast')!.classList.contains('ready'), null, { timeout: 240_000 });
+  const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;
+  const words: Record<string, string> = { 'Live agents': 'Agents: live from the api', 'Rules fallback': 'Agents: api did not answer, rules in this page', 'Offline (simulated)': 'Agents: rules in this page (no api connected)' };
+  await expect.poll(async () => { const p = String(await pill(page).textContent()); const d = String(await f.locator('#mc-agentstate').textContent()); return p.startsWith('Warming') ? d.startsWith('Agents: Warming') : d === words[p]; }, { timeout: 30_000 }).toBe(true);
+  api.server.close();
 });

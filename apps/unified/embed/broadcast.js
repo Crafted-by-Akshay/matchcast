@@ -154,3 +154,16 @@ if (MCS.framed) {
 }
 // type floor: 12 px for the desk text that was 10 to 11 px (UX review pass 6, finding 18)
 (() => { const st = document.createElement('style'); st.textContent = '.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}'; document.head.appendChild(st); })();
+// Judge re-test: on a phone the 3D renderer sizes its canvas (and the name-tag layer) to the window, but the live view is narrower, so the right edge was cut
+// off. Scale those layers down to the live view's width, from their top-left corner, so the whole pitch shows; nothing is scaled when they already fit.
+(() => {
+  const fit = () => {
+    const st = document.getElementById('stage'); if (!st || !st.clientWidth) return;
+    for (const el of st.children) {
+      const w = el.offsetWidth, s = st.clientWidth / w;
+      if (w > st.clientWidth + 1) { el.style.transformOrigin = '0 0'; el.style.transform = 'scale(' + s.toFixed(4) + ')'; el.dataset.fit = '1'; }
+      else if (el.dataset.fit) { el.style.transform = ''; delete el.dataset.fit; }
+    }
+  };
+  fit(); setInterval(fit, 1000); addEventListener('resize', fit);
+})();
