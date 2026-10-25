@@ -33,7 +33,7 @@ from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .tools import InProcessTools, ToolCall, ToolError
-from .vision import agreement, is_vision_stream, pass_facts
+from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
 if TYPE_CHECKING:
     from .live.client import ModelClient
@@ -135,6 +135,8 @@ class WorkflowConfig:
     hold_booth: bool = False  # producer mode also holds the booth voices (dead air if it does)
     publication_ttl_s: int = 30
     personas: tuple[Persona, ...] = ("casual", "analyst")
+    # the engine clock at which the one Vision moment is due (ADR-0022); 0 turns it off
+    vision_moment_ms: int = 900_000
     # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
     orchestrator: str = field(
         default_factory=lambda: os.environ.get("MATCHCAST_ORCHESTRATOR", "af")
@@ -193,12 +195,16 @@ class MatchWorkflow:
         history: dict[str, Any] | None = None,
         knowledge: "TalkKnowledge | None" = None,
         truth_feed: Callable[[], list[dict[str, Any]]] | None = None,
+        vision_feed: Callable[[], list[dict[str, Any]]] | None = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
         self.stats_desk = stats_desk
         # a Vision stream reads the engine match's events here, to check them (ADR-0022)
         self._truth_feed = truth_feed
+        # the engine match's Vision passes as pass facts: its one Vision moment counts them
+        self._vision_feed = vision_feed
+        self._vision_moment_tried = False
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
@@ -271,7 +277,10 @@ class MatchWorkflow:
             events=tuple(self.store.events(self.sk)),
             personas=self.config.personas,
             truth=tuple(self._truth_feed()) if self._truth_feed else (),
-            extra={"history": self.history} if self.history else {},
+            extra={
+                **({"history": self.history} if self.history else {}),
+                **({"vision_passes": self._vision_feed} if self._vision_feed else {}),
+            },
         )
         if all(p in (*self.config.personas, *self.extra_personas) for p in BOOTH):
             ctx.extra["booth"] = (
@@ -472,9 +481,48 @@ class MatchWorkflow:
 
             await run_event(self, ctx, event)
             return
+        task = await self._decide_moment(ctx, event)
+        if task is not None:
+            await self._run_moment(ctx, task)
+
+    async def _decide_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
+        """The Producer's task for this event, else the one Vision moment if it is due."""
         decision = await self._decide(ctx, event)
         if isinstance(decision, ProducerTask):
-            await self._run_moment(ctx, decision)
+            return decision
+        return self._vision_moment(ctx, event)
+
+    def _vision_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
+        """The one Vision moment on the engine feed (ADR-0022): Vision's pass count for each team
+        beside the engine's, once the engine clock reaches the config time and a pass is due.
+        It is a moment of its own, not a Producer decision, so it works the same in both modes."""
+        if (
+            self._vision_moment_tried
+            or self._vision_feed is None
+            or not self.config.vision_moment_ms
+            or is_vision_stream(ctx.stream)
+            or event["payload"]["type"] != "pass"
+            or event["event_time_ms"] < self.config.vision_moment_ms
+        ):
+            return None
+        home, away = ctx.home, ctx.away
+        passes = self._vision_feed()
+        if any(
+            vision_value("vision_precision", team, passes, ctx.events, event["event_time_ms"])
+            is None
+            for team in (home, away)
+        ):
+            return None  # no Vision pass is covered by the engine yet: try on a later pass
+        self._vision_moment_tried = True
+        return ProducerTask(
+            moment_id=f"v-{ctx.stream['match_id']}",
+            match_id=ctx.stream["match_id"],
+            event_ids=(event["event_id"],),
+            up_to_sequence=event["stream_sequence"],
+            priority=3,
+            personas=ctx.personas,
+            reason="vision",
+        )
 
     async def _decide(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
         """The Producer: one task for a moment worth a line, or None after auditing a skip."""

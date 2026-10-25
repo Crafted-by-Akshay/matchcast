@@ -447,6 +447,7 @@ function url(view) {
   const s = M.setup; const q = new URLSearchParams();
   for (const k of KEYS) q.set(k, s[k]);
   if (view === 'watch' && M.speed) q.set('speed', M.speed);
+  if (view === 'watch' && window.CREW && CREW.enabled) q.set('crew', '1');   // AB#450: the flag reaches the Watch iframe (feed picker)
   return VIEWS[view] + '?' + q.toString();
 }
 
@@ -540,6 +541,7 @@ try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applyS
 function show(view) {
   if (!PANES.includes(view)) view = 'watch';
   current = view;
+  if (!shownViews(view).includes('watch') && window.callLeave) window.callLeave();   // Watch beside Broadcast (SPLIT_VIEWS) keeps its call
   const on = shownViews(view);
   for (const v of PANES) {
     const shown = on.includes(v);
@@ -845,13 +847,93 @@ function pushCards() {
   }
 }
 
+// ---------------------------------------------------------------- crew feeds to Watch (AB#450, ?crew=1)
+function postCrew() { if (window.CREW && CREW.enabled && FR.watch) post('watch', { src: 'matchcast-shell', type: 'crew-feeds', lang: 'en', simulated: !!CREW.state.simulated, feeds: CREW.state.feeds, defs: CREW.FEEDS }); }
+if (window.CREW && CREW.enabled) CREW.subscribe(postCrew);
 // ---------------------------------------------------------------- messages from the views
+// ---- EXP-18: the voice call. Watch shows the Call button; the shell owns the call: one socket to the api (LV.openCall), the fan's
+// voice (Azure Speech, or the browser's recogniser labelled Simulated), and the player's checked reply in his own voice, sentence by
+// sentence. A cut-in stops the reply and cancels the turns in flight. Headphones give the cleanest cut-in: the speakers' echo can reach the mic.
+const CALL = { on: false, sock: null, n: 0, latest: 0, turns: new Map(), muted: new Set(), parts: [], el: null, src: null, quiet: 0, stop: null, rec: null };
+const callPost = (on, note) => post('watch', { src: 'matchcast-shell', type: 'call-state', on, note: note || '' });
+const callSilence = () => {
+  CALL.parts = [];
+  if (CALL.el) { CALL.el.pause(); CALL.el = null; }
+  if (CALL.src) { URL.revokeObjectURL(CALL.src); CALL.src = null; }   // a paused clip never ends, so its URL is freed here
+};
+const callPlay = () => {   // the next sentence starts when the one before has ended
+  if (CALL.el || !CALL.parts.length) return;
+  const src = URL.createObjectURL(CALL.parts.shift().blob), el = new Audio(src);
+  CALL.el = el; CALL.src = src; CALL.quiet = Date.now() + 1200;   // the player's own first words can come back through the mic: no cut-in for a moment
+  const done = () => { URL.revokeObjectURL(src); if (CALL.el === el) { CALL.el = null; CALL.src = null; } callPlay(); };
+  el.onended = done; el.onerror = done;
+  el.play().catch(done);
+};
+const callCutIn = () => {
+  if (!CALL.on || Date.now() < CALL.quiet) return;
+  callSilence();
+  for (const turn of CALL.turns.keys()) { CALL.muted.add(turn); if (CALL.sock) CALL.sock.cancel(turn); }
+};
+const callSaid = (text) => { if (CALL.on && text) post('watch', { src: 'matchcast-shell', type: 'call-said', text: String(text).slice(0, 300) }); };
+const callBrowser = (lang) => {   // Simulated: the browser's own recogniser, when the api has no Speech resource
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!R) return false;
+  const rec = new R(); rec.continuous = true; rec.interimResults = true; rec.lang = lang;
+  rec.onresult = (e) => { for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i], t = r[0].transcript.trim(); if (r.isFinal) callSaid(t); else if (t.split(/\s+/).length >= 2) callCutIn(); } };
+  rec.onend = () => { if (CALL.on && CALL.rec === rec) rec.start(); };   // the browser stops after a pause: keep the call open
+  rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') callEnd('The mic is blocked. Allow it for this page to call, or type.'); };
+  CALL.rec = rec; rec.start();
+  return true;
+};
+const callOpen = () => {
+  const s = LV.openCall({
+    reply: (turn, r) => { const id = CALL.turns.get(turn); if (id != null) post('watch', { src: 'matchcast-shell', type: 'talk-reply', id, reply: r }); },
+    audio: (turn, blob) => {
+      if (!CALL.turns.has(turn) || CALL.muted.has(turn) || turn < CALL.latest) return;   // an older turn's late sentence is not played
+      CALL.latest = turn;
+      CALL.parts = CALL.parts.filter((p) => p.turn >= turn);   // a newer answer does not wait behind an older one's sentences
+      CALL.parts.push({ turn, blob }); callPlay();
+    },
+    end: (turn) => { CALL.turns.delete(turn); CALL.muted.delete(turn); },
+    error: (turn) => { const id = CALL.turns.get(turn); CALL.turns.delete(turn); if (id != null) post('watch', { src: 'matchcast-shell', type: 'talk-reply', id, reply: null }); },
+    close: (opened) => { if (CALL.sock === s) callEnd(opened ? 'The call dropped. You can still type.' : 'The call could not start: the match is not on the api, or the session is not. You can still type.'); },
+  });
+  if (!s) return false;
+  CALL.sock = s; return true;
+};
+const callMic = async () => {
+  const lang = M.lang === 'es' ? 'es-ES' : M.lang === 'hi' ? 'hi-IN' : 'en-US';
+  const h = window.SPX && typeof SPX.listenOn === 'function' ? await SPX.listenOn(lang, callCutIn, callSaid) : null;
+  if (!CALL.on) { if (h) h.stop(); return; }   // ended while the Speech resource was being reached
+  if (h) { CALL.stop = h.stop; callPost(true, 'Call on, via Azure Speech. Speak to the player; he stops when you cut in. The transcript stays below.'); return; }
+  if (callBrowser(lang)) callPost(true, 'Call on, via browser speech (Simulated: the api has no Speech resource). Speak to the player; he stops when you cut in.');
+  else callEnd('Calls need speech recognition, which this browser does not have. You can still type.');
+};
+const callStart = () => {
+  if (CALL.on) { callPost(true); return; }   // a reloaded Watch asks again: tell it the call is still on
+  if (!callOpen()) { callPost(false, 'Calls need a match on the api. You can still type.'); return; }
+  CALL.on = true;
+  callMic();
+};
+const callEnd = (note) => {
+  const s = CALL.sock; CALL.sock = null; CALL.on = false;
+  if (s) s.close();
+  if (CALL.stop) { const stop = CALL.stop; CALL.stop = null; stop(); }
+  if (CALL.rec) { const rec = CALL.rec; CALL.rec = null; rec.stop(); }
+  callSilence();
+  for (const id of CALL.turns.values()) post('watch', { src: 'matchcast-shell', type: 'talk-reply', id, reply: null });   // turns still in flight fall back to the rules
+  CALL.turns.clear(); CALL.muted.clear();
+  callPost(false, note || 'Call ended.');
+};
+window.callLeave = () => { if (CALL.on) callEnd('Call ended: you left Watch.'); };   // the mic must not stay open on another view
+
 let boothLast = null;   // the booth's state (GET /booth), sent to both cards and re-sent to a card that loads after it
 window.addEventListener('message', (e) => {
   const d = e.data || {};
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
+  if (d.type === 'crew-feed-pick') { postCrew(); return; }   // AB#450: Watch's feed picker opened or changed; it only needs the lines, the pick stays in Watch
   if (d.type === 'feed-ready') {
     post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on });
     if (boothLast) post(view, boothLast);
@@ -904,9 +986,11 @@ window.addEventListener('message', (e) => {
   if (d.type === 'lang' && LANGS_OK.includes(d.lang)) { window.setLang(d.lang, view); return; }   // the Broadcast desk's own language buttons
   if (d.type === 'audit' && view === 'broadcast' && d.action === 'translation_rejected') { if (LANGS_OK.includes(d.lang) && d.lang !== 'en' && Number.isFinite(+d.minute)) AG.note('verifier', 'translation_rejected', String(d.id).slice(0, 60), { lang: d.lang, reason: String(d.reason).slice(0, 120) }, +d.minute); return; }
   if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
+  if (d.type === 'call' && view === 'watch') { if (d.on) callStart(); else callEnd(); return; }   // Watch's Call button (EXP-18)
   if (d.type === 'talk' && view === 'watch') {   // EXP-16: the api's player agent, when there is a match on the api
     const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply });
     if (!LV.enabled || !LV.key) { back(null); return; }
+    if (d.call && CALL.sock) { const turn = ++CALL.n; if (CALL.sock.talk(turn, d.player, d.position, d.utterance)) { CALL.turns.set(turn, d.id); return; } }   // a call's talk goes over its socket
     LV.talk(d.player, d.utterance, d.position).then((r) => { back(r); if (!d.call && r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
     return;
   }

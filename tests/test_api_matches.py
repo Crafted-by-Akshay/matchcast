@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from app import matches
 from app.main import create_app
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 from matchcast_contracts import validate
 from matchcast_contracts.audit import verify_chain
@@ -766,6 +767,111 @@ def test_the_registry_store_comes_from_matchcast_store(monkeypatch) -> None:
     monkeypatch.setenv("MATCHCAST_STORE", "bogus")
     with pytest.raises(ValueError, match="MATCHCAST_STORE"):
         create_app()
+
+
+def test_the_call_socket_answers_a_talk_over_one_socket(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json({"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"})
+        reply = ws.receive_json()
+        assert reply["type"] == "reply" and reply["id"] == 1
+        assert reply["verdict"] == "verified" and "audio_url" not in reply
+        frames = []
+        while True:
+            message = ws.receive()
+            if "text" in message and message["text"] is not None:
+                frames.append(json.loads(message["text"]))
+                if frames[-1]["type"] == "audio_end":
+                    break
+        assert frames == [{"type": "audio_end", "id": 1, "cancelled": False}]  # no voice: no audio
+
+
+def test_the_call_socket_refuses_an_unknown_match_or_a_bad_session(client: TestClient) -> None:
+    create(client)
+    for path in (
+        "/v1/matches/ghost/call?session_id=short",
+        "/v1/matches/match-short/call?session_id=-",
+    ):
+        with pytest.raises(WebSocketDisconnect) as refused:
+            with client.websocket_connect(path):
+                pass
+        assert refused.value.code == 1008
+
+
+def test_a_binary_frame_is_refused_and_the_call_still_talks(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_bytes(b"\x00\x01")
+        assert ws.receive_json() == {"type": "error", "id": None, "code": "bad_frame"}
+        ws.send_json({"type": "talk", "id": 2, "target": "home9", "utterance": "How many shots?"})
+        assert ws.receive_json()["type"] == "reply"
+
+
+def test_the_call_refuses_a_talk_the_talk_route_would_refuse(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    long = {"type": "talk", "id": 1, "target": "home9", "utterance": "x" * 301}
+    bad_position = {
+        "type": "talk",
+        "id": 2,
+        "target": "home9",
+        "utterance": "shots?",
+        "position": "st",
+    }
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json(long)
+        assert ws.receive_json() == {"type": "error", "id": 1, "code": "bad_frame"}
+        ws.send_json(bad_position)
+        assert ws.receive_json() == {"type": "error", "id": 2, "code": "bad_frame"}
+
+
+def test_a_call_turn_counts_against_the_address_question_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create(client)
+    post_all(client)
+    monkeypatch.setattr(matches, "ASK_PER_IP_MINUTE", 0)
+    talk = {"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"}
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json(talk)
+        assert ws.receive_json() == {"type": "error", "id": 1, "code": "rate_limited"}
+
+
+def test_the_call_speaks_a_reply_only_while_the_voice_allowance_lasts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create(client)
+    post_all(client)
+    voice = client.app.state.matches.voice
+    monkeypatch.setattr(type(voice), "ready", property(lambda self: True))
+    monkeypatch.setattr(voice, "get", lambda key: None)
+    monkeypatch.setattr(voice, "voice_for", lambda role, player=None: "voice-" + role)
+
+    async def clip(text: str, name: str) -> bytes:
+        return b"mp3"
+
+    monkeypatch.setattr(voice, "clip", clip)
+    talk = {"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"}
+    url = "/v1/matches/match-short/call?session_id=short"
+
+    monkeypatch.setattr(voice, "allow", lambda client_ip, now=None: False)  # allowance spent
+    with client.websocket_connect(url) as ws:
+        ws.send_json(talk)
+        assert ws.receive_json()["verdict"] == "verified"
+        assert ws.receive_json() == {"type": "audio_end", "id": 1, "cancelled": False}
+
+    monkeypatch.setattr(voice, "allow", lambda client_ip, now=None: True)
+    with client.websocket_connect(url) as ws:
+        ws.send_json(talk)
+        assert ws.receive_json()["type"] == "reply"
+        header = ws.receive_json()
+        assert header["type"] == "audio" and header["seq"] == 0
+        assert ws.receive_bytes() == b"mp3"
+        while (frame := ws.receive_json())["type"] != "audio_end":
+            ws.receive_bytes()
+        assert frame == {"type": "audio_end", "id": 1, "cancelled": False}
 
 
 @pytest.fixture(autouse=True)

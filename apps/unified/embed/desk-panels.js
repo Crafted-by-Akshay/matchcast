@@ -197,4 +197,78 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   send({ type: 'producer', action: 'sync' });   // the shell answers with the queue, so a desk that loads late shows it
 })();
 
+// ---- Six-feed monitor (Broadcast): the six English derived feeds, what each has aired, the lines the Verifier dropped and why, and a kill per feed.
+// Derived lines never enter the producer queue: booth lines keep it. The record shapes are the Feeds lane's proposal for matchcast.onair/1 (AB#498, not merged yet):
+// the shell sends feed-air and feed-drop. ?feeds=fixture feeds the monitor with a fixture until then. A kill changes this desk only; the air path does not read it yet (AB#499).
+(() => {
+  if (!framed) return;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const FEEDS = [['casual', 'Casual'], ['analyst', 'Analyst'], ['audio_description', 'Audio description'], ['catch_me_up', 'Catch-me-up'], ['half_time', 'Half-time'], ['ticker', 'Ticker']];
+  const feeds = Object.fromEntries(FEEDS.map(([k, label]) => [k, { label, on: true, aired: 0, last: '' }]));
+  const seen = new Set(), drops = [];
+  let fixture = false;   // a demo and test parameter: off unless the URL asks for it
+  try { fixture = /[?&]feeds=fixture(&|$)/.test(window.parent.location.search); } catch (err) { /* a cross-origin parent keeps the monitor on the live records */ }
+  const feedOf = (k) => (Object.hasOwn(feeds, k) ? feeds[k] : null);
+  const style = document.createElement('style');
+  style.textContent = '#mc-feeds{display:flex;flex-direction:column;gap:4px;padding-bottom:6px;border-bottom:1px solid #22395c}'
+    + '#mc-feeds ul{margin:0;padding:0;list-style:none}'
+    + '#mc-feeds li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #22395c}'
+    + '#mc-feeds li>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '#mc-feeds li[data-off="true"]{opacity:.6}'
+    + '#mc-feeds .mcp-v{font-size:11px;color:#9fb6d6}';
+  document.head.append(style);
+  const box = document.createElement('section');
+  box.id = 'mc-feeds'; box.setAttribute('aria-label', 'Six feeds, simulated: what each aired, the drops, and a kill per feed');
+  box.innerHTML = '<div class="mcp-row"><b>Feeds</b> <span class="mcp-v">simulated · English · no human approval' + (fixture ? ' · fixture feed' : '') + '</span></div>'
+    + '<ul id="mc-feed-list">' + FEEDS.map(([k, label]) => '<li data-feed="' + k + '"><b>' + label + '</b><span class="mcp-v"></span><button type="button" data-kill>Kill</button></li>').join('') + '</ul>'
+    + '<div><b>Dropped</b> <ul id="mc-drop-list"></ul></div>';
+  document.getElementById('mc-overlay').before(box);
+  const render = (k) => {
+    const s = feeds[k], row = box.querySelector('[data-feed="' + k + '"]');
+    row.dataset.off = String(!s.on);
+    row.querySelector('span').textContent = (s.on ? '' : 'Killed on this desk, not yet stopped at air · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
+    row.querySelector('[data-kill]').textContent = s.on ? 'Kill' : 'Resume';
+  };
+  FEEDS.forEach(([k]) => render(k));
+  const renderDrops = () => {
+    box.querySelector('#mc-drop-list').innerHTML = drops.length
+      ? drops.map((r) => '<li class="mcp-v">' + esc(feedOf(r.feed).label) + ' · ' + esc(r.reason_code) + (r.repair_count ? ' · repaired ' + esc(r.repair_count) + (r.repair_count === 1 ? ' time' : ' times') : '') + '</li>').join('')
+      : '<li class="mcp-v">Nothing dropped yet.</li>';
+  };
+  renderDrops();
+  // a feed line airs once per publication, in English this sprint, and only while its feed is on; a killed feed airs nothing
+  const aired = (rec) => {
+    const s = feedOf(rec.feed);
+    if (!s || !s.on || rec.lang !== 'en' || !rec.publication_id || seen.has(rec.publication_id)) return;
+    seen.add(rec.publication_id); s.aired++; s.last = rec.text || ''; render(rec.feed);
+  };
+  // the Verifier's drop shows the reason; the line text stays in the audit chain, so the desk shows no text here
+  const dropped = (rec) => {
+    if (!feedOf(rec.feed)) return;
+    drops.unshift(rec); drops.length = Math.min(drops.length, 5); renderDrops();
+  };
+  box.querySelector('#mc-feed-list').onclick = (e) => {
+    const b = e.target.closest('[data-kill]'); if (!b) return;
+    const k = b.closest('li').dataset.feed, s = feedOf(k);
+    s.on = !s.on; render(k);
+    send({ type: 'feed-kill', feed: k, on: s.on });
+  };
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source !== window.parent || d.src !== 'matchcast-shell' || !d.record) return;
+    if (d.type === 'feed-air') aired(d.record);
+    if (d.type === 'feed-drop') dropped(d.record);
+  });
+  // ?feeds=fixture: one fixture line every 12 s, round-robin over the six feeds, and a drop every fourth tick
+  if (fixture) {
+    let tick = 0;
+    setInterval(() => {
+      const k = FEEDS[tick % FEEDS.length][0];
+      tick++;
+      if (tick % 4 === 0) dropped({ feed: k, publication_id: 'fixture-drop-' + tick, source_event_ids: [], reason_code: 'REPEAT', repair_count: 0, audit_id: 'fixture' });
+      else aired({ feed: k, publication_id: 'fixture-' + tick, lang: 'en', text: 'fixture line ' + tick + ' for ' + feeds[k].label + '.', source_event_ids: [], claim_ids: [], match_time_ms: 0, aired_at: new Date().toISOString(), repair_count: 0 });
+    }, 12000);
+  }
+})();
+
 send({ type: 'panels' });   // the desk's panels are up: the shell may lift its loading card now, while the pitch still loads

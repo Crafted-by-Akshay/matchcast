@@ -57,6 +57,28 @@ def engine_count(events: Iterable[dict[str, Any]], team: str, upto_ms: int) -> i
     )
 
 
+# the Vision metrics a claim on the engine feed may carry (ADR-0022): Vision's own count, and the
+# share of its passes an engine pass backs, both for one team. ``passes:<team>`` stays the engine's.
+VISION_METRICS = {"vision_passes": "count", "vision_precision": "ratio"}
+
+
+def vision_value(
+    metric: str,
+    team: str,
+    passes: Iterable[dict[str, Any]],
+    engine_events: Iterable[dict[str, Any]],
+    upto_ms: int,
+) -> float | None:
+    """A Vision metric for one team, recounted from Vision's passes and the engine's log. None when
+    no Vision pass is covered by the engine yet, so there is no share to state."""
+    ours = [p for p in passes if p["team_id"] == team and p["time_ms"] <= upto_ms]
+    if metric == "vision_passes":
+        return float(len(ours))
+    # the whole engine feed: its latest event sets the span both streams cover
+    precision = agreement(ours, engine_events)["precision"]
+    return None if precision is None else round(precision, 2)
+
+
 def agreement(
     passes: list[dict[str, Any]], engine_events: Iterable[dict[str, Any]]
 ) -> dict[str, Any]:
