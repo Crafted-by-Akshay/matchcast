@@ -262,9 +262,23 @@ class _Counted:
         return call
 
 
+def corrupt_first(
+    results: list[ClaimResult], task: ProducerTask, seeded: frozenset[str], repair: bool
+) -> list[ClaimResult]:
+    """The seeded wrong claim: the first claim of a seeded moment is one too high. A repair is
+    never corrupted, so the Verifier's repair can fix it."""
+    if repair or task.moment_id not in seeded or not results:
+        return results
+    first = results[0]
+    wrong = {**first.packet, "value": first.packet["value"] + 1}
+    seeded_claim = ClaimResult(
+        packet=wrong, tool_call_ids=first.tool_call_ids, formula_inputs=first.formula_inputs
+    )
+    return [seeded_claim, *results[1:]]
+
+
 class SeededAnalyst:
-    """AnalystRules with seeded wrong claims: the first claim of each seeded moment is one too
-    high. A repair (``repair=True``) is not corrupted, so the Verifier's repair can fix it."""
+    """AnalystRules with seeded wrong claims (see ``corrupt_first``)."""
 
     def __init__(self, seeded: frozenset[str]) -> None:
         self._inner = AnalystRules()
@@ -287,14 +301,7 @@ class SeededAnalyst:
         metrics: list[str] | None = None,
     ) -> list[ClaimResult]:
         results = await self._inner.analyse(ctx, task, repair=repair, metrics=metrics)
-        if repair or task.moment_id not in self._seeded or not results:
-            return results
-        first = results[0]
-        wrong = {**first.packet, "value": first.packet["value"] + 1}
-        seeded = ClaimResult(
-            packet=wrong, tool_call_ids=first.tool_call_ids, formula_inputs=first.formula_inputs
-        )
-        return [seeded, *results[1:]]
+        return corrupt_first(results, task, self._seeded, repair)
 
 
 class UncheckedVerifier:
@@ -331,15 +338,18 @@ async def _crew(
     unchecked: bool,
     ledger: _Ledger,
     clock: Callable[[], datetime],
+    agents: AgentSet | None = None,
 ) -> dict[str, Any]:
-    """The workflow over every event, timed per shot or goal. Lines are the aired ones."""
+    """The workflow over every event, timed per shot or goal. Lines are the aired ones. ``agents``
+    replaces the rules set (a live arm); ``unchecked`` bypasses the Verifier either way."""
     verifier = UncheckedVerifier() if unchecked else VerifierRules()
     flow = MatchWorkflow(
         stream=match["roster"]["stream"],
         roster=match["roster"],
         names=match["names"],
         clubs=match["teams"],
-        agents=AgentSet(
+        agents=agents
+        or AgentSet(
             producer=_Counted(ProducerRules(PERSONAS), ledger),
             analyst=_Counted(SeededAnalyst(seeded), ledger),
             narrator=_Counted(NarratorRules(), ledger),
@@ -363,11 +373,17 @@ async def _crew(
 
 
 async def _single(
-    match: Mapping[str, Any], seeded: frozenset[str], *, ledger: _Ledger
+    match: Mapping[str, Any],
+    seeded: frozenset[str],
+    *,
+    ledger: _Ledger,
+    analyst: Any = None,
+    narrator: Any = None,
 ) -> dict[str, Any]:
-    """One pass per shot or goal: the rules Analyst's claims, then the line written from them."""
-    analyst = _Counted(SeededAnalyst(seeded), ledger)
-    narrator = _Counted(NarratorRules(), ledger)
+    """One pass per shot or goal: the Analyst's claims, then the line written from them. The
+    rules Analyst and Narrator unless a live pair is given."""
+    analyst = analyst or _Counted(SeededAnalyst(seeded), ledger)
+    narrator = narrator or _Counted(NarratorRules(), ledger)
     stream = match["roster"]["stream"]
     state, prefix = MatchState(), []
     lines, latencies = [], []
@@ -431,6 +447,8 @@ def _report(
     match: Mapping[str, Any],
     seed: int,
     seeded_claims: frozenset[str],
+    *,
+    mode: str = "rules",
 ) -> dict[str, Any]:
     events, allowed = match["events"], _allowed(match)
     grades = [
@@ -469,7 +487,7 @@ def _report(
     latency = run["latency_ms"]
     return {
         "label": LABELS[key],
-        "mode": "rules",
+        "mode": mode,
         "run_id": run_id,
         "lines_aired": lines,
         "wrong_lines_aired": sum(g["verdict"] == "incorrect" for g in grades),
@@ -499,6 +517,19 @@ def _report(
     }
 
 
+def seeded_set(
+    match: Mapping[str, Any], *, seed: int, rate: float, clock: Callable[[], datetime]
+) -> tuple[frozenset[str], frozenset[str]]:
+    """The moments whose first claim is seeded wrong, and the claim ids they make. The seeds go
+    only into shot and goal moments the clean crew aired, so every arm has the same population."""
+    shot_goal = {_moment_id(e) for e in match["events"] if _is_moment(e)}
+    clean = asyncio.run(_crew(match, frozenset(), unchecked=False, ledger=_Ledger(), clock=clock))
+    aired = sorted({m for _t, _l, m, _c in clean["lines"] if m in shot_goal})
+    rng = random.Random(f"{seed}:seeded-claims")
+    chosen = frozenset(rng.sample(aired, max(1, round(len(aired) * rate)) if aired else 0))
+    return chosen, frozenset(f"claim-{m}-1" for m in chosen)
+
+
 def scoreboard(
     match: Mapping[str, Any],
     *,
@@ -516,13 +547,7 @@ def scoreboard(
     shot_goal = {_moment_id(e): e for e in match["events"] if _is_moment(e)}
     as_of = run_date or datetime.now(UTC).date().isoformat()
     clock = _pinned_clock(as_of)
-    # the seeds go only into shot and goal moments the clean crew aired, so every arm has the
-    # same population of seeded claims to catch
-    clean = asyncio.run(_crew(match, frozenset(), unchecked=False, ledger=_Ledger(), clock=clock))
-    aired = sorted({m for _t, _l, m, _c in clean["lines"] if m in shot_goal})
-    rng = random.Random(f"{seed}:seeded-claims")
-    chosen = frozenset(rng.sample(aired, max(1, round(len(aired) * rate)) if aired else 0))
-    seeded_claims = frozenset(f"claim-{m}-1" for m in chosen)
+    chosen, seeded_claims = seeded_set(match, seed=seed, rate=rate, clock=clock)
 
     arms: dict[str, Any] = {}
     for key in ARMS:

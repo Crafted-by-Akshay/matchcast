@@ -33,6 +33,7 @@ from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.feeds import FEED_KEYS
 from matchcast_agents.grading import scoreboard
+from matchcast_agents.grading_live import load_live_run
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
@@ -1047,13 +1048,17 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/matches/{match_id}/scoreboard")
     async def crew_scoreboard(match_id: str, session_id: str) -> dict[str, Any]:
-        """The three-arm crew scoreboard for this match (CREW-5.2). The arms are rules-mode and run
-        on the stored events, so the result is cached per match, event count and run date. A new
-        event or a new day runs them again. Labelled rules-only (docs/architecture/16, 4.1)."""
+        """The three-arm crew scoreboard for this match (CREW-5.2). The arms run on the stored
+        events with rules, so the result is cached per match, event count and run date. A new
+        event or a new day runs them again. When a recorded live run is set
+        (MATCHCAST_SCOREBOARD_LIVE_RUN), its arms replace the rules arms as precomputed, labelled
+        with the run id. The route never calls a model (docs/architecture/16, 4.1)."""
         flow = await registry.flow_for(session_id, match_id)
         events = flow.store.events(flow.sk)
         run_date = datetime.now(UTC).date().isoformat()
-        key = (flow.sk, len(events), run_date)
+        live_path = os.environ.get("MATCHCAST_SCOREBOARD_LIVE_RUN", "")
+        live_stamp = os.path.getmtime(live_path) if live_path and os.path.isfile(live_path) else 0
+        key = (flow.sk, len(events), run_date, live_path, live_stamp)
         board = _SCOREBOARDS.get(key)
         if board is None:
             match = {
@@ -1062,7 +1067,10 @@ def build_router(registry: Registry) -> APIRouter:
                 "names": flow.names,
                 "teams": flow.clubs,
             }
-            board = await asyncio.to_thread(scoreboard, match, run_date=run_date)
+            recorded = load_live_run(live_path, match_id=match_id) if live_path else None
+            board = await asyncio.to_thread(
+                scoreboard, match, run_date=run_date, precomputed=recorded
+            )
             if len(_SCOREBOARDS) >= SCOREBOARD_CACHE_SIZE:
                 _SCOREBOARDS.pop(next(iter(_SCOREBOARDS)))  # the oldest one out
             _SCOREBOARDS[key] = board

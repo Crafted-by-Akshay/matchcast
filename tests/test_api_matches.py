@@ -934,6 +934,43 @@ def test_a_desk_feed_kill_and_resume_are_audited(
     assert verify_chain(audit)["valid"] is True
 
 
+def test_a_recorded_live_run_replaces_the_rules_arms_with_its_run_id(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    # the route never calls a model: a recorded live run (scripts/scoreboard_live.py) is read from
+    # a file, its arms are shown as precomputed with their run id, and nothing else changes
+    create(client)
+    post_all(client)
+    record = {
+        "kind": "crew_live_run",
+        "run_id": "live0001",
+        "match_id": "match-short",
+        "arms": {
+            key: {
+                "label": key,
+                "mode": "live",
+                "run_id": f"{key}-live",
+                "lines_aired": 1,
+                "wrong_lines_aired": 0,
+                "accuracy": {"wrong_numbers_aired": 0, "numbers_aired": 1, "wrong_rate": 0.0},
+                "catch_rate": {"caught": 0, "seeded": 0, "rate": None},
+                "latency_ms": {"p50": None, "p95": None, "total": None, "moments": 0},
+                "cost": {"model_calls": 1, "model_errors": 0, "budget_refused": 0},
+                "wrong_claim_ids": [],
+                "wrong_claim_ids_stated": [],
+            }
+            for key in ("full_crew", "single_agent", "crew_no_verifier")
+        },
+    }
+    path = tmp_path / "live.json"
+    path.write_text(json.dumps(record))
+    monkeypatch.setenv("MATCHCAST_SCOREBOARD_LIVE_RUN", str(path))
+    board = client.get("/v1/matches/match-short/scoreboard", params=Q).json()
+    assert board["arms"]["full_crew"]["mode"] == "precomputed"
+    assert board["arms"]["full_crew"]["run_id"] == "full_crew-live"
+    assert "run full_crew-live" in board["arms"]["full_crew"]["label"]
+
+
 def test_the_scoreboard_is_three_rules_arms_and_is_labelled_rules(client: TestClient) -> None:
     create(client)
     post_all(client)
