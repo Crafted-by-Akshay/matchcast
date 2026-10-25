@@ -29,7 +29,7 @@ QUEUE_LANE = "queue"
 class Feed:
     key: str  # wire name used by the feed switcher and the desk
     label: str  # what a fan or producer reads
-    persona: str | None  # the persona that writes it today; None until its writer lands
+    persona: str | None  # the persona that writes it today; None until the feed is wired in
     max_chars: int | None = None  # per line, for written feeds
     max_numbers: int | None = None  # numbers a line may state
     max_words: int | None = None  # whole-feed recap length (catch-me-up)

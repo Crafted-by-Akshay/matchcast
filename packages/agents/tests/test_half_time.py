@@ -156,6 +156,7 @@ def test_only_three_goals_are_named_and_the_fourth_is_left_out() -> None:
     assert len(piece.sentences) == 6  # headline, three goals, shots, closing
     assert "Gamma Player scored for Northgate." in piece.text
     assert "Delta Player" not in piece.text
+    assert "e4" in piece.source_event_ids  # the fourth goal is counted, only not named
 
 
 def test_a_retracted_goal_is_not_counted_or_named() -> None:
@@ -178,6 +179,29 @@ def test_a_correction_to_a_first_half_event_holds_the_piece() -> None:
 
 def test_a_correction_after_the_cut_also_holds_the_piece() -> None:
     assert half_time.build(ctx([*first_half(), correction(96, "e1")])) is None
+
+
+def test_a_retracted_half_time_boundary_gives_no_piece() -> None:
+    assert half_time.build(ctx([*first_half(), retraction(96, "e90")])) is None
+
+
+def test_a_started_boundary_is_not_the_half_time_cut() -> None:
+    started = ev(90, 45 * 60_000, {"type": "period_boundary", "boundary": "started"}, period=1)
+    assert half_time.build(ctx([goal(1, 12 * 60_000, HOME, "h9"), started])) is None
+
+
+def test_the_earliest_ended_boundary_is_the_cut() -> None:
+    later = boundary(120, 47 * 60_000, period=1)
+    piece = half_time.build(ctx([*first_half(), later]))
+    assert piece.cut_sequence == 90
+
+
+def test_a_period_two_event_with_an_early_sequence_stays_out() -> None:
+    late_goal = goal(2, 10 * 60_000, AWAY, "a1", period=2)
+    piece = half_time.build(ctx([goal(1, 12 * 60_000, HOME, "h9"), late_goal, HALF_END]))
+    assert "Tom Hale" in piece.text
+    assert "a1" not in piece.text
+    assert "e2" not in piece.source_event_ids
 
 
 def test_the_piece_fits_the_feed_spoken_limit() -> None:
