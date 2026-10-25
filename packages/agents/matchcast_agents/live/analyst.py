@@ -2,6 +2,7 @@
 
 import json
 
+from .. import history
 from ..context import MatchContext
 from ..messages import ProducerTask
 from ..metrics_spec import METRIC_UNITS
@@ -29,7 +30,12 @@ class LiveAnalyst:
         self, ctx: MatchContext, task: ProducerTask, *, repair: bool = False
     ) -> list[ClaimResult]:
         teams = (ctx.home, ctx.away)
-        menu = [f"{m}:{t}" for m in METRIC_UNITS for t in teams]
+        menu = [
+            f"{m}:{t}"
+            for m in METRIC_UNITS
+            for t in teams
+            if m not in history.HISTORY_METRICS or history.available(ctx)
+        ]
         request = {"moment": task.reason, "metrics_available": menu, "max": 3}
         answer = await self._client.complete(prompt("analyst"), json.dumps(request), SCHEMA)
         chosen = [m for m in dict.fromkeys(answer.get("metrics", [])) if m in menu]

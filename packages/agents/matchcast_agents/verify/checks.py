@@ -4,6 +4,7 @@ import re
 from collections import Counter
 from typing import Any
 
+from .. import history
 from ..context import MatchContext
 from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
@@ -122,7 +123,15 @@ def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any
                 detail=f"{claim['metric']} must be {METRIC_UNITS.get(name)} v"
                 f"{derivation_version(name)}, not {claim['units']} v{claim['derivation_version']}",
             )
-        expected = recompute(ctx.events, claim["metric"], claim["max_evidence_sequence"])
+        if name in history.HISTORY_METRICS:  # reference data: recounted from the match history
+            try:
+                expected = history.value(ctx, name, claim["metric"].split(":", 1)[1])
+            except (KeyError, TypeError, ValueError):
+                return Check(
+                    name="numbers", passed=False, detail=f"{claim['metric']} has no history here"
+                )
+        else:
+            expected = recompute(ctx.events, claim["metric"], claim["max_evidence_sequence"])
         if abs(expected - claim["value"]) > TOLERANCE[claim["units"]] + EPSILON:
             return Check(
                 name="numbers",

@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from .. import history
 from ..context import MatchContext
 from ..metrics_spec import METRIC_UNITS, derivation_version
 from ..xg import team_xg
@@ -89,8 +90,13 @@ class InProcessTools:
             metric, _, team = name.partition(":")
             if metric not in METRIC_UNITS or not team:
                 raise ToolError("get_metrics", f"unknown metric {name}")
-            if metric == "xg":
-                value: float = team_xg(self._ctx.events, team, self._up_to)
+            if metric in history.HISTORY_METRICS:
+                try:
+                    value: float = history.value(self._ctx, metric, team)
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ToolError("get_metrics", f"no pre-match history for {name}") from error
+            elif metric == "xg":
+                value = team_xg(self._ctx.events, team, self._up_to)
             else:
                 value = self._ctx.state.count(metric, team)
             values[name] = {
