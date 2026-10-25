@@ -34,10 +34,10 @@ writes `results/agents.json` and `docs/eval/agents-eval.md`; `--live` grades the
 once quota exists. `tests/test_eval_agents.py` holds the floors and fails if the committed
 report is stale. Known gaps are in the report, for example numbers written in the wrong order are not caught.
 
-## Live run (the moment the gpt-6-luna quota lands)
+## Live run (against the deployed gpt-5-mini)
 
 `make live-eval` on the Mac mini (`az login`, `FOUNDRY_PROJECT_ENDPOINT`, optionally
-`FOUNDRY_MODEL_DEPLOYMENT`, default `gpt-6-luna`) does three things in order:
+`FOUNDRY_MODEL_DEPLOYMENT`, default `gpt-5-mini`) does three things in order:
 
 1. `smoke-foundry`: one 16-token call; prints the model, token counts and latency. Stop here if it fails.
 2. `compare.py --live` (`--runs N`, default 1): three arms on the same frozen shots and goals,

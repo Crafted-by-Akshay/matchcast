@@ -8,7 +8,7 @@ description: Use when changing Bicep or azd, provisioning or deploying MatchCast
 Docs: `docs/infra.md`, `docs/architecture/13-deployment-and-operations.md`, ADR-0005 to 0008, `docs/runbook-shutdown.md`. Owner: Platform lane.
 
 ## Facts
-Subscription "Azure subscription 1", resource group `rg-matchcast` (East US), Foundry `matchcast-foundry` (East US 2, project `proj-default`, deployment `gpt-6-luna`), identity `id-matchcast`, Key Vault with RBAC, Storage tables and containers, Event Hubs Basic (hub `match-events`, consumer group `$Default` only), Container Apps `web`, `api`, `mcp` scaling 0 to 1 (api also on the Event Hubs backlog via KEDA, threshold 50). Images on GHCR (`ghcr.io/crafted-by-akshay/matchcast-*`, ADR-0008). Template: `infra/main.bicep` plus `infra/modules/*.bicep`, driven by `azure.yaml`.
+Subscription "Azure subscription 1", resource group `rg-matchcast` (East US), Foundry `matchcast-foundry` (East US 2, project `proj-default`, deployment `gpt-5-mini`), identity `id-matchcast`, Key Vault with RBAC, Storage tables and containers, Event Hubs Basic (hub `match-events`, consumer group `$Default` only), Container Apps `web`, `api`, `mcp` scaling 0 to 1 (api also on the Event Hubs backlog via KEDA, threshold 50). Images on GHCR (`ghcr.io/crafted-by-akshay/matchcast-*`, ADR-0008). Template: `infra/main.bicep` plus `infra/modules/*.bicep`, driven by `azure.yaml`.
 
 ## Rules
 - Azure commands run only where `az login` is done (the Mac mini). Provisioning in `rg-matchcast` is pre-authorised within the caps; deleting anything is not. The deny list blocks `azd down` and group or resource delete.

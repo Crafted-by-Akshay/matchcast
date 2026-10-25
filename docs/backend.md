@@ -12,7 +12,7 @@ The API reads these process environment variables at startup. It does not load
 | --- | --- | --- |
 | `MATCHCAST_MODE` | `local` | `local` or `cloud` |
 | `FOUNDRY_PROJECT_ENDPOINT` | unset | Required in `cloud` mode; absolute HTTPS URL of the Foundry project |
-| `FOUNDRY_MODEL_DEPLOYMENT` | unset | Required and non-blank in `cloud` mode; deployment name, `gpt-6-luna` |
+| `FOUNDRY_MODEL_DEPLOYMENT` | unset | Required and non-blank in `cloud` mode; deployment name, `gpt-5-mini` |
 
 There is no API key. Cloud mode authenticates with Microsoft Entra ID through
 `DefaultAzureCredential` (`az login` locally, the managed identity `id-matchcast` in Azure).
@@ -58,7 +58,7 @@ For an intentional negative configuration probe, start with
 `/ready` returns 503 with the missing settings. With both set and `az login` done,
 `/ready` returns 200 and the model dependency is `ready`.
 
-Prove one keyless model call (needs the `gpt-6-luna` deployment and the Azure AI User
+Prove one keyless model call (needs the `gpt-5-mini` deployment and the Azure AI User
 role): `make smoke-foundry`. It prints the model name, token counts and latency, never
 credentials.
 

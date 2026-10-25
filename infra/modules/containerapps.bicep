@@ -37,10 +37,10 @@ param pipelineMode string = 'direct'
 param searchKeysInVault bool = false
 
 @description('Name of the Foundry chat model deployment the agents call (the deployment name, not the model).')
-param foundryModelDeployment string = 'gpt-6-luna'
+param foundryModelDeployment string = 'gpt-5-mini'
 
 @allowed(['rules', 'live'])
-@description('rules = deterministic agents; live = Foundry agents (needs the gpt-6-luna deployment and quota).')
+@description('rules = deterministic agents; live = Foundry agents (needs the foundryModelDeployment deployed and quota approved).')
 param agentMode string = 'rules'
 
 @description('Keep one api and one web replica running (no scale to zero), so the first load is not a 17 to 22 s cold start. Costs a little idle compute; turn it on for the demo window.')
