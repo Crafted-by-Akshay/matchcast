@@ -293,3 +293,63 @@ def test_team_rule_leaves_summaries_period_ends_and_whole_names_alone(match) -> 
     text = f"Northgate FC: Ben Coleman shoots, shots {n}."
     ok = verdict(ctx2, line(text), [claim(ctx2, "shots:home", n)])
     assert ok.verdict == "verified"  # "Ben Cole" (away) is not found inside "Ben Coleman"
+
+
+HISTORY = {
+    "h2h": {"played": 12, "home_wins": 5, "draws": 3, "away_wins": 4, "last_meeting": "2024-06-01"},
+    "elo": {"home": 1843.4, "away": 1790.6},
+    "recent_form": {"home": "WWDLW", "away": "LDWWL"},
+}
+
+
+def with_history(match):
+    import dataclasses
+
+    return dataclasses.replace(context(match), extra={"history": HISTORY})
+
+
+def test_pre_match_history_claims_are_recounted_from_the_history(match) -> None:
+    ctx = with_history(match)
+    ok = [claim(ctx, "h2h_played:home", 12), claim(ctx, "elo:home", 1843)]
+    ok[1]["claim_id"] = "c2"
+    draft = DraftLine(
+        line_id="l1", claim_ids=("c1", "c2"), persona="analyst", max_chars=240,
+        text="They have met 12 times, and Northgate FC are rated 1843.",
+    )  # fmt: skip
+    assert verdict(ctx, draft, ok).verdict == "verified"
+    wrong = [claim(ctx, "elo:home", 1900)]
+    bad = verdict(ctx, line("Northgate FC are rated 1900."), wrong)
+    assert bad.reason_code == "number_mismatch"
+    away = verdict(ctx, line("Harbour United are rated 1791."), [claim(ctx, "elo:away", 1791)])
+    assert away.verdict == "verified"
+
+
+def test_history_metrics_need_history_and_stay_off_the_analysts_menu(match) -> None:
+    from matchcast_agents.tools import InProcessTools, ToolError
+
+    ctx = with_history(match)
+    values = InProcessTools(ctx, 40).get_metrics(
+        ["h2h_draws:home", "elo:away", "h2h_away_wins:away"]
+    )
+    got = {k: v["value"] for k, v in values[1]["values"].items()}
+    assert got == {"h2h_draws:home": 3, "elo:away": 1791, "h2h_away_wins:away": 4}
+    plain = context(match)  # a synthetic match has no history
+    try:
+        InProcessTools(plain, 40).get_metrics(["elo:home"])
+    except ToolError as error:
+        assert "no pre-match history" in str(error)
+    else:
+        raise AssertionError("a match without history must not make up a rating")
+    bare = verdict(plain, line("Northgate FC are rated 1843."), [claim(plain, "elo:home", 1843)])
+    assert bare.reason_code == "number_mismatch"
+
+
+def test_history_subject_must_be_a_side_of_the_match_and_elo_rounds_half_up(match) -> None:
+    import dataclasses
+
+    ctx = dataclasses.replace(
+        with_history(match), extra={"history": {**HISTORY, "elo": {"home": 1842.5, "away": 1800}}}
+    )
+    assert verdict(ctx, line("Rated 1843."), [claim(ctx, "elo:home", 1843)]).verdict == "verified"
+    stray = verdict(ctx, line("They have met 12 times."), [claim(ctx, "h2h_played:nobody", 12)])
+    assert stray.reason_code == "number_mismatch"

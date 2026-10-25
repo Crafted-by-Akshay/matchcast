@@ -172,7 +172,7 @@ def build_watch():
         + "\n"
         + r(EMB + "feed.js")
         + "\n"
-        + r(EMB + "twofans.js")
+        + r(EMB + "twofans.js") + "\n" + r(EMB + "democtl.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 

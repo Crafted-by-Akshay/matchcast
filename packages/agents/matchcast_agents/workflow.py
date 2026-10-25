@@ -10,7 +10,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
 
 from matchcast_contracts import ContractError, validate
@@ -18,9 +18,10 @@ from opentelemetry import trace
 
 from . import recap as recap_mod
 from .context import MatchContext
+from .history import history_for_roster
 from .hub import StreamHub
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
-from .personas import MAX_WATCH_MODES, known
+from .personas import BOOTH, MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
@@ -180,6 +181,7 @@ class MatchWorkflow:
         clock: Callable[[], datetime] = _utc_now,
         stats_desk: StatsDesk | None = None,
         answer_model: "ModelClient | None" = None,
+        history: dict[str, Any] | None = None,
         knowledge: "TalkKnowledge | None" = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
@@ -198,6 +200,16 @@ class MatchWorkflow:
         stored = self.store.get_match(self.sk) or {}
         self.names = {**stored.get("names", {}), **(names or {})}
         self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
+        # real pre-match facts for national teams (ADR-0020); None for fictional clubs
+        # the history cut-off is the day the match was created, so a rebuild keeps the same facts
+        self.history_on = (
+            date.fromisoformat(stored["history_on"]) if stored.get("history_on") else clock().date()
+        )
+        self.history = (
+            history
+            if history is not None
+            else history_for_roster(self.roster.get("team_ids"), self.clubs, self.history_on)
+        )
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)
@@ -214,6 +226,7 @@ class MatchWorkflow:
                 "roster": self.roster,
                 "names": self.names,
                 "clubs": self.clubs,
+                "history_on": self.history_on.isoformat(),
             },
         )
         self._restore()
@@ -241,6 +254,7 @@ class MatchWorkflow:
             state=self.store.get_state(self.sk),
             events=tuple(self.store.events(self.sk)),
             personas=self.config.personas,
+            extra={"history": self.history} if self.history else {},
         )
 
     def _audit(
@@ -393,6 +407,16 @@ class MatchWorkflow:
         self.extra_personas.append(persona)
         return True
 
+    def add_personas(self, personas: tuple[str, ...]) -> bool:
+        """All of ``personas`` or none: a pair such as the booth never lands half registered."""
+        if not all(known(p, self.clubs, self.names) for p in personas):
+            return False
+        new = [p for p in personas if p not in (*self.config.personas, *self.extra_personas)]
+        if len(self.extra_personas) + len(new) > MAX_WATCH_MODES:
+            return False
+        self.extra_personas.extend(new)
+        return True
+
     async def _process_event(self, event: dict[str, Any]) -> None:
         self.stats["events"] += 1
         state = apply(self.store.get_state(self.sk), event)
@@ -413,12 +437,10 @@ class MatchWorkflow:
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
-        if (
-            isinstance(decision, ProducerTask)
-            and self.extra_personas
-            and decision.reason != "colour"
-        ):
-            both = dict.fromkeys([*decision.personas, *self.extra_personas])
+        if isinstance(decision, ProducerTask) and self.extra_personas:
+            # a colour moment is the analyst's line (and the booth's), never a watch mode's
+            extra = [p for p in self.extra_personas if decision.reason != "colour" or p in BOOTH]
+            both = dict.fromkeys([*decision.personas, *extra])
             decision = decision.model_copy(update={"personas": tuple(both)})
         if isinstance(decision, Skip):
             self.stats["skipped"] += 1
@@ -806,15 +828,31 @@ class MatchWorkflow:
         self._repair_lock = asyncio.Lock()
         # The lines of a moment are independent, so their model checks run together (a moment
         # costs one round of Verifier calls, not one per persona); repairs take turns.
-        results = await asyncio.gather(
-            *(self._verify_line(ctx, task, claims, d, attempt=0) for d in drafts),
-            return_exceptions=True,
-        )
-        for failure in results:
-            if isinstance(failure, BaseException):
-                if isinstance(failure, asyncio.CancelledError):
-                    raise RuntimeError("a line check was cancelled") from failure
-                raise failure
+        # The booth's colour analyst answers the play-by-play, so that line is checked and aired
+        # after the call it reacts to; every other line goes together.
+        reacting = [d for d in drafts if d.persona == "booth:colour"]
+        first = [d for d in drafts if d not in reacting]
+        for group in (first, reacting):
+            if group is reacting and not self._call_aired(task):
+                break  # the call it would answer never aired: no reaction to nothing
+            results = await asyncio.gather(
+                *(self._verify_line(ctx, task, claims, d, attempt=0) for d in group),
+                return_exceptions=True,
+            )
+            for failure in results:
+                if isinstance(failure, BaseException):
+                    if isinstance(failure, asyncio.CancelledError):
+                        raise RuntimeError("a line check was cancelled") from failure
+                    raise failure
+
+    def _call_aired(self, task: ProducerTask) -> bool:
+        """Some play-by-play line of this moment passed its checks (or the moment has none)."""
+        calls = [
+            ln
+            for ln in self.store.lines(self.sk)
+            if ln.moment_id == task.moment_id and ln.persona == "booth:pbp"
+        ]
+        return not calls or any(ln.status in ("verified", "approved", "published") for ln in calls)
 
     def _wants_desk(self, task: ProducerTask) -> bool:
         # priority 1 always; any other moment only when the Producer asked for it
@@ -1162,6 +1200,8 @@ class MatchWorkflow:
             line = self._line(line_id)
             if line.status not in ("verified", "review"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
+            if line.escalated:
+                raise WorkflowError("not_approvable", "an escalated line can only be killed")
             self._approve(line, "person", actor_id, actor_name)
             return line
 
@@ -1197,6 +1237,10 @@ class MatchWorkflow:
             line = self._line(line_id)
             if line.status in ("published", "killed"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
+            if (
+                line.escalated
+            ):  # an edit that passes the Verifier would approve, so it waits for kill
+                raise WorkflowError("not_approvable", "an escalated line can only be killed")
             shield = await self.safety.shield(text)
             if shield.attack_detected:
                 self._audit("system", "content-safety", "safety_blocked", line_id,

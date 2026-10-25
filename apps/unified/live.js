@@ -2,8 +2,9 @@
 // With no api (MATCHCAST_API empty) nothing is called and the in-page rules agents (agents.js) are the only source: status 'offline'.
 // With an api, the rules agents keep running beside it, so if the api never answers the viewer still gets lines: status 'fallback'.
 const LV = (() => {
-  const WARM_MS = window.MATCHCAST_WARM_MS || 45000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
+  const WARM_MS = window.MATCHCAST_WARM_MS || 90000, CLAIM_MS = window.MATCHCAST_WARM_MS || 60000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
   let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
+  const vstats = { passes: 0, reads: 0, readsFailed: 0 };   // what Vision has reached the api with: passes accepted, shirt-number reads answered or refused
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
   const set = (s, again) => { if (s !== st || again) { st = s; onStatus(s); } };
@@ -45,14 +46,15 @@ const LV = (() => {
   const url = (path, q) => api() + path + '?' + new URLSearchParams(Object.assign({ session_id: run.key.session_id }, q || {}));
   const post = (path, body, q) => fetch(url(path, q), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-  // a new match from Watch: close the old stream, create the match, open the stream. Cold start is 'warming' until the first claim or 45 s.
+  // a new match from Watch: close the old stream, create the match, open the stream. Cold start is 'warming' until the first claim. The api is given 90 s to take the first batch, then 60 s from that batch to publish a claim; while batches are accepted and the stream is open it never drops to 'fallback' on its own.
   const begin = (matchKey, roster) => {
     stop();
     teamIds = roster ? roster.teams.map(slug) : [];
+    vstats.passes = 0; vstats.reads = 0; vstats.readsFailed = 0;   // Vision counts belong to one match
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
-    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, sending: false };
-    set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the 45 s timer
+    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, sending: false };
+    set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the 90 s timer
     timer = setTimeout(() => { if (run && !run.claimed) set('fallback'); }, WARM_MS);
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
       players: roster.players.map((q) => ({ player_id: slug(q.name), team_id: slug(q.team) })) } : null;
@@ -84,14 +86,15 @@ const LV = (() => {
       if (!r.created) {
         const bad = badClaim;   // the api takes the demo switch at match creation only
         const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; open(); } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
+        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
       }
       const batch = r.queue.slice(0, BATCH);
       const res = await post('/v1/matches/' + r.id + '/events', { events: batch });
       if (res.status === 404) { r.created = false; if (r.es) r.es.close(); }   // the api lost the match (a restart on a store that did not keep it): create it again with the next batch
       if (!res.ok) throw new Error('events ' + res.status);
       r.queue.splice(0, batch.length);
-    } catch (e) { if (run === r && st === 'warming') { /* keep waiting; the 45 s timer decides */ } }
+      if (run === r && !r.accepted) { r.accepted = true; clearTimeout(timer); timer = setTimeout(() => { if (run === r && !r.claimed) set('fallback'); }, CLAIM_MS); }   // the clock for a claim starts at the first accepted batch, not at page load
+    } catch (e) { if (run === r && st === 'warming' && !r.created && e.status >= 400 && e.status < 500 && e.status !== 404 && e.status !== 409) set('fallback'); /* the api refused the match: a real failure. A network error or a 5xx on a cold container keeps waiting; the timers decide */ }
     r.sending = false;
   };
 
@@ -127,8 +130,8 @@ const LV = (() => {
     if (!run) throw Object.assign(new Error('no match yet'), { status: 0 });
     const res = await fetch(api() + '/v1/matches/' + run.id + '/vision/identify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: run.key.session_id, crop, track_id: trackId, team_hint: team }) });
-    if (!res.ok) throw Object.assign(new Error('identify ' + res.status), { status: res.status, retry_after: +res.headers.get('Retry-After') || 0 });
-    return res.json();
+    if (!res.ok) { vstats.readsFailed++; throw Object.assign(new Error('identify ' + res.status), { status: res.status, retry_after: +res.headers.get('Retry-After') || 0 }); }
+    const j = await res.json(); vstats.reads++; return j;
   };
 
   // the server's audit records for this match (EXP-12), and the same check the server's verifyChain does (packages/contracts/src/audit.ts)
@@ -195,12 +198,13 @@ const LV = (() => {
       if (!v.created) {
         const res = await fetch(api() + '/v1/matches', json({ session_id: v.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1-vision', home_team_id: r.roster.team_ids[0], away_team_id: r.roster.team_ids[1], venue_id: 'v1',
           kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: Object.assign({}, r.roster, { stream: v.key }) }));
-        if (res.ok || res.status === 409) v.created = true; else throw new Error('create ' + res.status);
+        if (res.ok || res.status === 409) v.created = true; else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }
       }
       const batch = v.queue.slice(0, BATCH);
       const res = await fetch(at('/v1/matches/' + r.id + '/events'), json({ events: batch }));
       if (!res.ok) throw new Error('events ' + res.status);
       v.queue.splice(0, batch.length);
+      vstats.passes += batch.length;
     } catch (e) { /* kept; the next batch retries */ }
     v.sending = false;
     if (v.queue.length && run === r && v.created) sendVision(r, v);
@@ -224,7 +228,7 @@ const LV = (() => {
   };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, stop, talk, recap, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, visionEvents, stop, talk, recap, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

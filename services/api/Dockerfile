@@ -13,6 +13,7 @@ COPY services/recap services/recap
 COPY kb kb
 COPY data/season data/season
 COPY data/models data/models
+COPY data/history data/history
 RUN uv sync --locked --no-dev --package matchcast-api
 # The runtime user is not root; a checkout made under a strict umask must still be readable.
 RUN chmod -R a+rX /app

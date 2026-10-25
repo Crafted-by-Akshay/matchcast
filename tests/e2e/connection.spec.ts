@@ -18,6 +18,7 @@ const mock = (mode: 'ok' | 'error') => new Promise<Mock>((resolve) => {
       q.on('end', () => { const j = JSON.parse(b || '{}'); const ev = /\/events/.test(q.url!); if (ev) seen.events.push(...j.events); else seen.matches++; r.writeHead(ev ? 202 : 201, { 'Content-Type': 'application/json', ...cors }); r.end('{}'); });
       return;
     }
+    if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end('{}'); }   // only the match stream is an SSE stream (the shell also asks /v1/status)
     r.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...cors });
     const frame = (ev: string, d: object, id?: string) => r.write('event: ' + ev + '\n' + (id ? 'id: ' + id + '\n' : '') + 'data: ' + JSON.stringify(d) + '\n\n');
     frame('status', { status: 'live' });
@@ -112,4 +113,19 @@ test('status dialog: lists each dependency from /v1/status', async ({ page }) =>
   await expect(items.first()).toContainText('Live thing');
   await expect(items.last()).toContainText('Planned thing');
   expect(errs.filter((e) => !/127\.0\.0\.1:9|ERR_|Failed to load resource/.test(e))).toEqual([]);
+});
+
+test('chips: the Foundry chip and the claim provenance say what /v1/status says', async ({ page }) => {
+  const api = await mock('ok'); const errs = collectErrors(page);
+  await page.route('**/v1/status', (rt) => rt.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ mode: 'live', overall: 'live', counts: { live: 1 }, dependencies: [{ key: 'foundry', label: 'Microsoft Foundry agents', status: 'live', detail: 'model deployment answers' }] }) }));
+  await drive(page, api.url);
+  await expect(page.locator('#ag-foundry')).toHaveText('Foundry: live', { timeout: 15_000 });
+  await expect(page.locator('#ag-foundry')).not.toHaveClass(/warn/);
+  expect(errs).toEqual([]); api.server.close();
+});
+
+test('chips: with no api the Foundry chip says not connected', async ({ page }) => {
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="";' }));
+  await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#ag-foundry')).toHaveText('Foundry: not connected', { timeout: 15_000 });
 });
