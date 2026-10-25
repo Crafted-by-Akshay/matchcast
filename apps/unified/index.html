@@ -310,7 +310,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
       <div class="ag-head">
         <div><h2>Agent pipeline</h2><p>One pipeline for Watch, Analyst and Broadcast. Every claim is recounted by the Verifier and written to the audit chain.</p></div>
         <div class="chips">
-          <span class="chip warn">Foundry: not connected</span>
+          <span class="chip" id="ag-foundry">Foundry: checking…</span>
           <span class="chip">matchcast.event/1 · claim/1 · audit/1</span>
           <span class="chip" id="ag-src">Source: waiting for Watch</span>
         </div>
@@ -648,6 +648,7 @@ async function pollVision() {
 }
 setInterval(pollVision, 3000);
 renderVision();   // the strip says what it waits for before any match
+const FOUNDRY = { word: 'not connected' };   // from /v1/status, painted by paintFoundry
 function renderAgents() {
   renderQueue();
   if (current !== 'agents') return;
@@ -681,7 +682,7 @@ function renderAgents() {
     ['Verifier', esc(c.verdict + ': ' + c.reason)],
     ['Route', esc(c.route || 'held, not aired')],
     ['Contract', esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
-    ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules fallback · Foundry not connected'],
+    ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules in the page (Foundry: ' + FOUNDRY.word + ')'],
     ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending'],
     ['Trace', '<button type="button" class="ag-how" data-id="' + esc(c.id) + '">How was this made?</button>']
   ].map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>' : '<p class="empty">Pick a claim to see its provenance.</p>';
@@ -759,6 +760,7 @@ window.addEventListener('message', (e) => {
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
+  if (d.type === 'feed-ready') { post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on }); return; }   // the commentary card asks once on load, so it shows the right Voice state at once
   if (d.type === 'vision-crop' && view === 'watch') {   // the tracker's OCR second opinion (DAT-11); only when the agent api is live
     const reply = (extra) => post('watch', Object.assign({ src: 'matchcast-shell', type: 'vision-ocr', id: d.id }, extra));
     if (!(LV.enabled && LV.status === 'live')) { reply({ error: 'unavailable' }); return; }
@@ -945,6 +947,7 @@ function init(list) {
     vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
     $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') + (VC.crowd ? ' · crowd bed (simulated)' : '') : '';
     vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
+    post('watch', { src: 'matchcast-shell', type: 'voice-state', on: VC.on }); post('broadcast', { src: 'matchcast-shell', type: 'voice-state', on: VC.on });   // the commentary card says "Sound off" while Voice is off
   };
   const vd = $('voice-demo'), vdShow = () => { vd.hidden = !LV.enabled; };
   let demo = null;   // the playing sample; clicking again stops it
@@ -970,17 +973,30 @@ function init(list) {
   };
   AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); postQueue(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
-    warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
-  let warmTick = null;   // while warming, count the seconds so a cold start shows progress; the api's own limit is MATCHCAST_WARM_MS (45 s), then the rules agents take over
+    warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 90 s for the first batch, then up to 60 s for the first claim)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
+  const MATCHCAST_API_ON = () => !!(window.MATCHCAST_API || '').replace(/\/$/, '');
+  let warmTick = null;   // while warming, count the seconds so a cold start shows progress; the api's own limit is MATCHCAST_WARM_MS (90 s), then the rules agents take over
+  // the Foundry chip and the provenance line say what /v1/status says (live, simulated, planned, unavailable); with no api they say not connected
+  let fSeq = 0, fAt = 0;
+  const paintFoundry = async () => {
+    if (Date.now() - fAt < 5000 && fSeq) return;   // pill repaints in a burst share one status fetch
+    fAt = Date.now(); const me = ++fSeq;
+    const d = await STX.load(); if (me !== fSeq) return;   // a newer answer wins
+    const dep = d && d.dependencies.find((x) => /^(microsoft )?foundry\b/i.test(x.label)), ok = dep && dep.status === 'live';
+    FOUNDRY.word = !MATCHCAST_API_ON() ? 'not connected' : dep ? dep.status : 'status unavailable';
+    const chip = $('ag-foundry'); chip.textContent = 'Foundry: ' + (MATCHCAST_API_ON() ? (dep ? dep.status : 'status unavailable') : 'not connected');
+    chip.title = dep ? dep.detail : ''; chip.className = 'chip' + (ok ? '' : ' warn'); renderAgents();
+  };
   const paintPill = (s) => {
+    paintFoundry();
     clearInterval(warmTick); warmTick = null;
     if (s === 'warming') {
-      const lim = Math.round((window.MATCHCAST_WARM_MS || 45000) / 1000), t0 = Date.now(), base = PILL.warming[0], p = $('api-pill');
-      const tick = () => { const n = Math.min(lim, Math.round((Date.now() - t0) / 1000)); p.textContent = base + ' · ' + n + ' s of up to ' + lim; };
+      const lim = Math.round((window.MATCHCAST_WARM_MS || 90000) / 1000), t0 = Date.now(), base = PILL.warming[0], p = $('api-pill');
+      const tick = () => { const n = Math.round((Date.now() - t0) / 1000); p.textContent = base + ' · ' + n + ' s' + (n < lim ? ' of up to ' + lim : ''); };
       warmTick = setInterval(tick, 1000);
     }
     paintPillNow(s);
-    if (s === 'warming') $('api-pill').textContent = PILL.warming[0] + ' · 0 s of up to ' + Math.round((window.MATCHCAST_WARM_MS || 45000) / 1000);
+    if (s === 'warming') $('api-pill').textContent = PILL.warming[0] + ' · 0 s of up to ' + Math.round((window.MATCHCAST_WARM_MS || 90000) / 1000);
   };
   const paintPillNow = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
   LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });

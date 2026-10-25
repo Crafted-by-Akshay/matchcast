@@ -65,7 +65,7 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | Situation | What the viewer sees | What happens |
 | --- | --- | --- |
 | `MATCHCAST_API` empty at build | Status pill "Offline (simulated)" | `agents.js` rules in the page |
-| API cold (first request pending) | "Warming up the match engine" | Retry `/ready` every 2 s up to 45 s (Q13); after that, "Rules fallback" |
+| API cold (first request pending) | "Warming up the match engine" | Warm-up counts up to 90 s for the api to take the first batch, then 60 s from that batch for a first claim (Q13 target stays 45 s); while batches are accepted and the stream is open the pill never drops to "Rules fallback" by itself, only a failed create or no claim in time does. The Agents tab Foundry chip and claim provenance are painted from `/v1/status` |
 | API live | "Live agents" | REST + SSE |
 | SSE drops | "Reconnecting" for up to 10 s | `EventSource` reconnects with `Last-Event-ID`; the server replays from `publications` and `audit` |
 | API down for over 30 s during a match | "Rules fallback" | Switch to in-page rules; switch back when `/ready` returns 200 |
@@ -143,7 +143,7 @@ The top bar has a Status button beside the api pill. It opens a dialog built by 
 - Each feed line carries `numbers`, the same shape as an air line's: `[{name, value}]`, the values it was counted from (an xG on a shot line, the passes in a run). A line with no counted numbers has an empty list.
 - Each feed line keeps the persona in effect when it was written (`casual`, `analyst`, `broadcast`, or a lens such as `club:<key>`), set from the shell's `persona` messages through `CM.setPersona`. The Broadcast desk uses it to show which lens wrote a line. Play lines keep the feed moving between key events, so the two-minute summary rarely fires.
 - The api's checked line (`publication`) replaces the rules line for the same match minute or joins the feed, labelled `Live agents · verified`; rules lines are labelled `Rules · recounted`. Each line lists the agents that made it.
-- The shell posts `feed-lines` to Watch and Broadcast (at most every 200 ms); `embed/feed.js` draws the newest line and the list. Voice reads big moments with SSML (`speech.js`).
+- The shell posts `feed-lines` to Watch and Broadcast (at most every 200 ms); `embed/feed.js` draws the newest line and the list. The card shows a "Sound is off" line while Voice is off: the shell posts `voice-state` on each Voice change and answers the card's one-time `feed-ready` request on load. Voice reads big moments with SSML (`speech.js`).
 - Limit: the api narrates only the moments its Producer scores at 60 or more (goals, red cards, shots on target, half time, periodic summaries), so most lines in the feed come from the in-page rules until the live model keeps pace.
 
 ## UX review pass 1 (24 Oct): shell and phone Watch

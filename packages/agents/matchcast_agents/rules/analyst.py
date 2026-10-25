@@ -18,6 +18,8 @@ COUNT_METRICS = {
     "red_card": ("red_cards:{t}", "cards:{t}"),
     "summary": ("shots:{h}", "shots:{a}"),
     "period_end": ("goals:{h}", "goals:{a}"),
+    "buildup": ("goals:{h}", "goals:{a}"),  # the booth's kick-off talk, 0-0 on the record
+    "filler": ("shots:{h}", "shots:{a}"),  # the booth's line in a quiet spell
 }
 # a colour moment counts what the picked play adds to: shots, tackles or fouls of its team
 COLOUR_METRICS = {
