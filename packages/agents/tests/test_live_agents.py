@@ -295,6 +295,32 @@ def test_the_booth_voices_are_written_by_the_model_and_aired_in_order(match, mon
         assert pair == sorted(pair, key=lambda i: "colour" in i)  # pbp before colour
 
 
+def test_no_reaction_airs_when_the_call_it_answers_is_turned_away(match, monkeypatch) -> None:
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")
+
+    def narrator(facts):
+        lines = good_narrator(facts)["lines"]  # the call always carries numbers no claim backs
+        return {
+            "lines": [
+                {**r, "text": r["text"] + " 99 77"} if r["persona"] == "booth:pbp" else r
+                for r in lines
+            ]
+        }
+
+    config = WorkflowConfig(personas=("booth:pbp", "booth:colour"))
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"],
+        agents=live_agents(ScriptedModelClient(lambda s, u: answer(s, u, narrator=narrator)),
+                           config.personas),
+        config=config, clock=fixed_clock(),
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    lines = flow.store.lines(flow.sk)
+    assert lines and not [ln for ln in lines if ln.persona == "booth:colour"]
+    assert not [ln for ln in lines if ln.status == "published"]
+
+
 def test_colour_falls_back_to_a_rules_line_when_the_model_fails(match) -> None:
     class Down:
         async def complete(self, system, user, schema, **_):

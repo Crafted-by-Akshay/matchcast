@@ -173,3 +173,17 @@ def test_buildup_and_filler_moments_have_booth_lines_from_claims_alone(match) ->
         assert [p["metric"].split(":")[0] for p in packets] == [metric, metric]
         lines = run(NarratorRules().write(ctx, task, packets))
         assert [ln.persona for ln in lines] == ["booth:pbp", "booth:colour"]
+
+
+def test_a_booth_is_registered_whole_or_not_at_all(match) -> None:
+    flow = flow_with(match, ["casual"])
+    flow.extra_personas.extend(f"one-metric:{m}" for m in ("shots", "goals", "cards", "fouls"))
+    flow.extra_personas.extend(f"one-metric:{m}" for m in ("xg", "tackles_won", "red_cards"))
+    assert len(flow.extra_personas) == 7
+    before = list(flow.extra_personas)
+    assert not flow.add_personas(("booth:pbp", "booth:colour"))
+    assert flow.extra_personas == before  # not even the first voice stayed
+    flow.extra_personas.pop()
+    assert flow.add_personas(("booth:pbp", "booth:colour"))
+    assert flow.add_personas(("booth:pbp", "booth:colour"))  # again: nothing new, still fine
+    assert len(flow.extra_personas) == 8

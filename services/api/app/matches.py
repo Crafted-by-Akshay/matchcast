@@ -694,9 +694,8 @@ def build_router(registry: Registry) -> APIRouter:
             if persona is None:
                 raise Problem(422, "contract_invalid", "unknown persona for this match")
             keep = (persona,)
-        for mode in keep:
-            if not flow.add_persona(mode):  # a watch mode gets lines from the next moment on
-                raise Problem(429, "rate_limited", "this match already has the most watch modes")
+        if keep and not flow.add_personas(keep):  # a watch mode gets lines from the next moment on
+            raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
             return not (item.event == "publication" and keep and item.data["persona"] not in keep)

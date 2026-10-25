@@ -389,6 +389,16 @@ class MatchWorkflow:
         self.extra_personas.append(persona)
         return True
 
+    def add_personas(self, personas: tuple[str, ...]) -> bool:
+        """All of ``personas`` or none: a pair such as the booth never lands half registered."""
+        if not all(known(p, self.clubs, self.names) for p in personas):
+            return False
+        new = [p for p in personas if p not in (*self.config.personas, *self.extra_personas)]
+        if len(self.extra_personas) + len(new) > MAX_WATCH_MODES:
+            return False
+        self.extra_personas.extend(new)
+        return True
+
     async def _process_event(self, event: dict[str, Any]) -> None:
         self.stats["events"] += 1
         state = apply(self.store.get_state(self.sk), event)
@@ -798,6 +808,8 @@ class MatchWorkflow:
         reacting = [d for d in drafts if d.persona == "booth:colour"]
         first = [d for d in drafts if d not in reacting]
         for group in (first, reacting):
+            if group is reacting and not self._call_aired(task):
+                break  # the call it would answer never aired: no reaction to nothing
             results = await asyncio.gather(
                 *(self._verify_line(ctx, task, claims, d, attempt=0) for d in group),
                 return_exceptions=True,
@@ -807,6 +819,17 @@ class MatchWorkflow:
                     if isinstance(failure, asyncio.CancelledError):
                         raise RuntimeError("a line check was cancelled") from failure
                     raise failure
+
+    def _call_aired(self, task: ProducerTask) -> bool:
+        """Some play-by-play line of this moment was not turned away (or the moment has none)."""
+        calls = [
+            ln
+            for ln in self.store.lines(self.sk)
+            if ln.moment_id == task.moment_id and ln.persona == "booth:pbp"
+        ]
+        return not calls or any(
+            ln.status not in ("rejected", "abstained", "killed") for ln in calls
+        )
 
     def _wants_desk(self, task: ProducerTask) -> bool:
         # priority 1 always; any other moment only when the Producer asked for it
