@@ -2,10 +2,10 @@ import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // UX review pass 7: the first screen of Watch tells the story, not the tracker's accuracy numbers. The Vision tracker runs from kick-off,
-// but its panel and its detection boxes (which sat on top of the 3D name tags) stay closed until asked for, and the On-the-ball card
+// but its panel stays closed until asked for (its detection boxes too below 1100 px, where they sat on top of the 3D name tags; pass 8 draws them from kick-off on wide screens), and the On-the-ball card
 // no longer hides under the Live commentary card.
 for (const [name, width, height] of [['desktop', 1440, 900], ['laptop', 1024, 768], ['phone', 390, 844]] as const) {
-  test(`Watch on ${name}: Vision runs with its panel and boxes closed, and the bottom cards do not overlap`, async ({ page }) => {
+  test(`Watch on ${name}: Vision runs with its panel closed (boxes on wide screens only), and the bottom cards do not overlap`, async ({ page }) => {
     test.setTimeout(300_000);
     const errs = collectErrors(page);
     await page.setViewportSize({ width, height });
@@ -21,7 +21,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['laptop', 1024, 76
       return { iw, cap: rect('cap'), on: (window as any).__mc.vis.VIS.on, boxes: (window as any).__mc.vis.VIS.boxes, panel: rect('visp'), third: rect('third'), mcf: rect('mcf'), pressed: document.getElementById('visb')!.getAttribute('aria-pressed') };
     });
     expect(m.on, 'the tracker runs').toBe(true);
-    expect(m.boxes, 'detection boxes are off by default').toBe(false);
+    expect(m.boxes, name === 'desktop' ? 'on a wide screen the detection boxes are drawn from kick-off' : 'detection boxes are off by default below 1100 px').toBe(name === 'desktop');
     expect(m.panel, 'the Vision panel starts closed').toBeNull();
     expect(m.pressed).toBe('false');
     if (m.third && m.mcf) {

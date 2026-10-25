@@ -42,6 +42,7 @@ test('analyst focus: the live page explains its stats in plain words', async ({ 
   await expect(f.locator('#live-stats')).toContainText('Expected goals (xG)');
   await expect(f.locator('#live-stats')).toContainText('PPDA');
   await expect(f.locator('#live-source')).toContainText('Simulated');
+  await expect(f.locator('#live-recorded'), 'with the feed off the page says it is a recorded match, not live').toContainText('Recorded match · not live');
   expect(errs).toEqual([]);
 });
 
@@ -71,6 +72,7 @@ test('analyst focus: with the live feed on, a stat Watch has not sent shows a da
     (window as any).mcLiveRefresh();
   }, await f.evaluate(() => D.matches[0].id));
   await expect(f.locator('#live-source')).toContainText('Live from Watch');
+  await expect(f.locator('#live-recorded'), 'no recorded-match label while Watch feeds the page').toHaveCount(0);
   expect(await f.locator('#live-stats dt b').allTextContents()).toEqual(['– – –', '– – –', '– – –', '– – –', '–']);
   // full time: PPDA is still the recorded run's figure, so it stays a dash while the feed is on
   await f.evaluate(() => { (window as any).MC_FEED.over = true; (window as any).mcLiveRefresh(); });

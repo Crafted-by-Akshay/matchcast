@@ -45,12 +45,26 @@
   const go = setInterval(() => {
     if (!window.__mc || !window.__mc.vis || !$('load') || !$('load').hidden) return;
     clearInterval(go);
+    // UX review pass 8: the detection boxes were hairlines. The tracker draws them with strokeRect; give them a firm line and a soft glow in the box's own colour.
+    const ov = $('visov'), cx = ov && ov.getContext && ov.getContext('2d');
+    if (cx && !cx.mcThick) {
+      cx.mcThick = true;
+      for (const k of ['strokeRect', 'stroke']) {
+        const draw = cx[k];
+        cx[k] = function (...a) {
+          const w = this.lineWidth, b = this.shadowBlur, c = this.shadowColor;
+          this.lineWidth = Math.max(w, 2.5); this.shadowColor = this.strokeStyle; this.shadowBlur = 5;
+          try { return draw.apply(this, a); } finally { this.lineWidth = w; this.shadowBlur = b; this.shadowColor = c; }
+        };
+      }
+    }
     if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
     if (!window.__mc.vis.VIS.on) {
       window.__mc.vis.toggle(true);
-      // the tracker runs, but the panel (debug-style accuracy numbers) and the detection boxes (which sit on top of the 3D name tags) stay closed until asked for (UX review pass 7).
+      // the tracker runs, but the panel (debug-style accuracy numbers) stays closed until asked for (UX review pass 7). On a wide screen the detection boxes are drawn from the start, so
+      // the tracker is visible (pass 8); below 1100 px they sit on top of the 3D name tags and stay off until asked for.
       // Only when this start switched Vision on, so a viewer who already pressed the button is not overruled.
-      const bx = $('visp-box'); if (bx && window.__mc.vis.VIS.boxes) bx.click();
+      const bx = $('visp-box'); if (bx && window.__mc.vis.VIS.boxes && innerWidth <= 1100) bx.click();
       $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false');
     }
   }, 300);
