@@ -10,7 +10,7 @@ from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
 from ..personas import max_numbers
 from ..state import counted
-from ..vision import engine_count
+from ..vision import agreement, pass_facts
 from ..xg import team_xg
 
 FRESH_REVISIONS = 5
@@ -232,14 +232,27 @@ def check_vision(ctx: MatchContext, claims: list[dict[str, Any]]) -> Check:
     if not ctx.truth:
         return Check(name="vision", passed=True, detail="no engine truth on this stream")
     parts = []
+    passes = pass_facts(ctx.events)
     for claim in counts:
         team = claim["metric"].split(":", 1)[1]
         cut = claim["source"]["to_event_time_ms"]
-        seen, real = claim["value"], engine_count(ctx.truth, team, cut)
-        top = max(seen, real)
-        share = 100 if top == 0 else round(100 * min(seen, real) / top)
+        seen = claim["value"]
+        ours = [p for p in passes if p["team_id"] == team and p["time_ms"] <= cut]
+        theirs = [
+            e
+            for e in ctx.truth
+            if e["payload"]["type"] == "pass" and e["payload"]["team_id"] == team
+        ]
+        report = agreement(ours, theirs)
+        if report["precision"] is None:
+            parts.append(
+                f"Vision counted {seen:g} passes for {team}, none covered by the engine yet"
+            )
+            continue
+        share = round(100 * report["precision"])
         parts.append(
-            f"Vision counted {seen:g} passes for {team}, the engine {real} ({share}% agree)"
+            f"Vision counted {seen:g} passes for {team}, the engine {report['engine']} over the "
+            f"same span ({share}% agree)"
         )
     return Check(name="vision", passed=True, detail="; ".join(parts))
 

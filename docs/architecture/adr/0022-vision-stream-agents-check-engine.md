@@ -29,7 +29,7 @@ Option 3.
 ## Consequences
 
 - The Vision stream's lines say "Vision has tracked ..." and carry the agreement with the engine as a Verifier check, so a judge sees the measured accuracy beside the count.
-- Vision's agreement is the share of Vision's passes an engine pass backs within 8 s, over the span both streams have covered. It is precision, not identity accuracy; identity stays in the Tracking lab (docs/architecture/09).
+- Vision's agreement is the share of Vision's passes an engine pass backs within 8 s, over the span both streams have covered. It keys on the team, the passer and the receiver, so a wrong player lowers it as well as an invented pass; it is not identity accuracy, which stays in the Tracking lab (docs/architecture/09). The Verifier's check reports this same figure, so the trace, the chip and the strip agree.
 - The engine's agents do not yet cite Vision in engine lines. That is a later change that needs its own ADR.
 - Vision state and the `_vision_lines` counter are in memory. A restart rebuilds the passes from the store and the counter starts again at zero.
 - Not checked live: gpt-5-mini on the Vision summary and the agreement numbers on a real match. The rules twin covers the pass count and its Verifier check.

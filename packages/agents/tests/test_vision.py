@@ -62,14 +62,17 @@ def vision_events(match, lag_ms=1_000):
     return rows
 
 
-def build_vision(match, *, truth=True, client=None):
+def build_vision(match, *, truth=True, client=None, truth_until=None):
     config = WorkflowConfig()
     extra = {"agents": live_agents(client, config.personas)} if client else {}
+    engine = [
+        e for e in match["events"] if truth_until is None or e["event_time_ms"] <= truth_until
+    ]
     return MatchWorkflow(
         stream=vision_stream(match),
         roster={**match["roster"], "stream": vision_stream(match)},
         names=match["names"], clubs=match["teams"], config=config, clock=fixed_clock(),
-        truth_feed=(lambda: match["events"]) if truth else None, **extra,
+        truth_feed=(lambda: engine) if truth else None, **extra,
     )  # fmt: skip
 
 
@@ -127,14 +130,43 @@ def test_engine_passes_before_vision_started_are_not_counted_against_it(match) -
     assert report["engine"] < sum(1 for e in match["events"] if e["payload"]["type"] == "pass")
 
 
-def test_a_check_reports_disagreement_as_a_lower_share(match) -> None:
-    keep_every_other = vision_events(match)[::2]  # Vision misses half the passes
+def test_passes_vision_missed_do_not_lower_the_share(match) -> None:
+    keep_every_other = vision_events(match)[
+        ::2
+    ]  # Vision misses half the passes: recall, not agreement
     flow = build_vision(match)
     run(flow.ingest(keep_every_other))
     shares = [
         int(m) for c in checks(flow, "vision") for m in re.findall(r"\((\d+)% agree\)", c.detail)
     ]
-    assert shares and min(shares) < 100
+    assert shares and set(shares) == {100}
+
+
+def test_a_right_count_with_the_wrong_passer_is_not_full_agreement(match) -> None:
+    rows = vision_events(match)
+    for team in ("home", "away"):  # the same passes, each credited to the next passer on the team
+        mine = [r for r in rows if r["payload"]["team_id"] == team]
+        passers = [r["payload"]["player_id"] for r in mine]
+        for row, passer in zip(mine, passers[1:] + passers[:1]):
+            row["payload"]["player_id"] = passer
+    flow = build_vision(match)
+    run(flow.ingest(rows))
+    shares = [
+        int(m) for c in checks(flow, "vision") for m in re.findall(r"\((\d+)% agree\)", c.detail)
+    ]
+    assert shares and max(shares) < 50  # a few rotated pairs still line up with a real pass
+
+
+def test_an_engine_that_lags_vision_does_not_lower_the_share(match) -> None:
+    halfway = match["events"][-1]["event_time_ms"] // 2
+    flow = build_vision(match, truth_until=halfway)
+    run(flow.ingest(vision_events(match)))
+    shares = [
+        int(m) for c in checks(flow, "vision") for m in re.findall(r"\((\d+)% agree\)", c.detail)
+    ]
+    assert shares and set(shares) == {
+        100
+    }  # the passes after the engine's reach are pending, not missed
 
 
 def test_a_pass_outside_the_window_is_not_matched(match) -> None:
