@@ -7,7 +7,7 @@ MatchCast
 
 ## Elevator pitch (what you built, which technologies, what it does, what problem it solves)
 
-Football data is everywhere; explanations are not. MatchCast turns a stream of synthetic football events into explainable match intelligence. Four agents with distinct roles (Producer, Analyst, Narrator, Verifier) read each event, write commentary and insight, and the Verifier recounts every number from the stored event log before a line reaches a screen. The same moment reads differently for a data-hungry analyst, a casual fan and a producer, and with the Producer mode switch on, nothing goes to air without a producer's approval (the live demo runs in auto mode, which airs a line once the Verifier passes it).
+Football data is everywhere; explanations are not. MatchCast turns a stream of synthetic football events into explainable match intelligence. Four agents with distinct roles (Producer, Analyst, Narrator, Verifier) read each event, write commentary and insight, and the Verifier recounts every number from the stored event log before a line reaches a screen. The same moment reads differently for a data-hungry analyst, a casual fan and a producer, and with the Producer mode switch on, a person approves each Broadcast line in the page before it airs (the api's matches run in auto mode, which airs a line once the Verifier passes it).
 
 Built on Microsoft Foundry with the Microsoft Agent Framework for the agent workflow, an MCP tool server for verified match facts (Planned: a recorded run of GitHub Copilot Agent Mode calling it), Azure Container Apps, Event Hubs (simulated by an in-process stream today), Table and Blob Storage, Azure AI Speech, Azure AI Translator and Azure AI Search, defined as Bicep and deployed from a laptop with `azd` and `scripts/deploy_cloud.sh`; the GitHub Actions workflows are manual-only, and the OIDC deploy workflow is written but not used (no keys in the repo). All clubs, players and matches are fictional and come from our own seeded simulator.
 
@@ -19,11 +19,11 @@ The customer (an illustrative scenario): a rights holder's production team runs 
 
 Checked against the deployed api's `/v1/status` on 25 Oct; the app and [`docs/judge/walkthrough.md`](../judge/walkthrough.md) label the same states.
 
-- Live on Azure: Analyst, Narrator and Verifier on the Foundry gpt-5-mini deployment (the Producer stays rules; moments above priority 2 and failed model calls use the rules), the Stats Desk over A2A, Table Storage, Azure AI Search, Speech, Translator, Vision, Content Safety and Entra sign-in on the Producer routes.
+- Live on Azure: Analyst, Narrator and Verifier on the Foundry gpt-5-mini deployment (the Producer stays rules; moments up to priority 2 and colour lines call the model, and quieter moments and failed calls use the rules), the Stats Desk over A2A, Table Storage, Azure AI Search, Speech, Translator, Vision, Content Safety and Entra sign-in on the Producer routes.
 - Simulated: Event Hubs, which is an in-process stream today. Key Vault, Application Insights and Blob Storage are provisioned; `/v1/status` does not report them. The first load of the live app can take up to a minute while it wakes.
 - Planned, not connected: Microsoft Fabric and Azure Databricks season data jobs; video auto-eventing.
 - Vision: a vision tracker in the browser reads the rendered broadcast and measures its accuracy against the simulator's ground truth. Its passes go to a `<session>.vision` stream that the match's agents do not read yet.
-- The Mode selector in the Agents tab's Approval queue is Demo by default (verified lines air at once) or Producer (a person approves each line). The live app's api matches run in auto mode.
+- The Mode selector in the Agents tab's Approval queue is Demo by default (verified lines air at once) or Producer (a person approves each Broadcast line). The live app's api matches run in auto mode.
 
 ## Built with
 Microsoft Foundry, Microsoft Agent Framework, Model Context Protocol, Azure Container Apps, Azure Event Hubs (simulated today), Azure Table and Blob Storage, Azure AI Speech, Azure AI Translator, Azure AI Search, Azure Key Vault, Application Insights, Bicep, azd (deploys run locally; GitHub Actions is manual-only), Python (FastAPI), JavaScript, three.js, Playwright.
