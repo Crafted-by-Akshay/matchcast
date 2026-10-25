@@ -69,9 +69,15 @@ class CallSocket:
 
     async def _frame(self) -> dict[str, Any] | None:
         """The next client frame as a JSON object, or None for a binary frame or bad JSON."""
+        message = await self.ws.receive()  # the raw ASGI message: a binary frame has no "text" key
+        if message["type"] == "websocket.disconnect":
+            raise WebSocketDisconnect(message.get("code", 1000))
+        text = message.get("text")
+        if text is None:
+            return None
         try:
-            payload = json.loads(await self.ws.receive_text())
-        except (TypeError, ValueError):  # TypeError: a binary frame has no text
+            payload = json.loads(text)
+        except ValueError:
             return None
         return payload if isinstance(payload, dict) else None
 

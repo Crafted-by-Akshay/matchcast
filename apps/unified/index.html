@@ -502,7 +502,7 @@ try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applyS
 function show(view) {
   if (!PANES.includes(view)) view = 'watch';
   current = view;
-  if (view !== 'watch' && window.callLeave) window.callLeave();
+  if (!shownViews(view).includes('watch') && window.callLeave) window.callLeave();   // Watch beside Broadcast (SPLIT_VIEWS) keeps its call
   const on = shownViews(view);
   for (const v of PANES) {
     const shown = on.includes(v);
@@ -741,7 +741,7 @@ function pushCards() {
 // ---- EXP-18: the voice call. Watch shows the Call button; the shell owns the call: one socket to the api (LV.openCall), the fan's
 // voice (Azure Speech, or the browser's recogniser labelled Simulated), and the player's checked reply in his own voice, sentence by
 // sentence. A cut-in stops the reply and cancels the turns in flight. Headphones give the cleanest cut-in: the speakers' echo can reach the mic.
-const CALL = { on: false, sock: null, n: 0, turns: new Map(), muted: new Set(), parts: [], el: null, src: null, quiet: 0, stop: null, rec: null };
+const CALL = { on: false, sock: null, n: 0, latest: 0, turns: new Map(), muted: new Set(), parts: [], el: null, src: null, quiet: 0, stop: null, rec: null };
 const callPost = (on, note) => post('watch', { src: 'matchcast-shell', type: 'call-state', on, note: note || '' });
 const callSilence = () => {
   CALL.parts = [];
@@ -776,7 +776,8 @@ const callOpen = () => {
   const s = LV.openCall({
     reply: (turn, r) => { const id = CALL.turns.get(turn); if (id != null) post('watch', { src: 'matchcast-shell', type: 'talk-reply', id, reply: r }); },
     audio: (turn, blob) => {
-      if (!CALL.turns.has(turn) || CALL.muted.has(turn)) return;
+      if (!CALL.turns.has(turn) || CALL.muted.has(turn) || turn < CALL.latest) return;   // an older turn's late sentence is not played
+      CALL.latest = turn;
       CALL.parts = CALL.parts.filter((p) => p.turn >= turn);   // a newer answer does not wait behind an older one's sentences
       CALL.parts.push({ turn, blob }); callPlay();
     },

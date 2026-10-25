@@ -4,7 +4,6 @@ import asyncio
 import json
 
 from app.call import CallSocket, sentences
-from fastapi import WebSocketDisconnect
 
 DISCONNECT = object()
 REPLY = "Two shots so far, boss. I'll keep asking for the ball. Watch the far post."
@@ -15,13 +14,15 @@ class FakeSocket:
         self.inbox: asyncio.Queue = asyncio.Queue()
         self.sent: list = []
 
-    async def receive_text(self) -> str | None:
+    async def receive(self) -> dict:
+        """The raw ASGI message, as Starlette hands it over: a binary frame has no "text" key."""
         item = await self.inbox.get()
         if item is DISCONNECT:
-            raise WebSocketDisconnect()
+            return {"type": "websocket.disconnect", "code": 1000}
         if isinstance(item, bytes):
-            return None  # a binary frame has no text, as in Starlette
-        return json.dumps(item) if isinstance(item, dict) else item
+            return {"type": "websocket.receive", "bytes": item}
+        text = json.dumps(item) if isinstance(item, dict) else item
+        return {"type": "websocket.receive", "text": text}
 
     async def send_json(self, payload: dict) -> None:
         self.sent.append(payload)

@@ -41,7 +41,7 @@ from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
 from matchcast_mcp.server import create_server
 from mcp import Client
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app import budget
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
@@ -990,6 +990,16 @@ def build_router(registry: Registry) -> APIRouter:
         ip = client_ip(websocket)
 
         async def talk(target: str, utterance: str, position: str | None) -> dict[str, Any]:
+            try:  # the talk route's own limits, so a turn never reaches the model unchecked
+                TalkBody(
+                    session_id=session_id, target=target, utterance=utterance, position=position
+                )
+            except ValidationError as error:
+                raise Problem(
+                    422,
+                    "bad_frame",
+                    "a talk needs a player, 1 to 300 characters, and a position code",
+                ) from error
             registry.allow_question(websocket)  # a turn counts as a question, as in the talk route
             try:
                 result = await flow.talk(target, utterance, position=position)

@@ -712,7 +712,7 @@ def test_the_call_socket_answers_a_talk_over_one_socket(client: TestClient) -> N
                 frames.append(json.loads(message["text"]))
                 if frames[-1]["type"] == "audio_end":
                     break
-        assert frames[-1] == {"type": "audio_end", "id": 1, "cancelled": False}
+        assert frames == [{"type": "audio_end", "id": 1, "cancelled": False}]  # no voice: no audio
 
 
 def test_the_call_socket_refuses_an_unknown_match_or_a_bad_session(client: TestClient) -> None:
@@ -725,6 +725,34 @@ def test_the_call_socket_refuses_an_unknown_match_or_a_bad_session(client: TestC
             with client.websocket_connect(path):
                 pass
         assert refused.value.code == 1008
+
+
+def test_a_binary_frame_is_refused_and_the_call_still_talks(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_bytes(b"\x00\x01")
+        assert ws.receive_json() == {"type": "error", "id": None, "code": "bad_frame"}
+        ws.send_json({"type": "talk", "id": 2, "target": "home9", "utterance": "How many shots?"})
+        assert ws.receive_json()["type"] == "reply"
+
+
+def test_the_call_refuses_a_talk_the_talk_route_would_refuse(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    long = {"type": "talk", "id": 1, "target": "home9", "utterance": "x" * 301}
+    bad_position = {
+        "type": "talk",
+        "id": 2,
+        "target": "home9",
+        "utterance": "shots?",
+        "position": "st",
+    }
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json(long)
+        assert ws.receive_json() == {"type": "error", "id": 1, "code": "bad_frame"}
+        ws.send_json(bad_position)
+        assert ws.receive_json() == {"type": "error", "id": 2, "code": "bad_frame"}
 
 
 def test_a_call_turn_counts_against_the_address_question_limit(
