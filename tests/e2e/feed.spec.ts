@@ -5,6 +5,7 @@ import { collectErrors, openShell, stepSim, viewFrame } from './helpers';
 // Broadcast draws the same feed, Ask counts from the event log, and a talk order always gets a reply in the chat.
 declare const post: (view: string, msg: unknown) => void; // top-level function of the shell
 declare const AG: any;
+declare const VC: any;
 
 async function openWatch(page: Page, query = '?seed=2026&speed=4'): Promise<Frame> {
   await openShell(page, 'watch', query);
@@ -179,7 +180,9 @@ test('the pre-match build-up is a play-by-play call and a colour line, each on i
   });
   expect(spoken.lines.map((l) => l.speaker), 'the build-up has a call, then a colour line').toEqual(['pbp', 'colour']);
   expect(spoken.lines[0].text).toContain('Ridgeview');
-  expect(spoken.calls, 'each line is spoken once, on the voice its speaker has').toEqual([
+  // the Watch frame may post its own batches meanwhile, so only the two build-up lines are checked
+  const booth = spoken.calls.filter(([text]) => spoken.lines.some((l) => l.text === text));
+  expect(booth, 'each line is spoken once, on the voice its speaker has').toEqual([
     [spoken.lines[0].text, 'playByPlay'],
     [spoken.lines[1].text, 'analyst'],
   ]);
@@ -196,7 +199,7 @@ test('a quiet stretch gets a booth exchange drawn from the match state, and not 
     return { first, after: CM.view().filter((l: any) => l.kind === 'filler').length };
   });
   expect(out.first.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
-  expect(out.first[0].text, 'the play-by-play line counts the passes from the events').toContain('Ridgeview have it: 3 passes');
+  expect(out.first[0].text, 'the play-by-play line counts the passes from the events').toContain('Ridgeview: 3 passes in the last two minutes.');
   expect(out.after).toBe(2);
 });
 

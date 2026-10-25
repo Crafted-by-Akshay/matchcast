@@ -10,21 +10,21 @@ const CM = (() => {
   const f2 = (x) => (+x || 0).toFixed(2);
   const trim = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
   const seenApi = new Set();
-  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playFrom = 0, persona = 'casual', changed = () => {}, lastPushAt = 0, fillN = 0;
+  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playFrom = 0, persona = 'casual', changed = () => {}, lastPushAt = 0, fillN = 0, filledAt = -1, over = false;
   // the booth's dead-air fill: after FILL_MS of real time with no line, a play-by-play line and a colour line drawn from the match state
   const FILL_MS = 8000, FILL_TICK_MS = 2000;
-  // four phrasings a turn, so the exchange does not repeat line for line (s: club, other, who, score, home, away, at, passes)
+  // four phrasings a turn, so the exchange does not repeat line for line. Only counts, the score and the named player from the events (s: club, who, score, home, away, at, passes)
   const FILL_PBP = [
-    (s) => s.club + ' have it: ' + s.passes + ' passes in the last two minutes, with ' + s.who + ' on the ball.',
+    (s) => s.club + ': ' + s.passes + ' passes in the last two minutes.',
     (s) => 'Still ' + s.home + ' ' + s.score + ' ' + s.away + ' at ' + s.at + '.',
-    (s) => s.who + ' with the ball for ' + s.club + '. Nothing forced yet.',
-    (s) => s.club + ' keep the tempo: ' + s.passes + ' passes in the last two minutes.',
+    (s) => (s.who ? s.who + ' on the ball for ' + s.club : s.club + ' keep the ball') + '.',
+    (s) => s.passes + ' passes for ' + s.club + ' in the last two minutes.',
   ];
   const FILL_COLOUR = [
-    (s) => 'Patience from ' + s.club + ', with ' + s.other + ' content to wait.',
+    (s) => 'Two minutes of build-up from ' + s.club + ': ' + s.passes + ' passes.',
     (s) => 'That is the shape to watch: who moves first when the ball comes back.',
-    (s) => 'The score is what matters here: ' + s.home + ' ' + s.score + ' ' + s.away + '.',
-    (s) => 'A good spell of possession for ' + s.club + '. The next pass decides whether it goes anywhere.',
+    (s) => 'The score is ' + s.home + ' ' + s.score + ' ' + s.away + '.',
+    (s) => s.club + ' have made ' + s.passes + ' passes in the last two minutes.',
   ];
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
@@ -98,6 +98,7 @@ const CM = (() => {
       const ti = idx(ev.team);
       events.push({ minute: +ev.minute, type: ev.type, ti, player: ev.player || null });
       if (ev.type === 'goal' && ti >= 0) score[ti]++;
+      if (ev.type === 'full_time') over = true;
       const line = lineOf(ev, ti);
       if (line) push(line);
       last = Math.max(last == null ? -1 : last, +ev.minute);
@@ -105,6 +106,7 @@ const CM = (() => {
     for (const m of moments || []) {
       if (!m || seen.has(m.id) || m.minute == null || m.type === 'big_chance') continue;   // a big chance is the shot's own line (its xG and the Big chance tag)
       seen.add(m.id);
+      if (m.type === 'full_time') over = true;
       const why = m.why ? ' ' + m.why : '';
       push({ minute: m.minute, kind: m.type, tone: ['goal', 'red_card', 'turning_point'].includes(m.type) ? 'big' : '', text: (m.title || m.type) + '.' + why, chain: CHAIN.slice() });
       last = Math.max(last == null ? -1 : last, +m.minute);
@@ -114,11 +116,15 @@ const CM = (() => {
   };
 
   // a quiet stretch of real time gets the booth exchange: the newest action and the score give the facts, and the phrasing turns over
+  // it speaks once per new action, stops after full time, and skips an action with no team (the fill would name the wrong side)
   const fill = (now = Date.now()) => {
-    if (!names || !events.length || now - lastPushAt < FILL_MS) return;
-    const last = events[events.length - 1], ti = last.ti >= 0 ? last.ti : 0;
+    if (!names || over || !events.length || events.length === filledAt || now - lastPushAt < FILL_MS) return;
+    const last = events[events.length - 1];
+    if (last.ti < 0) return;
+    filledAt = events.length;
+    const ti = last.ti;
     const passes = events.filter((e) => e.ti === ti && e.type === 'pass' && last.minute - e.minute <= 2).length;
-    const s = { club: club(ti), other: club(1 - ti), who: last.player || club(ti), score: score.join('–'), home: names.home, away: names.away, at: Math.floor(last.minute), passes };
+    const s = { club: club(ti), who: last.player || null, score: score.join('–'), home: names.home, away: names.away, at: Math.floor(last.minute), passes };
     const k = fillN++ % FILL_PBP.length;
     push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_PBP[k](s) });
     push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_COLOUR[k](s) });
@@ -135,7 +141,7 @@ const CM = (() => {
   };
 
   // the pre-match exchange: the play-by-play caller opens, then the colour voice reads the match (rules lines, no claims beyond the fixture)
-  const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playFrom = 0; n = 0; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Good evening, and welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); } };
+  const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playFrom = 0; n = 0; filledAt = -1; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); } };
   // the feed the views draw: newest last, each with its label
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers, speaker: x.speaker || (x.source === 'live' || x.kind === 'summary' ? 'colour' : 'pbp') }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under
