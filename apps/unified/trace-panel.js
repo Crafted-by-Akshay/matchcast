@@ -54,7 +54,7 @@ const TP = (() => {
   };
   // the card of a published line has the record's publication_id; a claim card is not a line and takes no line's record
   const crewFor = (c) => {
-    if (c.dropped && c.fromLine) return { state: c.dropState === 'rejected' ? 'rejected' : 'dropped', feed: c.feed, lang: '', events: [], claims: c.apiClaims || [], repairs: c.repairs, reason: c.reasonCode, auditId: '', extra: [], note: c.repairedBy ? (c.repairOk ? 'repaired: ' + c.repairedBy + ' verified' : 'repair ' + c.repairedBy + ' checking') : '', checks: c.checksFailed || [] };   // a line event, not a feed_drop record: the card holds what it said
+    if (c.dropped && c.fromLine) return { state: c.dropState === 'rejected' ? 'rejected' : 'dropped', feed: c.feed, lang: '', events: [], claims: c.apiClaims || [], repairs: null, reason: c.reasonCode, auditId: '', extra: [], note: c.repairNote || '', checks: c.checksFailed || [] };   // a line event, not a feed_drop record: the card holds what it said
     const t = c.pub || c.dropped ? CT.get(String(c.id)) : null; return t && t.run === AG.run ? t : null;
   };
   const claimsOf = (c) => (c.apiClaims || []).map((cid) => AG.run.claims.find((x) => x.id === cid && x.api)).filter(Boolean);

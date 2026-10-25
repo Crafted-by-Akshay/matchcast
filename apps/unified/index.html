@@ -773,7 +773,7 @@ function renderAgents() {
   const c = r && r.claims.find((x) => x.id === sel);
   $('ag-prov').innerHTML = c ? '<dl>' + [
     ['Claim', esc(c.id + ' · ' + c.kind + ' · ' + mins(c.minute))],
-    ['Line', c.dropped ? '<b>Verifier ' + (c.dropState === 'rejected' ? 'rejected' : 'dropped') + '</b> · ' + (c.feed ? 'feed ' + esc(c.feed) + ' · ' : '') + 'reason <code>' + esc(c.reasonCode || 'not given') + '</code>' + (c.dropState === 'rejected' ? (c.repairedBy ? ' · ' + (c.repairOk ? 'repaired: ' + esc(c.repairedBy) + ' verified' : 'repair ' + esc(c.repairedBy) + ' checking') : ' · one repair requested') : '') + ' · the text stays in the audit chain, not shown' + ((c.checksFailed || []).length ? '<br>Failed checks: ' + c.checksFailed.map((k) => esc(k.name + (k.detail ? ' (' + k.detail + ')' : ''))).join('; ') : '') : esc(c.text)],
+    ['Line', c.dropped ? '<b>Verifier ' + (c.dropState === 'rejected' ? 'rejected' : 'dropped') + '</b> · ' + (c.feed ? 'feed ' + esc(c.feed) + ' · ' : '') + 'reason <code>' + esc(c.reasonCode || 'not given') + '</code>' + (c.repairNote ? ' · ' + esc(c.repairNote) : '') + ' · the text stays in the audit chain, not shown' + ((c.checksFailed || []).length ? '<br>Failed checks: ' + c.checksFailed.map((k) => esc(k.name + (k.detail ? ' (' + k.detail + ')' : ''))).join('; ') : '') : esc(c.text)],
     ['Inputs', '<code>' + esc(MCC.canon(c.inputs)) + '</code>'],
     ['Evidence', esc((c.dropped ? (c.eventIds || []).join(', ') : c.evidence.join(', ')) || c.basis || '')],
     ['Verifier', esc(c.verdict + ': ' + c.reason)],

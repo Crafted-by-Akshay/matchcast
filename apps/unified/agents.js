@@ -13,7 +13,7 @@ const AG = (() => {
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
     roll: { score: [0, 0], xg: [0, 0], nextXg: 1 },
-    stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0, dropped: 0 }, aired: new Set() });
+    stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0, dropped: 0 }, aired: new Set(), repairsOf: new Map() });
   const teamIx = (k) => (!run || k == null) ? -1 : k === run.names.hk ? 0 : k === run.names.ak ? 1 : -1;
   const teamName = (t) => (t === 0 ? run.names.home : run.names.away);
   const min = (m) => Math.floor(m) + "'";
@@ -279,35 +279,49 @@ const AG = (() => {
   const sstr = (x, n) => (typeof x === 'string' ? x : Number.isFinite(x) ? String(x) : '').slice(0, n || 120);
   // A line event the Verifier rejected (status rejected: one repair follows) or gave up on (status abstained): the same card, from the api's `line` stream, which carries these today.
   // The rejected text is on that event, but it is the draft that failed its check: the card shows the reason and the failed checks, not the text.
-  const caughtReason = (c) => (c.dropState === 'rejected' ? 'Verifier rejected' : 'Verifier dropped') + (c.reasonCode ? ' · ' + c.reasonCode : '')
-    + (c.dropState === 'rejected' ? (c.repairedBy ? (c.repairOk ? ' · repaired, ' + c.repairedBy + ' verified' : ' · repair ' + c.repairedBy + ' checking') : ' · one repair requested') : c.repairs ? ' after ' + c.repairs + ' repair' : '');
+  // The card belongs to the original line (id pub-<line_id>); its redraft names it in repair_of, so a rejected or abstained redraft updates that card instead of making a second one.
+  // Booth lines are not cards here: a booth line the Verifier cannot repair is escalated to the producer queue (the held card below), which owns it.
+  const caughtReason = (c) => {
+    c.repairNote = c.dropState === 'rejected' ? (c.repairFailed ? 'repair ' + c.repairedBy + ' failed its check' : c.repairedBy ? (c.repairOk ? 'repair ' + c.repairedBy + ' passed the Verifier' : 'repair ' + c.repairedBy + ' checking') : 'one repair requested') : c.repairs ? 'after ' + c.repairs + ' repair' : '';
+    return (c.dropState === 'rejected' ? 'Verifier rejected' : 'Verifier dropped') + (c.reasonCode ? ' · ' + c.reasonCode : '') + (c.repairNote ? ' · ' + c.repairNote : '');
+  };
+  const isBooth = (d) => typeof d.persona === 'string' && d.persona.startsWith('booth');
   const ingestCaught = (d, src) => {
-    const lid = sstr(d.line_id, 190), id = 'pub-' + lid;
-    if (!lid || run.aired.has(id)) return;
+    if (isBooth(d)) return;
+    const lid = sstr(d.line_id, 190), root = sstr(d.repair_of || d.line_id, 190), id = 'pub-' + root;
+    if (!lid || !root || run.aired.has(id)) return;
     let c = run.claims.find((x) => x.id === id);
     if (c && !c.dropped) return;
-    const fresh1 = !c, gaveUp = d.status === 'abstained';
+    const redraft = !!d.repair_of, gaveUp = d.status === 'abstained';
     if (!c) {
       if (run.stat.dropped >= 500) return;
       c = MCC.claim({ id, kind: 'dropped line', minute: run.events.length ? run.events[run.events.length - 1].minute : 0, agent: 'verifier', evidence: [], inputs: {}, source: src, api: true });
-      c.dropped = true; c.fromLine = true; c.pub = false; c.text = ''; c.approval = 'dropped'; c.seenAt = clock();
+      c.dropped = true; c.fromLine = true; c.pub = false; c.text = ''; c.approval = 'dropped'; c.seenAt = clock(); c.dropState = 'rejected'; c.verdict = 'rejected'; c.route = 'rejected, one repair requested';
+      const early = run.repairsOf.get(root); if (early) { c.repairedBy = early.by; c.repairOk = early.ok; }   // the redraft was seen before the original
       run.claims.push(c); run.stat.dropped = (run.stat.dropped || 0) + 1;
       hop(c, 'verifier', 'rejected');
+      say('Verifier', c.minute, 'rejected a line on the ' + (sstr(d.persona, 40) || 'unnamed') + ' feed' + (d.reason_code ? ': ' + sstr(d.reason_code, 60) : '') + '. One repair follows.', 'warn');
     }
-    if (gaveUp) hop(c, 'verifier', 'dropped');
-    c.dropState = gaveUp ? 'dropped' : 'rejected'; c.verdict = c.dropState; c.route = gaveUp ? 'dropped, not aired' : 'rejected, one repair requested';
-    c.feed = sstr(d.persona, 40); c.reasonCode = sstr(d.reason_code, 60); c.repairs = d.repair_of ? 1 : 0;
+    c.feed = sstr(d.persona, 40) || c.feed; c.reasonCode = sstr(d.reason_code, 60) || c.reasonCode;
+    if (redraft) { c.repairedBy = lid; c.repairFailed = true; c.repairs = 1; }   // a rejected or abstained redraft: the one repair did not hold
     c.apiClaims = (Array.isArray(d.claim_ids) ? d.claim_ids : []).map((x) => sstr(x, 200)).filter(Boolean).slice(0, 50);
-    c.checksFailed = (Array.isArray(d.checks) ? d.checks : []).filter((k) => k && typeof k === 'object' && k.passed === false).slice(0, 5).map((k) => ({ name: sstr(k.name, 40), detail: sstr(k.detail, 200) }));
+    const failed = (Array.isArray(d.checks) ? d.checks : []).filter((k) => k && typeof k === 'object' && k.passed === false).slice(0, 5).map((k) => ({ name: sstr(k.name, 40), detail: sstr(k.detail, 200) }));
+    if (failed.length) c.checksFailed = failed;
+    if (gaveUp && c.dropState !== 'dropped') {   // never moves back to rejected on a replay
+      c.dropState = 'dropped'; c.verdict = 'dropped'; c.route = 'dropped, not aired'; hop(c, 'verifier', 'dropped');
+      say('Verifier', c.minute, 'dropped a line on the ' + (c.feed || 'unnamed') + ' feed' + (c.reasonCode ? ': ' + c.reasonCode : '') + ' after one repair. It did not air.', 'warn');
+    }
     c.reason = caughtReason(c);
-    if (fresh1 || (gaveUp && !c.saidDropped)) { if (gaveUp) c.saidDropped = true; say('Verifier', c.minute, (gaveUp ? 'dropped' : 'rejected') + ' a line on the ' + (c.feed || 'unnamed') + ' feed' + (c.reasonCode ? ': ' + c.reasonCode : '') + (gaveUp ? ' after one repair. It did not air.' : '. One repair follows.'), 'warn'); }
   };
-  // the redraft of a rejected line names it in repair_of: the card follows it to a verified line
+  // a redraft that is not itself rejected (drafted, verifying, verified, ...) names its original in repair_of: the card follows it
   const noteRepair = (d) => {
-    const o = run.claims.find((x) => x.id === 'pub-' + sstr(d.repair_of, 190));
-    if (!o || !o.dropped || !o.fromLine) return;
-    o.repairedBy = sstr(d.line_id, 190);
-    if (['verified', 'approved', 'published'].includes(d.status) && !o.repairOk) { o.repairOk = true; say('Verifier', o.minute, 'the repair ' + o.repairedBy + ' verified: the corrected line replaces the rejected one.', 'ok'); }
+    if (isBooth(d)) return;
+    const root = sstr(d.repair_of, 190), by = sstr(d.line_id, 190), ok = ['verified', 'approved', 'published'].includes(d.status);
+    const o = run.claims.find((x) => x.id === 'pub-' + root);
+    if (!o) { if (run.repairsOf.size < 200) { const e = run.repairsOf.get(root); run.repairsOf.set(root, { by, ok: ok || !!(e && e.ok) }); } return; }
+    if (!o.dropped || !o.fromLine || o.dropState === 'dropped' || o.repairFailed) return;
+    o.repairedBy = by;
+    if (ok && !o.repairOk) { o.repairOk = true; say('Verifier', o.minute, 'the repair ' + by + ' passed the Verifier.', 'ok'); }
     o.reason = caughtReason(o);
   };
   const noteAired = (id) => { if (run && typeof id === 'string' && id) run.aired.add(id.slice(0, 200)); };
@@ -326,6 +340,7 @@ const AG = (() => {
       run.claims.push(c); run.stat.dropped = (run.stat.dropped || 0) + 1;
       hop(c, 'verifier', 'dropped');
     }
+    c.fromLine = false; c.dropState = 'dropped'; c.verdict = 'dropped'; c.route = 'dropped, not aired';   // a feed_drop for a card the line stream made: the record is the later word
     c.feed = feed; c.reasonCode = code; c.auditId = sstr(d.audit_id, 200); c.repairs = Number.isInteger(d.repair_count) && d.repair_count >= 0 ? d.repair_count : null;
     c.eventIds = (Array.isArray(d.source_event_ids) ? d.source_event_ids : []).map((x) => sstr(x, 60)).filter(Boolean).slice(0, 50);
     c.reason = caughtReason(c);
@@ -359,7 +374,7 @@ const AG = (() => {
         if (d.status === 'killed') { hop(e, 'producer', 'killed'); e.verdict = 'abstained'; e.reason = 'api: line killed'; }
       }
     }
-    if (isLine && d.repair_of) noteRepair(d);
+    if (isLine && d.repair_of && d.status !== 'rejected' && d.status !== 'abstained') noteRepair(d);
     if (isLine && !escalated && (d.status === 'rejected' || d.status === 'abstained') && (!c || c.dropped)) { ingestCaught(d, src); changed(); return; }
     if (!c && isLine && !escalated) { changed(); return; }
     if (!c) {
@@ -371,7 +386,7 @@ const AG = (() => {
     }
     if (d.publication_id) {   // the line aired: the page now knows it, and a drop card made before its publication arrived becomes the published line it is
       run.aired.add(String(d.publication_id).slice(0, 200));
-      if (c.dropped) { c.dropped = false; c.pub = true; c.kind = 'line'; c.agent = 'analyst'; c.approval = undefined; c.route = null; c.reasonCode = ''; run.stat.dropped = Math.max(0, run.stat.dropped - 1); }
+      if (c.dropped) { c.dropped = false; c.pub = true; c.kind = 'line'; c.agent = 'analyst'; c.approval = undefined; c.route = null; c.reasonCode = ''; c.fromLine = false; c.dropState = ''; c.checksFailed = null; c.repairedBy = ''; run.stat.dropped = Math.max(0, run.stat.dropped - 1); }
     }
     // contract 1.2.0 optional claim fields (docs/contracts.md, Derived feed lines): ids only, kept for the evidence trace
     if (Array.isArray(d.tool_call_ids)) c.toolCallIds = d.tool_call_ids.filter((x) => typeof x === 'string').slice(0, 50);
