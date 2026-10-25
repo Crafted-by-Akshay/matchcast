@@ -119,3 +119,17 @@ def test_a_desk_feed_kill_reaches_the_vision_session_too() -> None:
     )
     assert resumed.status_code == 200
     assert "analyst" not in vision.killed_feeds
+
+
+def test_a_kill_made_before_the_vision_match_exists_holds_there_too() -> None:
+    # AB#499: the Vision match is created lazily by its first pass batch, after the desk's kill
+    client = TestClient(create_app())
+    create(client, ENGINE, FIXTURE["roster"])
+    killed = client.post("/v1/matches/match-short/feeds/analyst/kill", json={"session_id": "short"})
+    assert killed.status_code == 200
+    create(client, VISION, vision_roster())
+    post(client, VISION, vision_events())
+    vision = client.app.state.matches.flows[("short.vision", "match-short")]
+    assert "analyst" in vision.killed_feeds
+    aired = [e for e in vision.hub.history() if e.event == "onair" and e.data["feed"] == "analyst"]
+    assert not aired

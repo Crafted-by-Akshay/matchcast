@@ -79,6 +79,25 @@ RUNDOWN_KEEP = 400
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
 
 
+def feed_kills_in(store: Any, sk: str) -> set[str]:
+    """The derived feeds the desk has killed on a match, replayed from its audit chain (AB#499).
+
+    A kill is audited before it takes effect, so this is the kill state a restart rebuilds, and
+    a Vision session reads its engine match's kills the same way when it is created."""
+    killed: set[str] = set()
+    sequence = 1
+    while True:
+        rows = store.audit_records(sk, from_sequence=sequence, limit=500)
+        if not rows:
+            return killed
+        for row in rows:
+            if row["action"] == "feed_killed":
+                killed.add(row["subject_id"])
+            elif row["action"] == "feed_resumed":
+                killed.discard(row["subject_id"])
+        sequence = rows[-1]["sequence"] + 1
+
+
 class WorkflowError(Exception):
     """A request the workflow refuses; ``code`` maps to an RFC 9457 problem code."""
 
@@ -1482,17 +1501,7 @@ class MatchWorkflow:
 
     def _restore_feed_state(self) -> None:
         """Rebuild the kill state from the audit chain, so a restart keeps a kill in force."""
-        sequence = 1
-        while True:
-            rows = self.store.audit_records(self.sk, from_sequence=sequence, limit=500)
-            if not rows:
-                return
-            for row in rows:
-                if row["action"] == "feed_killed":
-                    self.killed_feeds.add(row["subject_id"])
-                elif row["action"] == "feed_resumed":
-                    self.killed_feeds.discard(row["subject_id"])
-            sequence = rows[-1]["sequence"] + 1
+        self.killed_feeds |= feed_kills_in(self.store, self.sk)
 
     async def edit(
         self,

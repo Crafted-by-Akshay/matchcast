@@ -37,7 +37,7 @@ from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
 from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
-from matchcast_agents.workflow import WorkflowError
+from matchcast_agents.workflow import WorkflowError, feed_kills_in
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
@@ -473,6 +473,11 @@ class Registry:
                 truth_feed=self.truth_feed_for(session_id, match_id),
                 vision_feed=self.vision_feed_for(session_id, match_id),
             )
+            if is_vision_stream({"session_id": session_id}):
+                # a Vision match created after a desk kill must not air from the killed feed
+                flow.killed_feeds |= await asyncio.to_thread(
+                    _engine_kills, self.store, session_id, match_id
+                )
             self.flows[key] = flow
             return flow
 
@@ -537,6 +542,16 @@ def wanted_on_stream(item: StreamEvent, keep: tuple[str, ...]) -> bool:
     if item.event == "publication":
         return item.data["persona"] in keep
     return True
+
+
+def _engine_kills(store: Any, vision_session: str, match_id: str) -> set[str]:
+    """The desk's feed kills on a Vision session's engine match, from its audit chain (AB#499)."""
+    engine = {
+        "tenant_id": TENANT,
+        "session_id": engine_stream_of(vision_session),
+        "match_id": match_id,
+    }
+    return feed_kills_in(store, stream_key(engine))
 
 
 def _is_stored(store: Any, sk: str) -> bool:
@@ -715,6 +730,10 @@ def build_router(registry: Registry) -> APIRouter:
                 raise Problem(
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
+            if is_vision_stream(stream):  # the Vision match is created after the desk's kills
+                flow.killed_feeds |= _engine_kills(
+                    registry.store, stream["session_id"], stream["match_id"]
+                )
             registry.flows[key] = flow
             registry.cuts[key] = cut
             registry.count_new_match(request, live)
