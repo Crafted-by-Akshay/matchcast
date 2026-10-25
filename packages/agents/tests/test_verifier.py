@@ -96,6 +96,8 @@ def test_possessives_and_sentence_openers_keep_roster_names_valid(match) -> None
         f"Strong Northgate FC pressure, shots: {shots}.",
     ):
         assert verdict(ctx, line(text), claims).verdict == "verified", text
+    for text in ("Ben Northgate FC lead.", "Zed Arlo Dunne scores.", "Nobody Northgate FC"):
+        assert verdict(ctx, line(text), claims).reason_code == "unknown_player", text
     # a made-up player is still caught in a possessive, and after the opener
     for text in (f"Zed Quill's shots: {shots}.", f"Strong Zed Quill shots: {shots}."):
         assert verdict(ctx, line(text), claims).reason_code == "unknown_player", text

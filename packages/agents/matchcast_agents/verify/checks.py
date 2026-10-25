@@ -31,6 +31,14 @@ def extract_names(text: str) -> list[str]:
     return [_POSSESSIVE.sub("", m.group(0)) for m in _NAME.finditer(text)]
 
 
+# capitalised words a commentary line may open a sentence with before a club name
+OPENERS = frozenset(
+    "strong great good big another second early late sharp quick brilliant dangerous careful "
+    "tight tough busy relentless constant steady fresh rare late first next both still just now "
+    "again here more less all only even".split()
+)
+
+
 def _unknown_name(text: str, allowed: set[str]) -> str | None:
     """The first name run that is not a roster name. A run that only has a capitalised sentence
     opener in front of a roster name ("Strong Harbour United pressure") is that roster name."""
@@ -42,7 +50,7 @@ def _unknown_name(text: str, allowed: set[str]) -> str | None:
         starts_sentence = match.start() == 0 or text[: match.start()].rstrip().endswith(
             (".", "!", "?")
         )
-        if starts_sentence and rest.casefold() in allowed:
+        if starts_sentence and opener.casefold() in OPENERS and rest.casefold() in allowed:
             continue
         return name
     return None
