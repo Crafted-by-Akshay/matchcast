@@ -9,7 +9,8 @@ import re
 BASE = ("casual", "analyst", "broadcast")
 PATTERN = (
     r"^(casual|analyst|broadcast|my-club:[A-Za-z0-9._-]{1,64}|"
-    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour))$"
+    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour)|"
+    r"ticker|audio_description)$"
 )
 _VALID = re.compile(PATTERN)
 # the base voice whose character limit a persona uses
@@ -18,12 +19,14 @@ VOICE = {
     "player-focus": "casual",
     "one-metric": "analyst",
     "booth": "broadcast",
+    "ticker": "broadcast",  # the news ticker's one-line templates (AB#471)
+    "audio_description": "casual",  # the describer's sentences (AB#454)
 }
 BOOTH = ("booth:pbp", "booth:colour")  # the two voices of the commentary booth, in speaking order
 MAX_CHARS = {"casual": 140, "analyst": 280, "broadcast": 180}
 MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 # watch modes keep their own number limits (one-metric may quote both teams)
-NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1, "booth": 2}
+NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1, "booth": 2, "ticker": 2}
 
 
 # the metrics a one-metric watch mode can follow (the Narrator's LABELS has the same keys)

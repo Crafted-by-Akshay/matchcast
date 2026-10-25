@@ -15,11 +15,13 @@ from dataclasses import dataclass
 from .context import MatchContext
 from .state import MatchState, apply
 
+# No minute in the text: a minute is a number the Verifier cannot recount from a claim (the
+# minute stays on TickerItem for anyone who wants it). The score is the numbers, each a claim.
 TEMPLATES = {
-    "goal": "{minute}' Goal: {player} for {club}. {score}",
-    "own_goal": "{minute}' Own goal, credited to {club}. {score}",
-    "yellow": "{minute}' Yellow card: {player} ({club}).",
-    "red": "{minute}' Red card: {player} ({club}).",
+    "goal": "Goal: {player} for {club}. {score}",
+    "own_goal": "Own goal, credited to {club}. {score}",
+    "yellow": "Yellow card: {player} ({club}).",
+    "red": "Red card: {player} ({club}).",
 }
 CONTROLS = ("correction", "retraction")
 

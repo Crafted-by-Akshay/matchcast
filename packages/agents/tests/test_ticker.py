@@ -36,9 +36,10 @@ def test_a_goal_names_the_scorer_and_the_running_score(match) -> None:
     item = item_for(ticker_items(ctx(match)), goal["event_id"])
     assert item.kind == "goal"
     assert item.text == (
-        f"1' Goal: {match['names'][goal['payload']['player_id']]} for Harbour United. "
+        f"Goal: {match['names'][goal['payload']['player_id']]} for Harbour United. "
         "Northgate FC 0-1 Harbour United"
     )
+    assert item.minute == 1
 
 
 def test_a_red_card_names_the_player_and_never_the_engine_reason(match) -> None:
@@ -46,7 +47,7 @@ def test_a_red_card_names_the_player_and_never_the_engine_reason(match) -> None:
     item = item_for(ticker_items(ctx(match)), card["event_id"])
     assert item.kind == "red"
     assert item.text == (
-        f"9' Red card: {match['names'][card['payload']['player_id']]} "
+        f"Red card: {match['names'][card['payload']['player_id']]} "
         f"({match['teams'][card['payload']['team_id']]})."
     )
     assert card["payload"]["reason"] not in item.text
@@ -58,7 +59,7 @@ def test_an_own_goal_names_no_player(match) -> None:
     own["payload"]["own_goal"] = True
     item = item_for(ticker_items(ctx(match, [*match["events"], own])), "og1")
     assert item.kind == "own_goal"
-    assert item.text.startswith("50' Own goal, credited to Harbour United. ")
+    assert item.text.startswith("Own goal, credited to Harbour United. ")
     assert match["names"][own["payload"]["player_id"]] not in item.text
 
 

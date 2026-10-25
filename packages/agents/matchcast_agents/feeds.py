@@ -37,6 +37,9 @@ class Feed:
     min_gap_ms: int | None = None  # silence needed before a spoken line (audio description)
 
 
+AUDIO_PERSONA = "audio_description"  # the describer (CREW-7.2)
+TICKER_PERSONA = "ticker"  # the data-only ticker (CREW-7.5)
+
 FEEDS: tuple[Feed, ...] = (
     Feed(
         "casual",
@@ -52,10 +55,10 @@ FEEDS: tuple[Feed, ...] = (
         max_chars=max_chars("analyst"),
         max_numbers=max_numbers("analyst"),
     ),
-    Feed("audio_description", "Audio description", None, min_gap_ms=2_000),
+    Feed("audio_description", "Audio description", AUDIO_PERSONA, min_gap_ms=2_000),
     Feed("catch_me_up", "Catch me up", None, max_words=280),
     Feed("half_time", "Half-time explainer", None, max_seconds=90),
-    Feed("ticker", "News ticker", None),  # fixed templates only, no free text
+    Feed("ticker", "News ticker", TICKER_PERSONA),  # fixed templates only, no free text
 )
 
 FEED_KEYS = frozenset(feed.key for feed in FEEDS)
