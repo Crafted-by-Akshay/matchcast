@@ -27,6 +27,8 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
   await expect(f.locator('[data-feed="casual"]')).toContainText('1 aired');
   await expect(f.locator('[data-feed="casual"]')).toContainText('Northgate FC press high up the pitch.');
   await post(page, { type: 'feed-air', record: casual('P1', 'Northgate FC press high up the pitch.') });   // the same publication twice counts once
+  await post(page, { type: 'feed-air', record: { ...casual('S0', 'Sentinel for analyst.'), feed: 'analyst' } });   // a line on another feed proves the handler ran after the duplicate
+  await expect(f.locator('[data-feed="analyst"]')).toContainText('1 aired');
   await expect(f.locator('[data-feed="casual"]')).toContainText('1 aired');
 
   await post(page, { type: 'feed-drop', record: { feed: 'ticker', publication_id: 'P2', source_event_ids: ['E13'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'A9' } });
@@ -37,6 +39,8 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
   await f.locator('[data-feed="casual"] [data-kill]').click();
   await expect(f.locator('[data-feed="casual"]')).toContainText('Killed');
   await post(page, { type: 'feed-air', record: casual('P3', 'A line that must not count while the feed is killed.') });
+  await post(page, { type: 'feed-air', record: { ...casual('S1', 'Sentinel for analyst again.'), feed: 'analyst' } });
+  await expect(f.locator('[data-feed="analyst"]')).toContainText('2 aired');
   await expect(f.locator('[data-feed="casual"]')).toContainText('1 aired');
   await f.locator('[data-feed="casual"] [data-kill]').click();
   await expect(f.locator('[data-feed="casual"]')).not.toContainText('Killed');

@@ -206,8 +206,9 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const FEEDS = [['casual', 'Casual'], ['analyst', 'Analyst'], ['audio_description', 'Audio description'], ['catch_me_up', 'Catch-me-up'], ['half_time', 'Half-time'], ['ticker', 'Ticker']];
   const feeds = Object.fromEntries(FEEDS.map(([k, label]) => [k, { label, on: true, aired: 0, last: '' }]));
   const seen = new Set(), drops = [];
-  let fixture = false;
-  try { fixture = /[?&]feeds=fixture\b/.test(window.parent.location.search); } catch (err) { /* a cross-origin parent keeps the monitor on the live records */ }
+  let fixture = false;   // a demo and test parameter: off unless the URL asks for it
+  try { fixture = /[?&]feeds=fixture(&|$)/.test(window.parent.location.search); } catch (err) { /* a cross-origin parent keeps the monitor on the live records */ }
+  const feedOf = (k) => (Object.hasOwn(feeds, k) ? feeds[k] : null);
   const style = document.createElement('style');
   style.textContent = '#mc-feeds{display:flex;flex-direction:column;gap:4px;padding-bottom:6px;border-bottom:1px solid #22395c}'
     + '#mc-feeds ul{margin:0;padding:0;list-style:none}'
@@ -225,30 +226,30 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const render = (k) => {
     const s = feeds[k], row = box.querySelector('[data-feed="' + k + '"]');
     row.dataset.off = String(!s.on);
-    row.querySelector('span').textContent = (s.on ? '' : 'Killed · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
+    row.querySelector('span').textContent = (s.on ? '' : 'Killed on this desk, not yet stopped at air · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
     row.querySelector('[data-kill]').textContent = s.on ? 'Kill' : 'Resume';
   };
   FEEDS.forEach(([k]) => render(k));
   const renderDrops = () => {
     box.querySelector('#mc-drop-list').innerHTML = drops.length
-      ? drops.map((r) => '<li class="mcp-v">' + esc(feeds[r.feed].label) + ' · ' + esc(r.reason_code) + (r.repair_count ? ' · repaired ' + esc(r.repair_count) + (r.repair_count === 1 ? ' time' : ' times') : '') + '</li>').join('')
+      ? drops.map((r) => '<li class="mcp-v">' + esc(feedOf(r.feed).label) + ' · ' + esc(r.reason_code) + (r.repair_count ? ' · repaired ' + esc(r.repair_count) + (r.repair_count === 1 ? ' time' : ' times') : '') + '</li>').join('')
       : '<li class="mcp-v">Nothing dropped yet.</li>';
   };
   renderDrops();
   // a feed line airs once per publication, in English this sprint, and only while its feed is on; a killed feed airs nothing
   const aired = (rec) => {
-    const s = feeds[rec.feed];
-    if (!s || !s.on || (rec.lang && rec.lang !== 'en') || seen.has(rec.publication_id)) return;
+    const s = feedOf(rec.feed);
+    if (!s || !s.on || rec.lang !== 'en' || !rec.publication_id || seen.has(rec.publication_id)) return;
     seen.add(rec.publication_id); s.aired++; s.last = rec.text || ''; render(rec.feed);
   };
   // the Verifier's drop shows the reason; the line text stays in the audit chain, so the desk shows no text here
   const dropped = (rec) => {
-    if (!feeds[rec.feed]) return;
+    if (!feedOf(rec.feed)) return;
     drops.unshift(rec); drops.length = Math.min(drops.length, 5); renderDrops();
   };
   box.querySelector('#mc-feed-list').onclick = (e) => {
     const b = e.target.closest('[data-kill]'); if (!b) return;
-    const k = b.closest('li').dataset.feed, s = feeds[k];
+    const k = b.closest('li').dataset.feed, s = feedOf(k);
     s.on = !s.on; render(k);
     send({ type: 'feed-kill', feed: k, on: s.on });
   };
