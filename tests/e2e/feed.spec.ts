@@ -55,11 +55,15 @@ test('Broadcast draws the same feed', async ({ page }) => {
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
-  await page.evaluate(() => post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items: [
+  // the shell also pushes its own feed when a line reaches it, and that push can land after this one: post again until the frame shows these lines
+  const lines = [
     { id: 'l1', minute: 3, text: 'Shot for Thames Rovers. xG 0.12.', kind: 'shot', tone: '', source: 'rules', label: 'Rules · recounted', chain: ['Producer', 'Analyst', 'Narrator', 'Verifier'] },
     { id: 'l2', minute: 4, text: 'GOAL! A header from the corner.', kind: 'goal', tone: 'big', source: 'live', label: 'Live agents · verified', chain: ['Producer', 'Analyst', 'Narrator', 'Verifier', 'Live agents'] },
-  ] }));
-  await expect(f.locator('#mcf-top')).toContainText('GOAL! A header from the corner.');
+  ];
+  await expect.poll(async () => {
+    await page.evaluate((items) => post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items }), lines);
+    return f.evaluate(() => ({ top: document.getElementById('mcf-top')!.textContent, rows: document.querySelectorAll('#mcf-list li').length }));
+  }, { timeout: 60_000 }).toMatchObject({ top: expect.stringContaining('GOAL! A header from the corner.'), rows: 2 });
   await f.click('#mcf-tog');
   await expect(f.locator('#mcf-list li')).toHaveCount(2);
   await expect(f.locator('#mcf-list li.big')).toContainText('Live agents');
