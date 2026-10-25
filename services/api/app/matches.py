@@ -1030,7 +1030,8 @@ def build_router(registry: Registry) -> APIRouter:
         actor: tuple[str, str | None],
         killed: bool,
     ) -> dict[str, Any]:
-        """The desk's per-feed kill or resume (AB#499). Audited now; the air gate reads it later."""
+        """The desk's per-feed kill or resume (AB#499). Audited, and enforced by the air gate: a
+        killed feed airs nothing, on the engine match and on its Vision session."""
         need_producer(role)
         if feed not in FEED_KEYS:
             raise Problem(422, "contract_invalid", f"unknown feed {feed}", "/feed")

@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import Any
 
 PUBLICATION_REPLAYED = ("publication", "audit")
-# onair and feed_drop are records, not speech: a desk that opens late rebuilds its feed monitor from
-# them, so they have their own budget and are not crowded out by publications and audit records
+# onair and feed_drop are records, not speech: a desk that opens late rebuilds its feed monitor
+# from them. They are kept past the buffer, so a long match still has its feed records
 FEED_REPLAYED = ("onair", "feed_drop")
 REPLAYED = (*PUBLICATION_REPLAYED, *FEED_REPLAYED)
 REPLAY_LIMIT = 500
@@ -35,12 +35,19 @@ class StreamHub:
     def __init__(self, buffer: int = 5000) -> None:
         self._buffer = buffer
         self._log: list[StreamEvent] = []
+        # the newest feed records the buffer has evicted, oldest first: they are older than _log
+        self._kept_feeds: list[StreamEvent] = []
         self._subscribers: set[asyncio.Queue[StreamEvent]] = set()
 
     def publish(self, event: str, id_: str | None, data: dict[str, Any]) -> None:
         item = StreamEvent(event, id_, data)
         self._log.append(item)
-        del self._log[: -self._buffer]
+        overflow = len(self._log) - self._buffer
+        if overflow > 0:
+            evicted = self._log[:overflow]
+            del self._log[:overflow]
+            self._kept_feeds.extend(e for e in evicted if e.event in FEED_REPLAYED)
+            del self._kept_feeds[:-FEED_REPLAY_LIMIT]
         for queue in list(self._subscribers):
             try:
                 queue.put_nowait(item)
@@ -55,27 +62,24 @@ class StreamHub:
     ) -> list[StreamEvent]:
         """Records after ``last_id`` (all of them when it is unknown), oldest first.
 
-        The first 500 publication and audit records and the first 2000 feed records are kept, so
-        the caps count only what ``wanted`` lets through, in the order they were published."""
+        Publications and audit records are capped at the first 500 of what ``wanted`` lets
+        through. Feed records are capped at the newest 2000 of those, and they are kept past the
+        buffer, so a late desk still counts the feeds of a long match."""
+        records = [*self._kept_feeds, *self._log]
         start = 0
         if last_id:
-            for index, item in enumerate(self._log):
+            for index, item in enumerate(records):
                 if item.id == last_id:
                     start = index + 1
-        kept: list[StreamEvent] = []
-        counts = {"publication": 0, "feed": 0}
-        for item in self._log[start:]:
-            if item.event not in REPLAYED or (wanted is not None and not wanted(item)):
-                continue
-            kind, limit = (
-                ("feed", FEED_REPLAY_LIMIT)
-                if item.event in FEED_REPLAYED
-                else ("publication", REPLAY_LIMIT)
-            )
-            if counts[kind] < limit:
-                counts[kind] += 1
-                kept.append(item)
-        return kept
+        candidates = [
+            (index, item)
+            for index, item in enumerate(records[start:])
+            if item.event in REPLAYED and (wanted is None or wanted(item))
+        ]
+        publications = [pair for pair in candidates if pair[1].event in PUBLICATION_REPLAYED]
+        feeds = [pair for pair in candidates if pair[1].event in FEED_REPLAYED]
+        chosen = {index for index, _ in publications[:REPLAY_LIMIT] + feeds[-FEED_REPLAY_LIMIT:]}
+        return [item for index, item in candidates if index in chosen]
 
     async def subscribe(self, replay: list[StreamEvent]) -> AsyncIterator[StreamEvent]:
         queue: asyncio.Queue[StreamEvent] = asyncio.Queue(maxsize=1000)

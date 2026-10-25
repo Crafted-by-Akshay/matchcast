@@ -240,20 +240,26 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
       : '<li class="mcp-v">Nothing dropped yet.</li>';
   };
   renderDrops();
+  // ids are per match (each match's audit chain counts from 1), so a record is keyed by its match's stream too
+  const recKey = (rec, id) => (rec.stream ? JSON.stringify(rec.stream) : '') + '|' + id;
   // a feed line airs once per publication, in English this sprint, and only while its feed is on; a killed feed airs nothing.
   // A line is remembered even while its feed is off, so a replay after a resume does not count it
   const aired = (rec) => {
     const s = feedOf(rec.feed);
-    if (!s || rec.lang !== 'en' || !rec.publication_id || seen.has(rec.publication_id)) return;
-    seen.add(rec.publication_id);
+    if (!s || rec.lang !== 'en' || !rec.publication_id) return;
+    const key = recKey(rec, rec.publication_id);
+    if (seen.has(key)) return;
+    seen.add(key);
     if (!s.on) return;
     s.aired++; s.last = rec.text || ''; render(rec.feed);
   };
   // the Verifier's drop shows the reason; the line text stays in the audit chain, so the desk shows no text here.
   // A reconnect replays the drops already shown, so each drop is shown once, by its audit id
   const dropped = (rec) => {
-    if (!feedOf(rec.feed) || droppedIds.has(rec.audit_id)) return;
-    droppedIds.add(rec.audit_id);
+    if (!feedOf(rec.feed)) return;
+    const key = recKey(rec, rec.audit_id);
+    if (droppedIds.has(key)) return;
+    droppedIds.add(key);
     drops.unshift(rec); drops.length = Math.min(drops.length, 5); renderDrops();
   };
   box.querySelector('#mc-feed-list').onclick = (e) => {

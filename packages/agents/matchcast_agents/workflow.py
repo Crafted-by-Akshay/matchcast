@@ -1640,7 +1640,8 @@ class MatchWorkflow:
         actor_id: str = "producer",
         actor_name: str | None = None,
     ) -> dict[str, Any]:
-        """The desk's per-feed kill or resume (AB#499). enforced stays false until the air gate."""
+        """The desk's per-feed kill or resume (AB#499). Audited with enforced true: the air gate
+        in _verify_line airs nothing from a killed feed."""
         async with self._lock:
             details = {"feed": feed, "reason": reason[:200], "enforced": True}
             if actor_name:

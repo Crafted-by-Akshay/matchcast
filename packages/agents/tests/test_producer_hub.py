@@ -92,6 +92,23 @@ def test_the_persona_filter_applies_before_the_replay_cap() -> None:
     assert [e.id for e in hub.replay_after(None, wanted=keep_casual)] == ["pub:c"]
 
 
+def test_a_feed_record_the_buffer_has_evicted_is_still_replayed() -> None:
+    # a long match pushes the buffer past its feed records; the desk must still count them
+    hub = StreamHub(buffer=10)
+    hub.publish("onair", "onair:early", {"feed": "casual"})
+    for i in range(50):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    assert "onair:early" in [e.id for e in hub.replay_after(None)]
+
+
+def test_the_newest_2000_feed_records_are_replayed_when_there_are_more() -> None:
+    hub = StreamHub(buffer=10)
+    for i in range(2100):
+        hub.publish("onair", f"onair:{i}", {"feed": "casual"})
+    ids = [e.id for e in hub.replay_after(None)]
+    assert len(ids) == 2000 and ids[0] == "onair:100" and ids[-1] == "onair:2099"
+
+
 def test_colour_moment_is_capped_by_wall_time_and_off_by_default(match) -> None:
     now = [100.0]
     producer = ProducerRules(colour_every_s=45, clock=lambda: now[0])
