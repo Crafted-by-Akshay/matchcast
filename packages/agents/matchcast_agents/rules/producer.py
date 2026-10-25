@@ -6,12 +6,16 @@ from typing import Any
 
 from ..context import MatchContext
 from ..messages import ProducerTask, Skip
+from ..personas import BOOTH
 
 THRESHOLD = 60
 RATE_WINDOW_MS = 8_000
 SUMMARY_EVERY_MS = 300_000
 # plays the feed would otherwise leave bare: one of them may get an analyst colour line
 COLOUR_KINDS = frozenset({"shot_off_target", "tackle", "foul"})
+# the booth's own moments: kick-off, and a quiet spell with nothing aired for FILLER_EVERY_S
+BOOTH_MOMENTS = ("buildup", "filler")
+FILLER_EVERY_S = 20.0
 
 
 def moment_score(payload: dict[str, Any]) -> tuple[int, int, str]:
@@ -52,18 +56,22 @@ class ProducerRules:
         self._next_summary_ms = SUMMARY_EVERY_MS
         self._seen: set[str] = set()
         self._spent: tuple[int | None, float | None] = (None, None)  # before the last task
+        self._opened = False  # the first event of the match has been seen
+        self._last_aired: float | None = None  # wall time of the last task, for the quiet spell
 
     def snapshot(self) -> dict[str, Any]:
         return {
             "last_task_ms": self._last_task_ms,
             "next_summary_ms": self._next_summary_ms,
             "seen": sorted(self._seen),
+            "opened": self._opened,
         }
 
     def restore(self, data: dict[str, Any]) -> None:
         self._last_task_ms = data["last_task_ms"]
         self._next_summary_ms = data["next_summary_ms"]
         self._seen = set(data["seen"])
+        self._opened = data.get("opened", True)  # a checkpoint from before kick-off was tracked
 
     def _colour_due(self) -> bool:
         if self._colour_every_s <= 0:
@@ -76,11 +84,36 @@ class ProducerRules:
         """A model skip of the task just decided gives back its rate window and colour budget."""
         self._last_task_ms, self._last_colour = self._spent
 
+    def _filler_due(self) -> bool:
+        return self._last_aired is not None and self._clock() - self._last_aired >= FILLER_EVERY_S
+
+    def _booth(self, ctx: MatchContext, event: dict[str, Any], kind: str) -> ProducerTask | Skip:
+        """A booth moment (kick-off or quiet spell): it keeps the rate rule and the booth voices."""
+        moment_id = f"m-{event['event_id']}"
+        now = event["event_time_ms"]
+        if self._last_task_ms is not None and now - self._last_task_ms < RATE_WINDOW_MS:
+            return Skip(moment_id=moment_id, reason="rate_limited")
+        self._last_task_ms = now
+        self._last_aired = self._clock()
+        return ProducerTask(
+            moment_id=moment_id,
+            match_id=ctx.stream["match_id"],
+            event_ids=(event["event_id"],),
+            up_to_sequence=event["stream_sequence"],
+            priority=3,
+            personas=BOOTH,
+            reason=kind,
+        )
+
     async def decide(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | Skip:
         moment_id = f"m-{event['event_id']}"
         if moment_id in self._seen:
             return Skip(moment_id=moment_id, reason="duplicate_moment")
         self._seen.add(moment_id)
+        first = not self._opened
+        self._opened = True
+        if first and ctx.extra.get("booth"):  # kick-off opens the booth, when the booth is on
+            return self._booth(ctx, event, "buildup")
         score, priority, kind = moment_score(event["payload"])
         if event["event_time_ms"] >= self._next_summary_ms and kind == "pass":
             score, priority, kind = 60, 3, "summary"
@@ -95,6 +128,8 @@ class ProducerRules:
         if colour:
             score, kind = THRESHOLD, "colour"  # still subject to the rate rule below
         if priority != 1 and score < THRESHOLD:
+            if ctx.extra.get("booth") and self._filler_due():
+                return self._booth(ctx, event, "filler")  # a quiet spell gets the booth's filler
             return Skip(moment_id=moment_id, reason="quiet_play" if score < 30 else "low_score")
         now = event["event_time_ms"]
         if (
@@ -105,6 +140,7 @@ class ProducerRules:
             return Skip(moment_id=moment_id, reason="rate_limited")
         self._spent = (self._last_task_ms, self._last_colour)
         self._last_task_ms = now
+        self._last_aired = self._clock()
         if colour:
             self._last_colour = self._clock()
         return ProducerTask(
