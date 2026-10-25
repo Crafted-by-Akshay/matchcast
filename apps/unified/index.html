@@ -265,7 +265,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
     <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
-    <span class="pill" id="api-pill" role="status" title="">Starting…</span>
+    <span class="pill" id="api-pill" role="status" title="">Starting…</span><span class="pill" id="lat-pill" hidden title="Event to on air: wall-clock time from a Watch event reaching this page to the agent api's published line arriving here, the median of the last 30 matched lines. Watch batches its events once a second before they reach this page; that wait is not in the number."></span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
     <span class="more" aria-hidden="true">›</span>
   </div>
@@ -1113,7 +1113,9 @@ function init(list) {
   };
   const paintPillNow = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
   const boothState = (j) => { boothLast = { src: 'matchcast-shell', type: 'booth-state', ready: !j || !!j.ready, reason: (j && j.reason) || '' }; post('watch', boothLast); post('broadcast', boothLast); };   // no answer yet (null): the card shows nothing
-  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, booth: boothState });
+  // event to on air, measured in this page: hidden until the api publishes a line for events this page sent (live.js measure)
+  const paintLatency = (l) => { const p = $('lat-pill'); p.hidden = !l.n; if (l.n) p.textContent = 'Event → on air ' + (l.median_ms / 1000).toFixed(1) + ' s' + (l.n < 5 ? ' (' + l.n + ' line' + (l.n === 1 ? '' : 's') + ')' : ''); };
+  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, booth: boothState, latency: paintLatency });
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
   renderAgents();
