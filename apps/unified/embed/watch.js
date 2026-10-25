@@ -128,7 +128,7 @@ MCS.progress('Loading the stadium and players');
   const mode = () => (typeof FAN !== 'undefined' ? FAN.mode : 'analyst');
   const mine = (c) => mode() === 'club' && FAN.club != null && c.team === TEAMS[FAN.club].key;
   const lang = () => (typeof FAN !== 'undefined' ? FAN.lang : 'en');
-  const tr = (c) => (lang() === 'es' || lang() === 'hi') && c.tr ? c.tr[lang()] : null;
+  const tr = (c) => lang() !== 'en' && c.tr ? c.tr[lang()] : null;   // any language the api checked; the rest stays English
   const line = (c) => {
     const t = tr(c); if (t && t.ok) return t.text;   // a translation the Verifier re-checked (numbers and names unchanged)
     if (mode() === 'casual') return c.plain;
@@ -306,7 +306,7 @@ window.addEventListener('message', (e) => {
     e.stopImmediatePropagation();
     if (busy) return;
     busy = true; mic.classList.add('live'); document.getElementById('tk-q').placeholder = 'Listening…';
-    az.listen(FAN.lang === 'es' ? 'es-ES' : FAN.lang === 'hi' ? 'hi-IN' : 'en-US').then((text) => {
+    az.listen(window.MC_SPEECH_LOCALE[FAN.lang] || 'en-US').then((text) => {
       busy = false; mic.classList.remove('live'); document.getElementById('tk-q').placeholder = 'Talk to the player…';
       if (text) { document.getElementById('tk-q').value = text.slice(0, 300); document.getElementById('tk-form').requestSubmit(); return; }
       if (text === null && (window.SpeechRecognition || window.webkitSpeechRecognition)) orig.call(mic);   // Azure unavailable: the browser mic
@@ -366,7 +366,7 @@ window.addEventListener('message', (e) => {
     btn.textContent = 'Call'; btn.setAttribute('aria-pressed', 'false'); q.placeholder = 'Talk to the player…';
   };
   const startCall = async () => {
-    const lang = FAN.lang === 'es' ? 'es-ES' : FAN.lang === 'hi' ? 'hi-IN' : 'en-US';
+    const lang = window.MC_SPEECH_LOCALE[FAN.lang] || 'en-US';
     on = true; btn.textContent = 'End call'; btn.setAttribute('aria-pressed', 'true'); q.placeholder = 'Listening…';
     let az = null; try { az = window.parent !== window && window.parent.SPX && typeof window.parent.SPX.listenOn === 'function' ? window.parent.SPX : null; } catch (e) { /* cross-origin parent */ }
     const h = az ? await az.listenOn(lang, cutIn, send) : null;
@@ -378,10 +378,13 @@ window.addEventListener('message', (e) => {
   btn.addEventListener('click', () => { if (on) { stopCall(); say('Call ended.'); } else startCall(); });
 })();
 
-// ---- EXP-17: the shell's language selector (EN, ES, HI) sets Watch's language too; Watch's own picker keeps the others (Tamil, French, Arabic).
+// ---- EXP-17: the shell's language selector (MC_LANGS, ADR-0023) sets Watch's language too; Watch's own picker keeps the rest.
 window.addEventListener('message', (e) => {
   const d = e.data || {};
-  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !['en', 'es', 'hi'].includes(d.lang)) return;
-  window.__shellLang = d.lang;   // the restore of Watch's saved settings below must not undo it
-  if (FAN.lang !== d.lang) fanSet({ lang: d.lang }, 'shell');
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !window.MC_LANGS.includes(d.lang)) return;
+  // Watch's own list has an entry for only some feed languages; the rest show English here, with the Verifier note, until its picker lists them
+  const known = typeof FAN_LANGS !== 'undefined' && FAN_LANGS.some((l) => l[0] === d.lang);
+  const lang = known ? d.lang : 'en';
+  window.__shellLang = lang;   // the restore of Watch's saved settings below must not undo it
+  if (FAN.lang !== lang) fanSet({ lang }, 'shell');
 });

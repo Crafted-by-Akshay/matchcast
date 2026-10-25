@@ -151,7 +151,8 @@ class AskBody(BaseModel):
     session_id: str = Field(pattern=ID)
     question: str = Field(min_length=1, max_length=300)
     persona: Literal["casual", "analyst", "broadcast"] = "casual"
-    lang: Literal["en", "es", "hi"] = "en"
+    # ADR-0023: the feed languages, the same as LANGUAGES in matchcast_agents.translate
+    lang: Literal["en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans"] = "en"
     surface: Literal["ask", "broadcast"] = "ask"
 
 
@@ -729,7 +730,9 @@ def build_router(registry: Registry) -> APIRouter:
     ) -> StreamingResponse:
         flow = await registry.flow_for(session_id, match_id)
         if lang not in LANGUAGES:
-            raise Problem(422, "contract_invalid", "lang must be en, es or hi", "/lang")
+            raise Problem(
+                422, "contract_invalid", "lang must be one of the feed languages", "/lang"
+            )
         keep: tuple[str, ...] = ()  # the personas this viewer reads; empty means every one
         if persona and booth(persona):  # both voices of the commentary booth, in one stream
             keep = BOOTH

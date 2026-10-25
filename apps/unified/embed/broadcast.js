@@ -117,7 +117,7 @@ const mcTx = (l) => { if (mcLang === 'en') return l.text; const t = l.tr && l.tr
 function mcPaintTele() { mcTele.hidden = false; mcTele.innerHTML = ''; for (const x of mcAired.slice().reverse()) { const li = document.createElement('li'); li.textContent = mcTx(x); mcTele.append(li); } }
 window.addEventListener('message', (e) => {
   const d = e.data || {};
-  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !['en', 'es', 'hi'].includes(d.lang)) return;
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !window.MC_LANGS.includes(d.lang)) return;   // a language without a desk template shows English with its note
   mcLang = d.lang;
   if (typeof BC !== 'undefined' && BC.lang !== d.lang) { BC.lang = d.lang; if (typeof bcPaintScript === 'function') bcPaintScript(); }
   if (mcAired.length) mcPaintTele();
@@ -150,7 +150,7 @@ if (MCS.framed) {
     setTimeout(() => finish(id, null), 9000);   // no answer in time: the desk's own
   };
   // the mic: the desk pane is redrawn often, so it is attached whenever a fresh question box appears
-  const attachMic = () => { const q = $('bcd-q'); if (q && !q.dataset.ptt) MCS.ptt(q, { requestSubmit: () => bcAsk() }, BC.lang === 'es' ? 'es-ES' : BC.lang === 'hi' ? 'hi-IN' : 'en-GB'); };
+  const attachMic = () => { const q = $('bcd-q'); if (q && !q.dataset.ptt) MCS.ptt(q, { requestSubmit: () => bcAsk() }, window.MC_SPEECH_LOCALE[BC.lang] || 'en-GB'); };
   const pane = $('pane-desk'); if (pane) { new MutationObserver(attachMic).observe(pane, { childList: true, subtree: true }); attachMic(); }
 }
 // type floor: 12 px for the desk text that was 10 to 11 px (UX review pass 6, finding 18)

@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 import urllib.parse
 import urllib.request
 from collections import OrderedDict
@@ -22,15 +23,32 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-LANGUAGES = ("en", "es", "hi")  # Tamil stays off until a native speaker reviews it
+# The ten feed languages (ADR-0023). Tamil stays off until a native speaker reviews it.
+LANGUAGES = ("en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans")
 MAX_CHARS_DEFAULT = 500_000
 TRANSLATE_TIMEOUT_S = 3.0
 SCOPE = "https://cognitiveservices.azure.com/.default"
 ENDPOINT = re.compile(r"^https://[a-z0-9-]{2,64}\.cognitiveservices\.azure\.com/?$")
-_DEVANAGARI = {ord("०") + i: str(i) for i in range(10)}
+# Devanagari, Arabic-Indic and full-width digits read as ASCII; the Arabic decimal separator and the
+# full-width full stop read as a point. A translation that switches numerals is still compared on
+# its numbers.
+_DIGITS = {
+    **{ord("\u0966") + i: str(i) for i in range(10)},
+    **{ord("\u0660") + i: str(i) for i in range(10)},
+    **{ord("\uff10") + i: str(i) for i in range(10)},
+    ord("\u066b"): ".",
+    ord("\uff0e"): ".",
+}
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 _MARKER = re.compile(r"\[(?:claim|kb|line|event):[^\]]+\]")
 _TAG = re.compile(r"<[^>]+>")
+# The neutral-wording list (ADR-0020, tests/test_neutral_names.py) applies to translations too.
+# Latin letters on both sides, not \b: Japanese and Chinese set no spaces around a Latin name.
+_NEUTRAL = re.compile(
+    r"(?<![A-Za-z])(FIFA|UEFA|IFAB|CONMEBOL|CONCACAF|World Cup|La Liga|"
+    r"Premier League|Champions League|Bundesliga|Serie A)(?![A-Za-z])",
+    re.I,
+)
 
 log = logging.getLogger("matchcast.translate")
 
@@ -44,8 +62,8 @@ class Translator(Protocol):
 
 
 def numbers(text: str) -> list[str]:
-    """Numbers in the text, Devanagari read as ASCII, decimal commas as points, sorted."""
-    found = _NUMBER.findall(text.translate(_DEVANAGARI))
+    """Numbers in the text, other numerals read as ASCII, decimal commas as points, sorted."""
+    found = _NUMBER.findall(text.translate(_DIGITS))
     return sorted(n.replace(",", ".") for n in found)  # 2.5 and 2,5 are the same, 25 is not
 
 
@@ -76,6 +94,8 @@ def recheck(english: str, translated: str, names: Iterable[str]) -> str | None:
             return "name_changed"
     if set(_MARKER.findall(english)) != set(_MARKER.findall(translated)):
         return "citation_changed"
+    if _NEUTRAL.search(unicodedata.normalize("NFKC", translated)):
+        return "neutral_wording"
     return None
 
 
@@ -208,6 +228,7 @@ class TranslationService:
             log.warning("translation to %s failed: %s", lang, type(error).__name__)
             return Variant(None, "service_error")
         translated = clean(raw)
+        log.info("translated to %s: %d characters sent, %d in all", lang, len(sent), self.used)
         reason = recheck(text, translated, names)
         if reason:
             if on_reject:

@@ -3,7 +3,8 @@
 // browser's own voice, labelled as such. A line older than 5 s is never spoken. Voices come from voices.json (edit there, nowhere else).
 const VC = (() => {
   const EXPIRY_MS = 5000, KEY = 'mc-voice';
-  let voices = { playByPlay: 'en-GB-RyanNeural', analyst: 'en-GB-SoniaNeural', es: 'es-ES-ElviraNeural', hi: 'hi-IN-SwaraNeural' };
+  const LOCALE = { es: 'es-ES', pt: 'pt-BR', hi: 'hi-IN' };
+  let voices = { playByPlay: 'en-GB-RyanNeural', analyst: 'en-GB-SoniaNeural', es: 'es-ES-ElviraNeural', hi: 'hi-IN-SwaraNeural', pt: 'pt-BR-FranciscaNeural' };
   let gen = 0, on = false, queue = [], busy = false, bar = null, hide = 0, source = 'browser', playing = null, onChange = () => {};
   const spoken = new Set();   // one voice line per claim, however often its card is redrawn
   try { on = localStorage.getItem(KEY) === 'on'; } catch (e) { /* storage may be blocked */ }
@@ -21,24 +22,30 @@ const VC = (() => {
     if (Date.now() - it.at > EXPIRY_MS) { next(); return; }   // expired while waiting: caption only (already shown)
     busy = true; const my = gen, done = () => { if (my !== gen) return; busy = false; next(); };   // a stale callback (Voice was switched off meanwhile) does nothing
     if (it.audio) { const a = playing = new Audio(it.audio); a.onended = a.onerror = done; a.play().catch(done); return; }
-    const lang = it.lang === 'es' ? 'es-ES' : it.lang === 'hi' ? 'hi-IN' : 'en-GB';
+    const lang = LOCALE[it.lang] || 'en-GB';
     const browser = () => {
       if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') { done(); return; }
+      // the browser's voice for this language; with none here, a non-English line is shown but not read in another voice
+      const all = window.speechSynthesis.getVoices(), v = all.find((x) => x.lang.replace('_', '-') === lang) || all.find((x) => x.lang.slice(0, 2) === lang.slice(0, 2));
+      if (!v && !lang.startsWith('en')) { done(); return; }   // no voice yet (Chrome fills the list late) or none for this language: caption only
       source = 'browser'; onChange();
-      const u = new SpeechSynthesisUtterance(it.text); u.lang = lang;
+      const u = new SpeechSynthesisUtterance(it.text); u.lang = lang; if (v) u.voice = v;
       u.onend = u.onerror = done; window.speechSynthesis.speak(u);
     };
     // Azure Speech (token from the api) when it is there, otherwise the browser voice; one voice per role and language
     if (typeof SPX === 'undefined') { browser(); return; }
-    const voice = it.lang === 'es' ? voices.es : it.lang === 'hi' ? voices.hi : it.role === 'analyst' ? voices.analyst : voices.playByPlay;
+    const voice = it.lang !== 'en' && voices[it.lang] ? voices[it.lang] : it.role === 'analyst' ? voices.analyst : voices.playByPlay;
     SPX.speak(it.text, voice, lang, it.tone === 'big').then((ok) => { if (my !== gen || !on) return; if (ok) { source = 'azure'; onChange(); done(); } else if (Date.now() - it.at > EXPIRY_MS) done(); else browser(); });   // not spoken late by the browser after a slow Azure try
   };
-  // a line to show and (if voice is on) speak. at: when it was written, in ms; lang: en, es or hi; audio: an api audio url
+  // a line to show and (if voice is on) speak. at: when it was written, in ms; lang: a language in VOICED; audio: an api audio url
+  // a language with no voice is shown as text only: the English voice must not read another language's words
+  const VOICED = ['en', 'es', 'pt', 'hi'];   // CREW-7.10: the top four spoken; voices.json names each one's voice
+  const speaks = (lang) => VOICED.includes(lang || 'en');
   const say = (text, o) => {
     o = o || {}; const at = o.at || Date.now();
     caption(text);
     source = o.audio ? 'azure' : 'browser'; onChange();
-    if (on && !(o.id && spoken.has(o.id))) {
+    if (on && speaks(o.lang) && !(o.id && spoken.has(o.id))) {
       if (o.tone === 'big') swell();
       if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' }); next(); }
   };
@@ -62,5 +69,5 @@ const VC = (() => {
     clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(0.04, crowd.ctx.currentTime, 1.5); }, 3000);
   };
   const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
-  return { load, say, set, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
+  return { load, say, set, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();
