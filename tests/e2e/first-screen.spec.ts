@@ -56,7 +56,7 @@ test('Hindi casual lines keep every name and number, and a line with no rule sta
   expect(errs).toEqual([]);
 });
 
-test('Camera presets, speed and names sit behind Demo controls, one click away', async ({ page }) => {
+test('Speed and names sit behind Demo controls, one click away; the camera presets stay off the first screen', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   await openShell(page, 'watch');
@@ -71,7 +71,8 @@ test('Camera presets, speed and names sit behind Demo controls, one click away',
   await expect(f.locator('#mc-pause')).toBeVisible();          // Pause stays one tap away while the speed group is folded (it presses the real button)
   await btn.click();
   await expect(btn).toHaveAttribute('aria-expanded', 'true');
-  await expect(f.locator('#cams')).toBeVisible();
+  await expect(f.locator('#cams'), 'the camera presets are in the page').toHaveCount(1);
+  await expect(f.locator('#cams'), 'the camera presets stay off the screen (AB#497)').toBeHidden();
   await expect(f.locator('#play')).toBeVisible();
   await expect(f.locator('#cpbtn')).toBeVisible();   // Copilot stays on the first screen
   expect(errs).toEqual([]);

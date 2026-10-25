@@ -328,7 +328,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   </section>
   <section class="view gone" id="v-agents" data-view="agents" aria-label="Agents: the shared pipeline" hidden>
     <div class="ag">
-      <div id="crew-mount"></div>
+      <div id="crew-mount" hidden></div>
       <div class="ag-head">
         <div><h2>Agent pipeline</h2><p>One pipeline for Watch, Analyst and Broadcast. Every claim is recounted by the Verifier and written to the audit chain.</p></div>
         <div class="chips">
@@ -344,6 +344,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
         <p class="muted" id="ag-vision" role="status"></p>
         <ol class="ag-lanes" id="ag-lanes"><li class="empty">Waiting for the kick-off in Watch. Each claim shows its handoffs here: Analyst, Narrator, Verifier, then Producer.</li></ol>
       </section>
+      <div id="crew-score"></div>
       <section class="ag-panel" id="aq"><h3>Approval queue <span class="muted" id="aq-n"></span></h3>
         <div class="ag-filters"><label>Mode <select id="aq-mode"><option value="demo">Demo: verified lines air at once</option><option value="producer">Producer: a person approves each line</option></select></label>
           <span class="muted" id="aq-who">Signed in as Sam Producer (simulated account, Planned: Entra ID)</span></div>
@@ -389,6 +390,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
 <script src="crew.js"></script>
+<script src="crew-score.js"></script>
 <script src="crew-tree.js"></script>
 <dialog id="status-dlg" aria-labelledby="status-h"><h2 id="status-h">What is running</h2><div id="status-box"></div><form method="dialog"><button class="pill">Close</button></form></dialog>
 <script src="speech.js"></script>
@@ -545,7 +547,8 @@ function show(view) {
   }
   $('stage').classList.toggle('split', on.length > 1);
   $('split-bar').hidden = on.length < 2;
-  const tg = $('bc-toggle'); tg.hidden = !(view === 'watch' && wide.matches); tg.setAttribute('aria-pressed', String(bcBeside));
+  const tg = $('bc-toggle'); tg.hidden = true;   // the second 3D view is off the first screen for the sprint (AB#497); ?split=1 still opens it
+  tg.setAttribute('aria-pressed', String(bcBeside));
   for (const v of on) ensure(v);
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   paint();
@@ -678,15 +681,24 @@ function renderVision() {
   el.textContent = !s ? 'Vision -> Agents: waiting for Vision. Watch sends the tracker\'s passes once a match runs.'
     : 'Vision -> Agents: ' + s.passes_in + ' passes in · ' + s.lines_verified + ' lines verified by the Verifier · engine ' + ((s.agreement && s.agreement.engine) || 0) + ' passes, ' + (s.agreement && s.agreement.precision != null ? Math.round(s.agreement.precision * 100) + '% of Vision\'s passes match one' : 'no passes to match yet') + (s.latest_line ? ' · latest: ' + s.latest_line : '');
 }
+// polls every 3 s while a summary is ready; before there is a match or a Vision stream it backs off, 3 s doubling to 20 s
+let visWait = 3000;
 async function pollVision() {
   const key = LV.key;
-  const s = await LV.visionSummary();
-  if (LV.key !== key) return;   // a new match started while this answer was on its way: the next poll shows it
-  const ok = !!s && typeof s.passes_in === 'number';   // no match, or no answer: clear what the last match showed
-  VIS = ok ? s : null; renderVision();
-  post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: ok ? s : null });
+  try {
+    const s = await LV.visionSummary();
+    if (LV.key !== key) visWait = 3000;   // a new match: its first summary should not wait out the back-off
+    else {
+      const ok = !!s && s.ready === true;   // not ready, or no answer: clear what the last match showed
+      VIS = ok ? s : null; renderVision();
+      post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: ok ? s : null });
+      visWait = ok ? 3000 : Math.min(visWait * 2, 20000);
+    }
+  } finally {
+    setTimeout(pollVision, visWait);   // keep polling even when a render throws, as the old interval did
+  }
 }
-setInterval(pollVision, 3000);
+setTimeout(pollVision, visWait);
 renderVision();   // the strip says what it waits for before any match
 // What the agents are doing right now, from the live api's status (live.js): Foundry when the api answers with models,
 // the rules fallback when it does not answer, and rules in the page when no api is configured. Never a fixed label.
