@@ -38,7 +38,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     + '</div>'
     + '<section id="mc-overlay" aria-label="Overlay feed preview, simulated"><div class="mcp-row"><b>Overlay feed preview</b> <span class="mcp-v">simulated</span></div>'
     + '<p class="mcp-v">What a rendering partner would take: the on-air export, matchcast.onair/1. The timed stream endpoint is not built yet.</p>'
-    + '<div id="mc-overlay-n" class="mcp-v">Nothing aired yet.</div><pre id="mc-overlay-pre" style="margin:4px 0 0;max-height:120px;overflow:auto;font:11px ui-monospace,monospace;white-space:pre-wrap"></pre></section>'
+    + '<div id="mc-overlay-n" class="mcp-v">Checking the on-air log.</div><pre id="mc-overlay-pre" style="margin:4px 0 0;max-height:120px;overflow:auto;font:11px ui-monospace,monospace;white-space:pre-wrap"></pre></section>'
     + '</div>';
   (document.getElementById('bc-view') || document.body).append(box);
   const $ = (id) => box.querySelector('#' + id);
@@ -105,6 +105,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     const d = e.data || {};
     if (e.source === window.parent && d.src === 'matchcast-shell' && d.type === 'air') setTimeout(renderOverlay, 0);   // after onair.js has logged the line
   });
+  window.addEventListener('load', renderOverlay);   // deferred modules (onair.js) have run by load: shows "Nothing aired yet." or "Export not ready" before any line airs
 
   // the Broadcast Copilot: each question is asked of the api with surface "broadcast"; only the newest answer is shown
   const QUESTIONS = { highlights: 'What are the highlights so far?', focus: 'Where should the camera go next?', plan: 'What is the production plan for the next few minutes?' };
