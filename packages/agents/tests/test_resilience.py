@@ -36,7 +36,7 @@ class FakeNarrator:
         self.script, self.calls = list(script), 0
         self.rules = NarratorRules()
 
-    async def write(self, ctx, task, claims, *, attempt=0):
+    async def write(self, ctx, task, claims, *, attempt=0, feedback=""):
         self.calls += 1
         step = self.script.pop(0) if self.script else "ok"
         if isinstance(step, Exception):
@@ -135,7 +135,7 @@ def test_breaker_window_forgets_old_failures() -> None:
 
 
 class AlwaysBadNarrator(NarratorRules):
-    async def write(self, ctx, task, claims, *, attempt=0):
+    async def write(self, ctx, task, claims, *, attempt=0, feedback=""):
         lines = await super().write(ctx, task, claims, attempt=attempt)
         return [
             DraftLine(

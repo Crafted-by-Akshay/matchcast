@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
+from matchcast_agents.feeds import FEED_KEYS
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
@@ -145,6 +146,12 @@ class LineAction(BaseModel):
     session_id: str = Field(pattern=ID)
     match_id: str = Field(pattern=ID)
     text: str | None = Field(default=None, min_length=1, max_length=280)
+    reason: str | None = Field(default=None, max_length=200)
+
+
+class FeedAction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
     reason: str | None = Field(default=None, max_length=200)
 
 
@@ -960,6 +967,48 @@ def build_router(registry: Registry) -> APIRouter:
         actor: tuple[str, str | None] = Depends(caller_actor),
     ) -> dict[str, Any]:
         return await act(line_id, body, x_matchcast_role, "kill", actor)
+
+    async def feed_switch(
+        match_id: str,
+        feed: str,
+        body: FeedAction,
+        role: str | None,
+        actor: tuple[str, str | None],
+        killed: bool,
+    ) -> dict[str, Any]:
+        """The desk's per-feed kill or resume (AB#499). Audited now; the air gate reads it later."""
+        need_producer(role)
+        if feed not in FEED_KEYS:
+            raise Problem(422, "contract_invalid", f"unknown feed {feed}", "/feed")
+        flow = await registry.flow_for(body.session_id, match_id)
+        reason = body.reason or ("killed on desk" if killed else "resumed")
+        record = await flow.set_feed(feed, killed, reason, actor[0], actor[1])
+        return {
+            "feed": feed,
+            "state": "killed" if killed else "live",
+            "audit_id": record["audit_id"],
+            "enforced": False,
+        }
+
+    @router.post("/matches/{match_id}/feeds/{feed}/kill")
+    async def feed_kill(
+        match_id: str,
+        feed: str,
+        body: FeedAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
+    ) -> dict[str, Any]:
+        return await feed_switch(match_id, feed, body, x_matchcast_role, actor, killed=True)
+
+    @router.post("/matches/{match_id}/feeds/{feed}/resume")
+    async def feed_resume(
+        match_id: str,
+        feed: str,
+        body: FeedAction,
+        x_matchcast_role: str | None = Depends(caller_role),
+        actor: tuple[str, str | None] = Depends(caller_actor),
+    ) -> dict[str, Any]:
+        return await feed_switch(match_id, feed, body, x_matchcast_role, actor, killed=False)
 
     @router.get("/matches/{match_id}/audit")
     async def audit(

@@ -30,6 +30,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/lines/{line_id}/approve` | Producer | `session_id, match_id` | 200 line (+ publication) | 403, 404, 409 not approvable |
 | `POST /v1/lines/{line_id}/edit` | Producer | `session_id, match_id, text ≤ 280` | 200 line after re-verification | 403, 404, 422 rejected (verdict in body) |
 | `POST /v1/lines/{line_id}/kill` | Producer | `session_id, match_id, reason ≤ 200` | 200 | 403, 404 |
+| `POST /v1/matches/{match_id}/feeds/{feed}/kill` | Producer | `session_id, reason ≤ 200`; `feed` one of the six keys in `docs/contracts.md` (AB#499; the route is built, the air gate is **Planned**) | 200 `{feed, state: killed, audit_id, enforced: false}` | 403, 422 unknown feed, 404 |
+| `POST /v1/matches/{match_id}/feeds/{feed}/resume` | Producer | `session_id, reason ≤ 200` | 200 `{feed, state: live, audit_id, enforced: false}` | 403, 422, 404 |
 | `GET /v1/matches/{match_id}/audit` | anyone | `session_id, from_seq?, limit ≤ 1000` | 200 records | 404 |
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
 | `POST /v1/matches/{match_id}/ask` | anyone | `session_id, question ≤ 300, persona, lang (the same ten), surface (ask or broadcast; default ask)` (`browser_session_id` is **Planned**) | 200 `{answer, intent, abstained, citations[], mode, retrieval, lang, variants?, broadcast?}` where `broadcast` is `{highlights[]}`, `{focus}` or `{plan[]}` when `surface` is `broadcast` and the question asks for one (ADR-0019). `claim_ids`, `verdict` and `trace_id` are **Planned**. | 400 shield, 429 |
@@ -66,6 +68,8 @@ Every match route rebuilds the workflow of a stored match from its roster when t
 | `publication` | publication with the variant for `lang` (+ English) | `pub:<publication_id>` |
 | `audit` | audit record | `audit:<sequence>` |
 | `recap_ready` | personas available | `recap` |
+| `onair` | **Planned** (AB#498 contract, AB#499 wiring): the `onair` record of a derived feed line that aired (`docs/contracts.md`, "Derived feed lines") | `onair:<publication_id>:<lang>` |
+| `feed_drop` | **Planned** (same): the `feed_drop` record of a derived line that did not air; the text stays in the audit chain | `feed_drop:<publication_id>` |
 | `status` | `{status, reason?}`: `live`, `rules_fallback` (with `reason` from the `fallback_reason` list in 04-agents.md §4) or `warming_up`. Sent only when the status or reason changes; every refusal is still audited as `fallback_used` | none |
 | `heartbeat` | server time | none, every 15 s |
 

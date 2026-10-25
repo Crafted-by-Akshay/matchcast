@@ -48,6 +48,26 @@ TALK_PHRASES = {
 }  # fmt: skip
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
+
+
+def repair_feedback(draft: DraftLine, verdict: Verdict) -> str:
+    """What to tell the Narrator on its one redraft, in words: no figure from the failed check
+    (a limit or a number named there would be echoed into the line)."""
+    said = {
+        "persona": f"the {draft.persona} line was too long or had too many numbers: shorten it",
+        "numbers": "a number lacked a claim or was repeated: use the claim values, each once",
+        "names": "a name was not in the roster or not on the team in this moment",
+        "sources": "a claim was not usable",
+        "specific": "the colour line must name a player or club",
+    }
+    parts = [
+        said.get(c.name, "the line was not supported by the claims")
+        for c in verdict.checks
+        if not c.passed
+    ]
+    return "; ".join(dict.fromkeys(parts))
+
+
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 # a booth line that fails its repair on one of these goes to the producer queue: the event log can
 # settle it. The six derived feeds that fail are dropped from air instead (CREW-4.3).
@@ -84,6 +104,7 @@ class Narrator(Protocol):
         claims: list[dict[str, Any]],
         *,
         attempt: int = 0,
+        feedback: str = "",
     ) -> list[DraftLine]: ...
 
 
@@ -1237,6 +1258,7 @@ class MatchWorkflow:
                         task,
                         fresh_claims,
                         attempt=1,
+                        feedback=repair_feedback(draft, verdict),
                     )
                     if fresh_claims
                     else []
@@ -1371,6 +1393,23 @@ class MatchWorkflow:
                 details["actor_name"] = actor_name[:80]
             self._audit("person", actor_id, "line_killed", line_id, details)
             return line
+
+    async def set_feed(
+        self,
+        feed: str,
+        killed: bool,
+        reason: str,
+        actor_id: str = "producer",
+        actor_name: str | None = None,
+    ) -> dict[str, Any]:
+        """The desk's per-feed kill or resume (AB#499). enforced stays false until the air gate."""
+        async with self._lock:
+            details = {"feed": feed, "reason": reason[:200], "enforced": False}
+            if actor_name:
+                details["actor_name"] = actor_name[:80]
+            return self._audit(
+                "person", actor_id, "feed_killed" if killed else "feed_resumed", feed, details
+            )
 
     async def edit(
         self,
