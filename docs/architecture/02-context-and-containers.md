@@ -132,7 +132,7 @@ Names follow `<type>-matchcast-<env>` with `env = dev` (the only environment). T
 | AI Search | `srch-matchcast-dev` | Free |
 | Content Safety | `cs-matchcast-dev` | S0 |
 | Speech | `spch-matchcast-dev` | S0 |
-| Translator | `tr-matchcast-dev` | S1 |
+| Translator | `tr-matchcast-dev` | F0 (free, 2M characters a month) |
 | AI Vision | `cv-matchcast-dev` | S1 |
 | Key Vault | `kv-matchcast-dev` | Standard, RBAC |
 | Log Analytics and App Insights | `log-matchcast-dev`, `appi-matchcast-dev` | Pay as you go, 0.5 GB daily cap |

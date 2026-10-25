@@ -30,11 +30,14 @@ test('ask: twenty questions a minute, then a polite refusal', async ({ page }) =
   await seed(page);
   const answers = await page.evaluate(async () => {
     const got: any[] = [];
-    (window as any).post = (_v: string, m: any) => got.push(m.answer);
+    // the shell posts every view's messages through post; only the answers count here
+    (window as any).post = (_v: string, m: any) => { if (m.type === 'answer') got.push(m.answer); };
     for (let i = 1; i <= 21; i++) await answerAsk(i, 'who has the most shots?');
     return got;
   });
+  expect(answers).toHaveLength(21);
   expect(answers.slice(0, 20).every((x: any) => x.verdict === 'verified')).toBe(true);
+  expect(answers[20].verdict).toBe('abstained');
   expect(answers[20].note).toBe('rate limit');
 });
 

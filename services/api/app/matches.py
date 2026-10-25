@@ -10,6 +10,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from collections import deque
@@ -18,7 +19,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Literal
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, WebSocket
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.ask import kb_root
@@ -34,17 +35,18 @@ from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
-from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream
+from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
 from matchcast_mcp.server import create_server
 from mcp import Client
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app import budget
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
+from app.call import CallSocket
 from app.pipeline import Pipeline
 from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
@@ -377,6 +379,21 @@ class Registry:
         window.append(now)
         return True
 
+    def vision_feed_for(
+        self, session_id: str, match_id: str
+    ) -> Callable[[], list[dict[str, Any]]] | None:
+        """An engine match's Vision passes, as pass facts, from the store: its one Vision moment
+        counts them beside its own (ADR-0022). None for a Vision stream."""
+        if is_vision_stream({"session_id": session_id}):
+            return None
+        vision = {
+            "tenant_id": TENANT,
+            "session_id": f"{session_id}.vision",
+            "match_id": match_id,
+        }
+        sk = stream_key(vision)
+        return lambda: pass_facts(self.store.events(sk))
+
     def truth_feed_for(
         self, session_id: str, match_id: str
     ) -> Callable[[], list[dict[str, Any]]] | None:
@@ -446,6 +463,7 @@ class Registry:
                 answer_model=self.answers_for(live, cut),
                 knowledge=self.knowledge,
                 truth_feed=self.truth_feed_for(session_id, match_id),
+                vision_feed=self.vision_feed_for(session_id, match_id),
             )
             self.flows[key] = flow
             return flow
@@ -670,6 +688,7 @@ def build_router(registry: Registry) -> APIRouter:
                     answer_model=registry.answers_for(live, cut),
                     knowledge=registry.knowledge,
                     truth_feed=registry.truth_feed_for(stream["session_id"], stream["match_id"]),
+                    vision_feed=registry.vision_feed_for(stream["session_id"], stream["match_id"]),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
@@ -1079,6 +1098,60 @@ def build_router(registry: Registry) -> APIRouter:
                 except VoiceError:
                     pass  # the reply is still shown, just not spoken
         return result
+
+    @router.websocket("/matches/{match_id}/call")
+    async def call(websocket: WebSocket, match_id: str) -> None:
+        """The voice call (EXP-18): talks and their spoken replies over one socket, both ways."""
+        session_id = websocket.query_params.get("session_id", "")
+        if not re.fullmatch(ID, session_id):
+            await websocket.close(code=1008)
+            return
+        try:
+            flow = await registry.flow_for(session_id, match_id)
+        except Problem:
+            await websocket.close(code=1008)
+            return
+        await websocket.accept()
+        voice = registry.voice
+        ip = client_ip(websocket)
+
+        async def talk(target: str, utterance: str, position: str | None) -> dict[str, Any]:
+            try:  # the talk route's own limits, so a turn never reaches the model unchecked
+                TalkBody(
+                    session_id=session_id, target=target, utterance=utterance, position=position
+                )
+            except ValidationError as error:
+                raise Problem(
+                    422,
+                    "bad_frame",
+                    "a talk needs a player, 1 to 300 characters, and a position code",
+                ) from error
+            registry.allow_question(websocket)  # a turn counts as a question, as in the talk route
+            try:
+                result = await flow.talk(target, utterance, position=position)
+            except WorkflowError as error:
+                raise Problem(STATUS[error.code], error.code, str(error)) from error
+            result["lang"] = "en"
+            return result
+
+        async def speak(sentence: str, voice_name: str) -> bytes | None:
+            if not voice.ready:
+                return None
+            # a new clip uses the caller's voice allowance; once spent, the reply is written only
+            if voice.get(clip_key(sentence, voice_name)) is None and not voice.allow(ip):
+                return None
+            try:
+                return await voice.clip(sentence, voice_name)
+            except VoiceError:
+                return None
+
+        await CallSocket(
+            websocket,
+            talk=talk,
+            speak=speak,
+            voice_for=voice.voice_for,
+            allow_talk=lambda: registry.allow_talk(session_id),
+        ).serve()
 
     @router.get("/voice/audition.mp3")
     async def audition(request: Request) -> Response:
