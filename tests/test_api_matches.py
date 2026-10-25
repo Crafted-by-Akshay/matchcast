@@ -981,3 +981,16 @@ def test_a_desk_feed_kill_and_resume_are_audited(
     assert all(r["details"]["enforced"] is True for r in audit if r["subject_id"] == "casual")
     assert published.count("audit") == 2  # each switch reaches the live audit stream
     assert verify_chain(audit)["valid"] is True
+
+
+def test_the_scoreboard_is_three_rules_arms_and_is_labelled_rules(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    board = client.get("/v1/matches/match-short/scoreboard", params=Q).json()
+    assert board["kind"] == "crew_ablation_scoreboard"
+    assert set(board["arms"]) == {"full_crew", "single_agent", "crew_no_verifier"}
+    assert all(arm["mode"] == "rules" for arm in board["arms"].values())
+    assert board["match_id"] == "match-short"
+    # the same events on the same day give the same scoreboard (the cache, and a rerun)
+    again = client.get("/v1/matches/match-short/scoreboard", params=Q).json()
+    assert again["arms"]["full_crew"]["accuracy"] == board["arms"]["full_crew"]["accuracy"]

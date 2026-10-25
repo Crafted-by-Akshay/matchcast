@@ -171,7 +171,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visi
 .ag-panel tbody tr{cursor:pointer}
 .ag-panel tbody tr:hover,.ag-panel tbody tr.on{background:var(--bg3)}
 .v.verified{color:var(--ok)}
-.v.abstained{color:var(--bad)}
+.v.abstained,.v.dropped{color:var(--bad)}.v.dropped{font-weight:600}
 .ag-audit{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 .ag-audit button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:600}
 .ag-recs{list-style:none;margin:0;padding:0;font:12px ui-monospace,Menlo,monospace;color:var(--muted);display:grid;gap:3px}
@@ -357,7 +357,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
         <section class="ag-panel"><h3>Provenance</h3><div class="ag-prov" id="ag-prov"></div></section>
       </div>
       <section class="ag-panel"><h3>Claims <span class="muted" id="ag-n"></span></h3>
-        <div class="ag-filters"><label>Verdict <select id="lg-verdict"><option value="">all</option><option>verified</option><option>pending</option><option>abstained</option></select></label>
+        <div class="ag-filters"><label>Verdict <select id="lg-verdict"><option value="">all</option><option>verified</option><option>pending</option><option>abstained</option><option>dropped</option></select></label>
           <label>Agent <select id="lg-agent"><option value="">all</option><option>analyst</option><option>verifier</option><option>producer</option></select></label>
           <label>Metric <select id="lg-metric"><option value="">all</option><option>score</option><option>shot_xg</option><option>xg_total</option><option>moment</option><option>line</option></select></label>
           <button type="button" id="lg-export">Export CSV</button> <span class="muted" id="lg-hash" aria-live="polite"></span></div>
@@ -653,7 +653,7 @@ const nameOf = (k) => { const f = FX.find((x) => x.home.key === k || x.away.key 
 const teamsOf = (s) => ({ hk: s.h, ak: s.a, home: nameOf(s.h), away: nameOf(s.a) });
 // the claims ledger (EXP-10): one row per claim, newest first, filtered by verdict, agent and metric; the export is the same rows
 const METRIC = { score: ['score', 'goals'], shot: ['shot_xg', 'xG'], xg_total: ['xg_total', 'xG'] };
-const valueOf = (c) => c.kind === 'score' ? c.inputs.score.join('–') : c.kind === 'shot' ? (+c.inputs.xg).toFixed(2) : c.kind === 'xg_total' ? c.inputs.xg.map((x) => (+x).toFixed(2)).join(' / ')
+const valueOf = (c) => c.dropped ? (c.feed ? 'feed ' + c.feed : '') : c.kind === 'score' ? c.inputs.score.join('–') : c.kind === 'shot' ? (+c.inputs.xg).toFixed(2) : c.kind === 'xg_total' ? c.inputs.xg.map((x) => (+x).toFixed(2)).join(' / ')
   : c.inputs && c.inputs.value != null ? String(c.inputs.value) : '';
 function ledgerRows(claims) {
   const f = { verdict: $('lg-verdict').value, agent: $('lg-agent').value, metric: $('lg-metric').value };
@@ -727,9 +727,9 @@ function stepsOf(c) {
     .sort((a, b) => (STAGE[a.agent] ?? 9) - (STAGE[b.agent] ?? 9));
 }
 function renderOrch(r) {
-  const claims = r ? r.claims.filter((c) => !c.pub) : [];
-  const verified = claims.filter((c) => c.verdict === 'verified').length, held = claims.filter((c) => c.verdict === 'abstained').length;
-  $('ag-orch-n').textContent = claims.length ? claims.length + ' claims · ' + verified + ' verified · ' + held + ' held' : '';
+  const claims = r ? r.claims.filter((c) => !c.pub) : [];   // the lanes list a dropped line's handoffs too; the counts below are claims
+  const verified = claims.filter((c) => c.verdict === 'verified').length, held = claims.filter((c) => c.verdict === 'abstained').length, dropped = claims.filter((c) => c.dropped).length;
+  $('ag-orch-n').textContent = claims.length ? claims.filter((c) => !c.dropped).length + ' claims · ' + verified + ' verified · ' + held + ' held' + (dropped ? ' · ' + dropped + ' dropped' : '') : '';
   $('ag-orch-src').textContent = agentState().src;
   // Vision: the browser tracker reads the match from pixels; the api gets its passes, and Azure Read is asked only about unclear shirt numbers
   const v = LV.vision, failed = v.readsFailed ? ' (' + v.readsFailed + ' over budget or failed)' : '';
@@ -756,7 +756,7 @@ function renderAgents() {
     card('Producer', 'Picks moments and routes lines', st.moments + ' moments seen · ' + st.verified + ' approved · ' + st.abstained + ' held', cardTag),
     card('Analyst', 'Turns events into claims with evidence', st.claims + ' claims from ' + st.events + ' events', cardTag),
     card('Narrator', 'Writes each line from the claim inputs', st.lines + ' lines in English', cardTag),
-    card('Verifier', 'Recounts every claim from the event log', st.verified + ' verified · ' + st.repaired + ' repaired · ' + st.abstained + ' abstained', 'Checks all claims'),
+    card('Verifier', 'Recounts every claim from the event log', st.verified + ' verified · ' + st.repaired + ' repaired · ' + st.abstained + ' abstained' + (st.dropped ? ' · ' + st.dropped + ' dropped' : ''), 'Checks all claims'),
     card('Predictor', 'A tool the agents call, not an agent', st.predictions + ' predictions seen in the stream', 'Tool'),
     card('Data Scientist', 'Analyst dashboard only, when asked', 'Not called in this match', 'On demand')
   ].join('');
@@ -765,22 +765,22 @@ function renderAgents() {
   $('ag-feed').innerHTML = r && r.feed.length
     ? r.feed.slice(-40).reverse().map((f) => '<li class="' + f.tone + '"><span class="m">' + mins(f.minute) + '</span><b>' + esc(f.who) + '</b> ' + esc(f.text) + '</li>').join('')
     : '<li class="empty">Waiting for the kick-off in Watch. Events and claims appear here as the match runs.</li>';
-  $('ag-n').textContent = r ? r.claims.filter((c) => !c.pub).length + ' claims' : '';
+  $('ag-n').textContent = r ? r.claims.filter((c) => !c.pub && !c.dropped).length + ' claims' : '';
   const rows = ledgerRows(r ? r.claims : []);
   $('ag-claims').innerHTML = rows.length
     ? rows.slice(0, 40).map((x) => '<tr role="row" data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td role="cell">' + esc(x.time) + '</td><td role="cell">' + esc(x.metric) + '</td><td role="cell">' + esc(x.value) + '</td><td role="cell">' + esc(x.units) + '</td><td role="cell">' + esc(x.agent) + '</td><td role="cell">' + esc(x.source) + '</td><td role="cell" class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td role="cell">' + esc(x.reason) + '</td><td role="cell">' + esc(x.approval) + '</td></tr>').join('')
     : '<tr role="row"><td role="cell" colspan="9" class="empty">No claims yet</td></tr>';
   const c = r && r.claims.find((x) => x.id === sel);
   $('ag-prov').innerHTML = c ? '<dl>' + [
-    ['Claim', c.id + ' · ' + c.kind + ' · ' + mins(c.minute)],
-    ['Line', esc(c.text)],
+    ['Claim', esc(c.id + ' · ' + c.kind + ' · ' + mins(c.minute))],
+    ['Line', c.dropped ? '<b>Verifier dropped</b> · ' + (c.feed ? 'feed ' + esc(c.feed) + ' · ' : '') + 'reason <code>' + esc(c.reasonCode || 'not given') + '</code> · the text stays in the audit chain, not shown' : esc(c.text)],
     ['Inputs', '<code>' + esc(MCC.canon(c.inputs)) + '</code>'],
-    ['Evidence', esc(c.evidence.join(', ') || c.basis || '')],
+    ['Evidence', esc((c.dropped ? (c.eventIds || []).join(', ') : c.evidence.join(', ')) || c.basis || '')],
     ['Verifier', esc(c.verdict + ': ' + c.reason)],
     ['Route', esc(c.route || 'held, not aired')],
-    ['Contract', esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
-    ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules · in the page, ' + agentState().note],
-    ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending'],
+    ['Contract', c.dropped ? 'feed_drop · 1.2.0' : esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
+    ['Agent', c.dropped ? 'Api Verifier (as the api reports it)' : c.source === 'model' ? 'Model · live agent api' : 'Rules · in the page, ' + agentState().note],
+    ['Audit', c.dropped ? (c.auditId ? 'api audit record <code>' + esc(c.auditId) + '</code> (the api\'s own chain)' : 'no audit id sent') : c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending'],
     ['Trace', '<button type="button" class="ag-how" data-id="' + esc(c.id) + '">How was this made?</button>']
   ].map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>' : '<p class="empty">Pick a claim to see its provenance.</p>';
   $('ag-recs').innerHTML = MCC.records().slice(-6).reverse().map((x) => '<li>#' + x.seq + ' ' + esc(x.agent) + ' ' + esc(x.action) + ' ' + esc(x.ref) + ' · ' + x.hash.slice(0, 16) + '</li>').join('') || '<li class="empty">No records yet</li>';
@@ -1208,7 +1208,7 @@ function init(list) {
   const boothState = (j) => { boothLast = { src: 'matchcast-shell', type: 'booth-state', ready: !j || !!j.ready, reason: (j && j.reason) || '' }; post('watch', boothLast); post('broadcast', boothLast); };   // no answer yet (null): the card shows nothing
   // event to on air, measured in this page: hidden until the api publishes a line for events this page sent (live.js measure)
   const paintLatency = (l) => { const p = $('lat-pill'); p.hidden = !l.n; if (l.n) p.textContent = 'Event → on air ' + (l.median_ms / 1000).toFixed(1) + ' s' + (l.n < 5 ? ' (' + l.n + ' line' + (l.n === 1 ? '' : 's') + ')' : ''); };
-  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, booth: boothState, latency: paintLatency, feed: (type, record) => post('broadcast', { src: 'matchcast-shell', type, record }) });   // derived feed records go to the desk only (AB#499)
+  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, drop: AG.ingestDrop, aired: AG.noteAired, booth: boothState, latency: paintLatency, feed: (type, record) => post('broadcast', { src: 'matchcast-shell', type, record }) });   // derived feed records go to the desk only (AB#499)
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
   renderAgents();

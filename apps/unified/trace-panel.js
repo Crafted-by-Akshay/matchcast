@@ -53,7 +53,7 @@ const TP = (() => {
       repairs: Number.isFinite(f.repair_count) ? f.repair_count : null, reason: str(f.reason_code), auditId: str(f.audit_id) };
   };
   // the card of a published line has the record's publication_id; a claim card is not a line and takes no line's record
-  const crewFor = (c) => { const t = c.pub ? CT.get(String(c.id)) : null; return t && t.run === AG.run ? t : null; };
+  const crewFor = (c) => { const t = c.pub || c.dropped ? CT.get(String(c.id)) : null; return t && t.run === AG.run ? t : null; };
   const claimsOf = (c) => (c.apiClaims || []).map((cid) => AG.run.claims.find((x) => x.id === cid && x.api)).filter(Boolean);
   const histRow = (id) => { const m = /^results:(\d+)$/.exec(id); return m ? { label: 'results row ' + m[1], value: '', dataset: 'data/history/results.csv · the row is not loaded in this page' } : { label: id, value: '', dataset: '' }; };
   // the api's own event ids (live.js numbers only the events it sent) are looked up in live.js's table of what it sent, never matched to the page's own ids, which count every event
@@ -63,7 +63,7 @@ const TP = (() => {
   };
   const evidence = (c) => {
     const r = AG.run, chain = MCC.records();
-    const tr = c.trace || [], crew = c.api ? crewFor(c) : null, cl = c.api ? (c.pub ? claimsOf(c) : [c]) : [];
+    const tr = c.trace || [], crew = c.api ? crewFor(c) : null, cl = c.api ? (c.pub ? claimsOf(c) : c.dropped ? [] : [c]) : [];
     const rows = crew ? crew.events.slice(0, ROWS).map(apiRow) : (c.evidence || []).map((id) => {
       const e = r.events.find((x) => x.id === id), m = !e && r.moments.find((x) => x.id === id);
       return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') }
@@ -87,10 +87,10 @@ const TP = (() => {
       + (x.crew && x.crew.extra.length ? '<p class="tp-extra m">' + x.crew.extra.map(esc).join(' · ') + '</p>' : '')
       + (x.traceId ? '<p class="tp-trace"><b>Run</b> <code>' + esc(x.traceId) + '</code></p>' : '')
       + '<p class="tp-agents"><b>Agents</b> ' + (x.api ? '<span class="m">Planned (AB#498): the api does not say which agents ran.</span>' : x.agents.length ? x.agents.map(esc).join(' → ') : '<span class="m">none recorded</span>') + '</p>'
-      + '<p class="tp-tools"><b>Tool calls</b> ' + (x.api ? (x.toolIds.length ? x.toolIds.map(esc).join(', ') + ' <span class="m">· ids only; the names are in the audit records</span>' : none) : x.tools.length ? x.tools.map(esc).join(', ') : '<span class="m">none reported</span>') + '</p>'
+      + '<p class="tp-tools"><b>Tool calls</b> ' + (x.api ? (x.toolIds.length ? x.toolIds.map(esc).join(', ') + ' <span class="m">· ids only; the names are in the audit records</span>' : c.dropped ? '<span class="m">A feed_drop record names no claims, so it has no tool call ids.</span>' : none) : x.tools.length ? x.tools.map(esc).join(', ') : '<span class="m">none reported</span>') + '</p>'
       + '<p><b>Data rows</b></p>' + (x.rows.length ? '<ol class="tp-rows">' + x.rows.map((o) => '<li data-id="' + esc(o.id) + '">' + esc(o.text) + ' <span class="m">' + esc(o.id) + '</span></li>').join('') + '</ol>' + (x.more ? '<p class="m">+' + x.more + ' more event ids not listed</p>' : '')
-        : '<p class="m">' + (x.api ? (x.crew ? 'The api cites no event for this line.' : c.pub ? 'The api has not sent this line\'s record (onair or feed_drop) yet.' : 'A claim\'s events come with the lines that cite it: open a line.') : 'This line cites no single event (a running total over the shots up to its minute).') + '</p>')
-      + '<p class="tp-history"><b>History rows</b> ' + (x.history && x.history.length ? x.history.map((h) => esc(h.label) + ' ' + esc(h.value) + ' <span class="m">' + esc(h.dataset || '') + '</span>').join(' · ') : x.api ? (x.history ? '<span class="m">none cited by this line\'s claims</span>' : '<span class="m">The api sent no <code>evidence_ids</code> for ' + (c.pub ? 'this line\'s claims' : 'this claim') + '.</span>') : '<span class="m">none used. Planned (CREW-2.2): head-to-head and Elo rows are not built yet.</span>') + '</p>'
+        : '<p class="m">' + (x.api ? (x.crew ? 'The api cites no event for this line.' : c.pub ? 'The api has not sent this line\'s record (onair or feed_drop) yet.' : c.dropped ? 'The feed_drop record is no longer held in this page.' : 'A claim\'s events come with the lines that cite it: open a line.') : 'This line cites no single event (a running total over the shots up to its minute).') + '</p>')
+      + '<p class="tp-history"><b>History rows</b> ' + (x.history && x.history.length ? x.history.map((h) => esc(h.label) + ' ' + esc(h.value) + ' <span class="m">' + esc(h.dataset || '') + '</span>').join(' · ') : x.api ? (x.history ? '<span class="m">none cited by this line\'s claims</span>' : '<span class="m">' + (c.dropped ? 'A feed_drop record names no claims, so it cites no history rows.' : 'The api sent no <code>evidence_ids</code> for ' + (c.pub ? 'this line\'s claims' : 'this claim') + '.') + '</span>') : '<span class="m">none used. Planned (CREW-2.2): head-to-head and Elo rows are not built yet.</span>') + '</p>'
       + '<p><b>Audit</b></p>' + (x.audit.length ? '<ol class="tp-audit">' + x.audit.map((a) => '<li class="' + (a.ok ? 'ok' : 'bad') + '">#' + esc(a.seq) + ' <code>' + esc(a.hash) + '</code> ' + esc(a.action) + ' · ' + (a.ok ? 'matches the chain record' : 'no matching chain record') + '</li>').join('') + '</ol>' : '<p class="m">no audit record yet (they are written as each agent acts; reopen to refresh)</p>')
       + '<p class="tp-chain note">Checking the chain…</p></section>';
   };

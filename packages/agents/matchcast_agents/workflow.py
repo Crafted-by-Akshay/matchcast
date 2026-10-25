@@ -30,6 +30,7 @@ from .rules.analyst import ClaimResult
 from .rules.producer import BOOTH_MOMENTS
 from .safety import LocalSafetyScreen, SafetyScreen
 from .season_clubs import season_code
+from .specialists import SpawnBudget, default_registry, plan_spawns, run_all
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
@@ -75,8 +76,31 @@ NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
 # the rundown ledger keeps this many moments (it is checkpointed with the match)
 RUNDOWN_KEEP = 400
+# the contract version of the crew frames (crew_ledger, crew_spawn); the audit stays on 1.1.0
+CREW_SCHEMA_VERSION = "1.3.0"
+# a specialist's report status, as the crew_spawn frame names it
+SPAWN_STATUS = {
+    "ok": "done",
+    "no_data": "no_data",
+    "budget_exhausted": "budget_exhausted",
+    "failed": "failed",
+}
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
+# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1).
+# History is built but not in the pool: a goal's four slots go to the four above, so it has no slot
+# until the planner's cap is decided (see 04-agents.md §2.1).
+SPAWN_POOL = ("replay", "tactics", "stats", "rhythm")
+QUIET_SPAWNS_PER_MATCH = 40  # the quiet moments' own allowance, apart from the priority-1 pool
+
+
+@dataclass
+class MatchSpawnBudgets:
+    """The specialist pools of one match. Every workflow that runs the match (its engine stream and
+    its Vision stream) draws on the same two pools, so the caps hold per match, not per stream."""
+
+    priority_one: SpawnBudget = field(default_factory=SpawnBudget)
+    quiet: SpawnBudget = field(default_factory=lambda: SpawnBudget(QUIET_SPAWNS_PER_MATCH))
 
 
 def feed_kills_in(store: Any, sk: str) -> set[str]:
@@ -243,6 +267,7 @@ class MatchWorkflow:
         knowledge: "TalkKnowledge | None" = None,
         truth_feed: Callable[[], list[dict[str, Any]]] | None = None,
         vision_feed: Callable[[], list[dict[str, Any]]] | None = None,
+        spawn_budgets: MatchSpawnBudgets | None = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
@@ -298,6 +323,17 @@ class MatchWorkflow:
         )
         self.rundown: list[dict[str, Any]] = []  # the Showrunner ledger, see _record_rundown
         self._routing: dict[str, Any] | None = None  # the entry of the moment being run
+        self._at_ms = 0  # the event time of the event being run, for the crew frames
+        # the match's cost guard for specialists, in two pools: quiet moments cannot use up
+        # a goal's specialists. The pools are the match's; this workflow's share of them is
+        # checkpointed, so a restart adds back exactly what this workflow spent
+        pools = spawn_budgets or MatchSpawnBudgets()
+        self.spawn_budgets = pools  # the engine stream's pools are handed to its Vision stream
+        self.spawn_budget = pools.priority_one  # priority-1 moments
+        self.quiet_budget = pools.quiet  # every other moment
+        self._spent = {"priority_one": 0, "quiet": 0}  # what this workflow took from each pool
+        self._saved_once = False  # this workflow has written a checkpoint of its own
+        self._specialists = default_registry()
         self._restore()
         self.killed_feeds: set[str] = set()  # the desk's per-feed kills, from the audit chain
         self._restore_feed_state()
@@ -454,14 +490,23 @@ class MatchWorkflow:
         """Start from the last checkpoint: state and Producer memory before any partial event."""
         row = self.store.get_checkpoint(self.sk)
         if row is None:
+            # a replay from the first event decides every moment again: this workflow's share of
+            # the pools, its ledger and the Producer's memory start at zero: nothing counts twice
+            self._set_spent(0, 0)
+            self.rundown = []
+            reset = getattr(self.agents.producer, "reset", None)
+            if reset:
+                reset()
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
+        self._set_spent(row.get("spawn_used", 0), row.get("quiet_used", 0))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
             restore(row["producer"])
 
     def _checkpoint(self, sequence: int) -> None:
+        self._saved_once = True
         snapshot = getattr(self.agents.producer, "snapshot", None)
         self.store.put_checkpoint(
             self.sk,
@@ -470,6 +515,8 @@ class MatchWorkflow:
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
                 "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
+                "spawn_used": self._spent["priority_one"],
+                "quiet_used": self._spent["quiet"],
             },
         )
 
@@ -478,18 +525,27 @@ class MatchWorkflow:
         row = self.store.get_checkpoint(self.sk)
         done = row["processed_sequence"] if row else 0
         pending = [e for e in self.store.events(self.sk) if e["stream_sequence"] > done]
+        if pending and row is None and self._saved_once:
+            # this workflow already ran the match, so a replay would write its audit records again
+            raise WorkflowError(
+                "conflict", "no checkpoint for a match this workflow has already run"
+            )
         if pending and row is None:
             self.store.put_state(self.sk, MatchState())
         if pending:
-            self._restore()  # drop the half-applied state of the interrupted event
+            self._restore()  # drop the half-applied state and spawn spend of the interrupted event
         for event in pending:
             await self._process(event)
 
     async def _process(self, event: dict[str, Any]) -> None:
+        self._at_ms = int(event["event_time_ms"])
         try:
             await self._process_event(event)
+            ran = self._routing
         finally:
             self._routing = None  # calls after the event (an edit, a talk) are not this moment's
+        if ran is not None:  # the moment's run has ended, so its entry is final
+            self._publish_ledger(ran)
         self._checkpoint(event["stream_sequence"])
 
     def add_persona(self, persona: str) -> bool:
@@ -601,7 +657,47 @@ class MatchWorkflow:
             return None
         self.stats["moments"] += 1
         self._record_rundown(decision)
+        await self._spawn(ctx, decision)
         return decision
+
+    def _set_spent(self, priority_one: int, quiet: int) -> None:
+        """Make this workflow's share of the match's pools exactly these counts. The shared pool
+        moves by the difference, so a restore or a replay adds nothing twice and refills nothing."""
+        self.spawn_budget.used += priority_one - self._spent["priority_one"]
+        self.quiet_budget.used += quiet - self._spent["quiet"]
+        self._spent = {"priority_one": priority_one, "quiet": quiet}
+
+    async def _spawn(self, ctx: MatchContext, task: ProducerTask) -> None:
+        """The specialists for this moment: planned inside the match budget, run in parallel, and
+        written into the moment's rundown entry (names in ``called``, and a ``spawns`` list). A
+        refused moment gets ``spawn_reason`` and no ``spawns`` key."""
+        priority_one = task.priority == 1
+        plan = plan_spawns(
+            priority=int(task.priority),
+            moment_id=task.moment_id,
+            available=SPAWN_POOL,
+            budget=self.spawn_budget if priority_one else self.quiet_budget,
+        )
+        entry = self.rundown[-1]
+        if not plan.requests:
+            entry["spawn_reason"] = plan.reason
+            return
+        pool = "priority_one" if priority_one else "quiet"
+        self._spent[pool] += len(plan.requests)
+        entry["spawns"] = []
+        for request in plan.requests:
+            self._publish_spawn(request.moment_id, request.name, "running")
+        for report in await run_all(ctx, plan.requests, self._specialists):
+            entry["spawns"].append(
+                {"name": report.name, "status": report.status, "findings": len(report.findings)}
+            )
+            self._note_called(report.name)
+            self._publish_spawn(
+                report.moment_id,
+                report.name,
+                SPAWN_STATUS[report.status],
+                ended=True,
+            )
 
     def _record_rundown(self, task: ProducerTask) -> None:
         """One rundown entry per moment the crew takes: the agents it calls, skips and why."""
@@ -611,7 +707,7 @@ class MatchWorkflow:
                 "moment_id": task.moment_id,
                 "called": [],  # filled in as each agent actually runs, see _note_called
                 "skipped": [] if desk else ["stats_desk"],
-                "why": task.why or task.reason,
+                "why": task.reason,  # the rules' or Producer's reason code, never model text
                 "routed_by": task.routed_by,
             }
         )
@@ -622,6 +718,52 @@ class MatchWorkflow:
         """An agent of the current moment actually ran: it goes into that moment's entry."""
         if self._routing is not None and agent_id not in self._routing["called"]:
             self._routing["called"].append(agent_id)
+
+    def _publish_ledger(self, entry: dict[str, Any]) -> None:
+        """The crew_ledger frame for one moment, sent once its run has ended (contract 1.3.0)."""
+        self.hub.publish(
+            "crew_ledger",
+            f"ledger:{entry['moment_id']}",
+            {
+                "kind": "crew_ledger",
+                "schema_version": CREW_SCHEMA_VERSION,
+                "stream": self.stream,
+                "moment_id": entry["moment_id"],
+                "at_ms": self._at_ms,
+                "called": list(entry["called"]),
+                "skipped": list(entry["skipped"]),
+                "why": str(entry["why"])[:200],
+                "routed_by": entry["routed_by"],
+                "spawn_reason": str(entry.get("spawn_reason", ""))[:200],
+            },
+        )
+
+    def _publish_spawn(
+        self, moment_id: str, name: str, status: str, *, ended: bool = False
+    ) -> None:
+        """A crew_spawn frame: a specialist starts (running) or ends (contract 1.3.0). Specialists
+        are deterministic here, so they make no model call and ``tokens`` is 0. ``why`` stays empty:
+        a specialist's line is free text with numbers the Verifier has not checked, so it does not
+        go on the wire."""
+        self.hub.publish(
+            "crew_spawn",
+            f"spawn:{moment_id}:{name}:{status}",
+            {
+                "kind": "crew_spawn",
+                "schema_version": CREW_SCHEMA_VERSION,
+                "stream": self.stream,
+                "moment_id": moment_id,
+                "spawn_id": f"{moment_id}:{name}",
+                "agent_id": name,
+                "role": name,
+                "parent_id": "showrunner",
+                "status": status,
+                "started_ms": self._at_ms,
+                "ended_ms": self._at_ms if ended else None,
+                "tokens": 0,
+                "why": "",
+            },
+        )
 
     def _state_json(self, state: MatchState) -> dict[str, Any]:
         return {
