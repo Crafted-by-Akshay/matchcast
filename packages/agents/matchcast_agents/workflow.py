@@ -48,10 +48,9 @@ TALK_PHRASES = {
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
-# a line that fails its repair on one of these goes to a person, if it is the booth's call: the
-# event log can settle it. Derived feed lines that fail are dropped from air instead (CREW-4.3).
+# a booth line that fails its repair on one of these goes to the producer queue: the event log can
+# settle it. The six derived feeds that fail are dropped from air instead (CREW-4.3).
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
-QUEUED_PERSONA = "booth:pbp"  # the main booth line: the only one a producer decides on
 
 
 class WorkflowError(Exception):
@@ -1164,11 +1163,11 @@ class MatchWorkflow:
         await self._verify_line(ctx, task, claims, replacement, attempt=1, repair_of=draft.line_id)
 
     def _give_up(self, record: LineRecord, verdict: Verdict) -> None:
-        """A line that failed its one repair. The booth's call, when a checkable fact is wrong,
-        waits in the producer queue flagged escalated. Every other line is dropped from air
-        with an audit record (CREW-4.3): the derived feeds air once the Verifier passes them."""
+        """A line that failed its one repair. A booth line (play-by-play or colour) whose failure
+        is a checkable fact waits in the producer queue flagged escalated. The six derived feeds
+        are dropped from air with an audit record (CREW-4.3): they air once the Verifier passes."""
         a = self.agents
-        if record.persona == QUEUED_PERSONA and verdict.reason_code in ESCALATED_CODES:
+        if record.persona in BOOTH and verdict.reason_code in ESCALATED_CODES:
             record.status = "review"
             record.escalated = True
             self._save_line(record)

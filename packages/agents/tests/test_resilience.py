@@ -160,7 +160,7 @@ def test_an_escalated_line_can_be_killed_but_not_approved_or_edited(match) -> No
         config=WorkflowConfig(),
         clock=fixed_clock(),
     )
-    assert flow.add_personas(BOOTH)  # only the booth's call is queued (CREW-4.3)
+    assert flow.add_personas(BOOTH)  # the booth's lines are queued, nothing else (CREW-4.3)
     run(flow.ingest(match["events"]))
     held = next(ln for ln in flow.store.lines(flow.sk) if ln.escalated)
     for attempt in (flow.approve(held.line_id), flow.edit(held.line_id, "Northgate FC lead.")):
@@ -188,17 +188,18 @@ def test_unrepairable_line_is_escalated_after_exactly_one_repair(match) -> None:
     run(flow.ingest(match["events"]))
     records = flow.store.audit_records(flow.sk)
     assert flow.store.publications(flow.sk) == []
-    # an unknown name is a checkable fact: the booth's call waits for a person, and the derived
+    # an unknown name is a checkable fact: the booth's lines wait for a person, and the derived
     # feed lines that cannot be repaired are dropped from air with an audit record (CREW-4.3)
     escalated = [
         r for r in records if r["action"] == "line_review" and r["details"].get("escalated")
     ]
     assert escalated and flow.stats["escalated"] == len(escalated)
     lines = flow.store.lines(flow.sk)
+    # the colour line reacts to a call that never aired, so the Verifier never sees it
     assert {ln.persona for ln in lines if ln.escalated} == {"booth:pbp"}
     dropped = [ln for ln in lines if ln.status == "abstained"]
     assert dropped and flow.stats["abstained"] == len(dropped)
-    assert all(ln.persona != "booth:pbp" for ln in dropped)
+    assert all(ln.persona not in BOOTH for ln in dropped)
     repairs: dict[str, int] = {}
     for r in records:
         if r["action"] == "line_repair_requested":

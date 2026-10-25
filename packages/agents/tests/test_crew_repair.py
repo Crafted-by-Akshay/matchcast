@@ -1,19 +1,22 @@
-"""CREW-4.2: a wrong number is repaired and the corrected line airs; CREW-4.3: only the booth's
-play-by-play call is queued for a person when it cannot be repaired, every other line is dropped.
+"""CREW-4.2: a wrong number is repaired and the corrected line airs; CREW-4.3: the booth's two
+lines (play-by-play and colour) are queued for a person when they cannot be repaired; the six
+derived feeds are dropped from air with an audit record.
 """
 
-from conftest import fixed_clock, run
+from conftest import colour_producer, fixed_clock, run
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.messages import DraftLine
 from matchcast_agents.personas import BOOTH
 from matchcast_agents.rules import NarratorRules
 from matchcast_contracts.audit import verify_chain
 
-BOOTH_CALL = "booth:pbp"
 
+class BadNarrator(NarratorRules):
+    """Adds a name no roster has to the lines of the personas ``breaks`` names, so no redraft of
+    those lines can pass the Verifier. The other personas are written as the rules twin writes."""
 
-class AlwaysBadNarrator(NarratorRules):
-    """Adds a name no roster has, so no redraft can pass the Verifier."""
+    def __init__(self, breaks) -> None:
+        self.breaks = breaks
 
     async def write(self, ctx, task, claims, *, attempt=0):
         lines = await super().write(ctx, task, claims, attempt=attempt)
@@ -22,25 +25,29 @@ class AlwaysBadNarrator(NarratorRules):
                 line_id=ln.line_id,
                 claim_ids=ln.claim_ids,
                 persona=ln.persona,
-                text=ln.text + " Zed Quill agrees.",
+                text=ln.text + " Zed Quill agrees." if self.breaks(ln.persona) else ln.text,
                 max_chars=ln.max_chars,
             )
             for ln in lines
         ]
 
 
-def unrepairable(match) -> MatchWorkflow:
+def flow_with_bad_lines(match, breaks) -> MatchWorkflow:
+    """The booth on, the colour cadence always due, and the lines of ``breaks`` unrepairable."""
     base = rules_agents()
+    config = WorkflowConfig()
     flow = MatchWorkflow(
         stream=match["roster"]["stream"],
         roster=match["roster"],
         names=match["names"],
         clubs=match["teams"],
-        agents=AgentSet(base.producer, base.analyst, AlwaysBadNarrator(), base.verifier),
-        config=WorkflowConfig(),
+        agents=AgentSet(
+            colour_producer(config.personas), base.analyst, BadNarrator(breaks), base.verifier
+        ),
+        config=config,
         clock=fixed_clock(),
     )
-    assert flow.add_personas(BOOTH)  # the booth's calls, and the derived lines beside them
+    assert flow.add_personas(BOOTH)
     return flow
 
 
@@ -88,20 +95,44 @@ def test_a_seeded_wrong_claim_is_repaired_and_the_corrected_line_airs(make_workf
     assert verify_chain(records)["valid"] is True
 
 
-def test_only_the_booth_call_is_queued_and_a_derived_feed_line_is_dropped(match) -> None:
-    flow = unrepairable(match)
+def test_an_unrepairable_call_is_queued_and_the_derived_feeds_are_dropped(match) -> None:
+    flow = flow_with_bad_lines(match, breaks=lambda persona: True)
     run(flow.ingest(match["events"]))
     lines = flow.store.lines(flow.sk)
     records = flow.store.audit_records(flow.sk)
 
     queued = [ln for ln in lines if ln.escalated]
-    assert queued and {ln.persona for ln in queued} == {BOOTH_CALL}
+    assert queued and {ln.persona for ln in queued} == {"booth:pbp"}
     assert all(ln.status == "review" for ln in queued)
 
-    derived = [ln for ln in lines if ln.persona != BOOTH_CALL and ln.status != "rejected"]
+    derived = [ln for ln in lines if ln.persona not in BOOTH and ln.status != "rejected"]
     assert derived and all(ln.status == "abstained" and not ln.escalated for ln in derived)
     dropped = {r["subject_id"] for r in records if r["action"] == "line_abstained"}
     assert {ln.line_id for ln in derived} <= dropped
 
     assert flow.store.publications(flow.sk) == []  # auto-air is on, and nothing unrepaired airs
+    assert verify_chain(records)["valid"] is True
+
+
+def test_an_unrepairable_colour_line_is_queued_while_the_call_it_reacts_to_airs(match) -> None:
+    flow = flow_with_bad_lines(match, breaks=lambda persona: persona != "booth:pbp")
+    run(flow.ingest(match["events"]))
+    lines = flow.store.lines(flow.sk)
+    records = flow.store.audit_records(flow.sk)
+
+    queued = [ln for ln in lines if ln.escalated]
+    assert queued and {ln.persona for ln in queued} == {"booth:colour"}
+    assert all(ln.status == "review" for ln in queued)
+
+    # the play-by-play call it reacts to airs, and nothing else does
+    calls = [ln for ln in lines if ln.persona == "booth:pbp" and ln.status == "published"]
+    assert calls
+    publications = flow.store.publications(flow.sk)
+    assert {p["persona"] for p in publications} == {"booth:pbp"}
+    assert {p["publication_id"] for p in publications} == {f"pub-{ln.line_id}" for ln in calls}
+
+    derived = [ln for ln in lines if ln.persona not in BOOTH and ln.status != "rejected"]
+    assert derived and all(ln.status == "abstained" for ln in derived)
+    dropped = {r["subject_id"] for r in records if r["action"] == "line_abstained"}
+    assert {ln.line_id for ln in derived} <= dropped
     assert verify_chain(records)["valid"] is True
