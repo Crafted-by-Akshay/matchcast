@@ -21,7 +21,13 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, WebSocket
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents import (
+    AgentSet,
+    MatchSpawnBudgets,
+    MatchWorkflow,
+    WorkflowConfig,
+    rules_agents,
+)
 from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.feeds import FEED_KEYS
@@ -255,6 +261,8 @@ class Registry:
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
         self.cuts: dict[tuple[str, str], ModelCut] = {}  # the failure drill's switch per match
+        # the specialist pools per match: the engine and Vision streams of one match share them
+        self.spawn_budgets: dict[str, MatchSpawnBudgets] = {}
         self.create_lock = asyncio.Lock()  # the stored-match check awaits, so creates take turns
         self.store = (
             build_store()
@@ -402,6 +410,10 @@ class Registry:
         sk = stream_key(vision)
         return lambda: pass_facts(self.store.events(sk))
 
+    def spawn_budgets_for(self, match_id: str) -> MatchSpawnBudgets:
+        """The match's specialist pools, shared by its engine and Vision workflows (CREW-2.1)."""
+        return self.spawn_budgets.setdefault(match_id, MatchSpawnBudgets())
+
     def truth_feed_for(
         self, session_id: str, match_id: str
     ) -> Callable[[], list[dict[str, Any]]] | None:
@@ -472,6 +484,7 @@ class Registry:
                 knowledge=self.knowledge,
                 truth_feed=self.truth_feed_for(session_id, match_id),
                 vision_feed=self.vision_feed_for(session_id, match_id),
+                spawn_budgets=self.spawn_budgets_for(match_id),
             )
             self.flows[key] = flow
             return flow
@@ -697,6 +710,7 @@ def build_router(registry: Registry) -> APIRouter:
                     knowledge=registry.knowledge,
                     truth_feed=registry.truth_feed_for(stream["session_id"], stream["match_id"]),
                     vision_feed=registry.vision_feed_for(stream["session_id"], stream["match_id"]),
+                    spawn_budgets=registry.spawn_budgets_for(stream["match_id"]),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(

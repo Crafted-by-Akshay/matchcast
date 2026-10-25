@@ -3,14 +3,18 @@
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents import workflow as workflow_module
+from matchcast_agents.specialists import SpawnBudget
 from matchcast_agents.store import MemoryStore
+from matchcast_agents.workflow import MatchSpawnBudgets
 
 
-def build(match, store: MemoryStore) -> MatchWorkflow:
+def build(
+    match, store: MemoryStore, spawn_budgets: MatchSpawnBudgets | None = None
+) -> MatchWorkflow:
     return MatchWorkflow(
         stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
         clubs=match["teams"], agents=rules_agents(), config=WorkflowConfig(), store=store,
-        clock=fixed_clock(),
+        clock=fixed_clock(), spawn_budgets=spawn_budgets,
     )  # fmt: skip
 
 
@@ -90,7 +94,7 @@ def test_quiet_moments_cannot_use_up_a_goals_specialists(match, monkeypatch) -> 
     assert flow.spawn_budget.used == main_pool
     quiet = [r for r in flow.rundown if r["why"] not in priority_one]
     assert quiet and all(
-        r["spawns"] == [] and r["spawn_reason"] == "budget exhausted" for r in quiet
+        "spawns" not in r and r["spawn_reason"] == "budget exhausted" for r in quiet
     )
 
 
@@ -103,3 +107,61 @@ def test_the_spawn_budgets_survive_a_restart(match) -> None:
     restarted = build(match, store)
     assert restarted.spawn_budget.used == first.spawn_budget.used
     assert restarted.quiet_budget.used == first.quiet_budget.used
+
+
+def test_a_refused_moment_has_a_reason_and_no_spawns_key(match) -> None:
+    """A moment that spawns nothing carries spawn_reason only: the ledger gains no empty list."""
+    flow = build(match, MemoryStore())
+    flow.spawn_budget.used = flow.spawn_budget.limit
+    flow.quiet_budget.used = flow.quiet_budget.limit
+    run(flow.ingest(match["events"]))
+    goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
+    assert entry_for(flow, goal)["spawn_reason"] == "budget exhausted"
+    assert all("spawns" not in r for r in flow.rundown)
+
+
+def test_a_priority_one_goal_is_refused_once_its_pool_is_spent(match) -> None:
+    flow = build(match, MemoryStore())
+    flow.spawn_budget.used = flow.spawn_budget.limit  # the goal pool is out
+    run(flow.ingest(match["events"]))
+    goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
+    entry = entry_for(flow, goal)
+    assert entry["spawn_reason"] == "budget exhausted" and "spawns" not in entry
+    assert set(entry["called"]) == {"analyst", "narrator", "verifier"}
+
+
+def test_a_restart_mid_match_stays_refused_once_the_goal_pool_is_spent(match) -> None:
+    """A tiny goal pool is spent by the first goal; a restart in between must not refill it."""
+    goals = [i for i, e in enumerate(match["events"]) if e["payload"]["type"] == "goal"]
+    cut = goals[0] + 1  # everything up to and including the first goal
+    store = MemoryStore()
+    first = build(match, store, MatchSpawnBudgets(priority_one=SpawnBudget(4)))
+    run(first.ingest(match["events"][:cut]))
+    assert first.spawn_budget.used == 4
+    restarted = build(match, store, MatchSpawnBudgets(priority_one=SpawnBudget(4)))
+    run(restarted.ingest(match["events"][cut:]))
+    second = match["events"][goals[1]]
+    assert entry_for(restarted, second)["spawn_reason"] == "budget exhausted"
+    assert restarted.spawn_budget.used == 4
+
+
+def test_two_workflows_of_one_match_draw_on_the_same_pools(match) -> None:
+    """The engine and the Vision stream run one match: its caps are per match, not per stream."""
+    shared = MatchSpawnBudgets(priority_one=SpawnBudget(4))
+    engine = build(match, MemoryStore(), shared)
+    run(engine.ingest(match["events"]))
+    assert shared.priority_one.used == 4
+    vision = build(match, MemoryStore(), shared)
+    run(vision.ingest(match["events"]))
+    goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
+    assert entry_for(vision, goal)["spawn_reason"] == "budget exhausted"
+    assert shared.priority_one.used == 4
+
+
+def test_a_replay_from_the_first_event_gives_back_the_spend_it_made(match) -> None:
+    """Without a checkpoint the replay starts over, so its earlier spend is taken back first."""
+    flow = build(match, MemoryStore())
+    flow._set_spent(3, 1)
+    assert flow.spawn_budget.used == 3 and flow.quiet_budget.used == 1
+    flow._set_spent(0, 0)
+    assert flow.spawn_budget.used == 0 and flow.quiet_budget.used == 0
