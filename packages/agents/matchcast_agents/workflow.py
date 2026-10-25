@@ -20,7 +20,7 @@ from . import recap as recap_mod
 from .context import MatchContext
 from .hub import StreamHub
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
-from .personas import MAX_WATCH_MODES, known
+from .personas import BOOTH, MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
@@ -409,12 +409,10 @@ class MatchWorkflow:
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
-        if (
-            isinstance(decision, ProducerTask)
-            and self.extra_personas
-            and decision.reason != "colour"
-        ):
-            both = dict.fromkeys([*decision.personas, *self.extra_personas])
+        if isinstance(decision, ProducerTask) and self.extra_personas:
+            # a colour moment is the analyst's line (and the booth's), never a watch mode's
+            extra = [p for p in self.extra_personas if decision.reason != "colour" or p in BOOTH]
+            both = dict.fromkeys([*decision.personas, *extra])
             decision = decision.model_copy(update={"personas": tuple(both)})
         if isinstance(decision, Skip):
             self.stats["skipped"] += 1
@@ -795,15 +793,20 @@ class MatchWorkflow:
         self._repair_lock = asyncio.Lock()
         # The lines of a moment are independent, so their model checks run together (a moment
         # costs one round of Verifier calls, not one per persona); repairs take turns.
-        results = await asyncio.gather(
-            *(self._verify_line(ctx, task, claims, d, attempt=0) for d in drafts),
-            return_exceptions=True,
-        )
-        for failure in results:
-            if isinstance(failure, BaseException):
-                if isinstance(failure, asyncio.CancelledError):
-                    raise RuntimeError("a line check was cancelled") from failure
-                raise failure
+        # The booth's colour analyst answers the play-by-play, so that line is checked and aired
+        # after the call it reacts to; every other line goes together.
+        reacting = [d for d in drafts if d.persona == "booth:colour"]
+        first = [d for d in drafts if d not in reacting]
+        for group in (first, reacting):
+            results = await asyncio.gather(
+                *(self._verify_line(ctx, task, claims, d, attempt=0) for d in group),
+                return_exceptions=True,
+            )
+            for failure in results:
+                if isinstance(failure, BaseException):
+                    if isinstance(failure, asyncio.CancelledError):
+                        raise RuntimeError("a line check was cancelled") from failure
+                    raise failure
 
     def _wants_desk(self, task: ProducerTask) -> bool:
         # priority 1 always; any other moment only when the Producer asked for it

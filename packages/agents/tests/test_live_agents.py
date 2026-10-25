@@ -267,6 +267,34 @@ def test_the_verifier_is_told_the_moment_and_the_narrator_no_limits(match, monke
     assert asked["verifier"]["moment"]["play"]  # what happened, so a named player is supported
 
 
+def test_the_booth_voices_are_written_by_the_model_and_aired_in_order(match, monkeypatch) -> None:
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")
+    asked: list[list[str]] = []
+
+    def record(system, user):
+        facts = json.loads(user)
+        if "personas" in facts:
+            asked.append(facts["personas"])
+        return answer(system, user)
+
+    config = WorkflowConfig(personas=("casual", "booth:pbp", "booth:colour"))
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=match["teams"], agents=live_agents(ScriptedModelClient(record), config.personas),
+        config=config, clock=fixed_clock(),
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    assert asked and all("booth:pbp" in p and "booth:colour" in p for p in asked)
+    booth = [ln for ln in flow.store.lines(flow.sk) if ln.persona.startswith("booth:")]
+    assert booth and all(ln.origin == "model" for ln in booth)
+    done = [
+        r["subject_id"] for r in flow.store.audit_records(flow.sk) if r["action"] == "line_verified"
+    ]
+    for moment in {ln.moment_id for ln in booth}:
+        pair = [i for i in done if i.startswith(f"line-{moment}-booth-")]
+        assert pair == sorted(pair, key=lambda i: "colour" in i)  # pbp before colour
+
+
 def test_colour_falls_back_to_a_rules_line_when_the_model_fails(match) -> None:
     class Down:
         async def complete(self, system, user, schema, **_):

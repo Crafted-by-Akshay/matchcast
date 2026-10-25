@@ -123,3 +123,53 @@ def test_club_watch_accepts_the_display_name_or_the_slug() -> None:
     assert normalise("club:Northgate FC", clubs, {}) == "my-club:home"
     assert normalise("club:harbour-united", clubs, {}) == "my-club:away"
     assert normalise("club:Nowhere Town", clubs, {}) is None
+
+
+def test_booth_voices_are_personas_with_broadcast_limits() -> None:
+    assert valid("booth:pbp") and valid("booth:colour") and not valid("booth:referee")
+    assert max_chars("booth:pbp") == 180 and max_numbers("booth:colour") == 2
+
+
+def test_goal_moment_gives_the_booth_a_call_and_a_reaction_in_order(match) -> None:
+    flow = flow_with(match, ["casual", "booth:pbp", "booth:colour"])
+    lines = flow.store.lines(flow.sk)
+    by_moment: dict[str, list] = {}
+    for line in lines:
+        by_moment.setdefault(line.moment_id, []).append(line)
+    goal = next(v for v in by_moment.values() if {ln.persona for ln in v} >= {"booth:pbp"})
+    assert {ln.persona for ln in goal} == {"casual", "booth:pbp", "booth:colour"}
+    pbp = next(ln for ln in goal if ln.persona == "booth:pbp")
+    colour = next(ln for ln in goal if ln.persona == "booth:colour")
+    assert pbp.text != colour.text and not extract_numbers(colour.text)
+    assert pbp.status in ("verified", "published", "approved")
+    assert colour.status in ("verified", "published", "approved")
+    # the reaction is checked and aired after the call it reacts to
+    order = [
+        r["subject_id"] for r in flow.store.audit_records(flow.sk) if r["action"] == "line_verified"
+    ]
+    moment = [i for i in order if i in {pbp.line_id, colour.line_id}]
+    assert moment == [pbp.line_id, colour.line_id]
+
+
+def test_buildup_and_filler_moments_have_booth_lines_from_claims_alone(match) -> None:
+    from matchcast_agents.messages import ProducerTask
+    from matchcast_agents.rules import AnalystRules, NarratorRules
+
+    flow = flow_with(match, ["casual"])
+    ctx = flow._ctx()
+    first = ctx.events[0]
+    for kind, metric in (("buildup", "goals"), ("filler", "shots")):
+        task = ProducerTask(
+            moment_id=f"m-{kind}",
+            match_id=ctx.stream["match_id"],
+            event_ids=(first["event_id"],),
+            up_to_sequence=ctx.state.max_sequence,
+            priority=3,
+            personas=("booth:pbp", "booth:colour"),
+            reason=kind,
+        )
+        claims = run(AnalystRules().analyse(ctx, task))
+        packets = [c.packet for c in claims]
+        assert [p["metric"].split(":")[0] for p in packets] == [metric, metric]
+        lines = run(NarratorRules().write(ctx, task, packets))
+        assert [ln.persona for ln in lines] == ["booth:pbp", "booth:colour"]

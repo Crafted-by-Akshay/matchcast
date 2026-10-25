@@ -27,7 +27,7 @@ from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
 from matchcast_agents.messages import LineRecord
-from matchcast_agents.personas import ALIASES, normalise
+from matchcast_agents.personas import ALIASES, BOOTH, booth, normalise
 from matchcast_agents.safety import safety_from_env
 from matchcast_agents.statsdesk import A2A_URL, A2AStatsDesk, StatsDeskError
 from matchcast_agents.store import stream_key
@@ -686,15 +686,20 @@ def build_router(registry: Registry) -> APIRouter:
         flow = await registry.flow_for(session_id, match_id)
         if lang not in LANGUAGES:
             raise Problem(422, "contract_invalid", "lang must be en, es or hi", "/lang")
-        if persona:
+        keep: tuple[str, ...] = ()  # the personas this viewer reads; empty means every one
+        if persona and booth(persona):  # both voices of the commentary booth, in one stream
+            keep = BOOTH
+        elif persona:
             persona = normalise(persona, flow.clubs, flow.names)
             if persona is None:
                 raise Problem(422, "contract_invalid", "unknown persona for this match")
-            if not flow.add_persona(persona):  # a watch mode gets lines from the next moment on
+            keep = (persona,)
+        for mode in keep:
+            if not flow.add_persona(mode):  # a watch mode gets lines from the next moment on
                 raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
-            return not (item.event == "publication" and persona and item.data["persona"] != persona)
+            return not (item.event == "publication" and keep and item.data["persona"] not in keep)
 
         async def localised(item: StreamEvent) -> StreamEvent:
             """The publication with a checked `variants[lang]`, or untouched (English)."""
