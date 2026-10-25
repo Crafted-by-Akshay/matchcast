@@ -63,3 +63,20 @@ function narrow() { return window.matchMedia('(max-width:640px)').matches; }
   };
   for (const id of ['visb', 'visp-x']) { const el = $(id); if (el) el.addEventListener('click', panelOnly, true); }
 })();
+// Vision throttle: a capture reads the GPU back, which on a slow machine stalls the frame loop. The tracker's period (VIS.period, in match seconds) is stretched so that captures use about a tenth of the wall time, up to 3 s, and eases back to 0.2 s when they are cheap. The panel's "Hz" shows the period actually in use.
+(() => {
+  const BASE = 0.2, MAX = 3, SHARE = 0.1;
+  let prev = null;
+  window.mcVisThrottle = () => {
+    if (typeof VIS === 'undefined' || !VIS.cost) return null;
+    const c = VIS.cost, now = { ms: c.cap + c.cls + c.det, n: c.n };
+    const fresh = prev && now.n > prev.n;
+    const per = fresh ? (now.ms - prev.ms) / (now.n - prev.n) : 0;   // wall ms one capture job costs
+    prev = now;
+    if (!fresh) return VIS.period;   // nothing captured since the last look (or the counters were reset)
+    const want = Math.min(MAX, Math.max(BASE, (per / 1000 / SHARE) * Math.max(S.speed, 0.25)));   // VIS.acc advances by wall time x playback speed
+    VIS.period += (want - VIS.period) * 0.5;
+    return VIS.period;
+  };
+  setInterval(window.mcVisThrottle, 2000);
+})();

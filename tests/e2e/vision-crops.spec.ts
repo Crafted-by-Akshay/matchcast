@@ -18,8 +18,9 @@ async function liveShell(page: Page, seen: any[], answer: (body: any) => { statu
   });
   await openShell(page, 'watch');
   await ready('watch')(page);   // Watch's own start restarts the stream, so begin after it
-  await page.evaluate(() => LV.begin('k1', null));
-  await page.waitForFunction(() => LV.status === 'live', null, { timeout: 20_000 });
+  // the api creates the match with the first events and the stream opens after that (#234); Watch's own first events do this in the app
+  await page.evaluate(() => { LV.begin('k1', null); LV.events([{ minute: 12.3, type: 'shot', team: 'ars', player: 'A One', x: 90, y: 30, xg: 0.3, kind: 'open play', data: {} }]); });
+  await page.waitForFunction(() => LV.status === 'live', null, { timeout: 20_000 });   // identify is answered only while the stream is live
 }
 
 const relay = (w: any, id: number) => w.evaluate((n: number) => new Promise((res) => {
