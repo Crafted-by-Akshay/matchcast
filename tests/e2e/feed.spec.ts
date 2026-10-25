@@ -169,6 +169,19 @@ test('a build-up of three passes is a hot line, and a single pass is calm', asyn
   ]);
 });
 
+test('a possession change is called at once, even inside the gap', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const plays = await page.evaluate(() => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('booth', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([pass(3, 'H', 'Ana')], []);
+    CM.fromWatch([pass(3.01, 'A', 'Eli')], []);   // 0.01 minutes later: inside the gap, but the ball has changed side
+    CM.fromWatch([pass(3.02, 'A', 'Eli')], []);   // same side, inside the gap: no new line
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
+  });
+  expect(plays).toEqual(['Ana plays it on for Ridgeview.', 'Eli plays it on for Thames Rovers.']);
+});
+
 test('a run of passes is counted across calls, within one minute', async ({ page }) => {
   await openShell(page, 'watch', '?seed=2026');
   const text = await page.evaluate(() => {
@@ -176,7 +189,7 @@ test('a run of passes is counted across calls, within one minute', async ({ page
     const pass = (i: number) => ({ minute: 5 + i * 0.05, type: 'pass', team: 'H', player: names[i % 3] });
     CM.reset('span', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
     CM.fromWatch([0, 1, 2, 3, 4].map(pass), []);     // one call at 5.20, after five passes (the newest pass is at 5.20)
-    CM.fromWatch([5, 6, 7, 8].map(pass), []);        // 5.25 to 5.40: the call at 5.40 is exactly 0.2 minutes after the first, and counts all nine passes from 5.00
+    CM.fromWatch([5, 6, 7, 8].map(pass), []);        // 5.25 to 5.40: the call at 5.40 is 0.2 minutes after the first (the gap is 0.05), and counts all nine passes from 5.00
     return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
   });
   expect(text.at(-1)).toBe('Ridgeview keep the ball: 9 passes, last from Cal.');

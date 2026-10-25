@@ -57,5 +57,5 @@ test('the crowd bed is audible under the commentary, and swells on an attack and
   await page.evaluate(() => VC.say('Ana drives at the box and shoots.', { id: 'attack-1', tone: 'hot' }));
   await expect.poll(() => page.evaluate(() => VC.level), { timeout: 3000 }).toBeGreaterThan(rest + 0.08);
   await page.evaluate(() => VC.say('Goal for Thames Rovers.', { id: 'goal-1', tone: 'big' }));
-  await expect.poll(() => page.evaluate(() => VC.level), { timeout: 3000 }).toBeGreaterThan(0.4);
+  await expect.poll(() => page.evaluate(() => VC.level), { timeout: 3000 }).toBeGreaterThan(0.6);   // a hot line alone reaches 0.45, so only the goal's eruption passes this
 });

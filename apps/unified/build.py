@@ -414,6 +414,9 @@ NO_REAL_LEAGUE = [
     ("FIFA\\'s 32", "the 32"),
     ("// FIFA heat protocol", "// heat protocol"),
     ("// FIFA-style dynamic cam", "// broadcast-style dynamic cam"),
+    # before kick-off the fixture's clubs are not applied yet, so the pre-match caption and kick-off line must not name a season club
+    ("Players are out. Harbor City kick off.", "Players are out. Kick-off to come."),
+    ("TEAMS[0].club + ' get us under way.'", "'Both sides get us under way.'"),
 ]
 
 

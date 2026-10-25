@@ -40,7 +40,11 @@ const VC = (() => {
     source = o.audio ? 'azure' : 'browser'; onChange();
     if (on && !(o.id && spoken.has(o.id))) {
       if (o.tone === 'big') swell(0.8); else if (o.tone === 'hot') swell(0.45);   // a goal erupts; a shot or a build-up lifts the crowd
-      if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' }); next(); }
+      if (o.id) spoken.add(o.id);
+      const item = { text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' };
+      // a big line goes to the front, so a goal is not spoken behind play lines; the expiry still drops a line that waited too long
+      if (item.tone === 'big') queue.unshift(item); else queue.push(item);
+      next(); }
   };
   // the crowd bed (simulated): a murmur under the commentary while Voice is on. It is synthesised here, not a recording. It sits at BED, lifts on an attack
   // (swell 0.45) and erupts on a goal (0.8), then settles back to BED.
@@ -60,7 +64,7 @@ const VC = (() => {
   const crowdStop = () => { clearTimeout(swellT); if (crowd) { try { crowd.src.stop(); crowd.ctx.close(); } catch (e) { /* already stopped */ } crowd = null; } };
   const swell = (peak) => {
     if (!crowd) return; const t = crowd.ctx.currentTime, g = crowd.g.gain;
-    g.cancelScheduledValues(t); g.setTargetAtTime(peak, t, 0.3);
+    g.cancelScheduledValues(t); g.setTargetAtTime(Math.max(peak, g.value), t, 0.3);   // a lift never pulls an eruption back down
     clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(BED, crowd.ctx.currentTime, 1.5); }, 3000);
   };
   const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
