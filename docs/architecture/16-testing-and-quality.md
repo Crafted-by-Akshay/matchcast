@@ -36,8 +36,15 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: QUA-1 to QUA-9, D
 
 - 30 fixed moments (5 per scene family) from recorded matches.
 - Arm A: one `gpt-6-luna` agent with the same tools and a combined prompt. Arm B: the four-agent workflow.
-- The score comes from deterministic Verifier checks only, so the system under test never grades itself.
+- The score comes from deterministic Verifier checks only, so no model grades the system under test.
 - Measures: verified-line rate, hallucinated numbers or names per 100 lines, p50 and p95 latency, tokens, cost. 3 runs per arm; mean and range in `eval/results/<date>.json` and the README.
+
+### 4.1 Line grades and the arm scoreboard (CREW-5.1, CREW-5.2)
+
+- **Line grade.** `packages/agents/matchcast_agents/grading.py` `grade_line` grades an aired line against the event log: each claim it was built from (correct, incorrect or unverifiable, with the engine value beside the claim value), each number the line states, and any name not in the roster. It recounts from the events and never calls a model. A claim with no engine truth is unverifiable, never correct: a history fact, a Vision metric (the log does not count them), an unknown metric, or a claim whose evidence is not in the log. A number in a sentence with a club's name is judged against the claims of the club nearest to it in that sentence (a sentence ends at a full stop, ! or ?, not one inside a number); a sentence with no club name leaves its numbers unattributed. A line built on a wrong claim is incorrect, as the Verifier's check 3 refuses such a line. The grader shares the Verifier's recount function (`recompute`), so an error in that function shows in both; it does not use the Verifier's verdicts.
+- **Scoreboard.** `scoreboard` runs three rules-mode arms on one match with the same seeded wrong claims: the full crew (workflow with its Verifier), a single agent (one pass per shot or goal, claims then line, no Verifier, no Producer routing) and the crew with the Verifier check bypassed. It reports accuracy (wrong numbers aired over numbers aired), catch rate (seeded wrong claims whose wrong value no aired line states, over seeded wrong claims), lines aired, measured wall-time latency per shot or goal, and agent calls a model served. No price is applied. The single agent also skips Content Safety, which the crew arms run.
+- **Live or precomputed.** The rules arms run live on each request and make no model call. Their latency is measured wall time on the machine that runs them (`latency_ms` in each arm). A model-driven arm costs model calls, so it enters only as a precomputed arm from a recorded run and is labelled precomputed with that run's id. No recorded model run is in this change.
+- **Scope.** The grader runs offline on the recorded events of one match. A run's history facts are cut at its run date, so a rerun on the same date gives the same grades. Grading each line as it airs needs a hook in the workflow, which the Showrunner change owns, so it is not wired here. The scoreboard uses `match-short.json`, the fixture the workflow tests use, not the season moments in `eval/frozen-moments.json`.
 
 ## 5. Browser tests (Playwright)
 
