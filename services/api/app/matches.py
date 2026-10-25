@@ -904,7 +904,7 @@ def build_router(registry: Registry) -> APIRouter:
         async def body() -> AsyncIterator[str]:
             yield StreamEvent("status", None, {"status": flow.status}).encode()
             yield StreamEvent("state", None, _state_json(flow)).encode()
-            replay = [e for e in flow.hub.replay_after(last_event_id) if wanted(e)]
+            replay = flow.hub.replay_after(last_event_id, wanted=wanted)
             if not follow:
                 for item in replay:
                     yield (await localised(item)).encode()

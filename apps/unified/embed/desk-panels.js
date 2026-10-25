@@ -203,13 +203,13 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
 
 // ---- Six-feed monitor (Broadcast): the six English derived feeds, what each has aired, the lines the Verifier dropped and why, and a kill per feed.
 // Derived lines never enter the producer queue: booth lines keep it. The record fields are the matchcast.onair/1 1.2.0 onair and feed_drop packets (AB#498, merged; docs/contracts.md).
-// The shell does not send feed-air and feed-drop yet (AB#499): ?feeds=fixture feeds the monitor until it does. A kill changes this desk only; the air path does not read it yet.
+// The shell forwards the stream's feed-air and feed-drop records (AB#499). ?feeds=fixture feeds the monitor on its own, for demos and tests. A kill is enforced on the air path; this desk shows it.
 (() => {
   if (!framed) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const FEEDS = [['casual', 'Casual'], ['analyst', 'Analyst'], ['audio_description', 'Audio description'], ['catch_me_up', 'Catch-me-up'], ['half_time', 'Half-time'], ['ticker', 'Ticker']];
   const feeds = Object.fromEntries(FEEDS.map(([k, label]) => [k, { label, on: true, aired: 0, last: '' }]));
-  const seen = new Set(), drops = [];
+  const seen = new Set(), drops = [], droppedIds = new Set();
   let fixture = false;   // a demo and test parameter: off unless the URL asks for it
   try { fixture = /[?&]feeds=fixture(&|$)/.test(window.parent.location.search); } catch (err) { /* a cross-origin parent keeps the monitor on the live records */ }
   const feedOf = (k) => (Object.hasOwn(feeds, k) ? feeds[k] : null);
@@ -240,15 +240,20 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
       : '<li class="mcp-v">Nothing dropped yet.</li>';
   };
   renderDrops();
-  // a feed line airs once per publication, in English this sprint, and only while its feed is on; a killed feed airs nothing
+  // a feed line airs once per publication, in English this sprint, and only while its feed is on; a killed feed airs nothing.
+  // A line is remembered even while its feed is off, so a replay after a resume does not count it
   const aired = (rec) => {
     const s = feedOf(rec.feed);
-    if (!s || !s.on || rec.lang !== 'en' || !rec.publication_id || seen.has(rec.publication_id)) return;
-    seen.add(rec.publication_id); s.aired++; s.last = rec.text || ''; render(rec.feed);
+    if (!s || rec.lang !== 'en' || !rec.publication_id || seen.has(rec.publication_id)) return;
+    seen.add(rec.publication_id);
+    if (!s.on) return;
+    s.aired++; s.last = rec.text || ''; render(rec.feed);
   };
-  // the Verifier's drop shows the reason; the line text stays in the audit chain, so the desk shows no text here
+  // the Verifier's drop shows the reason; the line text stays in the audit chain, so the desk shows no text here.
+  // A reconnect replays the drops already shown, so each drop is shown once, by its audit id
   const dropped = (rec) => {
-    if (!feedOf(rec.feed)) return;
+    if (!feedOf(rec.feed) || droppedIds.has(rec.audit_id)) return;
+    droppedIds.add(rec.audit_id);
     drops.unshift(rec); drops.length = Math.min(drops.length, 5); renderDrops();
   };
   box.querySelector('#mc-feed-list').onclick = (e) => {
@@ -269,7 +274,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     setInterval(() => {
       const k = FEEDS[tick % FEEDS.length][0];
       tick++;
-      if (tick % 4 === 0) dropped({ feed: k, publication_id: 'fixture-drop-' + tick, source_event_ids: [], reason_code: 'repeat', repair_count: 0, audit_id: 'fixture' });
+      if (tick % 4 === 0) dropped({ feed: k, publication_id: 'fixture-drop-' + tick, source_event_ids: [], reason_code: 'repeat', repair_count: 0, audit_id: 'fixture-' + tick });
       else aired({ feed: k, publication_id: 'fixture-' + tick, lang: 'en', text: 'fixture line ' + tick + ' for ' + feeds[k].label + '.', source_event_ids: [], claim_ids: [], match_time_ms: 0, aired_at: new Date().toISOString(), repair_count: 0 });
     }, 12000);
   }

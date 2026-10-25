@@ -78,7 +78,7 @@ Every match route rebuilds the workflow of a stored match from its roster when t
 
 `persona` is `casual`, `analyst`, `broadcast` (aliases `fan`, `producer`) `booth` (both commentary voices, publications with persona `booth:pbp` then `booth:colour` for each moment, play-by-play first), or a watch mode: `club:<id or name>`, `player:<id or name>`, `metric:<name>` (server forms `my-club:`, `player-focus:`, `one-metric:`). A watch mode must name a real club, player or metric of the match; opening the stream registers it for the match from the next moment on (no back-fill), at most 8 extra modes per match, kept until the match ends.
 
-On reconnect with `Last-Event-ID`, the server replays publications, audit records and derived feed records (`onair`, `feed_drop`) after that point (at most 500), then continues live. The crew frames (`crew_ledger`, `crew_spawn`) are live only.
+On reconnect with `Last-Event-ID`, the server replays the records after that point, then continues live. Publications and audit records are capped at the first 500 after it; derived feed records (`onair`, `feed_drop`) have their own cap of the first 2000, so a desk that opens late still counts the feeds from the start of the match. A viewer's persona filter applies before either cap. With no `Last-Event-ID` (the desk's EventSource cannot send one) the replay is from the start of the buffer. The crew frames (`crew_ledger`, `crew_spawn`) are live only.
 
 ## 4. MCP and A2A
 

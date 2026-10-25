@@ -48,7 +48,7 @@ def test_periodic_summary_moment(match) -> None:
     assert isinstance(task, ProducerTask) and task.reason == "summary" and task.priority == 3
 
 
-def test_hub_replays_only_publications_and_audit_after_last_id() -> None:
+def test_hub_replays_publications_and_audit_after_last_id() -> None:
     hub = StreamHub()
     hub.publish("state", "state:1", {"r": 1})
     hub.publish("publication", "pub:a", {"t": "a"})
@@ -68,6 +68,28 @@ def test_hub_replays_feed_records_so_a_reconnect_rebuilds_the_monitor() -> None:
     hub.publish("crew_ledger", "ledger:m1", {"called": True})
     assert [e.id for e in hub.replay_after(None)] == ["onair:pub-a", "drop:line-b"]
     assert [e.id for e in hub.replay_after("onair:pub-a")] == ["drop:line-b"]
+
+
+def test_a_desk_that_opens_late_still_gets_every_feed_record_in_the_replay() -> None:
+    # AB#499: the desk sends no Last-Event-ID, so the replay is all it gets. Publications and
+    # audit are capped at 500 from the start; feed records have their own budget
+    hub = StreamHub()
+    for i in range(600):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    hub.publish("onair", "onair:late", {"feed": "casual"})
+    replay = [e.id for e in hub.replay_after(None)]
+    assert "onair:late" in replay
+    assert len([i for i in replay if i.startswith("pub:")]) == 500
+
+
+def test_the_persona_filter_applies_before_the_replay_cap() -> None:
+    # the cap counts only what a viewer keeps, so a casual viewer is not starved by analyst lines
+    hub = StreamHub()
+    for i in range(600):
+        hub.publish("publication", f"pub:a{i}", {"persona": "analyst"})
+    hub.publish("publication", "pub:c", {"persona": "casual"})
+    keep_casual = lambda e: e.event != "publication" or e.data["persona"] == "casual"  # noqa: E731
+    assert [e.id for e in hub.replay_after(None, wanted=keep_casual)] == ["pub:c"]
 
 
 def test_colour_moment_is_capped_by_wall_time_and_off_by_default(match) -> None:

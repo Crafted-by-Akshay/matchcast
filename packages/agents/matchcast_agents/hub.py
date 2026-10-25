@@ -2,13 +2,17 @@
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
 
-# onair and feed_drop are records, not speech, so a reconnecting desk can rebuild its feed monitor
-REPLAYED = ("publication", "audit", "onair", "feed_drop")
+PUBLICATION_REPLAYED = ("publication", "audit")
+# onair and feed_drop are records, not speech: a desk that opens late rebuilds its feed monitor from
+# them, so they have their own budget and are not crowded out by publications and audit records
+FEED_REPLAYED = ("onair", "feed_drop")
+REPLAYED = (*PUBLICATION_REPLAYED, *FEED_REPLAYED)
 REPLAY_LIMIT = 500
+FEED_REPLAY_LIMIT = 2000
 
 
 @dataclass(frozen=True)
@@ -46,15 +50,32 @@ class StreamHub:
     def history(self) -> list[StreamEvent]:
         return list(self._log)
 
-    def replay_after(self, last_id: str | None) -> list[StreamEvent]:
-        """Publications and audit records after ``last_id`` (all of them when it is unknown)."""
+    def replay_after(
+        self, last_id: str | None, wanted: Callable[[StreamEvent], bool] | None = None
+    ) -> list[StreamEvent]:
+        """Records after ``last_id`` (all of them when it is unknown), oldest first.
+
+        The first 500 publication and audit records and the first 2000 feed records are kept, so
+        the caps count only what ``wanted`` lets through, in the order they were published."""
         start = 0
         if last_id:
             for index, item in enumerate(self._log):
                 if item.id == last_id:
                     start = index + 1
-        rows = [e for e in self._log[start:] if e.event in REPLAYED]
-        return rows[:REPLAY_LIMIT]
+        kept: list[StreamEvent] = []
+        counts = {"publication": 0, "feed": 0}
+        for item in self._log[start:]:
+            if item.event not in REPLAYED or (wanted is not None and not wanted(item)):
+                continue
+            kind, limit = (
+                ("feed", FEED_REPLAY_LIMIT)
+                if item.event in FEED_REPLAYED
+                else ("publication", REPLAY_LIMIT)
+            )
+            if counts[kind] < limit:
+                counts[kind] += 1
+                kept.append(item)
+        return kept
 
     async def subscribe(self, replay: list[StreamEvent]) -> AsyncIterator[StreamEvent]:
         queue: asyncio.Queue[StreamEvent] = asyncio.Queue(maxsize=1000)
