@@ -1,10 +1,10 @@
 """Half-time explainer (CREW-7.4, AB#465): one whole-feed piece about the first half.
 
 Deterministic and templated, like the full-time recap. The first half is cut at the earliest
-period_boundary that ends period 1; a retracted one gives no piece. Only period-1 events up to that cut
-are folded, so no second-half event can reach the piece. A retraction leaves its target out,
-wherever it sits in the stream. A correction to a first-half event holds the piece (None):
-nothing folds corrections yet, so such a piece stays held until a fold exists.
+period_boundary that ends period 1; a retracted one gives no piece. Only period-1 events up to
+that cut are folded, so no second-half event can reach the piece. A retraction leaves its
+target out, wherever it sits in the stream. A correction to a first-half event holds the
+piece (None): nothing folds corrections yet, so such a piece stays held until a fold exists.
 
 Each sentence lists the metrics it quotes, for the Verifier to recount. feeds.py sets the
 feed's 90 seconds; WORDS_PER_SECOND here turns that into a word limit. Own goals are counted
