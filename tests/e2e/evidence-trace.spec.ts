@@ -297,7 +297,7 @@ test('evidence trace: a feed_drop becomes a "Verifier dropped" card in the Agent
   await expect(row.locator('td.v')).toContainText('dropped');
   await expect(row).toContainText('number_mismatch');
   await expect(row).toContainText('feed analyst');
-  await expect(page.locator('#ag-cards')).toContainText('1 dropped');
+  await expect(page.locator('#ag-cards')).toContainText('1 caught');
   await expect(page.locator('#ag-feed')).toContainText('dropped a line on the analyst feed: number_mismatch');
   await row.click();
   const prov = page.locator('#ag-prov');
@@ -340,7 +340,7 @@ test('evidence trace: a drop never shows for a line that aired, whatever order t
   expect(await page.evaluate((x) => { AG.noteAired('pub-a'); return AG.ingestDrop(x, 'live'); }, dropOf('pub-a'))).toBe(false);
   // the drop first, the publication after: the card becomes the published line and the count goes back down
   await page.evaluate((x) => AG.ingestDrop(x, 'live'), dropOf('pub-late'));
-  await expect(page.locator('#ag-cards')).toContainText('1 dropped');
+  await expect(page.locator('#ag-cards')).toContainText('1 caught');
   await page.evaluate(() => AG.ingest({ publication_id: 'pub-late', line_id: 'L-9', claim_ids: [], text: 'Goal for Northgate FC.' }, 'live'));
   const c = await page.evaluate(() => { const k = AG.run.claims.find((x: any) => x.id === 'pub-late'); return { dropped: k.dropped, pub: k.pub, approval: k.approval, kind: k.kind, n: AG.run.stat.dropped }; });
   expect(c).toEqual({ dropped: false, pub: true, approval: undefined, kind: 'line', n: 0 });
@@ -362,4 +362,104 @@ test('evidence trace: a drop never shows for a line that aired, whatever order t
   // a flood of distinct ids is bounded
   expect(await page.evaluate(() => { for (let i = 0; i < 520; i++) AG.ingestDrop({ publication_id: 'flood-' + i, reason_code: 'repeat' }, 'live'); return AG.run.claims.filter((k: any) => k.dropped).length; })).toBe(500);
   expect(errs).toEqual([]);
+});
+
+// the demo path today: the api's bad-claim switch makes the Verifier reject a line (a `line` event, status rejected, with its reason and failed checks). The redraft carries repair_of;
+// if it verifies the catch is repaired, and if it is rejected too the api sends abstained for the redraft (not for the original)
+const lineEv = (id: string, status: string, extra: object = {}) => ({ line_id: id, moment_id: 'm-e42', claim_ids: ['c-9'], persona: 'casual', text: 'Argentina lead 2-0 after 12 minutes.', status, ...extra });
+const badChecks = [{ name: 'numbers', passed: false, detail: 'score says 2-0, the event log says 1-0' }, { name: 'names', passed: true, detail: 'ok' }];
+const ing = (page: Page, ...evs: object[]) => page.evaluate((xs) => xs.forEach((x: any) => AG.ingest(x, 'live')), evs);
+const cardsOf = (page: Page) => page.evaluate(() => AG.run.claims.filter((c: any) => c.dropped).map((c: any) => c.id).sort());
+
+test('evidence trace: a rejected line event is a "Verifier rejected" card that follows its repair and shows the failed checks', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openEvidence(page, '?evidence=1');
+  await apiLine(page);
+  await page.evaluate(() => (document.getElementById('tp') as HTMLDialogElement).close());
+  const rej = lineEv('L-5', 'rejected', { reason_code: 'number_mismatch', checks: badChecks });
+  await ing(page, rej, rej);   // a replayed event is one card
+  const row = page.locator('#ag-claims tr[data-id="pub-L-5"]');
+  await expect(row.locator('td.v')).toContainText('rejected');
+  await expect(row).toContainText('Verifier rejected · number_mismatch · one repair requested');
+  await expect(row).toContainText('feed casual');
+  await expect(page.locator('#ag-cards')).toContainText('1 caught');
+  await expect(page.locator('#ag-feed')).toContainText('rejected a line on the casual feed: number_mismatch. One repair follows.');
+  expect(await page.evaluate(() => AG.run.claims.find((c: any) => c.id === 'pub-L-5').text), 'the rejected draft is not shown').toBe('');
+  // the redraft names it in repair_of and passes
+  await ing(page, lineEv('L-6', 'drafted', { repair_of: 'L-5' }));
+  await expect(row).toContainText('repair L-6 checking');
+  await ing(page, lineEv('L-6', 'verified', { repair_of: 'L-5' }), rej);   // a replayed rejection does not undo it
+  await expect(row).toContainText('repair L-6 passed the Verifier');
+  await expect(page.locator('#ag-feed')).toContainText('the repair L-6 passed the Verifier');
+  await row.click();
+  const prov = page.locator('#ag-prov');
+  await expect(prov).toContainText('Verifier rejected');
+  await expect(prov).toContainText('Failed checks: numbers (score says 2-0, the event log says 1-0)');
+  await expect(prov).toContainText('line event · status rejected');
+  await prov.locator('.ag-how').click();
+  const ev = page.locator('#tp .tp-evidence');
+  await expect(ev.locator('.tp-state')).toContainText('rejected');
+  await expect(ev.locator('.tp-verifier')).toContainText('number_mismatch');
+  await expect(ev.locator('.tp-checks')).toContainText('the event log says 1-0');
+  await expect(ev.locator('.tp-tools')).toContainText('tc-1, tc-2');   // from the claim the line cites
+  await expect(ev).toContainText('names its claims, not events');
+  await page.locator('#tp .tp-x').click();
+  expect(await cardsOf(page)).toEqual(['pub-L-5']);
+  expect(errs).toEqual([]);
+});
+
+test('evidence trace: a repair that fails is one card that ends dropped; replays and early redrafts do not move it back', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openEvidence(page, '?evidence=1');
+  await apiLine(page);
+  await page.evaluate(() => (document.getElementById('tp') as HTMLDialogElement).close());
+  const rej = lineEv('L-10', 'rejected', { reason_code: 'number_mismatch', checks: badChecks });
+  await ing(page, rej, lineEv('L-11', 'rejected', { repair_of: 'L-10', reason_code: 'number_mismatch', checks: badChecks }));
+  const row = page.locator('#ag-claims tr[data-id="pub-L-10"]');
+  await expect(row).toContainText('repair L-11 failed its check');
+  await ing(page, lineEv('L-11', 'abstained', { repair_of: 'L-10', reason_code: 'number_mismatch', checks: badChecks }));   // the api sends abstained for the redraft
+  await expect(row.locator('td.v')).toContainText('dropped');
+  await expect(row).toContainText('Verifier dropped · number_mismatch · after 1 repair');
+  await expect(page.locator('#ag-feed')).toContainText('after one repair. It did not air.');
+  await ing(page, rej, lineEv('L-11', 'drafted', { repair_of: 'L-10' }));   // an SSE replay of earlier events
+  await expect(row.locator('td.v')).toContainText('dropped');
+  expect(await cardsOf(page), 'one incident is one card, not one per line id').toEqual(['pub-L-10']);
+  await expect(page.locator('#ag-cards')).toContainText('1 caught');
+  // the redraft seen before its original: the card is made already repaired
+  await ing(page, lineEv('L-13', 'verified', { repair_of: 'L-12' }), lineEv('L-12', 'rejected', { reason_code: 'unknown_player' }));
+  await expect(page.locator('#ag-claims tr[data-id="pub-L-12"]')).toContainText('repair L-13 passed the Verifier');
+  // a feed_drop for a card the line stream made is the later word: dropped, with the record's audit id
+  await ing(page, lineEv('L-14', 'rejected', { reason_code: 'repeat' }));
+  await page.evaluate(() => AG.ingestDrop({ publication_id: 'pub-L-14', feed: 'casual', reason_code: 'repeat', audit_id: 'audit-9', repair_count: 1, source_event_ids: ['e1'] }, 'live'));
+  const r14 = page.locator('#ag-claims tr[data-id="pub-L-14"]');
+  await expect(r14.locator('td.v')).toContainText('dropped');
+  await r14.click();
+  await expect(page.locator('#ag-prov')).toContainText('audit-9');
+  await expect(page.locator('#ag-prov')).toContainText('feed_drop · 1.2.0');
+  // hostile fields are text
+  await ing(page, lineEv('L-7', 'rejected', { persona: '<b>x</b>', reason_code: '<img src=x onerror=window.__xss=1>', checks: [null, { name: { toString: 1 }, passed: false, detail: 7 }] }));
+  await expect(page.locator('#ag-claims tr[data-id="pub-L-7"]')).toContainText('<img src=x onerror=window.__xss=1>');
+  expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  expect(errs).toEqual([]);
+});
+
+test('evidence trace: a booth line the Verifier cannot repair stays the producer\'s held line, not a caught card', async ({ page }) => {
+  await openEvidence(page, '?evidence=1');
+  await apiLine(page);
+  await page.evaluate(() => (document.getElementById('tp') as HTMLDialogElement).close());
+  const booth = { persona: 'booth:pbp', reason_code: 'number_mismatch', checks: badChecks };
+  await ing(page, lineEv('L-b1', 'rejected', booth), lineEv('L-b2', 'rejected', { ...booth, repair_of: 'L-b1' }), lineEv('L-b2', 'review', { ...booth, repair_of: 'L-b1', escalated: true }));
+  const r = await page.evaluate(() => ({ caught: AG.run.claims.filter((c: any) => c.dropped).length, stat: AG.run.stat.dropped, queue: AG.queue().map((q: any) => q.id) }));
+  expect({ caught: r.caught, stat: r.stat, queued: r.queue.includes('pub-L-b2') }).toEqual({ caught: 0, stat: 0, queued: true });
+});
+
+test('evidence trace: a line event that is not rejected or abstained, or whose id aired, makes no card', async ({ page }) => {
+  await openEvidence(page, '?evidence=1');
+  await apiLine(page);
+  await page.evaluate(() => (document.getElementById('tp') as HTMLDialogElement).close());
+  await ing(page, lineEv('L-8', 'drafted', { claim_ids: [] }), lineEv('L-8', 'verified', { claim_ids: [] }));
+  await page.evaluate(() => { AG.noteAired('pub-L-9'); AG.ingest({ line_id: 'L-9', claim_ids: [], persona: 'casual', status: 'rejected', reason_code: 'repeat', text: 'x' }, 'live'); });
+  await expect(page.locator('#ag-claims tr[data-id="pub-L-8"]')).toHaveCount(0);
+  await expect(page.locator('#ag-claims tr[data-id="pub-L-9"]')).toHaveCount(0);
+  expect(await page.evaluate(() => AG.run.stat.dropped)).toBe(0);
 });
