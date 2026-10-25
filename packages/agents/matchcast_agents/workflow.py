@@ -55,12 +55,16 @@ def repair_feedback(draft: DraftLine, verdict: Verdict) -> str:
     (a limit or a number named there would be echoed into the line)."""
     said = {
         "persona": f"the {draft.persona} line was too long or had too many numbers: shorten it",
-        "numbers": "a number was not backed by a claim: use only the claim values, each once",
+        "numbers": "a number was not backed by a claim or a claim value was repeated: use only the claim values, each once",
         "names": "a name was not in the roster or not on the team in this moment",
         "sources": "a claim was not usable",
         "specific": "the colour line must name a player or club",
     }
-    parts = [said.get(c.name) or c.detail[:200] for c in verdict.checks if not c.passed]
+    parts = [
+        said.get(c.name, "the line was not supported by the claims")
+        for c in verdict.checks
+        if not c.passed
+    ]
     return "; ".join(dict.fromkeys(parts))
 
 
@@ -100,6 +104,7 @@ class Narrator(Protocol):
         claims: list[dict[str, Any]],
         *,
         attempt: int = 0,
+        feedback: str = "",
     ) -> list[DraftLine]: ...
 
 
