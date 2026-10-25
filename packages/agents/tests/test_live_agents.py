@@ -5,6 +5,7 @@ import json
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig
 from matchcast_agents.live import ModelCut, ScriptedModelClient, live_agents
+from matchcast_agents.personas import BOOTH
 from matchcast_agents.resilience import ModelError, ModelTimeout
 
 
@@ -95,7 +96,10 @@ def test_the_model_meaning_check_can_reject_or_send_to_review(match) -> None:
     )
     flow = build(match, unclear)
     run(flow.ingest(match["events"]))
-    assert any(ln.status == "review" for ln in flow.store.lines(flow.sk))
+    # a derived line the meaning check cannot pass is refused, never queued or aired (CREW-4.3)
+    derived = [ln for ln in flow.store.lines(flow.sk) if ln.persona not in BOOTH]
+    assert derived and not any(ln.status == "review" for ln in derived)
+    assert any(ln.status == "abstained" for ln in derived)
 
 
 def test_a_model_outage_falls_back_to_rules_and_is_audited(match, monkeypatch) -> None:
