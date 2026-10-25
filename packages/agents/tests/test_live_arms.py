@@ -135,3 +135,34 @@ def test_counting_a_fallback_leaves_it_for_the_workflow_audit() -> None:
     assert result == []
     assert (tally.agent_calls, tally.answered_by_rules) == (1, 1)
     assert taken == ["model_error"]  # still there for the workflow
+
+
+def test_the_producer_keeps_taken_fallbacks_in_order() -> None:
+    # outside a call the Producer's fallbacks are one list: a take then a keep restores it exactly
+    from matchcast_agents.live.client import ScriptedModelClient
+    from matchcast_agents.live.producer import LiveProducer
+    from matchcast_agents.rules import ProducerRules
+
+    producer = LiveProducer(ScriptedModelClient(), ProducerRules(("analyst",)))
+    producer.keep_fallbacks(["model_error", "timeout"])
+    taken = producer.take_fallbacks()
+    assert taken == ["model_error", "timeout"]
+    assert producer.take_fallbacks() == []
+    producer.keep_fallbacks(taken)
+    assert producer.take_fallbacks() == ["model_error", "timeout"]
+    # kept fallbacks go in front of any already waiting: they were taken first
+    producer.keep_fallbacks(["old"])
+    producer.keep_fallbacks(["older"])
+    assert producer.take_fallbacks() == ["older", "old"]
+
+
+def test_a_recorded_arm_without_a_run_id_is_no_run(tmp_path) -> None:
+    # a recording whose arm has no run id would make the route fail; it is treated as no run
+    path = tmp_path / "run.json"
+    record = {"kind": "crew_live_run", "match_id": "m", "seed": 2026, "seed_rate": SEED_RATE}
+    record["arms"] = {"full_crew": {"mode": "live"}}
+    path.write_text(json.dumps(record))
+    assert load_live_run(str(path), match_id="m") is None
+    record["arms"] = {"full_crew": "not an object"}
+    path.write_text(json.dumps(record))
+    assert load_live_run(str(path), match_id="m") is None
