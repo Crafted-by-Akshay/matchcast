@@ -11,9 +11,9 @@ Three lanes decide what a verified line does next:
 - queue: every other persona (broadcast, the watch modes, anything malformed). These keep
   today's behaviour and fail closed: they wait for the producer in any mode but auto.
 
-The other four feeds (audio description, catch-me-up, half-time, ticker) have no writer yet
-and no persona, so no line can be tagged with them. They join DERIVED_PERSONAS when their
-writers land.
+The other four feeds (audio description, catch-me-up, half-time, ticker) have no persona yet,
+so no line can be tagged with them. The half-time writer is in half_time.py (CREW-7.4); it
+joins DERIVED_PERSONAS when the workflow and feed stream wire it in.
 """
 
 from dataclasses import dataclass
