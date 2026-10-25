@@ -51,12 +51,12 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 #status-dlg::backdrop{background:rgba(0,0,0,.55)}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
-#lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+#lang-sel select{font:inherit;padding:2px 6px;border:1px solid var(--line,#999);border-radius:999px;background:transparent;color:inherit;max-width:9.5em}
 #voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0;min-height:0}   /* a live region for voice announcements, not a visible control */
 #api-pill::before{content:"Agents ·";margin-right:.4em;color:var(--muted)}   /* says which part the pill is about, so it does not read as a contradiction of the engine chips */
 @media (max-width:1500px){.brand small{display:none}.proto{display:none}}
 @media (max-width:1400px){.switch button small{display:none}}   /* the four tabs fit beside the wordmark; their titles say what each one is */
-@media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
+@media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#fx,#lang-sel select,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
@@ -265,7 +265,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <div class="status" aria-label="Environment">
     <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
-    <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
+    <span id="lang-sel" style="display:inline-flex;gap:4px"><select id="lang-pick" aria-label="Language"></select></span>
     <span class="pill" id="api-pill" role="status" title="">Starting…</span><span class="pill" id="lat-pill" hidden title="Event to on air: wall-clock time from a Watch event reaching this page to the agent api's published line arriving here, the median of the last 30 matched lines. Watch batches its events once a second before they reach this page; that wait is not in the number."></span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
     <span class="more" aria-hidden="true">›</span>
@@ -387,6 +387,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 </aside>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script src="langs.js"></script>
 <script src="contracts.js"></script>
 <script src="config.js"></script>
 <script src="agents.js"></script>
@@ -800,12 +801,12 @@ function cardOf(c) {
 }
 // ---------------------------------------------------------------- Ask (EXP-5)
 // 300 characters, ASK_LIMIT questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
-const LANGS_OK = ['en', 'es', 'hi'];
+const LANGS_OK = window.MC_LANGS;
 const ANSWER_WAIT_MS = 20000;   // the api's model call is given 15 s (packages/agents live/answers.py); Watch waits longer than this
 const askTimes = { watch: [], broadcast: [] };   // one budget per view
 const ASK_LIMIT = 20;   // questions a minute per view; the api has its own limit of the same size per session
 async function answerAsk(id, q, to = 'watch', surface = 'ask') {
-  const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
+  const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst', lang: answer.lang || 'en' }); };   // the answer's own language: a French answer is never read in the English voice   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
   const times = askTimes[to] || (askTimes[to] = []), now = Date.now(); while (times.length && now - times[0] > 60000) times.shift();
   if (times.length >= ASK_LIMIT) { reply({ text: 'You can ask ' + ASK_LIMIT + ' questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
@@ -1133,17 +1134,18 @@ function init(list) {
     b.disabled = false; renderAgents();
   };
   setInterval(badNote, 2000);
-  // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
+  // EXP-17, ADR-0023: one viewer language (MC_LANGS) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
   M.lang = 'en'; M.persona = M.persona || 'fan'; CM.setPersona(M.persona);
-  const LANGS = ['en', 'es', 'hi'];
+  const LANGS = window.MC_LANGS, pick = $('lang-pick');
+  pick.innerHTML = LANGS.map((l) => '<option value="' + l + '" lang="' + l + '">' + window.MC_LANG_NAMES[l] + '</option>').join('');
   window.setLang = (l, from) => {
     if (!LANGS.includes(l) || (l === M.lang && from)) return;   // the selector's own click always re-syncs the views
     M.lang = l; try { localStorage.setItem('mc-lang', l); } catch (e) { /* storage may be blocked */ }
-    for (const b of document.querySelectorAll('#lang-sel button')) b.setAttribute('aria-pressed', String(b.dataset.lang === l));
+    pick.value = l;
     for (const v of ['watch', 'broadcast']) if (v !== from) post(v, { src: 'matchcast-shell', type: 'lang', lang: l });
     if (LV.enabled && from !== 'watch') LV.persona(M.persona, l);   // the api translates for the language the stream asks for
   };
-  for (const b of document.querySelectorAll('#lang-sel button')) b.onclick = () => window.setLang(b.dataset.lang, null);
+  pick.onchange = (e) => window.setLang(e.target.value, null);
   try { const sv = localStorage.getItem('mc-lang'); if (LANGS.includes(sv) && sv !== 'en') setTimeout(() => window.setLang(sv, null), 0); } catch (e) { /* storage may be blocked */ }
   const vb = $('voice-btn'), vshow = () => {
     vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));

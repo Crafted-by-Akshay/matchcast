@@ -148,4 +148,4 @@ Names follow `<type>-matchcast-<env>` with `env = dev` (the only environment). T
 | (b) Interpret | `services/worker` reducer builds state; `packages/metrics` computes xG, pass quality, pressure, control and chaos; Databricks danger model; Fabric KQL |
 | (c) Explain | Producer, Analyst, Narrator, Verifier in `packages/agents`; RAG chatbot; recap function |
 | (d) Render | Watch Match Pulse, Broadcast lower-thirds and teleprompter, Analyst ledger and dashboards, condensed broadcast camera |
-| (e) Personalise | Personas (casual, analyst, broadcast, my-club, player-focus, one-metric), languages (en, es, hi), voice, talk to a player |
+| (e) Personalise | Personas (casual, analyst, broadcast, my-club, player-focus, one-metric), languages (the ten feed languages, ADR-0023), voice, talk to a player |

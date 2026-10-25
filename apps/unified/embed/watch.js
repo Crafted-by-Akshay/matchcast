@@ -128,7 +128,7 @@ MCS.progress('Loading the stadium and players');
   const mode = () => (typeof FAN !== 'undefined' ? FAN.mode : 'analyst');
   const mine = (c) => mode() === 'club' && FAN.club != null && c.team === TEAMS[FAN.club].key;
   const lang = () => (typeof FAN !== 'undefined' ? FAN.lang : 'en');
-  const tr = (c) => (lang() === 'es' || lang() === 'hi') && c.tr ? c.tr[lang()] : null;
+  const tr = (c) => lang() !== 'en' && c.tr ? c.tr[lang()] : null;   // any language the api checked; the rest stays English
   const line = (c) => {
     const t = tr(c); if (t && t.ok) return t.text;   // a translation the Verifier re-checked (numbers and names unchanged)
     if (mode() === 'casual') return c.plain;
@@ -140,7 +140,7 @@ MCS.progress('Loading the stadium and players');
     const chips = mode() === 'casual' ? [] : c.chips;
     return '<p>' + esc(line(c)) + '</p><div class="mcx-r"><span class="mcx-t' + (ok ? '' : ' wait') + '" title="' + (ok ? (api ? 'Recounted from the stored events by the server Verifier (agent api)' : 'Recounted by the in-page rules Verifier in this browser, not the server (Simulated)') : 'Awaiting review') + '">' + (ok ? (api ? '✓ API-Verified' : '✓ Verified in page') : '● Awaiting review') + '</span>'
       + chips.map((x) => '<span class="mcx-ch">' + esc(x) + '</span>').join('') + (api ? '' : '<span class="mcx-ch fb" title="Written and checked by the in-page rules in this browser, not the model or the server Verifier (Simulated)">In-page (Simulated)</span>')
-      + (tr(c) ? (tr(c).ok ? '<span class="mcx-ch" title="' + (tr(c).api ? 'Translated by Azure AI Translator; ' : 'Translated by rules; ') + 'the Verifier re-checked numbers and names">' + lang() + ' · translated ✓</span>' : '<span class="mcx-ch fb" title="' + esc(tr(c).reason) + '">Translation unavailable</span>') : '') + '<button class="mcx-b" data-why>Why?</button><button class="mcx-b" data-how>How was this made?</button></div><div class="mcx-w" hidden></div>';
+      + (tr(c) ? (tr(c).ok ? '<span class="mcx-ch" title="' + (tr(c).api ? 'Translated by Azure AI Translator; ' : 'Translated by rules; ') + 'the Verifier re-checked numbers and names">' + lang() + ' · translated ✓</span>' : '<span class="mcx-ch fb" title="' + esc(tr(c).reason) + '">Translation unavailable</span>') : '') + (lang() === 'en' || tr(c) ? '' : '<span class="mcx-ch fb" title="No checked translation for this line: the English line is shown">English · no checked ' + esc(lang().toUpperCase()) + ' translation</span>') + '<button class="mcx-b" data-why>Why?</button><button class="mcx-b" data-how>How was this made?</button></div><div class="mcx-w" hidden></div>';
   };
   const why = (el, c) => {
     const w = el.querySelector('.mcx-w'); if (!w.hidden) { w.hidden = true; return; }
@@ -305,7 +305,7 @@ window.addEventListener('message', (e) => {
     e.stopImmediatePropagation();
     if (busy) return;
     busy = true; mic.classList.add('live'); document.getElementById('tk-q').placeholder = 'Listening…';
-    az.listen(FAN.lang === 'es' ? 'es-ES' : FAN.lang === 'hi' ? 'hi-IN' : 'en-US').then((text) => {
+    az.listen(window.MC_SPEECH_LOCALE[FAN.lang] || 'en-US').then((text) => {
       busy = false; mic.classList.remove('live'); document.getElementById('tk-q').placeholder = 'Talk to the player…';
       if (text) { document.getElementById('tk-q').value = text.slice(0, 300); document.getElementById('tk-form').requestSubmit(); return; }
       if (text === null && (window.SpeechRecognition || window.webkitSpeechRecognition)) orig.call(mic);   // Azure unavailable: the browser mic
@@ -339,10 +339,11 @@ window.addEventListener('message', (e) => {
   });
 })();
 
-// ---- EXP-17: the shell's language selector (EN, ES, HI) sets Watch's language too; Watch's own picker keeps the others (Tamil, French, Arabic).
+// ---- EXP-17: the shell's language selector (MC_LANGS, ADR-0023) sets Watch's language too; Watch's own picker keeps the rest.
 window.addEventListener('message', (e) => {
   const d = e.data || {};
-  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !['en', 'es', 'hi'].includes(d.lang)) return;
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !window.MC_LANGS.includes(d.lang)) return;
+  // kept as the shell's language, so Watch's persona echo never sends English back; a line with no checked translation says so on its card
   window.__shellLang = d.lang;   // the restore of Watch's saved settings below must not undo it
   if (FAN.lang !== d.lang) fanSet({ lang: d.lang }, 'shell');
 });

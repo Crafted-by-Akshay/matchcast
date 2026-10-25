@@ -329,7 +329,7 @@ const AG = (() => {
     if (d.text && d.text !== c.text) c.tr = {};   // the shown English line changed, so older translations no longer match it
     if (d.variants && typeof d.variants === 'object') {   // the api's translate-then-verify (PR 118): only checked translations arrive; a missing language keeps the rules fallback
       c.tr = c.tr || {};
-      for (const l of ['es', 'hi']) if (typeof d.variants[l] === 'string' && d.variants[l].trim()) c.tr[l] = { ok: true, text: d.variants[l], reason: 'api: translated and re-checked', api: true };
+      for (const l of Object.keys(d.variants)) if (window.MC_LANGS.includes(l) && typeof d.variants[l] === 'string' && d.variants[l].trim()) c.tr[l] = { ok: true, text: d.variants[l], reason: 'api: translated and re-checked', api: true };   // ADR-0023: every language the api checked
     }
     // the stream repeats a line on every status step and audience: the Live flow and commentary take each distinct line once
     if (d.text) { c.text = d.text; c.said = c.said || new Set(); if (!c.said.has(d.text)) { c.said.add(d.text); run.stat.lines++; hop(c, 'narrator', 'draft'); say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, d.event_time_ms != null ? +d.event_time_ms / 60000 : last, d.metric, d.publication_id, typeof d.persona === 'string' && d.persona.startsWith('booth:') ? d.persona.slice(6) : ''); } }   // the api's checked line also joins the commentary

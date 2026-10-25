@@ -59,8 +59,8 @@ bcLine = function (ev) {
 };
 // the text for the chosen language: a verified translation, otherwise the English line
 const bcTx = (l) => (BC.lang !== 'en' && l[BC.lang]) || l.en;
-const bcTrNote = (l) => (BC.lang === 'en' || !l.tr ? '' : l.tr[BC.lang] && l.tr[BC.lang].ok ? ' · ' + BC.lang.toUpperCase() + ' translated, re-checked ✓' : ' · English shown: ' + ((l.tr[BC.lang] || {}).reason || 'not translated'));
-const bcLangTag = () => ({ en: 'English', es: 'Español · rules translation, re-checked', hi: 'हिन्दी · rules translation, re-checked' }[BC.lang] || 'English');
+const bcTrNote = (l) => (BC.lang === 'en' || !l.tr ? '' : l.tr[BC.lang] && l.tr[BC.lang].ok ? ' · ' + BC.lang.toUpperCase() + ' translated, re-checked ✓' : ' · English shown: ' + ((l.tr[BC.lang] || {}).reason || 'no Spanish or Hindi desk template for this language'));
+const bcLangTag = () => ({ en: 'English', es: 'Español · rules translation, re-checked', hi: 'हिन्दी · rules translation, re-checked' }[BC.lang] || 'English · no desk template for this language');
 window.__bcLang = { check: bcCheckTranslation, translate: bcTranslate };   // for the browser test
 
 // ---- accessibility (axe, WCAG AA): text on the team-colour chips and the yellow buttons is dark, and small grey notes are lighter

@@ -13,13 +13,13 @@ test('language selector: voice speaks the checked translation, falls back to Eng
   await page.click('#tab-broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
-  await page.click('#lang-sel button[data-lang="es"]');
-  await expect(page.locator('#lang-sel button[data-lang="es"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#lang-pick').selectOption('es');
+  await expect(page.locator('#lang-pick')).toHaveValue('es');
   await expect.poll(() => bc.evaluate(() => (window as any).__bcLang && (document.querySelector('#bc-lang button[aria-pressed="true"]') as HTMLElement).dataset.l)).toBe('es');
   // the desk's own buttons report back to the shell
   await bc.locator('#bc-lang button[data-l="hi"]').click();
-  await expect(page.locator('#lang-sel button[data-lang="hi"]')).toHaveAttribute('aria-pressed', 'true');
-  await page.click('#lang-sel button[data-lang="es"]');
+  await expect(page.locator('#lang-pick')).toHaveValue('hi');
+  await page.locator('#lang-pick').selectOption('es');
 
   // voice: the Spanish line is spoken with lang es; a line whose translation failed is spoken in English
   await page.evaluate(() => {
@@ -55,7 +55,7 @@ test('language selector: voice speaks the checked translation, falls back to Eng
 test('language selector: a translation the Verifier rejects is spoken in English, never the bad Spanish', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.click('#lang-sel button[data-lang="es"]');
+  await page.locator('#lang-pick').selectOption('es');
   await page.evaluate(() => {
     const w = window as any; w.__said = []; const say = VC.say; VC.say = (t: string, o: any) => { w.__said.push([t, o.lang]); return say(t, o); };
     AG.setMode('demo');   // these tests are about voice and translation: lines air as they are written (the approval gate has its own specs)
