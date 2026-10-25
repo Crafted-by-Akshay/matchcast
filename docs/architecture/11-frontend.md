@@ -1,6 +1,6 @@
 # 11 Front end (unified app)
 
-Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: EXP-1 to EXP-17. Current build notes: `apps/unified/README.md` (on branch `feature/unified-app`, PR #4).
+Status: **Agreed design**. Last reviewed 25 Oct 2026. Backlog: EXP-1 to EXP-17. Current build notes: `apps/unified/README.md` (on branch `feature/unified-app`, PR #4).
 
 ## 1. Structure
 
@@ -218,7 +218,7 @@ A desk that joins mid-match is sent the approval queue and mode, the commentary 
 - 12 px floor: the Verifier chip, the "Sound is off" line and the producer's verdict lines are 12 px.
 - Agents tab at 390 and 320 px: the claims ledger becomes one card per claim (the 600 px table made 17 elements run past the edge); the header row is visually hidden and the table keeps explicit ARIA table roles so a screen reader still hears the column names. Spec: `shell-layout.spec.ts`.
 - The header pill (this match's agents: live, rules fallback, warming) and the Foundry chip (the api's deployment from `/v1/status`) can differ: Foundry can be live while one match is on rules. Their tooltips now say so.
-- Event to on air: the header pill `#lat-pill` (visible over every tab, the Broadcast desk included) shows the median wall-clock time from a Watch event reaching the shell to the api's published line arriving, over the last 30 published lines. `live.js` stamps each event by its stream sequence when it is queued and matches a publication through `state.max_evidence_sequence`; Watch's one-second event batching is inside the number, and the pill stays hidden until the first sample (`tests/e2e/latency.spec.ts`).
+- Event to on air: the header pill `#lat-pill` (visible over every tab, the Broadcast desk included) shows the median wall-clock time from a Watch event reaching the shell to the api's published line arriving, over the last 30 matched lines. `live.js` stamps each event by its stream sequence when it is queued and matches a publication through `state.max_evidence_sequence`, one sample per event so a replay after a reconnect is not counted again; Watch batches events for up to a second before they reach the shell, which is before the stamp and not in the number; the pill stays hidden until the first sample (`tests/e2e/latency.spec.ts`).
 
 ## Crew accuracy scoreboard (AB#442, flagged `?crew=1`)
 `apps/unified/crew-score.js` mounts into `#crew-score` in the Agents tab, only when `CREW.enabled`. It reads `CREW.state.score` (`{method, arms:{full_crew, single_agent, crew_no_verifier}}`) and nothing else, so the real endpoint plugs in through `CREW.ingest` later. Each arm shows accuracy against simulator truth as the headline bar, with catch rate, latency, cost per match and lines graded as small figures, plus the method text. The panel says **Simulated** while `CREW.state.simulated` is true, and **Precomputed** (with `run_id`) on any arm whose data sets `precomputed`. Bars are DOM blocks with a different fill pattern per arm (solid, stripes, dots) so colour is never the only cue; every value is text, a "Show as table" fallback repeats them, and the bar transition is off under reduced motion. Spec: `tests/e2e/crew-score.spec.ts`.

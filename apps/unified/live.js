@@ -263,10 +263,12 @@ const LV = (() => {
     const j = await res.json(); if (run === r) r.cut = !!j.model_cut; return j;
   };
   // event to on air: wall time from Watch's event reaching this page to the api's published line arriving, matched by the publication's snapshot
-  // high-watermark (state.max_evidence_sequence, the last event the line rests on). Median of the last 30 lines; Watch's one-second batching is inside it.
+  // high-watermark (state.max_evidence_sequence, the last event the line rests on). One sample per event, so a replay after a reconnect is not counted again.
+  // Median of the last 30 matched lines. Watch batches events for up to a second before they reach this page; that wait is before the stamp, so it is not in the number.
   const measure = (r, d) => {
     const seq = d && d.state && d.state.max_evidence_sequence, t0 = r.sent.get(seq);
     if (!t0) return;
+    r.sent.delete(seq);
     r.lats.push(performance.now() - t0); if (r.lats.length > 30) r.lats.shift();
     onLatency(latency());
   };
