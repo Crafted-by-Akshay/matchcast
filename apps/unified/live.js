@@ -46,7 +46,7 @@ const LV = (() => {
   const url = (path, q) => api() + path + '?' + new URLSearchParams(Object.assign({ session_id: run.key.session_id }, q || {}));
   const post = (path, body, q) => fetch(url(path, q), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-  // a new match from Watch: close the old stream, create the match, open the stream. Cold start is 'warming' until the first claim. The api is given 90 s to take the first batch, then 60 s from that batch to publish a claim; while batches are accepted and the stream is open it never drops to 'fallback' on its own.
+  // a new match from Watch: close the old stream, create the match, open the stream. Cold start is 'warming' until the first claim. The api is given 90 s to take the first batch, then 60 s from that batch to publish a claim; while batches are accepted and the stream is open it never drops to 'fallback' on its own. Neither timer touches an api that already said 'live': it stays live while it waits for events, and a stream that keeps failing drops it (onerror).
   const begin = (matchKey, roster) => {
     stop();
     teamIds = roster ? roster.teams.map(slug) : [];
@@ -54,8 +54,8 @@ const LV = (() => {
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
     run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, sending: false };
-    set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the 90 s timer
-    timer = setTimeout(() => { if (run && !run.claimed) set('fallback'); }, WARM_MS);
+    set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the warm-up timer
+    timer = setTimeout(() => { if (run && !run.claimed && st === 'warming') set('fallback'); }, WARM_MS);   // only a silent api falls back: one that already said 'live' stays live while it waits for events (judge re-test: Broadcast read 'Rules fallback' while the api was live)
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
       players: roster.players.map((q) => ({ player_id: slug(q.name), team_id: slug(q.team) })) } : null;
     // the names go on create, so Ask knows the clubs and players by the names the fan sees
@@ -85,11 +85,11 @@ const LV = (() => {
       const es = new EventSource(url('/v1/matches/' + r.id + '/stream', { persona, lang }));
       r.es = es;
       const on = (name, fn) => es.addEventListener(name, (e) => { r.tries = 0; if (e.lastEventId) r.last = e.lastEventId; try { fn(JSON.parse(e.data)); } catch (err) { /* a bad frame is skipped */ } });
-      on('status', (d) => { const s = d && d.status; if (s === 'live') set('live'); else if (s === 'rules_fallback') set('fallback'); else if (s === 'warming_up') set('warming'); });
-      on('claim', (d) => { r.claimed = true; if (st === 'warming') set('live'); onClaim(d, st); });
+      on('status', (d) => { const s = d && d.status; r.apiFallback = s === 'rules_fallback'; if (s === 'live') set('live'); else if (s === 'rules_fallback') set('fallback'); else if (s === 'warming_up') set('warming'); });
+      on('claim', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); onClaim(d, st); });   // a claim after the warm-up timed out means the api is live after all, unless the api itself said it is on rules
       on('line', (d) => onLine(d, st));
-      on('publication', (d) => { r.claimed = true; if (st === 'warming') set('live'); onLine(d, st); });
-      es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
+      on('publication', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); onLine(d, st); });
+      es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; if (r.tries >= 2 && st === 'live') set('fallback');   /* a stream that keeps failing is not live agents; the next status, claim or line brings it back */ const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
     } catch (e) { set('fallback'); }
   };
 
@@ -107,7 +107,7 @@ const LV = (() => {
       if (res.status === 404) { r.created = false; if (r.es) r.es.close(); }   // the api lost the match (a restart on a store that did not keep it): create it again with the next batch
       if (!res.ok) throw new Error('events ' + res.status);
       r.queue.splice(0, batch.length);
-      if (run === r && !r.accepted) { r.accepted = true; clearTimeout(timer); timer = setTimeout(() => { if (run === r && !r.claimed) set('fallback'); }, CLAIM_MS); }   // the clock for a claim starts at the first accepted batch, not at page load
+      if (run === r && !r.accepted) { r.accepted = true; clearTimeout(timer); timer = setTimeout(() => { if (run === r && !r.claimed && st === 'warming') set('fallback'); }, CLAIM_MS); }   // the clock for a claim starts at the first accepted batch, not at page load
     } catch (e) { if (run === r && st === 'warming' && !r.created && e.status >= 400 && e.status < 500 && e.status !== 404 && e.status !== 409) set('fallback'); /* the api refused the match: a real failure. A network error or a 5xx on a cold container keeps waiting; the timers decide */ }
     r.sending = false;
   };

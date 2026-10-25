@@ -21,6 +21,9 @@ test('Broadcast view at 390 px: no horizontal scroll and 44 px tap targets on ev
     if (r.over > 1) wide.push(`${t}: ${r.over}px too wide`);
     for (const x of r.tiny) small.push(`${t}: ${x}`);
   }
+  // judge re-test: the 3D canvas used to sit about 20 px past the right edge of a phone-width live view; fit() scales it into the pane
+  const off = await bc.evaluate(() => { const vw = document.documentElement.clientWidth; return [...(document.getElementById('stage')?.children || [])].filter((e) => e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().right > vw + 1).map((e) => e.tagName + '#' + e.id); });
+  expect(off, 'nothing in the live stage runs past the right edge').toEqual([]);
   console.log('SMALL', JSON.stringify(small.slice(0, 20)), 'WIDE', JSON.stringify(wide));
   expect(wide).toEqual([]);
   expect(small).toEqual([]);
