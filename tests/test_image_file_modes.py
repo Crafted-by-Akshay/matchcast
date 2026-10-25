@@ -34,12 +34,13 @@ def test_build_stage_makes_the_shipped_tree_world_readable(dockerfile: str, tree
     # so the runtime stage copies only from the build stage, and only from chmodded trees
     assert "--chmod" not in text, f"{dockerfile}: --chmod needs BuildKit, which ACR builds lack"
     for line in runtime.splitlines():
-        assert not line.startswith("ADD "), f"{dockerfile}: {line!r} skips the chmod"
-        if line.startswith("COPY "):
-            parts = line.split()
+        parts = line.split()
+        op = parts[0].upper() if parts else ""  # Dockerfile instructions are case-insensitive
+        assert op != "ADD", f"{dockerfile}: {line!r} skips the chmod"
+        if op == "COPY":
             assert parts[1] == "--from=build", (
                 f"{dockerfile}: {line!r} copies from the context, skipping the chmod"
             )
-            assert any(src == t or src.startswith(t + "/") for src in parts[2:-1] for t in trees), (
-                f"{dockerfile}: {line!r} copies a path the chmod did not cover"
-            )
+            assert all(
+                any(src == t or src.startswith(t + "/") for t in trees) for src in parts[2:-1]
+            ), f"{dockerfile}: {line!r} copies a path the chmod did not cover"
