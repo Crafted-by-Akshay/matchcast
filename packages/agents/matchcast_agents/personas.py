@@ -9,8 +9,9 @@ import re
 BASE = ("casual", "analyst", "broadcast")
 PATTERN = (
     r"^(casual|analyst|broadcast|my-club:[A-Za-z0-9._-]{1,64}|"
-    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour))$"
-)
+    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour)|"
+    r"half_time)$"
+)  # half_time (CREW-7.4) is written by the workflow, never asked for by a viewer
 _VALID = re.compile(PATTERN)
 # the base voice whose character limit a persona uses
 VOICE = {
@@ -23,7 +24,7 @@ BOOTH = ("booth:pbp", "booth:colour")  # the two voices of the commentary booth,
 MAX_CHARS = {"casual": 140, "analyst": 280, "broadcast": 180}
 MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 # watch modes keep their own number limits (one-metric may quote both teams)
-NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1, "booth": 2}
+NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1, "booth": 2, "half_time": 6}
 
 
 # the metrics a one-metric watch mode can follow (the Narrator's LABELS has the same keys)
@@ -48,6 +49,8 @@ def known(persona: str, clubs: dict[str, str], names: dict[str, str]) -> bool:
         return arg in names
     if kind == "one-metric":
         return arg in WATCH_METRICS
+    if kind == "half_time":
+        return False  # a feed the workflow writes, not a voice a viewer can pick
     return True  # booth:pbp and booth:colour are always real
 
 

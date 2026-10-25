@@ -45,7 +45,7 @@ def test_only_feed_personas_map_to_a_feed(persona: str) -> None:
     assert feed_for(persona) is None
 
 
-@pytest.mark.parametrize("key", ["audio_description", "catch_me_up", "half_time", "ticker"])
+@pytest.mark.parametrize("key", ["audio_description", "catch_me_up", "ticker"])
 def test_feeds_without_a_writer_have_no_persona(key: str) -> None:
     feed = next(f for f in FEEDS if f.key == key)
     assert feed.persona is None
@@ -66,7 +66,7 @@ def test_limits_come_from_the_stories() -> None:
 
 
 def test_only_persona_backed_feeds_air_as_derived_lines_today() -> None:
-    assert {feed.key for feed in FEEDS if feed.persona} == {"casual", "analyst"}
+    assert {feed.key for feed in FEEDS if feed.persona} == {"casual", "analyst", "half_time"}
 
 
 @pytest.mark.parametrize("persona", sorted(BOOTH))

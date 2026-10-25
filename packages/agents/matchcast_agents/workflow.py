@@ -10,13 +10,14 @@ import copy
 import os
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
 
 from matchcast_contracts import ContractError, validate
 from opentelemetry import trace
 
+from . import half_time as half_time_mod
 from . import recap as recap_mod
 from .context import MatchContext
 from .history import history_for_roster
@@ -997,6 +998,93 @@ class MatchWorkflow:
                     "recap_ready", f"recap:{self.stream['match_id']}", {"personas": todo}
                 )
             return {p: r for p in personas if (r := self.store.get_recap(self.sk, p))}
+
+    async def half_time(self) -> dict[str, Any] | None:
+        """Write and verify the half-time piece once the first half has ended (CREW-7.4).
+
+        Each line cites its claims; the Verifier recounts them from the first-half events only.
+        A line that fails is dropped, not escalated. Nothing airs here: the air path belongs to
+        the feed lane (AB#499). None until the half is over, or when no piece can be written.
+        """
+        async with self._lock:
+            a = self.agents
+            ctx = self._ctx()
+            piece = half_time_mod.build(ctx)
+            if piece is None:
+                return None
+            stamp = _stamp(self._clock())
+            packets = half_time_mod.claims(piece, ctx.stream)
+            by_id = {c["claim_id"]: c for c in packets}
+            for packet in packets:
+                validate(packet)
+                self.store.put_claim(
+                    self.sk,
+                    packet,
+                    {
+                        "moment_id": "half_time",
+                        "agent": a.analyst.agent_id,
+                        "created_at": stamp,
+                        "tool_call_ids": [],
+                        "formula_inputs": {"metric": packet["metric"], "tool": "state"},
+                    },
+                )
+                self._agent(
+                    "claim_created",
+                    a.analyst,
+                    packet["claim_id"],
+                    metric=packet["metric"],
+                    value=packet["value"],
+                    half_time=True,
+                )
+            # the Verifier sees the first half only, so a line cannot quote a later event
+            half = replace(ctx, events=piece.events, state=piece.state)
+            kept: list[str] = []
+            dropped = 0
+            for draft in half_time_mod.drafts(piece, packets):
+                self._agent(
+                    "line_drafted",
+                    a.narrator,
+                    draft.line_id,
+                    persona=draft.persona,
+                    claim_ids=list(draft.claim_ids),
+                    half_time=True,
+                )
+                claims = [by_id[c] for c in draft.claim_ids]
+                verdict = await self._call(a.verifier, "check", draft.line_id, half, draft, claims)
+                verdict = await self._screen(draft, verdict)
+                if verdict.verdict == "rejected":
+                    dropped += 1
+                    self._agent(
+                        "line_rejected",
+                        a.verifier,
+                        draft.line_id,
+                        reason_code=verdict.reason_code,
+                        half_time=True,
+                        checks=[c.model_dump() for c in verdict.checks if not c.passed],
+                    )
+                    continue
+                self._audit(
+                    "agent",
+                    a.verifier.agent_id,
+                    "line_verified",
+                    draft.line_id,
+                    {
+                        "mode": getattr(a.verifier, "mode", "live"),
+                        "half_time": True,
+                        "checks": [{"name": c.name, "passed": c.passed} for c in verdict.checks],
+                    },
+                )
+                kept.append(draft.text)
+            return {
+                "match_id": self.stream["match_id"],
+                "persona": "half_time",
+                "cut_sequence": piece.cut_sequence,
+                "text": " ".join(kept),
+                "lines_dropped": dropped,
+                "claim_ids": [c["claim_id"] for c in packets],
+                "source_event_ids": list(piece.source_event_ids),
+                "created_at": stamp,
+            }
 
     async def _recap_persona(
         self,

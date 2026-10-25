@@ -11,9 +11,9 @@ Three lanes decide what a verified line does next:
 - queue: every other persona (broadcast, the watch modes, anything malformed). These keep
   today's behaviour and fail closed: they wait for the producer in any mode but auto.
 
-The other four feeds (audio description, catch-me-up, half-time, ticker) have no persona yet,
-so no line can be tagged with them. The half-time writer is in half_time.py (CREW-7.4); it
-joins DERIVED_PERSONAS when the workflow and feed stream wire it in.
+The half-time explainer (CREW-7.4) is a derived feed too: the workflow writes its piece with
+the "half_time" persona (half_time.py). The other three feeds (audio description, catch-me-up,
+ticker) have no persona yet, so no line can be tagged with them.
 """
 
 from dataclasses import dataclass
@@ -54,7 +54,7 @@ FEEDS: tuple[Feed, ...] = (
     ),
     Feed("audio_description", "Audio description", None, min_gap_ms=2_000),
     Feed("catch_me_up", "Catch me up", None, max_words=280),
-    Feed("half_time", "Half-time explainer", None, max_seconds=90),
+    Feed("half_time", "Half-time explainer", "half_time", max_seconds=90),
     Feed("ticker", "News ticker", None),  # fixed templates only, no free text
 )
 
