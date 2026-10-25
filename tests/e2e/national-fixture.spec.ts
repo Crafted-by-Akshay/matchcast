@@ -7,7 +7,7 @@ test('a national fixture is the default, says Synthetic squad, and is not routed
   const errs = collectErrors(page);
   await page.route('**/shared/fixtures.json', async (rt) => {
     const res = await rt.fetch(); const list = await res.json();
-    const arr = Array.isArray(list) ? list : list.fixtures;
+    const arr = (Array.isArray(list) ? list : list.fixtures).filter((x: any) => x.id !== 'N001');   // the build's own N001 would be a second option
     const n = JSON.parse(JSON.stringify(arr[0])); n.id = 'N001'; n.national = true; n.score = [0, 0]; n.matchday = 99;
     n.home = Object.assign({}, n.home, { club: 'Argentina' }); n.away = Object.assign({}, n.away, { club: 'Brazil' });
     arr.push(n);
