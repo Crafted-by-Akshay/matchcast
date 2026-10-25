@@ -420,6 +420,9 @@ NEUTRAL = [
     ("World Cup level", "top international level"),
     ("at a World Cup", "at a major tournament"),
     ("IFAB Law", "Law"),
+    # before kick-off the fixture's clubs are not applied yet, so the pre-match caption and kick-off line must not name a season club
+    ("Players are out. Harbor City kick off.", "Players are out. Kick-off to come."),
+    ("TEAMS[0].club + ' get us under way.'", "'Both sides get us under way.'"),
 ]
 BANNED = r"\b(FIFA|UEFA|IFAB|CONMEBOL|CONCACAF|World Cup|La Liga|Premier League|Champions League|Bundesliga|Serie A)\b"
 

@@ -45,3 +45,17 @@ test('voice: a verified goal line from the agents is captioned', async ({ page }
   });
   await expect(page.locator('#vc-bar')).toContainText('A One');
 });
+
+test('the crowd bed is audible under the commentary, and swells on an attack and again on a goal', async ({ page }) => {
+  await openShell(page, 'agents');
+  await page.evaluate(() => VC.set(false));
+  await page.click('#voice-btn');
+  // a murmur under the voices (full gain is 1): at rest it must be clearly above hiss, not inaudible
+  const rest = await page.evaluate(() => VC.level);
+  expect(rest, 'the crowd bed is audible at rest').toBeGreaterThanOrEqual(0.15);
+  // a shot or a build-up lifts the crowd, and a goal lifts it further
+  await page.evaluate(() => VC.say('Ana drives at the box and shoots.', { id: 'attack-1', tone: 'hot' }));
+  await expect.poll(() => page.evaluate(() => VC.level), { timeout: 3000 }).toBeGreaterThan(rest + 0.08);
+  await page.evaluate(() => VC.say('Goal for Thames Rovers.', { id: 'goal-1', tone: 'big' }));
+  await expect.poll(() => page.evaluate(() => VC.level), { timeout: 3000 }).toBeGreaterThan(0.6);   // a hot line alone reaches 0.45, so only the goal's eruption passes this
+});
