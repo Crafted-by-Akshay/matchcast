@@ -105,11 +105,14 @@ class NarratorRules:
             n = v[f"goals:{team}"]
             other = aid if team == hid else hid
             why = GOAL_CONTEXT[goal_context(n, v[f"goals:{other}"])]
+            # the History specialist's meetings, when it found a record for these two sides
+            meetings = v.get(f"h2h_played:{hid}")
+            on_record = "" if meetings is None else f" They have met {meetings} times on record."
             texts = {
                 "casual": f"Goal for {club}! {who} scores, goal number {n} for them. "
                 + why["casual"].format(club=club),
                 "analyst": f"Goal: {who} ({club}). Score: {home} {v[f'goals:{hid}']}, "
-                f"{away} {v[f'goals:{aid}']}. " + why["analyst"].format(club=club),
+                f"{away} {v[f'goals:{aid}']}. " + why["analyst"].format(club=club) + on_record,
                 "broadcast": f"{club} score through {who}. {home} {v[f'goals:{hid}']}, "
                 f"{away} {v[f'goals:{aid}']}. " + why["broadcast"].format(club=club),
             }

@@ -699,7 +699,10 @@ class MatchWorkflow:
         entry["spawns"] = []
         for request in plan.requests:
             self._publish_spawn(request.moment_id, request.name, "running")
-        for report in await run_all(ctx, plan.requests, self._specialists):
+        reports = await run_all(ctx, plan.requests, self._specialists)
+        # this moment's Analyst reads the reports from here; the Narrator reads their claims
+        ctx.extra["specialists"] = {report.name: report for report in reports}
+        for report in reports:
             entry["spawns"].append(
                 {"name": report.name, "status": report.status, "findings": len(report.findings)}
             )
