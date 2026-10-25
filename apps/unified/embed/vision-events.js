@@ -40,16 +40,19 @@
     if (batch.length) { stats.sent += batch.length; MCS.send({ type: 'vision-events', batch }); }
   }, 500);
 })();
-// Vision is on by default in Watch: the pixel tracker runs from kick-off, and its passes reach the agents' .vision stream. The viewer can still turn it off with the Vision button.
+// Vision is on by default in Watch: the pixel tracker runs from kick-off, and its passes reach the agents' .vision stream. The Vision button only shows or hides its panel (pass 7).
 (() => {
   const go = setInterval(() => {
     if (!window.__mc || !window.__mc.vis || !$('load') || !$('load').hidden) return;
     clearInterval(go);
     if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
-    if (!window.__mc.vis.VIS.on) window.__mc.vis.toggle(true);
-    // the tracker runs, but the panel (debug-style accuracy numbers) and the detection boxes (which sit on top of the 3D name tags) stay closed until asked for (UX review, finding 1 on a phone, pass 7 on every width)
-    const bx = $('visp-box'); if (bx && window.__mc.vis.VIS.boxes) bx.click();
-    $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false');
+    if (!window.__mc.vis.VIS.on) {
+      window.__mc.vis.toggle(true);
+      // the tracker runs, but the panel (debug-style accuracy numbers) and the detection boxes (which sit on top of the 3D name tags) stay closed until asked for (UX review pass 7).
+      // Only when this start switched Vision on, so a viewer who already pressed the button is not overruled.
+      const bx = $('visp-box'); if (bx && window.__mc.vis.VIS.boxes) bx.click();
+      $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false');
+    }
   }, 300);
 })();
 // The Vision button and the panel's close button only show or hide the panel; the tracker keeps running for the agents at every width.

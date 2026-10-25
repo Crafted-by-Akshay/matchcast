@@ -22,14 +22,14 @@ const focusFeedMatch = (f) => (f && f.fixture ? D.match(f.fixture) : null);
 // Watch's own bookkeeping line ("vision on") is not a match event; at 0' the list then says it is waiting for kick-off instead of showing it (UX review pass 7)
 const focusEvents = (f) => (f && f.last ? f.last.filter((e) => e.type !== 'vision_on') : []);
 const focusWaiting = (f) => !!f && !f.over && f.minute < 1 && !focusEvents(f).length;
-const WAIT_NOTE = '<p id="live-wait" class="note">Waiting for kick-off in Watch. These numbers fill in as the match plays; the Match centre shows the recorded run now.</p>';
+const WAIT_NOTE = (custom) => '<p id="live-wait" class="note">Waiting for kick-off in Watch. ' + (custom ? 'The score, time and events fill in as the match plays.' : 'These numbers fill in as the match plays; the Match centre shows the recorded run now.') + '</p>';
 
 function drawCustomLive(el, f) {
   const last = focusEvents(f).length
     ? '<ol class="list">' + focusEvents(f).map((e) => '<li>' + minLbl(e.minute) + ' ' + esc(String(e.type).replace(/_/g, ' ')) + (e.player ? ' · ' + esc(e.player) : '') + '</li>').join('') + '</ol>'
     : '<div class="empty">' + (focusWaiting(f) ? 'Waiting for kick-off. Events appear here as Watch plays.' : 'No events yet.') + '</div>';
   el.innerHTML = pgHead('Live match', 'Custom setup · no season fixture to compare with') +
-    '<p id="live-source" class="note">Live from Watch · the simulated match engine. Only the live score, time and events show for a custom setup.</p>' + (focusWaiting(f) ? WAIT_NOTE : '') +
+    '<p id="live-source" class="note">Live from Watch · the simulated match engine. Only the live score, time and events show for a custom setup.</p>' + (focusWaiting(f) ? WAIT_NOTE(true) : '') +
     '<div class="kpis">' + kpi('Score', esc(f.score.join('–')), 'Watch') + kpi('Time', f.over ? 'Full time' : Math.floor(f.minute) + '′', 'Watch clock') + '</div>' +
     card('Last five events', 'From the live match, newest last', last);
 }
@@ -58,7 +58,7 @@ function drawLive(el, arg) {
     ? '<ol class="list">' + focusEvents(f).map((e) => '<li>' + minLbl(e.minute) + ' ' + esc(String(e.type).replace(/_/g, ' ')) + (e.player ? ' · ' + esc(e.player) : '') + '</li>').join('') + '</ol>'
     : '<div class="empty">' + (f ? (focusWaiting(f) ? 'Waiting for kick-off. Events appear here as Watch plays.' : 'No events yet.') : 'The live feed is off. Start a match in Watch to follow it here.') + '</div>';
   el.innerHTML = pgHead('Live match', esc(clubName(m.home)) + ' v ' + esc(clubName(m.away)) + ' · ' + esc(m.title), '<button class="btn" data-go="ask">Ask the match</button><button class="btn" data-go="match.' + m.id + '">Match centre</button>') +
-    '<p id="live-source" class="note">' + esc(source) + '</p>' + (focusWaiting(f) ? WAIT_NOTE : '') +
+    '<p id="live-source" class="note">' + esc(source) + '</p>' + (focusWaiting(f) ? WAIT_NOTE(false) : '') +
     '<div class="kpis">' + kpi('Score', esc(score), esc(clubName(m.home)) + ' – ' + esc(clubName(m.away))) + kpi('Time', esc(when), f ? 'Watch clock' : 'Season run') + '</div>' +
     '<div class="grid"><div class="s7">' + card('Stats, explained', 'Each line says what the number means', '<dl class="kv" id="live-stats">' + rows.map((r) => '<dt>' + esc(r[0]) + ' <b>' + esc(r[2]) + '</b></dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl>') + '</div>' +
     '<div class="s5">' + card('Last five events', 'From the shared match, newest last', last) + '</div></div>';
