@@ -52,8 +52,12 @@ test('flag on: a live view from the shell data, labelled Simulated, no iframe ye
   const feed = al.locator('[data-panel="feed"]');
   await expect(feed).toContainText("23'");
   await expect(feed).toContainText('Second shot on target, first goal; xG 0.31.');
-  await expect(feed.locator('li', { hasText: 'Second shot on target' })).toContainText('Simulated');
-  await expect(feed).toContainText('verified');
+  const fixtureRow = feed.locator('[data-group="fixture"] li', { hasText: 'Second shot on target' });
+  await expect(fixtureRow).toContainText('Simulated, not recounted');
+  await expect(fixtureRow).not.toContainText('verified');            // the crew fixture is never ticked as verified
+  const verified = feed.locator('[data-group="verified"] li');
+  expect(await verified.count()).toBeGreaterThan(0);
+  await expect(verified.first()).toContainText('verified');           // recounted AG.run claims are, and sit in their own group
 
   // shot map: three shots, dots sized by xG, an accessible name with a text summary
   const map = al.locator('svg[data-map="shots"]');
@@ -69,7 +73,10 @@ test('flag on: a live view from the shell data, labelled Simulated, no iframe ye
   // pass quality, counted from the pass events, completion inferred
   const passes = al.locator('[data-panel="passes"]');
   await expect(passes).toContainText('Harbor City');
-  await expect(passes.locator('tr', { hasText: 'Harbor City' })).toContainText('2');
+  const hrow = passes.locator('tr', { hasText: 'Harbor City' });
+  await expect(hrow.locator('td').nth(1)).toHaveText('2');
+  await expect(hrow.locator('td').nth(2)).toHaveText('100%');
+  await expect(hrow.locator('td').nth(3)).toHaveText('10.8 m');       // (12.65 + 8.94) / 2
   await expect(passes).toContainText('inferred');
 
   // storyline ledger: lines already said per player and club
@@ -82,6 +89,9 @@ test('flag on: a live view from the shell data, labelled Simulated, no iframe ye
   await expect(ctl).toContainText('No control or chaos index yet');
   await page.evaluate(() => { M.indices = { t_ms: 600000, control: 62, chaos: 31, tempo: 8, series: [], passes: 12 }; });
   await expect(ctl.locator('[data-gauge="control"]')).toHaveAttribute('aria-label', /Control 62/);
+  await expect(ctl.locator('[data-gauge="control"]')).toHaveAttribute('aria-valuenow', '62');
+  await expect(ctl.locator('[data-gauge="chaos"]')).toHaveAttribute('aria-valuenow', '31');
+  await expect(ctl.locator('[data-gauge="control"] i')).toHaveAttribute('style', /width:62%/);
   await expect(ctl.locator('[data-gauge="chaos"]')).toHaveAttribute('aria-label', /Chaos 31/);
   expect(errs).toEqual([]);
 });
@@ -96,6 +106,16 @@ test('favourite club sets the highlighted side and is remembered', async ({ page
   await expect(page.locator('#al [data-side="1"][data-fav="1"]').first()).toBeVisible();
   await expect(page.locator('#al [data-side="0"][data-fav="1"]')).toHaveCount(0);
   await sel.selectOption({ label: 'Harbor City' });
+  await expect(page.locator('#al [data-side="0"][data-fav="1"]').first()).toBeVisible();
+  await sel.selectOption({ label: 'Thames Rovers' });
+  await page.reload();
+  await page.waitForFunction(() => document.querySelectorAll('#fx option').length > 20);
+  await seedMatch(page);
+  await expect(page.locator('#al-fav')).toHaveValue('1');
+  await expect(page.locator('#al [data-side="1"][data-fav="1"]').first()).toBeVisible();
+  // storage blocked: the choice still holds for the visit
+  await page.evaluate(() => { Storage.prototype.getItem = () => { throw new Error('blocked'); }; Storage.prototype.setItem = () => { throw new Error('blocked'); }; });
+  await page.locator('#al-fav').selectOption({ label: 'Harbor City' });
   await expect(page.locator('#al [data-side="0"][data-fav="1"]').first()).toBeVisible();
 });
 
@@ -120,9 +140,17 @@ test('Full console on a national fixture is not routed to a run that does not ex
   await block3d(page);
   await openShell(page, 'analyst', '?crew=1');
   await expect(page.locator('#fx')).toHaveValue('N001');
+  await expect(page.locator('#v-analyst iframe')).toHaveCount(0);
   await page.getByRole('button', { name: 'Full console' }).click();
   await expect(page.locator('#v-analyst iframe')).toBeVisible();
   expect(await page.evaluate(() => FR.analyst.route)).not.toBe('N001');
+  expect(await page.locator('#v-analyst iframe').getAttribute('src')).not.toContain('#live.');
+  await expect(page.locator('#al-back')).toBeFocused();
+  // the Live view bar sits above the console, not over it
+  const bar = await page.locator('#al-bar').boundingBox(), fr = await page.locator('#v-analyst iframe').boundingBox();
+  expect(fr!.y).toBeGreaterThanOrEqual(bar!.y + bar!.height - 1);
+  await page.getByRole('button', { name: 'Live view' }).click();
+  await expect(page.locator('#al-full')).toBeFocused();
 });
 
 test('phone width 320: no sideways scroll, SVGs named', async ({ page }) => {
@@ -135,6 +163,13 @@ test('phone width 320: no sideways scroll, SVGs named', async ({ page }) => {
   expect(w.doc).toBeLessThanOrEqual(w.win);
   expect(w.al).toBeLessThanOrEqual(w.alc);
   for (const svg of await page.locator('#al svg').all()) expect(await svg.getAttribute('aria-label') || await svg.getAttribute('aria-hidden')).toBeTruthy();
+});
+
+test('localStorage mc-crew=1 turns the live view on without the query flag', async ({ page }) => {
+  await block3d(page);
+  await page.addInitScript(() => localStorage.setItem('mc-crew', '1'));
+  await openShell(page, 'analyst');
+  await expect(page.locator('#al')).toBeVisible();
 });
 
 // Watch (real frame): the weather chip and the camera presets are gone unless ?demo=1
@@ -152,4 +187,16 @@ test('crew: Watch shows no weather chip and no camera presets unless ?demo=1', a
   const g = await viewFrame(page, 'watch');
   await expect(g.locator('#mc-demo')).toBeVisible();
   await expect(g.locator('#cams')).toBeVisible();
+});
+
+// flag off: Watch keeps Demo controls and shows the weather chip and camera presets once they are opened, as before
+test('flag off: Watch still has Demo controls, camera presets and the weather chip', async ({ page }) => {
+  test.setTimeout(300_000);
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  await expect(f.locator('#mc-demo')).toBeVisible();
+  await f.locator('#mc-demo').click();
+  await expect(f.locator('#cams')).toBeVisible();
+  await expect(f.locator('#wxchip')).toBeVisible();
 });

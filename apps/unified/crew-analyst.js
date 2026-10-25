@@ -4,7 +4,7 @@
    The match is the browser simulator, so every panel says Simulated. Nothing here is estimated: a panel with no honest source says so. */
 const ALV = (() => {
   const FAV_KEY = 'mc-crew-fav';
-  let full = false, hostEl = null, headSig = '', bodySig = '';
+  let full = false, favName = null, hostEl = null, headSig = '', bodySig = '';
   const on = () => !!(window.CREW && window.CREW.enabled);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const f2 = (x) => (+x || 0).toFixed(2);
@@ -20,9 +20,9 @@ const ALV = (() => {
     + '#al button{cursor:pointer}#al .alh .sp{flex:1 1 0}'
     + '#al .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}@media(min-width:900px){#al .grid{grid-template-columns:repeat(2,minmax(0,1fr))}#al .wide{grid-column:1/3}}'
     + '#al section{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r,12px);padding:10px 12px}'
-    + '#al h3{margin:0 0 6px;font-size:13px;display:flex;gap:8px;justify-content:space-between;align-items:baseline;flex-wrap:wrap}#al h3 small{font-weight:400;color:var(--muted);font-size:11px}'
+    + '#al h3{margin:0 0 6px;font-size:13px;display:flex;gap:8px;justify-content:space-between;align-items:baseline;flex-wrap:wrap}#al h3 small,#al h4 small{font-weight:400;color:var(--muted);font-size:12px}#al h4{margin:10px 0 4px;font-size:13px}'
     + '#al ul{list-style:none;margin:0;padding:0}#al li{padding:4px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}#al li:first-child{border-top:0}'
-    + '#al .m{color:var(--muted);font-size:11px}#al .ok{color:var(--ok)}#al .empty{color:var(--muted)}'
+    + '#al .m{color:var(--muted);font-size:12px}#al .ok{color:var(--ok)}#al .empty{color:var(--muted)}'
     + '#al table{width:100%;border-collapse:collapse;font-size:12px}#al th,#al td{text-align:left;padding:4px 6px 4px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}#al th{color:var(--muted);font-weight:600;border-top:0}'
     + '#al svg{display:block;width:100%;height:auto;max-width:100%}'
     + '#al [data-side="0"]{--side:var(--accent)}#al [data-side="1"]{--side:var(--hot)}'
@@ -30,7 +30,7 @@ const ALV = (() => {
     + '#al [data-fav="1"]{font-weight:700}#al tr[data-fav="1"] td:first-child::before,#al li[data-fav="1"] b::before{content:"\\2605  ";color:var(--side)}'
     + '#al .gauge{height:10px;border-radius:6px;background:var(--bg3);overflow:hidden;margin:3px 0 8px}#al .gauge i{display:block;height:100%;background:var(--ok)}#al .gauge.chaos i{background:var(--warn)}'
     + '#al .share{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:3px 0 4px}#al .share i{display:block;background:var(--side)}'
-    + '.view.alv .wait{display:none}#al-back{position:absolute;left:12px;bottom:12px;z-index:3;font:600 12px var(--font,system-ui,sans-serif);min-height:32px;padding:4px 12px;border-radius:999px;background:var(--bg3);color:var(--text);border:1px solid var(--accent);cursor:pointer}#al-back[hidden]{display:none}';
+    + '.view.alv .wait{display:none}#al-bar{position:absolute;top:0;left:0;right:0;height:40px;z-index:3;display:flex;align-items:center;padding:0 12px;background:var(--bg2);border-bottom:1px solid var(--line)}#al-bar[hidden]{display:none}#al-back{font:600 12px var(--font,system-ui,sans-serif);min-height:32px;padding:4px 12px;border-radius:999px;background:var(--bg3);color:var(--text);border:1px solid var(--accent);cursor:pointer}';
 
   const run = () => (typeof AG !== 'undefined' && AG.run) || null;
   const sideOf = (r, team) => (!r || team == null ? -1 : team === r.names.hk ? 0 : team === r.names.ak ? 1 : -1);
@@ -42,7 +42,7 @@ const ALV = (() => {
     return fx ? [fx.home.club, fx.away.club] : null;
   }
   function favSide(cl) {
-    let want = null; try { want = localStorage.getItem(FAV_KEY); } catch (e) { /* storage blocked: the default stands */ }
+    let want = favName; try { want = localStorage.getItem(FAV_KEY) || favName; } catch (e) { /* storage blocked: the in-memory choice stands */ }
     const i = cl ? cl.indexOf(want) : -1;
     return i >= 0 ? i : 0;
   }
@@ -50,13 +50,15 @@ const ALV = (() => {
 
   // ---- panels, each a string of html built from the data the shell already holds
   function feedPanel(r) {
-    const rows = [];
-    if (r) for (const c of r.claims) if (c.verdict === 'verified' && c.text) rows.push({ m: +c.minute || 0, text: c.text, tag: c.source === 'model' ? 'Live agents · verified' : 'Rules · recounted' });
-    for (const l of (window.CREW.state.feeds.analyst || [])) rows.push({ m: (+l.match_time_ms || 0) / 60000, text: l.text, tag: 'Crew fixture · Simulated' });
-    rows.sort((a, b) => b.m - a.m);
-    const li = rows.slice(0, 8).map((x) => '<li><b>' + mn(x.m) + '</b> ' + esc(x.text) + ' <span class="m"><span class="ok">&#10003; verified</span> · ' + esc(x.tag) + '</span></li>').join('');
-    return '<section data-panel="feed" class="wide"><h3>Analyst feed <small>Simulated match · every line recounted from the event log</small></h3>'
-      + (li ? '<ul>' + li + '</ul>' : '<p class="empty">No verified lines yet. They appear after the kick-off in Watch.</p>') + '</section>';
+    const ver = [], sim = [];
+    if (r) for (const c of r.claims) if (c.verdict === 'verified' && c.text) ver.push({ m: +c.minute || 0, text: c.text, tag: c.source === 'model' ? 'Live agents' : 'Rules' });
+    for (const l of (window.CREW.state.feeds.analyst || [])) sim.push({ m: (+l.match_time_ms || 0) / 60000, text: l.text });
+    ver.sort((a, b) => b.m - a.m); sim.sort((a, b) => b.m - a.m);
+    const lv = ver.slice(0, 8).map((x) => '<li><b>' + mn(x.m) + '</b> ' + esc(x.text) + ' <span class="m"><span class="ok">&#10003; verified</span> · ' + esc(x.tag) + ', recounted from the event log</span></li>').join('');
+    const ls = sim.slice(0, 5).map((x) => '<li><b>' + mn(x.m) + '</b> ' + esc(x.text) + ' <span class="m">Simulated, not recounted</span></li>').join('');
+    return '<section data-panel="feed" class="wide"><h3>Analyst feed <small>Simulated match</small></h3>'
+      + (lv ? '<ul data-group="verified">' + lv + '</ul>' : '<p class="empty">No verified lines yet. They appear after the kick-off in Watch.</p>')
+      + (ls ? '<h4>Crew fixture <small>Simulated, not checked by the Verifier</small></h4><ul data-group="fixture">' + ls + '</ul>' : '') + '</section>';
   }
 
   function controlPanel(r, cl, f) {
@@ -90,17 +92,17 @@ const ALV = (() => {
     const shots = r ? r.events.filter((e) => e.type === 'shot' && sideOf(r, e.team) >= 0 && e.data && num(e.data.x) && num(e.data.y)) : [];
     let h = '<section data-panel="shots"><h3>Shot map <small>Simulated · dot size is xG</small></h3>';
     if (!shots.length) return h + '<p class="empty">No shots yet.</p></section>';
-    const n = [0, 0], xg = [0, 0]; let goals = 0;
-    for (const e of shots) { const s = sideOf(r, e.team); n[s]++; xg[s] += +e.data.xg || 0; if (e.data.fate === 'goal') goals++; }
+    const n = [0, 0], xg = [0, 0]; let goals = 0, saves = 0;
+    for (const e of shots) { const s = sideOf(r, e.team); n[s]++; xg[s] += +e.data.xg || 0; if (e.data.fate === 'goal') goals++; else if (e.data.fate === 'save') saves++; }
     const sum = 'Shot map, simulated match. ' + shots.length + ' shots: ' + cl[0] + ' ' + n[0] + ', ' + cl[1] + ' ' + n[1] + '. Total xG ' + cl[0] + ' ' + f2(xg[0]) + ', ' + cl[1] + ' ' + f2(xg[1]) + '. ' + goals + (goals === 1 ? ' goal' : ' goals') + '. Dot size is the shot\'s xG; filled is a goal, half filled a save, hollow off target.';
     const dots = shots.map((e) => {
       const s = sideOf(r, e.team), d = e.data, op = d.fate === 'goal' ? 1 : d.fate === 'save' ? 0.5 : 0.12;
-      return '<circle data-xg="' + f2(d.xg) + '" data-side="' + s + '"' + fav(s, f) + ' cx="' + Math.max(0, Math.min(105, +d.x)).toFixed(1) + '" cy="' + Math.max(0, Math.min(68, +d.y)).toFixed(1) + '" r="' + (1 + 4.2 * Math.sqrt(Math.max(0, +d.xg || 0))).toFixed(2)
+      return '<circle data-fate="' + esc(d.fate || 'miss') + '"' + (d.fate === 'save' ? ' stroke-dasharray="1 0.7"' : '') + ' data-xg="' + f2(d.xg) + '" data-side="' + s + '"' + fav(s, f) + ' cx="' + Math.max(0, Math.min(105, +d.x)).toFixed(1) + '" cy="' + Math.max(0, Math.min(68, +d.y)).toFixed(1) + '" r="' + (1 + 4.2 * Math.sqrt(Math.max(0, +d.xg || 0))).toFixed(2)
         + '" fill="var(--side)" fill-opacity="' + op + '" stroke="var(--side)" stroke-width="' + (s === f ? 0.9 : 0.4) + '"><title>' + esc(mn(e.minute) + ' ' + (e.player || '') + ' xG ' + f2(d.xg) + ' ' + (d.fate || '')) + '</title></circle>';
     }).join('');
     h += '<div class="key"><span data-side="0"' + fav(0, f) + '>' + esc(cl[0]) + ' · ' + n[0] + ' shots · xG ' + f2(xg[0]) + '</span><span data-side="1"' + fav(1, f) + '>' + esc(cl[1]) + ' · ' + n[1] + ' shots · xG ' + f2(xg[1]) + '</span></div>'
       + '<svg data-map="shots" viewBox="0 0 105 68" role="img" aria-label="' + esc(sum) + '">' + PITCH + dots + '</svg>'
-      + '<p class="m">Filled is a goal, half filled a save, hollow off target. Positions are as the match recorded them.</p>';
+      + '<p class="m">Key: ' + goals + ' filled (goal), ' + saves + ' half filled with a dashed edge (save), ' + (shots.length - goals - saves) + ' hollow (off target). Positions are as the match recorded them.</p>';
     return h + '</section>';
   }
 
@@ -109,13 +111,16 @@ const ALV = (() => {
     const ps = r ? r.events.filter((e) => e.type === 'pass' && sideOf(r, e.team) >= 0) : [];
     if (!ps.length) return h + '<p class="empty">No passes yet.</p></section>';
     const row = [0, 1].map(() => ({ n: 0, ok: 0, len: 0, nl: 0 }));
+    const tov = new Map();   // turnovers by tenth of a minute, so each pass looks at two buckets instead of the whole log
+    for (const t of r.events) if (t.type === 'turnover') { const k = Math.floor(t.minute * 10); (tov.get(k) || tov.set(k, []).get(k)).push(t); }
+    const won = (e) => { const k = Math.floor(e.minute * 10); for (let b = k; b <= k + 1; b++) for (const t of tov.get(b) || []) if (t.team !== e.team && t.minute > e.minute && t.minute <= e.minute + 0.1) return true; return false; };
     for (const e of r.events) {
       if (e.type !== 'pass') continue;
       const s = sideOf(r, e.team); if (s < 0) continue;
       const o = row[s]; o.n++;
       // inferred like Watch's indices: completed unless the other side wins the ball within 6 s
-      if (!r.events.some((t) => t.type === 'turnover' && t.team !== e.team && t.minute > e.minute && t.minute <= e.minute + 0.1)) o.ok++;
-      const d = e.data; if (num(d.x0) && num(d.y0) && num(d.x1) && num(d.y1)) { o.len += Math.hypot(d.x1 - d.x0, d.y1 - d.y0); o.nl++; }
+      if (!won(e)) o.ok++;
+      const d = e.data || {}; if (num(d.x0) && num(d.y0) && num(d.x1) && num(d.y1)) { o.len += Math.hypot(d.x1 - d.x0, d.y1 - d.y0); o.nl++; }
     }
     h += '<table><thead><tr><th>Club</th><th>Passes</th><th>Completed (inferred)</th><th>Avg length</th></tr></thead><tbody>'
       + row.map((o, s) => '<tr data-side="' + s + '"' + fav(s, f) + '><td>' + esc(cl[s]) + '</td><td>' + o.n + '</td><td>' + (o.n ? Math.round((100 * o.ok) / o.n) + '%' : '-') + '</td><td>' + (o.nl ? (o.len / o.nl).toFixed(1) + ' m' : '-') + '</td></tr>').join('')
@@ -148,15 +153,19 @@ const ALV = (() => {
     hostEl = document.createElement('div'); hostEl.id = 'al'; hostEl.setAttribute('role', 'region'); hostEl.setAttribute('aria-label', 'Analyst live view');
     hostEl.innerHTML = '<div class="alh"><h2>Analyst live view</h2><span class="sim" title="The match is the browser simulator, not a real fixture">Simulated</span><label>Favourite club <select id="al-fav"></select></label><span class="sp"></span><button type="button" id="al-full" title="Open the 27-page enterprise console">Full console</button></div><div id="al-body" class="grid"></div>';
     sec.insertBefore(hostEl, sec.firstChild);
-    const back = document.createElement('button'); back.type = 'button'; back.id = 'al-back'; back.textContent = 'Live view'; back.hidden = true; back.title = 'Back to the compact live view';
-    sec.appendChild(back);
-    hostEl.querySelector('#al-full').onclick = () => { full = true; sync(); if (typeof routeAnalyst === 'function') routeAnalyst(); };
-    back.onclick = () => { full = false; sync(); };
-    hostEl.querySelector('#al-fav').onchange = (e) => { const cl = clubs(); if (cl) try { localStorage.setItem(FAV_KEY, cl[+e.target.value]); } catch (x) { /* storage blocked */ } bodySig = ''; render(); };
+    const bar = document.createElement('div'); bar.id = 'al-bar'; bar.hidden = true;
+    const back = document.createElement('button'); back.type = 'button'; back.id = 'al-back'; back.textContent = 'Live view'; back.title = 'Back to the compact live view';
+    bar.appendChild(back); sec.appendChild(bar);
+    hostEl.querySelector('#al-full').onclick = () => {
+      if (typeof M === 'undefined' || !M.fixture) { if (typeof toast === 'function') toast('Pick a season fixture to open the full console'); return; }   // the console needs a match to route to; without one it would sit on a spinner
+      full = true; sync(); if (typeof routeAnalyst === 'function') routeAnalyst(); sync(); back.focus();
+    };
+    back.onclick = () => { full = false; sync(); hostEl.querySelector('#al-full').focus(); };
+    hostEl.querySelector('#al-fav').onchange = (e) => { const cl = clubs(); if (cl) { favName = cl[+e.target.value]; try { localStorage.setItem(FAV_KEY, favName); } catch (x) { /* storage blocked: favName keeps it for this visit */ } } bodySig = ''; render(); };
     return hostEl;
   }
   function render() {
-    if (!on() || !ensureHost()) return;
+    if (!on() || (typeof current !== 'undefined' && current !== 'analyst') || !ensureHost()) return;
     const r = run(), cl = clubs(), f = favSide(cl), sel = hostEl.querySelector('#al-fav');
     const hs = cl ? cl.join('|') + '|' + f : '';
     if (hs !== headSig) { headSig = hs; sel.innerHTML = cl ? cl.map((c, i) => '<option value="' + i + '"' + (i === f ? ' selected' : '') + '>' + esc(c) + '</option>').join('') : ''; sel.disabled = !cl; }
@@ -172,8 +181,8 @@ const ALV = (() => {
     hostEl.hidden = !live;
     sec.classList.toggle('alv', live);
     sec.setAttribute('aria-label', live ? 'Analyst: live view' : 'Analyst: enterprise console');
-    if (fr) fr.style.display = live ? 'none' : '';
-    document.getElementById('al-back').hidden = live;
+    if (fr) { fr.style.display = live ? 'none' : ''; fr.style.marginTop = live ? '' : '40px'; fr.style.height = live ? '' : 'calc(100% - 40px)'; }   // the Live view bar sits above the console, covering none of it
+    document.getElementById('al-bar').hidden = live;
     if (live) render();
   }
   if (on()) { setInterval(() => { if (typeof current !== 'undefined' && current === 'analyst') { sync(); } }, 500); window.CREW.subscribe(() => { bodySig = ''; if (hostEl && !full) render(); }); }
