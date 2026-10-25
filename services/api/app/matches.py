@@ -16,6 +16,7 @@ import uuid
 from collections import deque
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any, Literal
 from urllib.parse import urlencode
 
@@ -31,6 +32,7 @@ from matchcast_agents import (
 from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.feeds import FEED_KEYS
+from matchcast_agents.grading import scoreboard
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
@@ -253,6 +255,11 @@ def stats_desk_from_env(local: Any, env: Mapping[str, str] | None = None) -> Any
         )
         return local
     return A2AStatsDesk(url)
+
+
+# the crew scoreboard, computed once per match, event count and run date (crew_scoreboard)
+SCOREBOARD_CACHE_SIZE = 32
+_SCOREBOARDS: dict[tuple[str, int, str], dict[str, Any]] = {}
 
 
 class Registry:
@@ -1037,6 +1044,29 @@ def build_router(registry: Registry) -> APIRouter:
     ) -> dict[str, Any]:
         flow = await registry.flow_for(session_id, match_id)
         return {"items": flow.store.audit_records(flow.sk, from_seq, limit)}
+
+    @router.get("/matches/{match_id}/scoreboard")
+    async def crew_scoreboard(match_id: str, session_id: str) -> dict[str, Any]:
+        """The three-arm crew scoreboard for this match (CREW-5.2). The arms are rules-mode and run
+        on the stored events, so the result is cached per match, event count and run date. A new
+        event or a new day runs them again. Labelled rules-only (docs/architecture/16, 4.1)."""
+        flow = await registry.flow_for(session_id, match_id)
+        events = flow.store.events(flow.sk)
+        run_date = datetime.now(UTC).date().isoformat()
+        key = (flow.sk, len(events), run_date)
+        board = _SCOREBOARDS.get(key)
+        if board is None:
+            match = {
+                "events": events,
+                "roster": flow.roster,
+                "names": flow.names,
+                "teams": flow.clubs,
+            }
+            board = await asyncio.to_thread(scoreboard, match, run_date=run_date)
+            if len(_SCOREBOARDS) >= SCOREBOARD_CACHE_SIZE:
+                _SCOREBOARDS.pop(next(iter(_SCOREBOARDS)))  # the oldest one out
+            _SCOREBOARDS[key] = board
+        return board
 
     @router.get("/matches/{match_id}/trace/{line_id}")
     async def trace(match_id: str, line_id: str, session_id: str) -> dict[str, Any]:

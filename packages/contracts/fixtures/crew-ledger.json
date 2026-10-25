@@ -1,0 +1,24 @@
+{
+  "kind": "crew_ledger",
+  "schema_version": "1.3.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "moment_id": "m-event-goal",
+  "at_ms": 10000,
+  "called": [
+    "analyst",
+    "narrator",
+    "verifier",
+    "replay",
+    "stats"
+  ],
+  "skipped": [
+    "stats_desk"
+  ],
+  "why": "goal",
+  "routed_by": "rules",
+  "spawn_reason": ""
+}

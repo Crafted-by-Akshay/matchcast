@@ -951,3 +951,16 @@ def test_lines_route_withholds_the_text_of_a_safety_refused_line() -> None:
     out = matches._line_json(refused)
     assert out["text"] != "something unsafe" and "unsafe" not in out["text"].replace("Safety", "")
     assert out["status"] == "rejected" and out["reason_code"] == "unsafe_content"
+
+
+def test_the_scoreboard_is_three_rules_arms_and_is_labelled_rules(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    board = client.get("/v1/matches/match-short/scoreboard", params=Q).json()
+    assert board["kind"] == "crew_ablation_scoreboard"
+    assert set(board["arms"]) == {"full_crew", "single_agent", "crew_no_verifier"}
+    assert all(arm["mode"] == "rules" for arm in board["arms"].values())
+    assert board["match_id"] == "match-short"
+    # the same events on the same day give the same scoreboard (the cache, and a rerun)
+    again = client.get("/v1/matches/match-short/scoreboard", params=Q).json()
+    assert again["arms"]["full_crew"]["accuracy"] == board["arms"]["full_crew"]["accuracy"]
