@@ -124,6 +124,7 @@ def rules_agents(
 @dataclass
 class WorkflowConfig:
     approval_mode: str = "auto"  # auto | producer
+    hold_booth: bool = False  # producer mode also holds the booth voices (dead air if it does)
     publication_ttl_s: int = 30
     personas: tuple[Persona, ...] = ("casual", "analyst")
     # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
@@ -1029,7 +1030,9 @@ class MatchWorkflow:
             for claim in claims:
                 if claim["claim_id"] in record.claim_ids:
                     self._verified_claims[claim["claim_id"]] = claim
-            if self.config.approval_mode == "auto":
+            # the booth is live talk: verified is enough unless the producer asked to hold it too
+            booth = record.persona in BOOTH and not self.config.hold_booth
+            if self.config.approval_mode == "auto" or booth:
                 self._approve(record, "agent", a.producer.agent_id)
 
     async def _screen(self, draft: DraftLine, verdict: Verdict) -> Verdict:
