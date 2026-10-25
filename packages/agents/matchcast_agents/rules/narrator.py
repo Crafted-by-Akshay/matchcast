@@ -20,15 +20,15 @@ LABELS = {
 
 # The colour voice in rules mode: a stock reading with no number, so there is nothing to verify.
 BOOTH_TAKE = {
-    "goal": "That changes how both sides have to play from here.",
-    "shot_on_target": "They are finding space in front of the defence.",
-    "yellow_card": "Now every challenge from that player will be watched closely.",
-    "red_card": "The whole shape of the match changes with that.",
-    "summary": "The balance of the game is getting clearer.",
-    "period_end": "Plenty to talk about at the break.",
-    "colour": "A small moment, but it shows where the game is being played.",
-    "buildup": "Both teams will want to settle quickly and set the tempo.",
-    "filler": "Patient football from both teams at the moment.",
+    "goal": "That changes how {subject} have to play from here.",
+    "shot_on_target": "{subject} are finding space in front of the defence.",
+    "yellow_card": "Now every challenge from {subject} will be watched closely.",
+    "red_card": "The whole shape of the match changes for {subject} with that.",
+    "summary": "{subject} are still working out where this game is going to be won.",
+    "period_end": "Plenty for {subject} to talk about at the break.",
+    "colour": "A small moment, but it shows where {subject} are playing the game.",
+    "buildup": "{subject} will want to settle quickly and set the tempo.",
+    "filler": "{subject} are being patient with the ball at the moment.",
 }
 
 # Why a goal matters, from the two goal claims alone (no new number, so nothing new to verify).
@@ -165,7 +165,7 @@ class NarratorRules:
             if persona not in BASE:
                 text = self._mode_text(ctx, persona, kind, payload, who, club, claims)
                 if text is None and persona in BOOTH:
-                    text = self._booth(ctx, persona, kind, texts, v)
+                    text = self._booth(ctx, persona, kind, texts, v, club)
                 if text:
                     texts[persona] = text
         lines = []
@@ -184,11 +184,18 @@ class NarratorRules:
 
     @staticmethod
     def _booth(
-        ctx: MatchContext, persona: str, kind: str, texts: dict[str, str], v: dict[str, Any]
+        ctx: MatchContext,
+        persona: str,
+        kind: str,
+        texts: dict[str, str],
+        v: dict[str, Any],
+        club: str,
     ) -> str | None:
         """The booth in rules mode: the call is the broadcast line, the reading is stock."""
         if persona == "booth:colour":
-            return BOOTH_TAKE.get(kind)
+            take = BOOTH_TAKE.get(kind)
+            subject = club or f"{ctx.club_name(ctx.home)} and {ctx.club_name(ctx.away)}"
+            return take.format(subject=subject) if take else None
         home, away = ctx.club_name(ctx.home), ctx.club_name(ctx.away)
         if kind == "buildup":
             return f"Welcome to {home} against {away}, and we are about to get under way."

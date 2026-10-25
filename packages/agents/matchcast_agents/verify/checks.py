@@ -214,7 +214,35 @@ def check_persona(line: DraftLine) -> Check:
     return Check(name="persona", passed=True, detail="within persona limits")
 
 
+# words many clubs share: on their own they do not name one
+CLUB_WORDS = frozenset("united city town real athletic rovers county".split())
+
+
+def is_generic(ctx: MatchContext, text: str) -> bool:
+    """A reaction that names no player, no club and carries no number could be said of any match."""
+    if extract_numbers(text):
+        return False
+    words = {w.casefold() for w in re.findall(r"\w+", text)}  # "Dunne's" -> dunne, "s"
+    named = {
+        w.casefold()
+        for n in (*ctx.names.values(), *ctx.clubs.values())
+        for w in re.findall(r"\w+", n)
+    }
+    return not (words & {w for w in named if len(w) >= 3 and w not in OPENERS | CLUB_WORDS})
+
+
+def check_specific(ctx: MatchContext, line: DraftLine) -> Check:
+    if is_generic(ctx, line.text):
+        return Check(
+            name="specific",
+            passed=False,
+            detail="the colour line names no player or club and carries no number",
+        )
+    return Check(name="specific", passed=True, detail="not a generic reaction")
+
+
 REASON: dict[str, ReasonCode] = {
+    "specific": "unsupported_statement",
     "sources": "unknown_source",
     "freshness": "stale_state",
     "numbers": "number_mismatch",
@@ -262,6 +290,9 @@ def run_checks(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]])
         check_names(ctx, line, claims),
         check_persona(line),
     ]
+    # only the colour voice has to be specific
+    if line.persona == "booth:colour":
+        checks.append(check_specific(ctx, line))
     # only a line that carries a Vision count gets the check
     if any(c["metric"].startswith("passes:") for c in claims):
         checks.append(check_vision(ctx, claims))
