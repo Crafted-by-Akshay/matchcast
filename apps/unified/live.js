@@ -78,15 +78,15 @@ const LV = (() => {
     } catch (e) { /* the rules booth carries on */ }
   };
   // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed, and its air gate airs nothing from a killed feed.
-  // A switch made before the match is created is held in feedHeld (the last one per feed) and sent by feedsSent once the match exists, so a kill is not dropped
-  const feedHeld = {};
+  // deskKilled is the desk's own state per feed, kept across matches as the desk keeps it. A switch made while the match is not created is sent by feedsSent once it is, so a kill is not dropped; a match created later starts with the feeds the desk has killed
+  const deskKilled = {};
   const feedSend = (r, feed, killed) => post('/v1/matches/' + r.id + '/feeds/' + feed + (killed ? '/kill' : '/resume'), { session_id: r.key.session_id }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
   const feedSwitch = (feed, killed) => {
-    if (!api()) return Promise.resolve(null);
-    if (!run || !run.created) { feedHeld[feed] = killed; return Promise.resolve(null); }
+    deskKilled[feed] = killed;
+    if (!api() || !run || !run.created) return Promise.resolve(null);
     return feedSend(run, feed, killed);
   };
-  const feedsSent = (r) => { for (const feed of Object.keys(feedHeld)) { feedSend(r, feed, feedHeld[feed]); delete feedHeld[feed]; } };
+  const feedsSent = (r) => { for (const feed of Object.keys(deskKilled)) if (deskKilled[feed]) feedSend(r, feed, true); };
   const open = () => {
     const r = run; if (!r || !r.created) return;
     if (r.es) r.es.close();   // one stream at a time: a pending retry must not add a second
@@ -119,7 +119,7 @@ const LV = (() => {
     try {
       const bad = badClaim;   // the api takes the demo switch at match creation only
       const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; if (res.status === 409) r.attached = true; feedsSent(r); open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
+      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; if (res.status === 409) r.attached = true; if (run === r) feedsSent(r); open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
     } finally { r.creating = null; }
   })());
 
