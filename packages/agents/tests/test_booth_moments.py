@@ -58,3 +58,21 @@ def test_booth_moments_skip_the_model(match) -> None:
     task = run(LiveProducer(client, ProducerRules()).decide(ctx(match), match["events"][0]))
     assert isinstance(task, ProducerTask) and task.reason == "buildup"
     assert client.calls == []
+
+
+def test_a_model_skip_gives_back_the_quiet_clock(match) -> None:
+    now = [0.0]
+    producer = ProducerRules(clock=lambda: now[0])
+    run(producer.decide(ctx(match), match["events"][0]))  # kick-off: silence starts at 0
+    shot = next(
+        e for e in match["events"] if e["payload"]["type"] == "shot" and e["payload"]["on_target"]
+    )
+    now[0] = 30.0
+    assert isinstance(
+        run(producer.decide(ctx(match), dict(shot, event_time_ms=130_000))), ProducerTask
+    )
+    producer.hand_back()  # the model skipped that shot: nothing aired, so the silence goes on
+    now[0] = 31.0
+    quiet = dict(event(match, "pass"), event_id="q-after-skip", event_time_ms=140_000)
+    filler = run(producer.decide(ctx(match), quiet))
+    assert isinstance(filler, ProducerTask) and filler.reason == "filler"

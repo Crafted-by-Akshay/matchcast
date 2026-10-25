@@ -55,7 +55,7 @@ class ProducerRules:
         self._last_task_ms: int | None = None
         self._next_summary_ms = SUMMARY_EVERY_MS
         self._seen: set[str] = set()
-        self._spent: tuple[int | None, float | None] = (None, None)  # before the last task
+        self._spent: tuple[int | None, float | None, float | None] = (None, None, None)
         self._opened = False  # the first event of the match has been seen
         self._last_aired: float | None = None  # wall time of the last task, for the quiet spell
 
@@ -72,6 +72,8 @@ class ProducerRules:
         self._next_summary_ms = data["next_summary_ms"]
         self._seen = set(data["seen"])
         self._opened = data.get("opened", True)  # a checkpoint from before kick-off was tracked
+        # wall time does not survive a restart: a resumed match counts its quiet spell from now
+        self._last_aired = self._clock() if self._opened else None
 
     def _colour_due(self) -> bool:
         if self._colour_every_s <= 0:
@@ -82,7 +84,7 @@ class ProducerRules:
 
     def hand_back(self) -> None:
         """A model skip of the task just decided gives back its rate window and colour budget."""
-        self._last_task_ms, self._last_colour = self._spent
+        self._last_task_ms, self._last_colour, self._last_aired = self._spent
 
     def _filler_due(self) -> bool:
         return self._last_aired is not None and self._clock() - self._last_aired >= FILLER_EVERY_S
@@ -138,7 +140,7 @@ class ProducerRules:
             and now - self._last_task_ms < RATE_WINDOW_MS
         ):
             return Skip(moment_id=moment_id, reason="rate_limited")
-        self._spent = (self._last_task_ms, self._last_colour)
+        self._spent = (self._last_task_ms, self._last_colour, self._last_aired)
         self._last_task_ms = now
         self._last_aired = self._clock()
         if colour:
