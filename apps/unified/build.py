@@ -161,6 +161,8 @@ def build_watch():
         + "\n"
         + r(EMB + "roles.js")
         + "\n"
+        + r(EMB + "langpick.js")   # before watch.js, whose restore of the saved settings goes through its fanSet
+        + "\n"
         + r(EMB + "watch.js")
         + "\n"
         + r(EMB + "focus.js")
