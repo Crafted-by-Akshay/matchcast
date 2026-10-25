@@ -136,22 +136,18 @@ def _event(name: str, data: dict) -> StreamEvent:
     return StreamEvent(event=name, id=None, data=data)
 
 
-def test_a_persona_stream_gets_only_its_own_feed_records() -> None:
-    # AB#499: a derived feed record reaches the stream of its own feed key, and no other
+def test_feed_records_reach_every_stream_and_publications_stay_per_persona() -> None:
+    # AB#499: the desk monitor counts all six feeds from whichever lens is open, so derived feed
+    # records reach every stream; publications still belong to their persona
     casual = ("casual",)
-    onair_casual = _event("onair", {"feed": "casual"})
-    onair_analyst = _event("onair", {"feed": "analyst"})
-    drop_analyst = _event("feed_drop", {"feed": "analyst"})
-    assert wanted_on_stream(onair_casual, casual)
-    assert not wanted_on_stream(onair_analyst, casual)
-    assert not wanted_on_stream(drop_analyst, casual)
-    assert wanted_on_stream(onair_analyst, ())  # an all-streams viewer gets every feed
     booth = tuple(BOOTH)
-    assert not wanted_on_stream(onair_casual, booth) and not wanted_on_stream(drop_analyst, booth)
-    line = _event("line_verified", {"persona": "casual"})
-    assert wanted_on_stream(line, booth)  # line records stay on every stream
-    pub = _event("publication", {"persona": "analyst"})
-    assert not wanted_on_stream(pub, casual) and wanted_on_stream(pub, ("analyst",))
+    for keep in ((), casual, ("broadcast",), booth):
+        assert wanted_on_stream(_event("onair", {"feed": "analyst"}), keep)
+        assert wanted_on_stream(_event("feed_drop", {"feed": "casual"}), keep)
+        assert wanted_on_stream(_event("line_verified", {"persona": "analyst"}), keep)
+    assert wanted_on_stream(_event("publication", {"persona": "casual"}), casual)
+    assert not wanted_on_stream(_event("publication", {"persona": "analyst"}), casual)
+    assert wanted_on_stream(_event("publication", {"persona": "analyst"}), ("analyst",))
 
 
 def test_bad_batch_is_a_problem_with_the_event_index(client: TestClient) -> None:
@@ -197,6 +193,9 @@ def test_producer_approval_flow_and_role_gate(client: TestClient) -> None:
     assert client.get("/v1/matches/match-short/lines", params=Q).status_code == 403
     queue = waiting_lines(client, producer)
     assert queue
+    booth_rows = client.get("/v1/matches/match-short/lines", params=Q, headers=producer).json()
+    booth_rows = [ln for ln in booth_rows["items"] if ln["persona"].startswith("booth:")]
+    assert {ln["status"] for ln in booth_rows} == {"verified"}  # the whole booth queue waits
 
     ids = {"session_id": "short", "match_id": "match-short"}
     denied = client.post(f"/v1/lines/{queue[0]['line_id']}/approve", json=ids)
@@ -440,6 +439,12 @@ def test_a_rebuilt_match_keeps_its_approval_mode_and_demo_seed() -> None:
     rejected = {r["subject_id"] for r in _rejections(restarted)}
     aired = {ln["line_id"] for ln in lines if ln["status"] in ("approved", "published")}
     assert rejected and not rejected & aired
+    # the seeded claim is the one the rejected lines cite: no aired line may cite it either
+    seeded = {c for ln in lines if ln["status"] == "rejected" for c in ln["claim_ids"]}
+    cited = {
+        c for ln in lines if ln["status"] in ("approved", "published") for c in ln["claim_ids"]
+    }
+    assert seeded and not seeded & cited
 
 
 def test_a_match_rebuilt_past_the_cue_does_not_fire_the_seed_again() -> None:

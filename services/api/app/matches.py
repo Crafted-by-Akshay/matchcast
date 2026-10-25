@@ -529,16 +529,13 @@ def client_ip(request: Request) -> str:
 def wanted_on_stream(item: StreamEvent, keep: tuple[str, ...]) -> bool:
     """Whether a viewer reading the personas in `keep` gets this event (empty keep: all of them).
 
-    Publications belong to the persona they were written for. Line records stay on every stream
-    because the Broadcast producer queue reads all personas' lines. Derived feed records (onair,
-    feed_drop) belong to their feed, and casual and analyst are the feeds whose keys match a
-    persona (AB#499)."""
+    Publications belong to the persona they were written for. Line records and derived feed
+    records (onair, feed_drop) stay on every stream: the desk monitor counts the six feeds from
+    whichever lens is open, and it reads them by feed key (AB#499)."""
     if not keep:
         return True
     if item.event == "publication":
         return item.data["persona"] in keep
-    if item.event in ("onair", "feed_drop"):
-        return item.data["feed"] in keep
     return True
 
 
@@ -996,6 +993,15 @@ def build_router(registry: Registry) -> APIRouter:
         flow = await registry.flow_for(body.session_id, match_id)
         reason = body.reason or ("killed on desk" if killed else "resumed")
         record = await flow.set_feed(feed, killed, reason, actor[0], actor[1])
+        if not is_vision_stream({"session_id": body.session_id}):
+            # the Vision session is its own workflow and its analyst lines air too: the kill
+            # reaches it, so a Vision pass cannot air from a feed the desk has killed
+            try:
+                vision = await registry.flow_for(f"{body.session_id}.vision", match_id)
+            except Problem:  # no Vision match was ever created: nothing from it can air
+                vision = None
+            if vision is not None:
+                await vision.set_feed(feed, killed, reason, actor[0], actor[1])
         return {
             "feed": feed,
             "state": "killed" if killed else "live",

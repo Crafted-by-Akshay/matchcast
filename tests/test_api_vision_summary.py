@@ -101,3 +101,21 @@ def test_an_unknown_match_is_an_answer_not_an_error() -> None:
     response = client.get("/v1/matches/nope/vision/summary", params={"session_id": "short"})
     assert response.status_code == 200
     assert response.json()["ready"] is False and response.json()["passes_in"] == 0
+
+
+def test_a_desk_feed_kill_reaches_the_vision_session_too() -> None:
+    # AB#499: the Vision session is its own workflow and its analyst lines air, so the desk's
+    # kill is applied there as well, and a resume lifts it on both
+    client = TestClient(create_app())
+    create(client, ENGINE, FIXTURE["roster"])
+    create(client, VISION, vision_roster())
+    post(client, VISION, vision_events())
+    killed = client.post("/v1/matches/match-short/feeds/analyst/kill", json={"session_id": "short"})
+    assert killed.status_code == 200
+    vision = client.app.state.matches.flows[("short.vision", "match-short")]
+    assert "analyst" in vision.killed_feeds
+    resumed = client.post(
+        "/v1/matches/match-short/feeds/analyst/resume", json={"session_id": "short"}
+    )
+    assert resumed.status_code == 200
+    assert "analyst" not in vision.killed_feeds

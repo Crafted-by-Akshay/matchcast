@@ -1319,10 +1319,13 @@ class MatchWorkflow:
             "persona": record.persona,
             **_repair_link(record.repair_of),
         }
-        if feed is not None:  # the dropped text stays in the audit chain (docs/contracts.md)
+        if feed is not None:
             reason_code = reason_code or "unsupported_statement"
             details["reason_code"] = reason_code
-            details["text"] = record.text
+            # the audit route and its SSE event reach every viewer, so the text of a line that
+            # Content Safety refused is never written there (14-security-and-responsible-ai.md §1)
+            if reason_code != "unsafe_content":
+                details["text"] = record.text  # a dropped feed line's text stays in the audit chain
         audit = self._audit("agent", a.producer.agent_id, "line_abstained", record.line_id, details)
         if feed is not None and drops_on_failed_repair(record.persona) and event_ids:
             drop = {

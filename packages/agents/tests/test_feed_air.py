@@ -5,6 +5,7 @@ from conftest import run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.messages import Verdict
 from matchcast_agents.personas import BOOTH
+from matchcast_agents.safety import SafetyResult, ShieldResult
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import validate
 
@@ -114,3 +115,49 @@ def test_booth_lines_never_emit_onair(match) -> None:
     flow = flow_with(match, personas=tuple(BOOTH))
     run(flow.ingest(match["events"][:60]))
     assert not events_of(flow, "onair")
+
+
+class BlocksEverything:
+    """A Content Safety screen that refuses every line, as an unsafe line would be refused."""
+
+    async def analyze(self, text):
+        return SafetyResult(allowed=False, categories={"violence": 4}, source="local")
+
+    async def shield(self, user_prompt):
+        return ShieldResult(attack_detected=False, source="local")
+
+
+def test_a_line_content_safety_refuses_is_dropped_without_its_text_in_the_audit(match) -> None:
+    cfg = WorkflowConfig(personas=("casual", "analyst"))
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"],
+        roster=match["roster"],
+        names=match["names"],
+        clubs=match["teams"],
+        agents=rules_agents(cfg.personas),
+        config=cfg,
+        safety=BlocksEverything(),
+    )
+    run(flow.ingest(match["events"][:60]))
+    drops = [e.data for e in events_of(flow, "feed_drop")]
+    assert drops and all(drop["reason_code"] == "unsafe_content" for drop in drops)
+    for drop in drops:
+        validate(drop)
+    records = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "line_abstained"]
+    assert records
+    for record in records:  # the audit route and its SSE event reach every viewer
+        assert record["details"]["reason_code"] == "unsafe_content"
+        assert "text" not in record["details"]
+    assert not [p for p in flow.store.publications(flow.sk) if p["persona"] == "casual"]
+
+
+def test_a_failed_audit_append_leaves_the_kill_unset(match, monkeypatch) -> None:
+    flow = flow_with(match)
+
+    def broken_append(*args, **kwargs):
+        raise RuntimeError("audit store down")
+
+    monkeypatch.setattr(flow, "_audit", broken_append)
+    with pytest.raises(RuntimeError):
+        run(flow.set_feed("casual", True, "desk kill"))
+    assert "casual" not in flow.killed_feeds  # the audit is written before the kill takes effect
