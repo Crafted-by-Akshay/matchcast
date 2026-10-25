@@ -227,6 +227,15 @@ def _repair_link(repair_of: str | None) -> dict[str, str]:
     return {"repair_of": repair_of} if repair_of else {}
 
 
+# Producer free text the Verifier has not checked. It stays in the stored audit, and is never
+# published to the live stream (issue #382).
+MODEL_TEXT_DETAILS = frozenset({"why"})
+
+
+def _live_details(details: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in details.items() if k not in MODEL_TEXT_DETAILS}
+
+
 class MatchWorkflow:
     def __init__(
         self,
@@ -379,7 +388,8 @@ class MatchWorkflow:
             details=details,
             time=_stamp(self._clock()),
         )
-        self.hub.publish("audit", f"audit:{record['sequence']}", record)
+        live = {**record, "details": _live_details(record["details"])}
+        self.hub.publish("audit", f"audit:{record['sequence']}", live)
         return record
 
     def record_translation_rejected(self, publication_id: str, lang: str, reason: str) -> None:
@@ -573,7 +583,11 @@ class MatchWorkflow:
         decision = await self._decide(ctx, event)
         if isinstance(decision, ProducerTask):
             return decision
-        return self._vision_moment(ctx, event)
+        task = self._vision_moment(ctx, event)
+        if task is not None:  # the Vision moment is a crew moment: rundown, ledger and spawns
+            self._record_rundown(task)
+            await self._spawn(ctx, task)
+        return task
 
     def _vision_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
         """The one Vision moment on the engine feed (ADR-0022): Vision's pass count for each team

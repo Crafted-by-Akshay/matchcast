@@ -67,7 +67,7 @@ Every match route rebuilds the workflow of a stored match from its roster when t
 | `claim` | claim packet | `claim:<claim_id>` |
 | `line` | line with status | `line:<line_id>:<status>` |
 | `publication` | publication with the variant for `lang` (+ English) | `pub:<publication_id>` |
-| `audit` | audit record | `audit:<sequence>` |
+| `audit` | audit record, with `details.why` (the Producer's free text, not yet verified) left out; the stored record keeps it | `audit:<sequence>` |
 | `recap_ready` | personas available | `recap` |
 | `onair` | **Planned** (AB#498 contract, AB#499 wiring): the `onair` record of a derived feed line that aired (`docs/contracts.md`, "Derived feed lines") | `onair:<publication_id>:<lang>` |
 | `feed_drop` | **Planned** (same): the `feed_drop` record of a derived line that did not air; the text stays in the audit chain | `feed_drop:<publication_id>` |
