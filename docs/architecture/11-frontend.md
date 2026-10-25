@@ -215,3 +215,15 @@ A desk that joins mid-match is sent the approval queue and mode, the commentary 
 - 12 px floor: the Verifier chip, the "Sound is off" line and the producer's verdict lines are 12 px.
 - Agents tab at 390 and 320 px: the claims ledger becomes one card per claim (the 600 px table made 17 elements run past the edge); the header row is visually hidden and the table keeps explicit ARIA table roles so a screen reader still hears the column names. Spec: `shell-layout.spec.ts`.
 - The header pill (this match's agents: live, rules fallback, warming) and the Foundry chip (the api's deployment from `/v1/status`) can differ: Foundry can be live while one match is on rules. Their tooltips now say so.
+
+## Analyst live view and decluttered Watch (CREW-7.8, AB#501, flagged)
+Behind `?crew=1` (`CREW.enabled`, see `crew.js`; flag off changes nothing) the Analyst tab opens a compact **live view** (`crew-analyst.js`, `ALV`) instead of the 27-page console. It is drawn in the shell from data the shell already holds, and the whole view is labelled **Simulated** because the match is the browser simulator:
+- **Analyst feed**: verified claims from `AG.run` (tagged Rules or Live agents) plus the crew fixture's `analyst` feed lines (`CREW.state.feeds.analyst`, tagged Simulated), each with its match minute.
+- **Control vs chaos**: Watch's `M.indices` (whole-match indices over the last 5 min, DAT-4). With no indices yet the panel says so and shows nothing estimated. The pass-share bar is labelled a stand-in for possession, which the events do not record.
+- **Shot map**: SVG pitch, one dot per shot from `AG.run.events`, radius from xG, filled for a goal, half for a save, hollow off target. The SVG has an `aria-label` with the counts and xG totals.
+- **Pass quality**: passes, completion (inferred, the same 6 s rule as the indices) and average length per club, from the pass events.
+- **Storyline ledger**: verified claims grouped per club and player, with how many were aired (approved).
+- **Favourite club**: there is no shell-level favourite setting, so the view has a two-club select (stored in `localStorage` `mc-crew-fav`); the chosen side is marked `data-fav` and starred.
+- **Full console**: the button creates the same iframe as before, with the same `routeAnalyst` routing (`#live.<id>`, none for a national fixture). `routeAnalyst` does nothing while the live view shows, so the console loads only when asked for. A "Live view" button returns.
+- **Watch**: with `?crew=1` and no `?demo=1`, `embed/democtl.js` also hides the Demo controls button, the weather chip and the camera presets. `?demo=1` restores them. Pause, Vision and Copilot stay.
+Spec: `tests/e2e/crew-analyst.spec.ts`. Not done here: per-team territory (no honest source), and ledger lines from the crew fixture (they carry no player).
