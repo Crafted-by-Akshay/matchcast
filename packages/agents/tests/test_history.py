@@ -79,8 +79,7 @@ def test_roster_history_needs_exactly_two_teams_named_by_clubs() -> None:
 
     clubs = {"ENG": "England", "BRA": "Brazil", "HAR": "Harbor City"}
     assert history_for_roster(["ENG", "BRA"], clubs) is not None
-    one_known = history_for_roster(["ENG", "HAR"], clubs)  # England is real, Harbor City is not
-    assert one_known is not None and one_known["elo"]["away"] is None
+    assert history_for_roster(["ENG", "HAR"], clubs) is None  # half real is not a real match
     assert history_for_roster(["ENG"], clubs) is None
     assert history_for_roster(None, clubs) is None
 

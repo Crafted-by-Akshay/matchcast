@@ -73,6 +73,7 @@ _ALIASES = {
         "Korea Republic": "South Korea",
         "St Kitts and Nevis": "Saint Kitts and Nevis",
         "Cura Ao": "Curaçao",
+        "S o Tom and Pr ncipe": "São Tomé and Príncipe",
     }.items()
 }
 
@@ -182,10 +183,13 @@ def pre_match(home: str, away: str, on: date | None = None) -> dict[str, Any]:
 
 
 def for_match(home_team: str, away_team: str, on: date | None = None) -> dict[str, Any] | None:
-    """The block for two teams, or None when neither is a nation in the dataset.
+    """The block for two nations, or None unless both are nations in the dataset.
 
-    Also None when the results file is missing from the deployed image, which is logged.
+    Requiring both sides keeps a fictional club from getting one side's real data. Also None
+    when the results file is missing from the deployed image, which is logged.
     """
+    if resolve_team(home_team) is None or resolve_team(away_team) is None:
+        return None
     try:
         block = pre_match(home_team, away_team, on)
     except OSError:
