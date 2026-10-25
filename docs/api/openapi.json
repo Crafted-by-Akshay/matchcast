@@ -311,7 +311,7 @@
             "title": "Engine Version"
           },
           "hold_booth": {
-            "default": false,
+            "default": true,
             "title": "Hold Booth",
             "type": "boolean"
           },
@@ -2458,6 +2458,114 @@
           }
         },
         "summary": "Recap Audio",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/scoreboard": {
+      "get": {
+        "description": "The three-arm crew scoreboard for this match (CREW-5.2). The arms run on the stored\nevents with rules, so the result is cached per match, event count and run date. A new\nevent or a new day runs them again. When a recorded live run is set\n(MATCHCAST_SCOREBOARD_LIVE_RUN), its arms replace the rules arms as precomputed, labelled\nwith the run id. The route never calls a model (docs/architecture/16, 4.1).",
+        "operationId": "crew_scoreboard_v1_matches__match_id__scoreboard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Crew Scoreboard V1 Matches  Match Id  Scoreboard Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Crew Scoreboard",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/scoreboard/input": {
+      "get": {
+        "description": "The stored events, roster, names and teams of one match: the input of a live scoreboard\nrecording (scripts/scoreboard_live.py). Read-only, with the scoreboard's session check.",
+        "operationId": "scoreboard_input_v1_matches__match_id__scoreboard_input_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Scoreboard Input V1 Matches  Match Id  Scoreboard Input Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scoreboard Input",
         "tags": [
           "matches"
         ]
