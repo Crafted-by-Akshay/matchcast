@@ -131,6 +131,7 @@ test('chips: with no api the Foundry chip says not connected', async ({ page }) 
   await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="";' }));
   await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#ag-foundry')).toHaveText('Foundry: not connected', { timeout: 15_000 });
+});
 
 // Judge re-test: Broadcast read "Rules fallback" while Analyst read "Live agents". An api that has said "live" stays live while it waits for events;
 // the warm-up timer only falls back for an api that never answered. And the Broadcast desk's line always matches the shell pill.
