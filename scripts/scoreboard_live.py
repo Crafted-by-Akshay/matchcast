@@ -18,6 +18,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from matchcast_agents.grading import SEED_RATE
@@ -25,9 +27,20 @@ from matchcast_agents.grading_live import MAX_CALLS_PER_ARM, live_run
 from matchcast_agents.live.client import FoundryModelClient
 
 
+def fetch_input(api: str, session_id: str, match_id: str) -> dict:
+    """The stored match of a live session, from the read-only scoreboard input export."""
+    query = urllib.parse.urlencode({"session_id": session_id})
+    path = f"/v1/matches/{urllib.parse.quote(match_id)}/scoreboard/input?{query}"
+    with urllib.request.urlopen(api.rstrip("/") + path, timeout=30) as response:
+        return json.loads(response.read())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--match", type=Path, required=True)
+    parser.add_argument("--match", type=Path, help="the export file, if already saved")
+    parser.add_argument("--api", help="the api base URL, to export the match instead of --match")
+    parser.add_argument("--session-id", help="the live session the match is in (with --api)")
+    parser.add_argument("--match-id", help="the match id in that session (with --api)")
     parser.add_argument(
         "--fixture", required=True, help="the fixture id the match is, e.g. M001 or N001"
     )
@@ -40,7 +53,13 @@ def main(argv: list[str] | None = None) -> int:
     if not 1 <= args.max_calls <= MAX_CALLS_PER_ARM:
         print(f"--max-calls must be between 1 and {MAX_CALLS_PER_ARM}", file=sys.stderr)
         return 2
-    match = json.loads(args.match.read_text())
+    if args.match is not None:
+        match = json.loads(args.match.read_text())
+    elif args.api and args.session_id and args.match_id:
+        match = fetch_input(args.api, args.session_id, args.match_id)
+    else:
+        print("give --match, or all of --api, --session-id and --match-id", file=sys.stderr)
+        return 2
     print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)
     record = live_run(
         match,
