@@ -35,6 +35,21 @@ MCS.progress('Loading the stadium and players');
   // desktop: the On-the-ball card and the Live commentary card both docked bottom left, one under the other; keep the card to the right of the commentary card
   const beside = () => { const t = document.getElementById('third'), m = document.getElementById('mcf'); if (t && m && m.getBoundingClientRect().width) t.style.left = Math.round(m.getBoundingClientRect().right + 12) + 'px'; };
   beside(); setInterval(beside, 1000); addEventListener('resize', beside);
+  // UX review pass 8: talking to a player used to start only from a name tag. A visible control sits beside the Copilot button and opens the Copilot Talk tab.
+  { const tb = document.createElement('button'); tb.id = 'mcx-talk'; tb.type = 'button';
+    tb.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false" style="margin-right:6px;flex:none"><path d="M8 1.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V4A2.5 2.5 0 0 0 8 1.5zM3.5 7.5v.5a4.5 4.5 0 0 0 9 0v-.5h-1.2v.5a3.3 3.3 0 0 1-6.6 0v-.5H3.5zM7.4 12.4h1.2V15H7.4z" fill="currentColor"/></svg>Talk to a player';
+    tb.style.cssText = 'position:fixed;z-index:6;display:none;align-items:center;white-space:nowrap;padding:0 14px;border-radius:999px;border:1px solid rgba(140,194,255,.55);background:rgb(9,13,19);color:#fff;font:600 13px var(--f-body,system-ui,sans-serif);cursor:pointer';
+    tb.title = 'Pick a player, ask a question or give an order. The reply is checked against the match record.';
+    document.body.appendChild(tb);
+    const place = () => {   // next to the Copilot button wherever the layout puts it; hidden while the Copilot drawer is open
+      const cp = document.getElementById('cpbtn'), dr = document.getElementById('copilot');
+      const r = cp ? cp.getBoundingClientRect() : null;
+      if (!r || !r.width || (dr && !dr.hidden)) { tb.style.display = 'none'; return; }
+      tb.style.display = 'inline-flex'; tb.style.height = r.height + 'px'; tb.style.top = r.top + 'px'; tb.style.left = Math.max(8, Math.round(r.left - tb.offsetWidth - 8)) + 'px';
+    };
+    tb.addEventListener('click', () => { if (window.openTalk) window.openTalk(); place(); });
+    document.addEventListener('click', () => setTimeout(place, 0), true);   // the drawer opens and closes on clicks; do not wait for the timer on a slow machine
+    setInterval(place, 500); addEventListener('resize', place); }
   const box = document.createElement('div'); box.id = 'mcx-box';
   box.innerHTML = '<div id="mcx-live" aria-live="polite"></div><div id="mcx-log" hidden></div><button class="mcx-b" id="mcx-tog" hidden>Pulse log (0)</button>';
   document.body.appendChild(box);
