@@ -48,8 +48,10 @@ TALK_PHRASES = {
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
-# a line that fails its repair on one of these goes to a person: the event log can settle it
+# a line that fails its repair on one of these goes to a person, if it is the booth's call: the
+# event log can settle it. Derived feed lines that fail are dropped from air instead (CREW-4.3).
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
+QUEUED_PERSONA = "booth:pbp"  # the main booth line: the only one a producer decides on
 
 
 class WorkflowError(Exception):
@@ -167,6 +169,11 @@ def _utc_now() -> datetime:
 
 def _stamp(moment: datetime) -> str:
     return moment.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moment.microsecond // 1000:03d}Z"
+
+
+def _repair_link(repair_of: str | None) -> dict[str, str]:
+    """The audit details that name the line a repair replaces; empty for a first attempt."""
+    return {"repair_of": repair_of} if repair_of else {}
 
 
 class MatchWorkflow:
@@ -1041,6 +1048,7 @@ class MatchWorkflow:
                 draft.line_id,
                 reason_code=verdict.reason_code,
                 checks=[c.model_dump() for c in verdict.checks if not c.passed],
+                **_repair_link(repair_of),
             )
             if attempt == 0:
                 with _TRACER.start_as_current_span("handoff verifier to repair") as span:
@@ -1058,6 +1066,7 @@ class MatchWorkflow:
             a.verifier,
             draft.line_id,
             checks=[{"name": c.name, "passed": c.passed} for c in verdict.checks],
+            **_repair_link(repair_of),
         )
         if record.status == "verified":
             self.stats["verified"] += 1
@@ -1155,9 +1164,11 @@ class MatchWorkflow:
         await self._verify_line(ctx, task, claims, replacement, attempt=1, repair_of=draft.line_id)
 
     def _give_up(self, record: LineRecord, verdict: Verdict) -> None:
-        """A line that failed its one repair: a checkable fact goes to a person, the rest drops."""
+        """A line that failed its one repair. The booth's call, when a checkable fact is wrong,
+        waits in the producer queue flagged escalated. Every other line is dropped from air
+        with an audit record (CREW-4.3): the derived feeds air once the Verifier passes them."""
         a = self.agents
-        if verdict.reason_code in ESCALATED_CODES:
+        if record.persona == QUEUED_PERSONA and verdict.reason_code in ESCALATED_CODES:
             record.status = "review"
             record.escalated = True
             self._save_line(record)
@@ -1174,7 +1185,14 @@ class MatchWorkflow:
         record.status = "abstained"
         self._save_line(record)
         self.stats["abstained"] += 1
-        self._agent("line_abstained", a.producer, record.line_id, reason_code=verdict.reason_code)
+        self._agent(
+            "line_abstained",
+            a.producer,
+            record.line_id,
+            reason_code=verdict.reason_code,
+            persona=record.persona,
+            **_repair_link(record.repair_of),
+        )
 
     # ---- approval and publication ------------------------------------------------------
 

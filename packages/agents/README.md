@@ -27,7 +27,7 @@ flowchart LR
 | Producer | Picks moments, sets priority, skips quiet play | Score table, threshold 60, priority 1 for goals and red cards, one task per 8 s of match time |
 | Analyst | Turns a moment into 1 to 3 claims with evidence | Counts from the rolling match state; claims are contract `claim` packets |
 | Narrator | One line per persona from claim values and roster names | Templates for `casual`, `analyst`, `broadcast` |
-| Verifier | Checks sources, freshness, numbers, names, persona limits | Checks 1 to 5 from `04-agents.md` §5, recounted from the stored events |
+| Verifier | Checks sources, freshness, numbers, names, persona limits | Checks 1 to 5 and the adversarial pass (8a) from `04-agents.md` §5, recounted from the stored events |
 
 ## Modes
 

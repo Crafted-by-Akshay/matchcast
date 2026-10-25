@@ -5,6 +5,7 @@ import copy
 import pytest
 from conftest import run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.verify.adversary import ATTEMPTS as adversary_attempts
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError, validate, validate_publication_context
 from matchcast_contracts.audit import verify_chain
@@ -134,7 +135,10 @@ def test_verified_audit_records_name_the_deterministic_and_meaning_checks(
     run(flow.ingest(match["events"][:40]))
     verified = next(r for r in flow.store.audit_records(flow.sk) if r["action"] == "line_verified")
     names = [c["name"] for c in verified["details"]["checks"]]
-    assert names == ["sources", "freshness", "numbers", "names", "persona", "meaning", "safety"]
+    adversary = [f"adversary:{a.name}" for a in adversary_attempts]
+    assert names == [
+        "sources", "freshness", "numbers", "names", "persona", *adversary, "meaning", "safety",
+    ]  # fmt: skip
 
 
 class FakeDesk:
