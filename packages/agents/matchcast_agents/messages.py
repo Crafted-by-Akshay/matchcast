@@ -19,7 +19,7 @@ ReasonCode = Literal[
     "length_exceeded",
     "citation_missing",
 ]
-SkipReason = Literal["quiet_play", "rate_limited", "duplicate_moment", "low_score"]
+SkipReason = Literal["quiet_play", "rate_limited", "duplicate_moment", "low_score", "model_skip"]
 LineStatus = Literal[
     "drafted",
     "verifying",
@@ -47,11 +47,15 @@ class ProducerTask(Packet):
     personas: tuple[Persona, ...]
     deadline_ms: int = 20_000
     reason: str
+    routed_by: Literal["rules", "model"] = "rules"
+    why: str = ""  # the model's one-line reason for this route, empty for rules
+    call_stats_desk: bool = False  # the model asked for the Stats Desk on a non-priority-1 moment
 
 
 class Skip(Packet):
     moment_id: str
     reason: SkipReason
+    why: str = ""  # the model's one-line reason for a model_skip, for the audit trail
 
 
 class DraftLine(Packet):
@@ -98,4 +102,5 @@ class LineRecord(BaseModel):
     created_at: str
     decided_by: str | None = None
     origin: Literal["template", "model"] = "template"
+    escalated: bool = False  # a repair failed on a checkable fact and a person must decide
     snapshot_revision: int

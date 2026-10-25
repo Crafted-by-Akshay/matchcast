@@ -32,16 +32,20 @@ from .tools import InProcessTools, ToolCall, ToolError
 
 if TYPE_CHECKING:
     from .live.client import ModelClient
+    from .live.knowledge import TalkKnowledge
 
 STATS_DESK_BUDGET_S = 2.0
+MINUTE_MENTION = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)  # "minute 12": a log minute
 
 TALK_PHRASES = {
     "shots on target": "shots_on_target", "shots": "shots", "goals": "goals",
     "tackles won": "tackles_won", "fouls": "fouls", "cards": "cards",
 }  # fmt: skip
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
-AUDIT_SKIPPED = ("rate_limited", "duplicate_moment")
+AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
+# a line that fails its repair on one of these goes to a person: the event log can settle it
+ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
 
 
 class WorkflowError(Exception):
@@ -176,11 +180,13 @@ class MatchWorkflow:
         clock: Callable[[], datetime] = _utc_now,
         stats_desk: StatsDesk | None = None,
         answer_model: "ModelClient | None" = None,
+        knowledge: "TalkKnowledge | None" = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
         self.stats_desk = stats_desk
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
+        self._knowledge = knowledge  # squads and the knowledge base for talk (EXP-18)
         self._verified_claims: dict[str, dict[str, Any]] = {}
         self._repair_lock = asyncio.Lock()
         self._redrafts: dict[tuple[str, str], tuple[MatchContext, list[dict], list[DraftLine]]] = {}
@@ -220,6 +226,7 @@ class MatchWorkflow:
             "verified": 0,
             "repaired": 0,
             "abstained": 0,
+            "escalated": 0,
             "published": 0,
         }
 
@@ -421,6 +428,7 @@ class MatchWorkflow:
                     self.agents.producer,
                     decision.moment_id,
                     reason=decision.reason,
+                    why=decision.why,
                 )
             return None
         self.stats["moments"] += 1
@@ -559,11 +567,29 @@ class MatchWorkflow:
         from .roles.orders import keyword_order
 
         if self._answers is not None:
-            live = await self._answers.talk(ctx, target, utterance, position)
+            sheet, passages = self._talk_knowledge(ctx, target, utterance)
+            live = await self._answers.talk(
+                ctx, target, utterance, position, sheet=sheet, passages=passages
+            )
             if live is not None and self._talk_numbers_ok(ctx, target, live[0]):
                 return live[0], live[1], "model", live[2]
         reply, facts = player_reply(ctx, target, utterance)
         return reply, facts, "rules", keyword_order(utterance)
+
+    def _talk_knowledge(
+        self, ctx: MatchContext, target: str, utterance: str
+    ) -> tuple[dict[str, list[str]], list[str]]:
+        """Both squads and the knowledge passages about him and the manager's words.
+
+        Empty when the match has no knowledge base.
+        """
+        if self._knowledge is None:
+            return {}, []
+        clubs = (ctx.club_name(ctx.home), ctx.club_name(ctx.away))
+        return (
+            self._knowledge.team_sheet(clubs),
+            self._knowledge.passages(f"{ctx.player_name(target)} {utterance}"),
+        )
 
     @staticmethod
     def _talk_numbers_ok(ctx: MatchContext, target: str, reply: str) -> bool:
@@ -575,11 +601,18 @@ class MatchWorkflow:
         from .verify import extract_numbers
         from .verify.checks import recompute
 
-        numbers = extract_numbers(reply)
         if target == "producer":
+            numbers = extract_numbers(reply)
             upto = ctx.state.max_sequence
             goals = {recompute(ctx.events, f"goals:{t}", upto) for t in (ctx.home, ctx.away)}
             return all(n in goals for n in numbers)
+        from .live.answers import minute_claims_fit
+
+        if not minute_claims_fit(
+            ctx, target, reply
+        ):  # a minute must be one the named player's log event
+            return False
+        numbers = extract_numbers(MINUTE_MENTION.sub(" ", reply))
         recount = dict.fromkeys(TALK_PHRASES.values(), 0)
         for event in ctx.events:
             p = event["payload"]
@@ -784,7 +817,8 @@ class MatchWorkflow:
                 raise failure
 
     def _wants_desk(self, task: ProducerTask) -> bool:
-        return task.priority == 1 and self.stats_desk is not None
+        # priority 1 always; any other moment only when the Producer asked for it
+        return (task.priority == 1 or task.call_stats_desk) and self.stats_desk is not None
 
     async def _desk_after_verify(self, task: ProducerTask) -> None:
         if not self._wants_desk(task):
@@ -918,6 +952,8 @@ class MatchWorkflow:
             claim_ids=list(draft.claim_ids),
             moment=task.reason,
             mode="rules" if draft.origin == "template" else "live",  # what wrote this very line
+            routed_by=task.routed_by,
+            why=task.why,
         )
         verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
         verdict = await self._screen(draft, verdict)
@@ -934,14 +970,12 @@ class MatchWorkflow:
                 checks=[c.model_dump() for c in verdict.checks if not c.passed],
             )
             if attempt == 0:
-                await self._repair(ctx, task, claims, draft, verdict)
+                with _TRACER.start_as_current_span("handoff verifier to repair") as span:
+                    span.set_attribute("matchcast.reason_code", verdict.reason_code or "")
+                    span.set_attribute("matchcast.line_id", draft.line_id)
+                    await self._repair(ctx, task, claims, draft, verdict)
             else:
-                record.status = "abstained"
-                self._save_line(record)
-                self.stats["abstained"] += 1
-                self._agent(
-                    "line_abstained", a.producer, draft.line_id, reason_code=verdict.reason_code
-                )
+                self._give_up(record, verdict)
             return
         record.status = "verified" if verdict.verdict == "verified" else "review"
         self._save_line(record)
@@ -1034,9 +1068,34 @@ class MatchWorkflow:
                 self._redrafts[key] = (fresh_ctx, fresh_claims, written)  # an empty one too
             ctx, claims, redrafts = self._redrafts[key]
         replacement = next((d for d in redrafts if d.persona == draft.persona), None)
-        if replacement is None:
+        if replacement is None:  # no repaired line for this persona: the original is final
+            original = self.store.get_line(self.sk, draft.line_id)
+            assert original is not None
+            self._give_up(original, verdict)
             return
         await self._verify_line(ctx, task, claims, replacement, attempt=1, repair_of=draft.line_id)
+
+    def _give_up(self, record: LineRecord, verdict: Verdict) -> None:
+        """A line that failed its one repair: a checkable fact goes to a person, the rest drops."""
+        a = self.agents
+        if verdict.reason_code in ESCALATED_CODES:
+            record.status = "review"
+            record.escalated = True
+            self._save_line(record)
+            self.stats["escalated"] += 1
+            self._agent(
+                "line_review",
+                a.verifier,
+                record.line_id,
+                reason_code=verdict.reason_code,
+                escalated=True,
+                repair_of=record.repair_of,
+            )
+            return
+        record.status = "abstained"
+        self._save_line(record)
+        self.stats["abstained"] += 1
+        self._agent("line_abstained", a.producer, record.line_id, reason_code=verdict.reason_code)
 
     # ---- approval and publication ------------------------------------------------------
 

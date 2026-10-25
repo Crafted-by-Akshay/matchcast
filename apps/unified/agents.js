@@ -9,7 +9,7 @@ const AG = (() => {
   const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   // one trace step per agent action: who, what, how long it took (ms), and whether rules or a model did it
   const trace = (c, agent, step, t0, extra) => c.trace.push(Object.assign({ agent, step, ms: +(clock() - t0).toFixed(3), mode: c.source === 'model' ? 'model' : 'rules', tokens: null }, extra || {}));
-  let mode = 'demo', onAir = () => {};   // demo: verified lines air at once; producer: a person approves each line first
+  let mode = 'producer', onAir = () => {};   // producer (the default): a person approves each line first; demo: verified lines air at once
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
     roll: { score: [0, 0], xg: [0, 0], nextXg: 5 },
@@ -96,7 +96,7 @@ const AG = (() => {
     if (agrees(c, rc)) return { verdict: 'verified', repaired: false, reason: 'recount from the event log matches' };
     // one repair: the log is the source, so the inputs take the recount and the line is written again
     const was = Object.assign({}, c.inputs), t1 = clock();
-    Object.assign(c.inputs, rc); c.text = narrate(c);
+    c.wasText = c.text; Object.assign(c.inputs, rc); c.text = narrate(c);
     trace(c, 'verifier', 'repair', t1, { detail: 'differed from the event log; rewrote the line from the recount', was, now: rc });
     log(c, 'verifier', 'repair', { was, now: rc });
     return { verdict: 'verified', repaired: true, reason: 'differed from the event log; repaired from it once' };
@@ -105,7 +105,7 @@ const AG = (() => {
   // wild moments are deterministic triggers; the Producer makes them priority 1 and the line still goes through the Verifier
   const ALERTS = { red_card: 'Red card', turning_point: 'Turning point' };
   // the steps are the agents' own trace (who did what, and whether by a model or the rules): the Broadcast desk shows them as the orchestration strip
-  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, alert: c.alert || null, verdict: c.verdict, tr: c.airText ? null : (c.tr || null), steps: (c.trace || []).map((s) => ({ agent: s.agent, step: s.step, mode: s.mode })), numbers: Object.entries(c.inputs || {}).filter(([, v]) => typeof v === 'number').slice(0, 4).map(([name, value]) => ({ name, value })) });   // an edited line has no checked translation
+  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, was: c.wasText || null, aired_ms: Math.round(clock() - (c.born || clock())), alert: c.alert || null, verdict: c.verdict, repaired: !!c.repaired, tr: c.airText ? null : (c.tr || null), steps: (c.trace || []).map((s) => ({ agent: s.agent, step: s.step, mode: s.mode })), numbers: Object.entries(c.inputs || {}).filter(([, v]) => typeof v === 'number').slice(0, 4).map(([name, value]) => ({ name, value })) });   // an edited line has no checked translation
   const nums = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
   // a person's action on a queued line; every one lands in the audit chain with the person's name
   const act = (id, who, action, detail, fn) => {
@@ -131,7 +131,7 @@ const AG = (() => {
   // one claim through the pipeline: Analyst claims it, Narrator writes it, Verifier checks it, Producer routes or holds it
   const pipeline = (c) => {
     let t = clock();
-    c.trace = [];
+    c.born = t; c.trace = [];   // born: when the pipeline picked the claim; event-to-air counts from here, so it includes any wait for approval
     trace(c, 'producer', 'task', t, { detail: 'picked a ' + c.kind + ' claim for the match' });
     t = clock();
     run.claims.push(c); run.stat.claims++;
@@ -326,5 +326,6 @@ const AG = (() => {
     if (c.hops.some((h) => h.agent === agent && h.step === step)) return;
     c.hops.push({ agent, step, mode: c.source === 'model' ? 'model' : 'rules', ms: c.seenAt != null ? +(clock() - c.seenAt).toFixed(0) : null });
   };
-  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), get mode() { return mode; }, setMode: (m) => { mode = m; changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  const queue = () => (run ? run.claims.filter((c) => c.approval === 'pending').map((c) => Object.assign(air(c), { approval: 'pending', waiting_ms: Math.round(clock() - c.born) })) : []);
+  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending')) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();

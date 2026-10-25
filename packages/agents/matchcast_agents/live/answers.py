@@ -13,6 +13,8 @@ from collections.abc import Iterable
 from typing import Any
 
 from ..ask.assistant import WORD_LIMIT, AskResult
+from ..ask.chunking import Chunk
+from ..ask.retrieval import Bm25Index
 from ..context import MatchContext
 from ..resilience import ModelError, ModelRateLimited, ModelTimeout
 from ..roles.orders import NONE, ORDER_KEYS, allowed_orders
@@ -25,6 +27,18 @@ ANSWER_BUDGET_S = 15.0  # a viewer waits this long at most; the rules answer aft
 TALK_WORD_LIMIT = 60
 RECENT_EVENTS = 15
 MATCH_EVENTS = 8  # the last events of the match a player may talk about
+LOG_RETRIEVED = 40  # the events of the whole match that best match the question
+LOG_LAST = 30  # and the last events, whatever the question
+MINUTE_CLAIM = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)
+EVENT_WORDS = {  # what a sentence may say happened, and the log's event type for it
+    "goal": ("goal",),
+    "card": ("card", "booked", "yellow", "red"),
+    "shot": ("shot",),
+    "pass": ("pass",),
+    "tackle": ("tackle",),
+    "foul": ("foul",),
+}
+MINUTE_IN_TEXT = re.compile(r"\bminute\s+\d{1,3}\b", re.IGNORECASE)  # a minute is not a count
 KEY_EVENT_TYPES = ("goal", "card")  # every goal and card of the match is known to any player
 KEY_EVENTS = ("goal", "card")  # every one of these is in the sheet, however long ago it was
 TEAM_METRICS = ("goals", "shots", "shots_on_target", "passes", "tackles_won", "fouls", "cards")
@@ -152,13 +166,32 @@ def _event_line(ctx: MatchContext, event: dict[str, Any]) -> str | None:
     if payload["type"] in ("correction", "retraction", "period_boundary"):
         return None
     who = ctx.player_name(payload["player_id"]) if "player_id" in payload else None
+    to = (
+        ctx.player_name(payload["recipient_player_id"])
+        if "recipient_player_id" in payload
+        else None
+    )
     club = ctx.club_name(payload["team_id"]) if "team_id" in payload else None
     parts = [f"minute {_minute(event['event_time_ms'])}", payload["type"].replace("_", " ")]
     if who:
         parts.append(f"by {who}")
+    if to:
+        parts.append(f"to {to}")
     if club:
         parts.append(f"({club})")
     return " ".join(p for p in parts if p)
+
+
+def match_log(ctx: MatchContext, query: str) -> list[str]:
+    """Every event of the match so far, as the lines he may talk from: the ones that best match the
+    question and the speaker (BM25 over one line per event), plus the last events. Each line is
+    built from the stored events, so a player, a minute or a club in it is the log's own."""
+    lines = [(i, line) for i, e in enumerate(ctx.events) if (line := _event_line(ctx, e))]
+    chunks = [Chunk(str(i), "match", "log", "", "", line) for i, line in lines]
+    picked = {int(hit.chunk.id) for hit in Bm25Index(chunks).search(query, k=LOG_RETRIEVED)}
+    picked |= {i for i, _ in lines[-LOG_LAST:]}
+    picked |= {i for i, e in enumerate(ctx.events) if e["payload"]["type"] in KEY_EVENT_TYPES}
+    return [line for i, line in lines if i in picked]
 
 
 def _label(phrase: str) -> str:
@@ -261,14 +294,83 @@ def _team_totals(ctx: MatchContext) -> list[str]:
     return totals
 
 
+NAME_RUN = re.compile(r"\b(?:[A-Z]\.\s+)?[A-Z][\w'’-]*(?:\s+(?:[A-Z]\.\s+)?[A-Z][\w'’-]*)*")
+
+
+def _whole(name: str) -> str:
+    return " ".join(name.split()).casefold()
+
+
+def _talk_names_fit(reply: str, whole: set[str], words: set[str]) -> bool:
+    """Each run of capitalised words is a whole name the match gives, or one known word.
+
+    A run of two or more words must equal a whole name, so "N. Morinari" is refused even when both
+    of its parts are on the sheet.
+    """
+    for run in NAME_RUN.findall(reply):
+        if len(run.split()) == 1:
+            if run not in words | COMMON_WORDS:
+                return False
+        elif _whole(run) not in whole:
+            return False
+    return True
+
+
+def _counts_another_player(ctx: MatchContext, target: str, reply: str) -> bool:
+    """A reply that names a team-mate or an opponent, by whole name or by any part of it, may not
+    carry a count of its own: his counts are his own, whichever sentence the name is in."""
+    if not re.search(r"\d", MINUTE_IN_TEXT.sub("", reply)):
+        return False
+    own = set(_whole(ctx.player_name(target)).split())
+    text = _whole(reply)
+    for pid, name in ctx.names.items():
+        if pid == target:
+            continue
+        if _whole(name) in text:
+            return True
+        for word in set(_whole(name).split()) - own:
+            if re.search(rf"\b{re.escape(word)}\b", text):
+                return True
+    return False
+
+
+def minute_claims_fit(ctx: MatchContext, target: str, reply: str) -> bool:
+    """Every "minute N" in the reply must be a minute in which the player the sentence names (or the
+    speaker) did what the sentence says: a goal, a card, a shot, a pass and so on."""
+    for sentence in re.split(r"(?<=[.!?])\s+", reply):
+        minutes = MINUTE_CLAIM.findall(sentence)
+        if not minutes:
+            continue
+        text = _whole(sentence)
+        who = {pid for pid, name in ctx.names.items() if _whole(name) in text} or {target}
+        kinds = {
+            kind
+            for kind, words in EVENT_WORDS.items()
+            if any(re.search(rf"\b{w}", text) for w in words)
+        }
+        for minute in minutes:
+            if not any(
+                e["event_time_ms"] // 60_000 == int(minute)
+                and e["payload"].get("player_id") in who
+                and (not kinds or e["payload"]["type"] in kinds)
+                for e in ctx.events
+            ):
+                return False
+    return True
+
+
 def talk_fits(ctx: MatchContext, target: str, reply: str, match_names: Iterable[str] = ()) -> bool:
-    """The reply as the Verifier sees it: short, digits only, and names only of the speaker, the
-    two clubs and the players in the recent match events the model was given."""
+    """The reply as the Verifier sees it: short, digits only, and names only whole names of the
+    speaker, the two clubs and the squads and players the model was given (the knowledge passages
+    are words, not names)."""
     if not reply or len(reply.split()) > TALK_WORD_LIMIT or not _words_fit(reply):
         return False
+    if _counts_another_player(ctx, target, reply):
+        return False
     sides = (ctx.player_name(target), ctx.club_name(ctx.home), ctx.club_name(ctx.away))
-    names = {w for n in (*sides, *match_names) for w in n.split()}
-    return _names_fit(reply, names)
+    known = (*sides, *match_names)
+    words = {w for n in known for w in _capitalised(n)}
+    return _talk_names_fit(reply, {_whole(n) for n in known}, words)
 
 
 class LiveAnswers:
@@ -319,16 +421,27 @@ class LiveAnswers:
         return AskResult(text, "live", False, citations, mode="live", retrieval="local"), ""
 
     async def talk(
-        self, ctx: MatchContext, target: str, utterance: str, position: str | None
+        self,
+        ctx: MatchContext,
+        target: str,
+        utterance: str,
+        position: str | None,
+        *,
+        sheet: dict[str, list[str]] | None = None,
+        passages: list[str] | None = None,
     ) -> tuple[str, dict, str] | None:
         """(reply, facts, order) in the player's voice, or None when no checked reply came back.
 
         The order is the one he says he heard, from the list his role allows; the role guard in the
-        workflow still decides whether it reaches the sim.
+        workflow still decides whether it reaches the sim. `sheet` is both squads as
+        `name, position` lines; `passages` is knowledge-base background in words, and the names
+        in it are not accepted as names of anyone.
         """
         stats = player_stats(ctx, target)
         if stats is None:
             return None
+        sheet = sheet or {}
+        squad_names = [line.split(",")[0] for lines in sheet.values() for line in lines]
         recent = [
             line
             for e in ctx.events
@@ -341,6 +454,10 @@ class LiveAnswers:
         match_names = [
             ctx.player_name(e["payload"]["player_id"]) for e in known if "player_id" in e["payload"]
         ]
+        match_names += [
+            *squad_names,
+            *ctx.names.values(),
+        ]  # every player of the match, by whole name
         home, away = _score(ctx)
         facts = {
             "you": {
@@ -354,10 +471,15 @@ class LiveAnswers:
             "match": {
                 "score": f"{ctx.club_name(ctx.home)} {home}, {ctx.club_name(ctx.away)} {away}",
                 "minute": _minute(ctx.state.event_time_ms),
+                "log": match_log(
+                    ctx, f"{utterance} {ctx.player_name(target)}"
+                ),  # every event, by relevance
                 "recent_events": match_events,  # what you saw happen, with the players' names
                 "key_events": key_events,  # every goal and card of the match
                 "team_totals": _team_totals(ctx),  # the log's counts for each club
             },
+            "team_sheet": sheet,  # both squads: who plays where, in words, no shirt numbers
+            "knowledge": passages or [],  # club and player background from the knowledge base
             "instruction_from_the_manager": utterance,
         }
         answer = await self._call(prompt("player"), facts, TALK_SCHEMA)

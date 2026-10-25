@@ -35,7 +35,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - Every Match Pulse card says who checked it: `✓ API-Verified` (the agent api wrote the line and its Verifier recounted it from the stored events) or `In-page (Simulated)` with `✓ Verified in page` (the in-page rules in this browser wrote and checked it; not the server Verifier).
 - `watch/index.html`, `broadcast/index.html`, `analyst/index.html`: built views. Each has `embed/hook.js` plus its own hook appended.
 - `embed/`: the hooks. `hook.js` (shared by Watch and Broadcast), `watch.js`, `broadcast.js`, `analyst.js`.
-- `shared/`: `players.json`, `intl.json` (3D engine), `fixtures.json` and `clubs.json` (season, generated from the Analyst data), `analyst/data/` (28 matches and the league).
+- `shared/`: `players.json` (four skinned body packs, 1.57 MB gzipped after `scripts/slim_players.py`, was 2.64 MB; weights, colours and UVs are 8/16-bit, normals 8-bit via KHR_mesh_quantization, positions lose their low mantissa bits, worst error 0.5 mm), `intl.json` (3D engine), `fixtures.json` and `clubs.json` (season, generated from the Analyst data), `analyst/data/` (28 matches and the league).
 
 ## Build
 - `python3 build.py`: writes the views, `shared/` and `analyst/data/` for publishing. The views load three.js 0.160.0 from jsdelivr.

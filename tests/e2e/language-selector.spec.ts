@@ -24,6 +24,7 @@ test('language selector: voice speaks the checked translation, falls back to Eng
   // voice: the Spanish line is spoken with lang es; a line whose translation failed is spoken in English
   await page.evaluate(() => {
     const w = window as any; w.__said = []; const say = VC.say; VC.say = (t: string, o: any) => { w.__said.push([t, o.lang]); return say(t, o); };
+    AG.setMode('demo');   // these tests are about voice and translation: lines air as they are written (the approval gate has its own specs)
     AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
     AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });
@@ -57,6 +58,7 @@ test('language selector: a translation the Verifier rejects is spoken in English
   await page.click('#lang-sel button[data-lang="es"]');
   await page.evaluate(() => {
     const w = window as any; w.__said = []; const say = VC.say; VC.say = (t: string, o: any) => { w.__said.push([t, o.lang]); return say(t, o); };
+    AG.setMode('demo');   // these tests are about voice and translation: lines air as they are written (the approval gate has its own specs)
     AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
     // the translator changes the score, so the re-check rejects it
     AG.setTranslator((x: any) => x.kind === 'score' ? 'Gol de Thames Rovers (A One) en el min 10. Thames Rovers 2–0 Coloso Ciudad.' : null);

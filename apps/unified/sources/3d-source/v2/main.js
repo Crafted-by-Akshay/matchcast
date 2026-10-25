@@ -235,38 +235,108 @@ const concrete = new THREE.MeshStandardMaterial({ color: 0x29303A, roughness: 0.
 const seatMat = new THREE.MeshStandardMaterial({ color: 0x1A2432, roughness: 0.8 });
 const ROWS = 24, DEPTH = 0.85, RISE = 0.5;
 const stands = [{ len: 128, off: 46, ax: 'z', s: -1 }, { len: 128, off: 46, ax: 'z', s: 1 }, { len: 92, off: 66, ax: 'x', s: -1, home: 0.88 }, { len: 92, off: 66, ax: 'x', s: 1, home: 0.12 }];
-const fanCount = stands.reduce((a, st) => a + Math.floor(st.len / 0.6) * ROWS, 0);
-const fanGeo = new THREE.CapsuleGeometry(0.2, 0.42, 3, 6); fanGeo.translate(0, 0.42, 0);
-const fanMat = new THREE.MeshStandardMaterial({ roughness: 0.85 });
-fanMat.onBeforeCompile = (sh) => {
-  sh.uniforms.uTime = { value: 0 }; sh.uniforms.uHype = { value: 0 }; fanMat.userData.sh = sh;
-  sh.vertexShader = 'uniform float uTime; uniform float uHype;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-    float ph = float(gl_InstanceID) * 12.9898; float r = fract(sin(ph) * 43758.5453);
+// Fans are low-poly people, about 1.7 m tall with feet at y = 0 (legs, torso with arms, head, hair; about 140 triangles).
+// Each body part is one InstancedMesh. The parts of a chunk share one instance order, so one fan's parts always move together.
+// A chunk is a LOD group: beyond LOD_FAR metres it draws a torso and a head only.
+const crowd = { kind: 'humanoid', fans: 0, parts: ['body', 'legs', 'head', 'hair'], lod: 2, trisPerFan: 0, lowTrisPerFan: 0 };
+const crowdU = { uTime: { value: 0 }, uHype: { value: 0 } };
+{
+  const CHUNK = 32, LOD_FAR = 70;
+  const FAN_SKIN = [0x8D5A3B, 0xC68E5F, 0xE0B48A, 0xF1C9A5, 0xFFDCB8, 0x6B4226, 0x4A2E1C];
+  const FAN_HAIR = ['#15110E', '#3B2A1E', '#6B4A2B', '#B8925A', '#8C8C8C', '#D9D2C0'];
+  const FAN_TROUSERS = ['#1E2530', '#2B2F38', '#3A3F4A', '#0F1319', '#E9E9E4', '#5C6B7D'];
+  const FAN = { home: ['#2F7BEA', '#2557B5', '#E6EDF3', '#5AA2FF'], away: ['#F2702A', '#C4561A', '#1A1D22', '#FFB089'], mix: ['#2B3442', '#3A3F4A', '#6B4F3A', '#C9B7A0', '#9AA7B5', '#4A5A70', '#7A2E2E', '#E2E2D8'] };
+  const prim = (geo, x, y, z, side = 0) => { geo.translate(x, y, z); return { geo, side }; };
+  const cyl = (rt, rb, h, seg, open) => new THREE.CylinderGeometry(rt, rb, h, seg, 1, open);
+  const mergeFan = (pieces) => {
+    const pos = [], nor = [], arm = [], idx = [];
+    for (const { geo, side } of pieces) {
+      const base = pos.length / 3, p = geo.attributes.position.array;
+      pos.push(...p); nor.push(...geo.attributes.normal.array);
+      for (let i = 0; i < p.length / 3; i++) arm.push(side);
+      for (const k of geo.index.array) idx.push(k + base);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('aArm', new THREE.Float32BufferAttribute(arm, 1));
+    g.setIndex(idx);
+    return g;
+  };
+  const FAN_SHAPE = {
+    body: mergeFan([prim(cyl(0.19, 0.16, 0.62, 6), 0, 1.16, 0), prim(cyl(0.05, 0.042, 0.62, 5, true), -0.25, 1.09, 0, -1), prim(cyl(0.05, 0.042, 0.62, 5, true), 0.25, 1.09, 0, 1)]),
+    legs: mergeFan([prim(cyl(0.075, 0.065, 0.85, 5, true), -0.09, 0.425, 0), prim(cyl(0.075, 0.065, 0.85, 5, true), 0.09, 0.425, 0)]),
+    head: mergeFan([prim(new THREE.SphereGeometry(0.11, 7, 4), 0, 1.58, 0)]),
+    hair: mergeFan([prim(new THREE.SphereGeometry(0.118, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2), 0, 1.59, 0)]),
+    lowBody: mergeFan([prim(cyl(0.19, 0.16, 0.62, 6), 0, 1.16, 0)]),
+    lowHead: mergeFan([prim(new THREE.SphereGeometry(0.11, 7, 3), 0, 1.58, 0)]),
+  };
+  // hype raises the arms of a share of the fans (the share grows with the hype); the rest sway a little.
+  // An arm turns about its shoulder at x = ±0.25, y = 1.40, so the torso (aArm = 0) stays put.
+  const ARM_CHEER = `float cheer = step(r2, 0.8 * uHype);
+    float ang = aArm * mix(0.12 * sin(uTime * 1.3 + ph), 2.5 + 0.35 * sin(uTime * 7.0 + ph), cheer);
+    mat2 rot = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)); vec2 pivot = vec2(aArm * 0.25, 1.40);
+    transformed.xy = pivot + rot * (transformed.xy - pivot);`;
+  const crowdMat = (arms) => {
+    const m = new THREE.MeshStandardMaterial({ roughness: 0.85 });
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = crowdU.uTime; sh.uniforms.uHype = crowdU.uHype;
+      sh.vertexShader = (arms ? 'attribute float aArm;\n' : '') + 'uniform float uTime; uniform float uHype;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    float ph = float(gl_InstanceID) * 12.9898; float r = fract(sin(ph) * 43758.5453); float r2 = fract(sin(ph * 1.37) * 9871.31);
+    ${arms ? ARM_CHEER : ''}
     float bounce = max(0.0, sin(uTime * (1.5 + r * 3.0) + ph)) * (0.05 + 0.4 * uHype) * step(0.5 - 0.45 * uHype, r);
     transformed.y += bounce; transformed.x += sin(uTime * 0.7 + ph) * 0.03;`);
-};
-const fans = new THREE.InstancedMesh(fanGeo, fanMat, fanCount);
-{
-  const m4 = new THREE.Matrix4(), col = new THREE.Color(); let fi = 0;
-  const FAN = { home: ['#2F7BEA', '#2557B5', '#E6EDF3', '#5AA2FF'], away: ['#F2702A', '#C4561A', '#1A1D22', '#FFB089'], mix: ['#2B3442', '#3A3F4A', '#6B4F3A', '#C9B7A0', '#9AA7B5', '#4A5A70', '#7A2E2E', '#E2E2D8'] };
+    };
+    return m;
+  };
+  const crowdMats = { body: crowdMat(true), legs: crowdMat(false), head: crowdMat(false), hair: crowdMat(false) };
+  const makeChunk = (centre, cap) => {
+    const parts = {
+      body: new THREE.InstancedMesh(FAN_SHAPE.body, crowdMats.body, cap), legs: new THREE.InstancedMesh(FAN_SHAPE.legs, crowdMats.legs, cap),
+      head: new THREE.InstancedMesh(FAN_SHAPE.head, crowdMats.head, cap), hair: new THREE.InstancedMesh(FAN_SHAPE.hair, crowdMats.hair, cap),
+      lowBody: new THREE.InstancedMesh(FAN_SHAPE.lowBody, crowdMats.body, cap), lowHead: new THREE.InstancedMesh(FAN_SHAPE.lowHead, crowdMats.head, cap),
+    };
+    const near = new THREE.Group(), far = new THREE.Group(), lod = new THREE.LOD();
+    near.add(parts.body, parts.legs, parts.head, parts.hair); far.add(parts.lowBody, parts.lowHead);
+    lod.addLevel(near, 0); lod.addLevel(far, LOD_FAR); lod.position.copy(centre); scene.add(lod);
+    return { parts, centre, count: 0 };
+  };
+  // looks come from a hash of the fan's index, not from rnd, so the seeded match stream is unchanged
+  const hash01 = (i, s) => { const x = Math.sin(i * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); };
+  const m4 = new THREE.Matrix4(), hair4 = new THREE.Matrix4(), col = new THREE.Color();
+  let gi = 0;
+  const allChunks = [];
   for (const st of stands) {
+    const slots = Math.floor(st.len / 0.6), nChunks = Math.ceil(st.len / CHUNK), per = Math.ceil(slots / nChunks);
+    const chunks = [];
+    for (let c = 0; c < nChunks; c++) {
+      const k0 = c * per, k1 = Math.min(slots, k0 + per), along = -st.len / 2 + (k0 + k1) / 2 * 0.6, dm = st.off + ROWS * DEPTH / 2, hm = RISE * ROWS / 2 + 1.2;
+      chunks.push(makeChunk(st.ax === 'z' ? new THREE.Vector3(along, hm, st.s * dm) : new THREE.Vector3(st.s * dm, hm, along), ROWS * (k1 - k0)));
+    }
     for (let r = 0; r < ROWS; r++) {
       const d = st.off + r * DEPTH, hh = RISE * (r + 1) + 1.2;
       const step = new THREE.Mesh(new THREE.BoxGeometry(st.ax === 'z' ? st.len : DEPTH, hh, st.ax === 'z' ? DEPTH : st.len), r % 2 ? concrete : seatMat);
       if (st.ax === 'z') step.position.set(0, hh / 2, st.s * d); else step.position.set(st.s * d, hh / 2, 0);
       step.receiveShadow = true; scene.add(step);
-      const n = Math.floor(st.len / 0.6);
-      for (let k = 0; k < n; k++) {
+      for (let k = 0; k < slots; k++) {
         if (rnd() < 0.05) continue;
         const along = -st.len / 2 + (k + 0.5) * 0.6 + (rnd() - 0.5) * 0.1; const sc = 0.85 + rnd() * 0.3;
+        const ch = chunks[Math.floor(k / per)], i = ch.count++, g = gi++, P = ch.parts;
         m4.makeScale(sc, sc * (0.9 + rnd() * 0.2), sc);
-        if (st.ax === 'z') m4.setPosition(along, hh, st.s * d); else m4.setPosition(st.s * d, hh, along);
-        fans.setMatrixAt(fi, m4);
+        m4.setPosition(st.ax === 'z' ? along - ch.centre.x : st.s * d - ch.centre.x, hh - ch.centre.y, st.ax === 'z' ? st.s * d - ch.centre.z : along - ch.centre.z);
         const u = along / st.len + 0.5; const hb = st.ax === 'z' ? lerp(0.85, 0.15, u) : st.home;
         const pool = rnd() < 0.7 ? (rnd() < hb ? FAN.home : FAN.away) : FAN.mix;
-        col.set(pool[Math.floor(rnd() * pool.length)]); fans.setColorAt(fi, col); fi++;
+        col.set(pool[Math.floor(rnd() * pool.length)]);
+        hair4.copy(m4); if (hash01(g, 3) < 0.15) hair4.makeScale(0, 0, 0);
+        P.body.setMatrixAt(i, m4); P.legs.setMatrixAt(i, m4); P.head.setMatrixAt(i, m4); P.hair.setMatrixAt(i, hair4); P.lowBody.setMatrixAt(i, m4); P.lowHead.setMatrixAt(i, m4);
+        P.body.setColorAt(i, col); P.lowBody.setColorAt(i, col);
+        col.set(FAN_TROUSERS[Math.floor(hash01(g, 1) * FAN_TROUSERS.length)]); P.legs.setColorAt(i, col);
+        col.set(FAN_SKIN[Math.floor(hash01(g, 2) * FAN_SKIN.length)]); P.head.setColorAt(i, col); P.lowHead.setColorAt(i, col);
+        col.set(FAN_HAIR[Math.floor(hash01(g, 4) * FAN_HAIR.length)]); P.hair.setColorAt(i, col);
       }
     }
+    for (const ch of chunks) for (const m of Object.values(ch.parts)) { m.count = ch.count; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    allChunks.push(...chunks);
     // pitch-side wall carrying the fascia LED ribbon
     const wallLen = st.len; const wall = new THREE.Mesh(new THREE.BoxGeometry(st.ax === 'z' ? wallLen : 0.3, 1.2, st.ax === 'z' ? 0.3 : wallLen), concrete);
     const wd = st.off - 0.6; if (st.ax === 'z') wall.position.set(0, 0.6, st.s * wd); else wall.position.set(st.s * wd, 0.6, 0); scene.add(wall);
@@ -281,7 +351,11 @@ const fans = new THREE.InstancedMesh(fanGeo, fanMat, fanCount);
       const bd = st.off + ROWS * DEPTH + 0.5; if (st.ax === 'z') back.position.set(0, (RISE * ROWS + 12) / 2, st.s * bd); else back.position.set(st.s * bd, (RISE * ROWS + 12) / 2, 0); scene.add(back);
     }
   }
-  fans.count = fi; fans.instanceMatrix.needsUpdate = true; fans.instanceColor.needsUpdate = true; scene.add(fans);
+  const tris = (g) => g.index.count / 3;
+  crowd.fans = gi;
+  crowd.chunks = allChunks.map((ch) => ({ count: ch.count, parts: Object.values(ch.parts).map((m) => m.count) }));
+  crowd.trisPerFan = tris(FAN_SHAPE.body) + tris(FAN_SHAPE.legs) + tris(FAN_SHAPE.head) + tris(FAN_SHAPE.hair);
+  crowd.lowTrisPerFan = tris(FAN_SHAPE.lowBody) + tris(FAN_SHAPE.lowHead);
 }
 const glowTex = canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.3, 'rgba(255,246,220,0.5)'); r.addColorStop(1, 'rgba(255,246,220,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); });
 for (const [x, z] of [[-76, -58], [76, -58], [76, 58], [-76, 58]]) {
@@ -1718,7 +1792,7 @@ function frame(dt, draw) {
   if (hd > 1e-4 && hd < 5) ballMesh.rotateOnWorldAxis(new THREE.Vector3(mv.z, 0, -mv.x).normalize(), hd / BR);
   ballMesh.position.copy(bw);
   ledAcc += dt; if (ledAcc > 1 / 30) { drawLED(ledAcc * (S.paused ? 0 : 1)); ledAcc = 0; }
-  if (fanMat.userData.sh) { fanMat.userData.sh.uniforms.uTime.value += dt; const hype = S.celebrate > 0 ? 1 : (S.shotInfo && S.t - S.shotInfo.t < 2 ? 0.6 : 0); fanMat.userData.sh.uniforms.uHype.value = lerp(fanMat.userData.sh.uniforms.uHype.value, hype, clamp(dt * 2, 0, 1)); }
+  crowdU.uTime.value += dt; const hype = S.celebrate > 0 ? 1 : (S.shotInfo && S.t - S.shotInfo.t < 2 ? 0.6 : 0); crowdU.uHype.value = lerp(crowdU.uHype.value, hype, clamp(dt * 2, 0, 1));
   updateCamera(dt);
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   if (players.length) hud();
@@ -1733,7 +1807,7 @@ function start() {
   $('kick').onclick = kickOff;
   renderer.setAnimationLoop(loop);
 }
-window.__mc = { DIRC, passageScore, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY };
+window.__mc = { DIRC, passageScore, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY, crowd };
 
 /*@@SETUP@@*/
 // ============ LOAD ============

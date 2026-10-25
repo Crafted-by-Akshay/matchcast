@@ -147,7 +147,7 @@ class AlwaysBadNarrator(NarratorRules):
         ]
 
 
-def test_unrepairable_line_is_abstained_after_exactly_one_repair(match) -> None:
+def test_unrepairable_line_is_escalated_after_exactly_one_repair(match) -> None:
     base = rules_agents()
     flow = MatchWorkflow(
         stream=match["roster"]["stream"],
@@ -161,14 +161,20 @@ def test_unrepairable_line_is_abstained_after_exactly_one_repair(match) -> None:
     run(flow.ingest(match["events"]))
     records = flow.store.audit_records(flow.sk)
     assert flow.store.publications(flow.sk) == []
-    abstained = [r for r in records if r["action"] == "line_abstained"]
-    assert abstained and flow.stats["abstained"] == len(abstained)
+    # an unknown name is a checkable fact: the failing lines wait for a person, none are dropped
+    escalated = [
+        r for r in records if r["action"] == "line_review" and r["details"].get("escalated")
+    ]
+    assert escalated and flow.stats["escalated"] == len(escalated)
+    assert flow.stats["abstained"] == 0
     repairs: dict[str, int] = {}
     for r in records:
         if r["action"] == "line_repair_requested":
             repairs[r["subject_id"]] = repairs.get(r["subject_id"], 0) + 1
     assert repairs and max(repairs.values()) == 1
-    assert all(ln.status in ("rejected", "abstained") for ln in flow.store.lines(flow.sk))
+    lines = flow.store.lines(flow.sk)
+    assert all(ln.status == "review" and ln.escalated for ln in lines if ln.repair_of)
+    assert all(ln.status in ("rejected", "review") for ln in lines)
     assert verify_chain(records)["valid"] is True
 
 
