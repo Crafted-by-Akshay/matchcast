@@ -9,7 +9,8 @@ Same {A..D: {gltf, bin}} layout and the same loader (glbFrom + GLTFLoader), so n
   NORMAL      float32 to int8 normalized, 4-byte stride (KHR_mesh_quantization,
               which GLTFLoader reads): 181 KB to 60 KB
   POSITION    stays float32 (skinned meshes ignore node transforms, so there is no
-              dequantisation matrix) but loses its low mantissa bits, which gzip then removes
+              dequantisation matrix) but loses its low mantissa bits (about 0.5 mm
+              on a 1.8 m body), which gzip then removes
 Idempotent: a pack that is already slim is left alone.
 Usage: python scripts/slim_players.py IN.json OUT.json
 """

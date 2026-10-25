@@ -25,3 +25,17 @@ def test_packs_use_the_slim_attribute_types():
         assert acc[attrs["NORMAL"]]["componentType"] == 5120, key
         assert "KHR_mesh_quantization" in g.get("extensionsRequired", []), key
         assert len(base64.b64decode(pack["bin"])) == g["buffers"][0]["byteLength"], key
+
+
+def test_packs_keep_their_layout_invariants():
+    for key, pack in json.loads(PACKS.read_bytes()).items():
+        g = pack["gltf"]
+        buf = base64.b64decode(pack["bin"])
+        prim = g["meshes"][0]["primitives"][0]
+        assert all(v["byteOffset"] % 4 == 0 for v in g["bufferViews"]), key
+        normal = g["accessors"][prim["attributes"]["NORMAL"]]
+        assert g["bufferViews"][normal["bufferView"]].get("byteStride") == 4, key
+        wa = g["accessors"][prim["attributes"]["WEIGHTS_0"]]
+        wv = g["bufferViews"][wa["bufferView"]]
+        w = buf[wv["byteOffset"] : wv["byteOffset"] + wv["byteLength"]]
+        assert all(sum(w[i : i + 4]) == 255 for i in range(0, len(w), 4)), key
