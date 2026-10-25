@@ -45,6 +45,7 @@ class LiveVerifier:
         request = {
             "line": line.text,
             "claims": [{"metric": c["metric"], "value": c["value"]} for c in claims],
+            "moment": _moment(ctx, claims),
         }
         answer = await self._client.complete(prompt("verifier"), json.dumps(request), SCHEMA)
         judgement = answer["judgement"]
@@ -64,3 +65,24 @@ class LiveVerifier:
             )
         verdict = "verified" if judgement == "supported" else "review"
         return Verdict(line_id=line.line_id, verdict=verdict, checks=tuple(checks))
+
+
+def _moment(ctx: MatchContext, claims: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The stored event the line is about: what happened, by whom, for which club. Names in a
+    line were already checked against it, so the meaning check may rely on this."""
+    if not claims:
+        return None
+    seq = max(c["max_evidence_sequence"] for c in claims)
+    event = next((e for e in reversed(ctx.events) if e["stream_sequence"] == seq), None)
+    if event is None:
+        return None
+    payload = event["payload"]
+    out: dict[str, Any] = {"play": payload["type"].replace("_", " ")}
+    if "player_id" in payload:
+        out["player"] = ctx.player_name(payload["player_id"])
+    if "team_id" in payload:
+        out["club"] = ctx.club_name(payload["team_id"])
+    for key in ("on_target", "outcome", "colour"):
+        if key in payload:
+            out[key] = payload[key]
+    return out

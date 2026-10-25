@@ -86,6 +86,21 @@ def test_unknown_player_name_is_rejected(match) -> None:
     assert result.reason_code == "unknown_player"
 
 
+def test_possessives_and_sentence_openers_keep_roster_names_valid(match) -> None:
+    ctx = context(match)
+    shots = ctx.state.count("shots", "home")
+    claims = [claim(ctx, "shots:home", shots)]
+    for text in (
+        f"Northgate FC's shots: {shots}.",
+        f"Northgate FC’s shots: {shots}.",
+        f"Strong Northgate FC pressure, shots: {shots}.",
+    ):
+        assert verdict(ctx, line(text), claims).verdict == "verified", text
+    # a made-up player is still caught in a possessive, and after the opener
+    for text in (f"Zed Quill's shots: {shots}.", f"Strong Zed Quill shots: {shots}."):
+        assert verdict(ctx, line(text), claims).reason_code == "unknown_player", text
+
+
 def test_persona_limits(match) -> None:
     ctx = context(match)
     shots = ctx.state.count("shots", "home")

@@ -252,6 +252,21 @@ def test_a_quiet_play_gets_one_verified_analyst_colour_line(match) -> None:
     assert lines and all(ln.status == "published" for ln in lines if ln.persona == "analyst")
 
 
+def test_the_verifier_is_told_the_moment_and_the_narrator_no_limits(match, monkeypatch) -> None:
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")
+    asked: dict[str, dict] = {}
+
+    def record(system, user):
+        facts = json.loads(user)
+        kind = "narrator" if "personas" in facts else "verifier" if "line" in facts else "other"
+        asked.setdefault(kind, facts)
+        return answer(system, user)
+
+    run(build(match, ScriptedModelClient(record)).ingest(match["events"]))
+    assert "limits" not in asked["narrator"]  # the model echoed "140" and "280" into its lines
+    assert asked["verifier"]["moment"]["play"]  # what happened, so a named player is supported
+
+
 def test_colour_falls_back_to_a_rules_line_when_the_model_fails(match) -> None:
     class Down:
         async def complete(self, system, user, schema, **_):
