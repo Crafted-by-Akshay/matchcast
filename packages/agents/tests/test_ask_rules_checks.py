@@ -1,11 +1,12 @@
 """The rules Ask: a knowledge example is not this match's score; a rebuilt match keeps its clubs."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.ask import Assistant, Bm25Index, load_kb
-from matchcast_agents.ask.assistant import _knowledge_sentences
+from matchcast_agents.ask.assistant import _knowledge_sentences, _leader_sentence
 from matchcast_agents.ask.chunking import Chunk
 from matchcast_agents.ask.retrieval import Hit
 from matchcast_agents.store import MemoryStore
@@ -122,3 +123,132 @@ def test_the_event_marker_is_protected_in_translation() -> None:
     from matchcast_agents.translate import _MARKER
 
     assert _MARKER.findall("Dev Hale scored [event:e10] today") == ["[event:e10]"]
+
+
+def test_the_judge_questions_on_a_named_match_are_answered(match) -> None:
+    # the Judge-test questions, on a match created with its club names
+    scored = rules_answer(match, "who scored for Northgate FC?")
+    assert scored.intent == "goals" and not scored.abstained
+    assert "Harbour" not in scored.answer and "[event:" in scored.answer
+    harbour = rules_answer(match, "how many goals did Harbour United score?")
+    assert harbour.answer.startswith("Score: Harbour United 2.")
+    shots = rules_answer(match, "how many shots on target does Northgate FC have?")
+    assert shots.answer.startswith("Shots on target so far: Northgate FC 9.")
+    most = rules_answer(match, "who has the most shots?")
+    assert most.intent == "leader" and most.answer.startswith(
+        "Northgate FC have the most shots, 15 to 4."
+    )
+
+
+def test_a_club_with_no_goal_yet_has_its_goals_so_far(match) -> None:
+    # the first half of the record without any Northgate goal
+    events = [
+        e for e in match["events"]
+        if not (e["payload"]["type"] == "goal" and e["payload"]["team_id"] == "home")
+    ]  # fmt: skip
+    flow = build(match)
+    run(flow.ingest(events))
+    result = run(flow.ask("who scored for Northgate FC?", "casual"))
+    assert result.intent == "live" and result.answer.startswith("Northgate FC haven't scored yet.")
+
+
+def test_who_has_the_most_with_a_player_named_still_abstains(match) -> None:
+    assert rules_answer(match, "which player has the most shots?").abstained
+
+
+def test_a_level_count_is_said_as_level_and_both_clubs_are_cited() -> None:
+    ctx = SimpleNamespace(home="home", away="away", club_name=lambda team: team.title())
+    claims = [
+        {"claim_id": "c1", "metric": "shots:home", "value": 3},
+        {"claim_id": "c2", "metric": "shots:away", "value": 3},
+    ]
+    assert (
+        _leader_sentence(ctx, "Shots", claims) == "Shots are level at 3 each. [claim:c1][claim:c2]"
+    )
+
+
+def test_a_definition_that_names_a_count_is_not_a_club_comparison(match) -> None:
+    result = rules_answer(match, "What are the top ways to score goals?")
+    assert result.intent not in ("live", "leader")
+
+
+def test_a_question_about_impact_is_not_a_club_comparison(match) -> None:
+    result = rules_answer(match, "Which shots have the most impact on a match?")
+    assert result.intent != "leader"
+
+
+def test_who_has_the_most_with_a_named_player_abstains(match) -> None:
+    assert rules_answer(match, "Who has the most shots, Arlo Dunne?").abstained
+
+
+def test_who_has_the_most_with_a_player_by_surname_or_first_name_abstains(match) -> None:
+    for name in ("Dunne", "Arlo", "Hugo"):
+        assert rules_answer(match, f"Who has the most shots, {name}?").abstained, name
+
+
+def test_only_the_plain_shots_question_is_the_club_comparison(match) -> None:
+    result = rules_answer(match, "which team has the most shots?")
+    assert result.intent == "leader" and result.answer.startswith(
+        "Northgate FC have the most shots"
+    )
+    for question in (
+        "Who has the most shots in the first half?",
+        "Who has the most shots in this match?",
+        "Who has the most shots in football?",
+        "Who has the most shots, Foss's?",
+        "Who has the most shots, Li?",
+        "Who has the most shots from outside the box?",
+    ):
+        assert rules_answer(match, question).intent != "leader", question
+
+
+def test_who_has_the_most_with_a_qualifier_abstains(match) -> None:
+    result = rules_answer(match, "Who has the most shots from outside the box?")
+    assert result.abstained and result.intent != "leader"
+
+
+def test_a_no_goal_question_for_two_named_clubs_gives_both_goals_so_far(match) -> None:
+    events = [
+        e for e in match["events"] if not (e["payload"]["type"] == "goal")
+    ]  # fmt: skip
+    flow = build(match)
+    run(flow.ingest(events))
+    result = run(flow.ask("who scored for Northgate FC and Harbour United?", "casual"))
+    assert result.answer.startswith("Goals so far: Northgate FC 0, Harbour United 0.")
+
+
+def test_a_ranking_of_goals_by_player_or_team_abstains(match) -> None:
+    for question in (
+        "Which player has the most goals?",
+        "Who has the most goals?",
+        "Who have more goals?",
+        "Which team has the most goals in football?",
+        "Who scored the most goals?",
+        "Who scored the most?",
+        "Tell me who scored the most goals",
+        "Who is the top scorer?",
+    ):
+        assert rules_answer(match, question).abstained, question
+
+
+def test_who_has_scored_is_answered_as_it_was_on_main(match) -> None:
+    result = rules_answer(match, "Who has scored?")
+    assert result.intent == "live" and not result.abstained
+    assert result.answer.startswith("Score: Northgate FC 1, Harbour United 2.")
+
+
+def test_a_formation_definition_with_the_best_word_is_still_a_definition(match) -> None:
+    assert rules_answer(match, "Which team formation is the best?").intent != "out_of_scope"
+
+
+def test_which_club_has_more_shots_on_target_is_the_club_comparison(match) -> None:
+    result = rules_answer(match, "Which club has more shots on target?")
+    assert result.intent == "leader"
+    assert result.answer.startswith("Northgate FC have the most shots on target")
+
+
+def test_a_ranking_with_a_definition_after_it_is_not_a_club_comparison(match) -> None:
+    result = rules_answer(
+        match, "Which team has the most shots on target, and what does that mean?"
+    )
+    assert result.intent != "leader"

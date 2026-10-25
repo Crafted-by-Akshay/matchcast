@@ -92,6 +92,21 @@ STRONG_LIVE = re.compile(
     re.IGNORECASE,
 )
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
+# "who has the most shots?" (or shots on target) compares the two clubs. Only that exact question
+# is answered; a club, a player, a zone or a period named in it abstains, since the club totals
+# cannot answer those.
+LEADER_ASK = re.compile(
+    r"^\s*(?:who|which (?:team|club)) (?:has|had|have) (?:the most|more) "
+    r"(?:shots|shots on target)\s*\??\s*$",
+    re.IGNORECASE,
+)
+# a who, or which player/team/club, question that ranks ("who has the most ...", "who scored the
+# most ...", "which player has more ...", "who is the best ..."): a ranking by a person or a club,
+# which no tool answers. "which formation ..." is a definition and is not caught.
+RANKING_Q = re.compile(
+    r"\b(?:who|which (?:player|team|club))\b.*\b(?:most|more|fewest|least|best|top)\b",
+    re.IGNORECASE,
+)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _SCORE_PAIR = re.compile(r"\b\d+\s*(?:[-–—:]|to|vs\.?)\s*\d+\b", re.IGNORECASE)
 _CITE = re.compile(r"\[(kb|claim|event):([^\]]+)\]")
@@ -110,7 +125,7 @@ class AskResult:
 
 @dataclass(frozen=True)
 class Route:
-    intent: str  # live | knowledge | both | out_of_scope | abstain
+    intent: str  # live | knowledge | both | leader | goals | goal_impact | out_of_scope | abstain
     metric: tuple[str, str] | None
     teams: tuple[str, ...]
     kb_query: str
@@ -175,6 +190,10 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     clauses = [c for c in CLAUSE.split(question) if c and c.strip()]
     metric = _metric_in(question)
     cue = bool(LIVE_CUE.search(question))
+    if RANKING_Q.search(question) and (metric is not None or SCORER_Q.search(question)):
+        if metric is not None and LEADER_ASK.match(question):
+            return Route("leader", metric, (), "")  # the plain club shot comparison
+        return Route("abstain", None, teams, "")  # a ranking by a count or by scorers: no tool
     if (SCORER_Q.search(question) or WHAT_GOALS_Q.search(question)) and (
         metric is None or metric[0] == "goals"
     ):
@@ -189,7 +208,7 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
 
     asks_now = bool(STRONG_LIVE.search(clauses[0])) or not DEFINITIONAL.match(clauses[0])
     if metric is not None and cue and asks_now:
-        if PLAYER_Q.search(question) and metric[0] != "goals":
+        if PLAYER_Q.search(question) and metric[0] != "goals":  # goal rankings: the gate above
             return Route("abstain", None, teams, "")  # per-player rankings have no tool
         live_at = next(i for i, c in enumerate(clauses) if _metric_in(c))
         others = " ".join(c for i, c in enumerate(clauses) if i != live_at)
@@ -270,6 +289,20 @@ def _live_sentence(ctx: MatchContext, label: str, claims: list[dict[str, Any]]) 
         parts.append(f"{ctx.club_name(team)} {claim['value']}")
     prefix = "Score" if label == "Score" else f"{label} so far"
     return f"{prefix}: {', '.join(parts)}. {cite}"
+
+
+def _cites(claims: list[dict[str, Any]]) -> str:
+    return "".join(f"[claim:{c['claim_id']}]" for c in claims)
+
+
+def _leader_sentence(ctx: MatchContext, label: str, claims: list[dict[str, Any]]) -> str:
+    """Which club leads a count: the claims are the home then the away club, both cited."""
+    home, away = (claim["value"] for claim in claims)
+    if home == away:
+        return f"{label} are level at {home} each. {_cites(claims)}"
+    lead = ctx.club_name(ctx.home if home > away else ctx.away)
+    high, low = max(home, away), min(home, away)
+    return f"{lead} have the most {label.lower()}, {high} to {low}. {_cites(claims)}"
 
 
 def check_citations(
@@ -362,9 +395,9 @@ class Assistant:
         if plan.intent == "goals" and len(plan.teams) == 1:  # "who scored for Northgate FC?"
             goals = [g for g in goals if g[1] == plan.teams[0]]
         if plan.intent in ("goals", "goal_impact") and not goals:
-            plan = Route(
-                "live", ("goals", "Score"), plan.teams, ""
-            )  # no goal yet: the score says so
+            # no goal yet: a named club's goals so far, else the score says so
+            label = "Goals" if plan.intent == "goals" and plan.teams else "Score"
+            plan = Route("live", ("goals", label), plan.teams, "")
         event_numbers = {event_id: extract_numbers(text) for event_id, _team, text in goals}
         retrieval = "local"
         sentences: list[tuple[str, str | None]] = []  # (text with citations, claim id if live)
@@ -374,7 +407,7 @@ class Assistant:
         elif plan.intent == "goal_impact":
             event_id, _team, text = goals[0] if plan.metric[1] == "first" else goals[-1]
             sentences.append((f"{text} [event:{event_id}]", None))
-        if plan.intent in ("live", "both") and plan.metric:
+        if plan.intent in ("live", "both", "leader") and plan.metric:
             metric, label = plan.metric
             try:
                 claims, call_id = _live_claims(ctx, question, metric, plan.teams)
@@ -393,7 +426,13 @@ class Assistant:
                         "formula_inputs": {"metric": claim["metric"], "tool": "get_metrics"},
                     },
                 )
-            sentences.append((_live_sentence(ctx, label, claims), "live"))
+            if plan.intent == "leader":
+                sentences.append((_leader_sentence(ctx, label, claims), "live"))
+            elif label == "Goals" and len(claims) == 1 and claims[0]["value"] == 0:  # no goal yet
+                club = ctx.club_name(plan.teams[0])
+                sentences.append((f"{club} haven't scored yet. {_cites(claims)}", "live"))
+            else:
+                sentences.append((_live_sentence(ctx, label, claims), "live"))
         if plan.intent in ("knowledge", "both"):
             hits, retrieval = await self._retrieve(plan.kb_query)
             for text, chunk_id in _knowledge_sentences(hits):
