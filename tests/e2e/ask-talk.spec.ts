@@ -35,7 +35,9 @@ test('ask: twenty questions a minute, then a polite refusal', async ({ page }) =
     for (let i = 1; i <= 21; i++) await answerAsk(i, 'who has the most shots?');
     return got;
   });
+  expect(answers).toHaveLength(21);
   expect(answers.slice(0, 20).every((x: any) => x.verdict === 'verified')).toBe(true);
+  expect(answers[20].verdict).toBe('abstained');
   expect(answers[20].note).toBe('rate limit');
 });
 
