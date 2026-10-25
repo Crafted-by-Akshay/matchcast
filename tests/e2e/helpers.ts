@@ -4,6 +4,8 @@ export const ready = (view: 'watch' | 'broadcast' | 'analyst', timeout = 240_000
   (page: Page) => page.waitForFunction((v) => document.getElementById('v-' + v)!.classList.contains('ready'), view, { timeout });
 
 export async function openShell(page: Page, hash = 'watch', query = '') {
+  // Watch is alone by default; the older specs read the Broadcast pane beside it, so they ask for it (watch-alone.spec.ts covers the default)
+  if (!/[?&]split=/.test(query)) query += (query ? '&' : '?') + 'split=1';
   await page.goto('/index.html' + query + '#' + hash, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
 }
