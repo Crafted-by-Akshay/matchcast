@@ -1,17 +1,21 @@
-// ---- Watch: the seven camera presets, the player-name modes, the speed buttons and Match data sit behind one "Demo controls" button (audit: a quiet first screen). Runs in the Watch module after twofans.js. ----
-// Nothing is removed: the buttons stay in the page and one click on "Demo controls" shows them. ?demo=1 (the filming URL) starts with them open.
+// ---- Watch: the player-name modes, the speed buttons and Match data sit behind one "Demo controls" button (audit: a quiet first screen). The seven camera presets are hidden for the sprint (AB#497). Runs in the Watch module after twofans.js. ----
+// Nothing is removed: the buttons stay in the page and one click on "Demo controls" shows the speed, names and match data. The camera presets stay hidden for the sprint (AB#497). ?demo=1 (the filming URL) starts with the controls open.
 (() => {
   const ctrl = document.getElementById('ctrl');
   if (!ctrl || document.getElementById('bc-view') || document.getElementById('mc-demo')) return;
+  const hidePresets = document.createElement('style'); hidePresets.textContent = '#cams{display:none!important}'; document.head.appendChild(hidePresets);   // the seven camera presets are off the screen for the sprint (AB#497); the buttons stay in the page
   const st = document.createElement('style');
   st.textContent = '#ctrl.mc-folded>.grp:not(.mc-demo){display:none}body:not(.mc-demo-open) #wxchip{display:none}#mc-demo{font:600 12px system-ui,sans-serif}';
   document.head.appendChild(st);
   const grp = document.createElement('div'); grp.className = 'grp mc-demo';
-  const b = document.createElement('button'); b.id = 'mc-demo'; b.type = 'button'; b.title = 'Camera presets, player names, speed and match data';
-  const paint = () => { const open = !ctrl.classList.contains('mc-folded'); b.setAttribute('aria-expanded', String(open)); document.body.classList.toggle('mc-demo-open', open); b.textContent = 'Demo controls'; b.title = (open ? 'Hide' : 'Show') + ' the camera presets, player names, speed, match data and the weather chip'; };
+  const b = document.createElement('button'); b.id = 'mc-demo'; b.type = 'button'; b.title = 'Player names, speed, match data and the weather chip';
+  const paint = () => { const open = !ctrl.classList.contains('mc-folded'); b.setAttribute('aria-expanded', String(open)); document.body.classList.toggle('mc-demo-open', open); b.textContent = 'Demo controls'; b.title = (open ? 'Hide' : 'Show') + ' player names, speed, match data and the weather chip'; };
   b.onclick = () => { ctrl.classList.toggle('mc-folded'); paint(); };
   let outer = ''; try { outer = parent.location.search; } catch (e) { /* cross-origin parent */ }
   if (!/[?&]demo=1\b/.test(location.search + outer)) ctrl.classList.add('mc-folded');
+  // CREW (?crew=1, CREW-7.8): a judge sees no weather chip and no camera presets unless ?demo=1, so the Demo controls button goes too (Pause, Vision and Copilot stay)
+  let crew = /[?&]crew=1\b/.test(location.search + outer); try { if (localStorage.getItem('mc-crew') === '1') crew = true; } catch (e) { /* storage blocked */ }
+  if (crew && !/[?&]demo=1\b/.test(location.search + outer)) { const hide = document.createElement('style'); hide.textContent = '#mc-demo,#wxchip,#cams{display:none!important}'; document.head.appendChild(hide); b.hidden = true; }
   grp.appendChild(b);
   // Pause stays one tap away: it presses the real button in the folded speed group
   const pz = document.createElement('button'); pz.id = 'mc-pause'; pz.type = 'button'; pz.textContent = '⏯'; pz.title = 'Pause or resume the match'; pz.setAttribute('aria-label', 'Pause or resume the match');

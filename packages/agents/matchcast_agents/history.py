@@ -31,23 +31,37 @@ _FEDERATION = re.compile(r"\b(FIFA|UEFA)\b")
 
 
 @lru_cache(maxsize=1)
-def _matches() -> tuple[Match, ...]:
-    """Every result, oldest first."""
+def _numbered() -> tuple[tuple[int, Match], ...]:
+    """Every result with its row number in the file (the first result is row 1), oldest first."""
     rows = []
     with RESULTS.open(newline="", encoding="utf-8") as fh:
-        for r in csv.DictReader(fh):
-            rows.append(
-                (
-                    date.fromisoformat(r["date"]),
-                    r["home_team"],
-                    r["away_team"],
-                    int(r["home_score"]),
-                    int(r["away_score"]),
-                    r["tournament"],
-                    r["neutral"] == "TRUE",
-                )
+        for number, r in enumerate(csv.DictReader(fh), start=1):
+            match = (
+                date.fromisoformat(r["date"]),
+                r["home_team"],
+                r["away_team"],
+                int(r["home_score"]),
+                int(r["away_score"]),
+                r["tournament"],
+                r["neutral"] == "TRUE",
             )
+            rows.append((number, match))
     return tuple(rows)
+
+
+@lru_cache(maxsize=1)
+def _matches() -> tuple[Match, ...]:
+    """Every result, oldest first."""
+    return tuple(match for _, match in _numbered())
+
+
+def meeting_rows(home: str, away: str, on: date | None = None) -> list[int]:
+    """The results-file row numbers of every past meeting of two nations, cut at `on`."""
+    cut = on or date.today()
+    home_name, away_name = resolve_team(home) or home, resolve_team(away) or away
+    return [
+        number for number, m in _numbered() if m[0] < cut and {m[1], m[2]} == {home_name, away_name}
+    ]
 
 
 @lru_cache(maxsize=1)

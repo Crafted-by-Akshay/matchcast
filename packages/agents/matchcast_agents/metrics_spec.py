@@ -20,6 +20,8 @@ METRIC_UNITS = {
     "h2h_draws": "count",
     "h2h_away_wins": "count",
     "elo": "count",
+    "vision_passes": "count",  # Vision's own pass count, on the engine feed (ADR-0022)
+    "vision_precision": "ratio",  # the share of Vision's passes an engine pass backs
 }
 TOLERANCE = {"count": 0.0, "ratio": 0.01, "m": 0.5, "m/s": 0.5, "s": 0.5, "ms": 500.0}
 
