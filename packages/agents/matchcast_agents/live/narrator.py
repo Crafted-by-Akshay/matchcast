@@ -1,6 +1,7 @@
 """Narrator on the model: one line per persona, from claims and roster names only (AGT-6)."""
 
 import json
+import re
 from typing import Any
 
 from ..context import MatchContext
@@ -26,6 +27,22 @@ SCHEMA = {
         }
     },
 }
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
+
+def fit(text: str, limit: int) -> str:
+    """A line over its limit loses its trailing sentences, whole, until it fits; one that cannot
+    be cut to fit is returned as it is, so the Verifier still refuses it. The cut text is checked
+    like any other: nothing the Verifier would catch is let through."""
+    if len(text) <= limit:
+        return text
+    kept = _SENTENCE_END.split(text)
+    while len(kept) > 1 and len(" ".join(kept)) > limit:
+        kept.pop()
+    cut = " ".join(kept)
+    return cut if len(cut) <= limit else text
 
 
 class LiveNarrator:
@@ -78,7 +95,7 @@ class LiveNarrator:
                     line_id=f"line-{task.moment_id}-{slug(persona)}-{attempt}",
                     claim_ids=ids,
                     persona=persona,
-                    text=text,
+                    text=fit(text, max_chars(persona)),
                     max_chars=max_chars(persona),
                     origin="model",
                 )
