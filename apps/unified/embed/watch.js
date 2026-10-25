@@ -43,7 +43,7 @@ MCS.progress('Loading the stadium and players');
     if (!m) return;
     m.style.clipPath = ''; m.style.pointerEvents = ''; delete m.dataset.dockHidden; const tog = document.getElementById('mcf-tog'); if (tog) tog.removeAttribute('tabindex');
     m.style.left = ''; m.style.width = ''; if (l) l.style.maxHeight = '';
-    if (fc) { fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = ''; fc.style.clipPath = ''; delete fc.dataset.dockHidden; }
+    if (fc) { fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = ''; fc.style.clipPath = ''; fc.inert = false; delete fc.dataset.dockHidden; }
     if (!m.getBoundingClientRect().width) return;
     const phone = innerWidth <= 560, wide = innerWidth > 1100;
     const dRect = dr && !dr.hidden && getComputedStyle(dr).display !== 'none' && dr.getBoundingClientRect().width ? dr.getBoundingClientRect() : null;
@@ -65,7 +65,7 @@ MCS.progress('Loading the stadium and players');
       if (hit(mr, dRect) || (dRect && onPulse(mr))) hide = true;
     }
     let fcOn = !!fc && getComputedStyle(fc).display !== 'none' && fc.getBoundingClientRect().width > 0;
-    if (fcOn && dRect && !phone) { fc.style.clipPath = 'inset(50%)'; fc.dataset.dockHidden = '1'; fcOn = false; }   // the open Copilot shows the followed player in its Talk tab: the corner goes to the commentary card (UX pass 10)
+    if (fcOn && dRect && !phone) { fc.style.clipPath = 'inset(50%)'; fc.inert = true; fc.dataset.dockHidden = '1'; fcOn = false; }   // the open Copilot shows the followed player in its Talk tab: the corner goes to the commentary card (UX pass 10)
     let fcRight = 0;
     if (fcOn) {
       const f = fc.getBoundingClientRect();

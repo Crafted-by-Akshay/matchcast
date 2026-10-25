@@ -7,8 +7,9 @@ import { collectErrors } from './helpers';
 declare const AG: any; declare const LV: any;
 
 type Mock = { server: Server; url: string; seen: { matches: number; events: any[]; sent?: boolean } };
-const mock = (mode: 'ok' | 'error' | 'quiet') => new Promise<Mock>((resolve) => {
-  const seen: Mock['seen'] = { matches: 0, events: [], sent: mode === 'quiet' };   // 'quiet': the api says live but sends no claim
+const mock = (mode: 'ok' | 'error' | 'quiet' | 'rules' | 'drop') => new Promise<Mock>((resolve) => {
+  const seen: Mock['seen'] = { matches: 0, events: [], sent: mode === 'quiet' || mode === 'drop' };   // 'quiet': the api says live but sends no claim; 'rules': it says rules_fallback, then sends a claim; 'drop': it says live once, then every stream fails
+  let gets = 0;
   const server = createServer((q, r) => {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
     if (q.method === 'OPTIONS') { r.writeHead(204, cors); return r.end(); }
@@ -19,9 +20,11 @@ const mock = (mode: 'ok' | 'error' | 'quiet') => new Promise<Mock>((resolve) => 
       return;
     }
     if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end('{}'); }   // only the match stream is an SSE stream (the shell also asks /v1/status)
+    if (mode === 'drop' && gets++) { r.writeHead(503, cors); return r.end('{}'); }
     r.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...cors });
     const frame = (ev: string, d: object, id?: string) => r.write('event: ' + ev + '\n' + (id ? 'id: ' + id + '\n' : '') + 'data: ' + JSON.stringify(d) + '\n\n');
-    frame('status', { status: 'live' });
+    frame('status', { status: mode === 'rules' ? 'rules_fallback' : 'live' });
+    if (mode === 'drop') return void setTimeout(() => r.end(), 300);
     const t = setInterval(() => {
       if (!seen.events.length || seen.sent) return; seen.sent = true;
       frame('claim', { claim_id: 'api-1', metric: 'goals', value: 1, units: 'count', approval_status: 'approved' }, 'claim:api-1');
@@ -150,5 +153,24 @@ test('the Broadcast desk says the same agents state as the shell pill', async ({
   const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;
   const words: Record<string, string> = { 'Live agents': 'Agents: live from the api', 'Rules fallback': 'Agents: api did not answer, rules in this page', 'Offline (simulated)': 'Agents: rules in this page (no api connected)' };
   await expect.poll(async () => { const p = String(await pill(page).textContent()); const d = String(await f.locator('#mc-agentstate').textContent()); return p.startsWith('Warming') ? d.startsWith('Agents: Warming') : d === words[p]; }, { timeout: 30_000 }).toBe(true);
+  api.server.close();
+});
+
+// the judge fix must not make a real fallback look live: the api's own rules_fallback stays "Rules fallback" even when it sends a claim,
+// a silent warm-up of an api that said nothing promotes to live on its first claim, and a stream that keeps failing stops reading "Live agents".
+test('an api that says rules_fallback stays Rules fallback when a claim arrives', async ({ page }) => {
+  const api = await mock('rules');
+  await drive(page, api.url);
+  await expect.poll(() => api.seen.sent, { timeout: 15_000 }).toBe(true);   // the mock has sent its claim and publication
+  await page.waitForTimeout(1500);
+  await expect(pill(page)).toHaveText('Rules fallback');
+  api.server.close();
+});
+
+test('a stream that keeps failing stops reading Live agents', async ({ page }) => {
+  test.setTimeout(60_000);
+  const api = await mock('drop');
+  await drive(page, api.url);
+  await expect(pill(page)).toHaveText('Rules fallback', { timeout: 30_000 });
   api.server.close();
 });
