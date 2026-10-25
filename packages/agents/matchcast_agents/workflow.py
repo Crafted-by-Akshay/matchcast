@@ -937,6 +937,7 @@ class MatchWorkflow:
             draft.line_id,
             persona=draft.persona,
             claim_ids=list(draft.claim_ids),
+            moment=task.reason,
             mode="rules" if draft.origin == "template" else "live",  # what wrote this very line
         )
         verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)

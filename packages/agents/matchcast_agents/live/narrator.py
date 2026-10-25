@@ -53,7 +53,6 @@ class LiveNarrator:
             "player": ctx.player_name(payload["player_id"]) if "player_id" in payload else None,
             "clubs": {t: ctx.club_name(t) for t in (ctx.home, ctx.away)},
             "personas": list(task.personas),
-            "limits": {p: max_chars(p) for p in task.personas},
         }
         if attempt:
             facts["note"] = (

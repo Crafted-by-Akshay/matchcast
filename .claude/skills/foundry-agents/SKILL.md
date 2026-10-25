@@ -14,7 +14,7 @@ Design: `docs/architecture/04-agents.md`. Code: `packages/agents/matchcast_agent
 - `derivation_version` must match `x.y.z`, so the fallback is not suffixed `+rules`; it shows in the audit and the stream status.
 
 ## Models and auth
-- `live/client.py` `FoundryModelClient` calls the `gpt-6-luna` deployment (Global Standard) through the Azure OpenAI client with an Entra bearer-token provider. No API key anywhere. `ScriptedModelClient` replays recorded answers: use it in every test.
+- `live/client.py` `FoundryModelClient` calls the `gpt-5-mini` deployment (Global Standard) through the Azure OpenAI client with an Entra bearer-token provider. No API key anywhere. `ScriptedModelClient` replays recorded answers: use it in every test.
 - Config comes from env: `MATCHCAST_MODE` (`local`/`cloud`), `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`, `MATCHCAST_AGENT_MODE` (`rules`/`live`). `make smoke-foundry` proves one keyless call (needs the Azure AI User role and quota). CI and tests never call Foundry.
 - Prompts live in `packages/agents/prompts/*.md`; the first line is `version: x.y.z`; bump it when the text changes because it lands in `derivation_version`.
 

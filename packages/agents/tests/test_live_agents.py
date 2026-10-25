@@ -186,7 +186,7 @@ def test_foundry_client_sends_the_reasoning_model_parameters() -> None:
     sent = completions.kwargs
     assert sent["max_completion_tokens"] == 400 + REASONING_HEADROOM >= 1500
     assert "max_tokens" not in sent and "temperature" not in sent  # gpt-5-mini rejects both
-    assert sent["reasoning_effort"] == "low"
+    assert sent["reasoning_effort"] == "minimal"
 
 
 def test_a_reasoning_run_that_hits_the_budget_is_its_own_error() -> None:
@@ -250,6 +250,21 @@ def test_a_quiet_play_gets_one_verified_analyst_colour_line(match) -> None:
     colour = [ln for ln in flow.store.lines(flow.sk) if ln.line_id.endswith("-analyst-0")]
     lines = [ln for ln in colour if ln.origin == "model" and ln.persona == "analyst"]
     assert lines and all(ln.status == "published" for ln in lines if ln.persona == "analyst")
+
+
+def test_the_verifier_is_told_the_moment_and_the_narrator_no_limits(match, monkeypatch) -> None:
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")
+    asked: dict[str, dict] = {}
+
+    def record(system, user):
+        facts = json.loads(user)
+        kind = "narrator" if "personas" in facts else "verifier" if "line" in facts else "other"
+        asked.setdefault(kind, facts)
+        return answer(system, user)
+
+    run(build(match, ScriptedModelClient(record)).ingest(match["events"]))
+    assert "limits" not in asked["narrator"]  # the model echoed "140" and "280" into its lines
+    assert asked["verifier"]["moment"]["play"]  # what happened, so a named player is supported
 
 
 def test_colour_falls_back_to_a_rules_line_when_the_model_fails(match) -> None:
