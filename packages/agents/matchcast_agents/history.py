@@ -54,27 +54,35 @@ def _matches() -> tuple[Match, ...]:
 def _names() -> dict[str, str]:
     """Dataset spelling by folded name, so "Bosnia And Herzegovina" still matches."""
     names = {m[1] for m in _matches()} | {m[2] for m in _matches()}
-    return {_fold(n): n for n in names}
+    return {_key(n): n for n in names}
 
 
-def _fold(name: str) -> str:
-    """Casefolded, accents removed: "Côte d'Ivoire" and "cote d'ivoire" compare equal."""
+def _key(name: str) -> str:
+    """Letters and digits only, lower case, no accents: "Côte d'Ivoire" matches "cote-d-ivoire"."""
     plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    return " ".join(plain.casefold().split())
+    return re.sub(r"[^a-z0-9]", "", plain.casefold())
 
 
-# names other sources use for a nation the dataset spells differently
+# the spellings other sources use, keyed by _key, including the default slug names the API makes
 _ALIASES = {
-    _fold("Côte d'Ivoire"): "Ivory Coast",
-    _fold("Korea Republic"): "South Korea",
-    _fold("St Kitts and Nevis"): "Saint Kitts and Nevis",
+    _key(spelling): canonical
+    for spelling, canonical in {
+        "Côte d'Ivoire": "Ivory Coast",
+        "Cote d'Ivoire": "Ivory Coast",
+        "C Te D Ivoire": "Ivory Coast",
+        "Korea Republic": "South Korea",
+        "St Kitts and Nevis": "Saint Kitts and Nevis",
+        "Cura Ao": "Curaçao",
+    }.items()
 }
 
 
 def resolve_team(name: str) -> str | None:
-    """The dataset spelling of a nation, ignoring case and accents; None if the dataset lacks it."""
-    key = _fold(name)
-    return _names().get(_fold(_ALIASES.get(key, name)))
+    """The dataset spelling of a nation, ignoring case, accents and punctuation; None if unknown."""
+    key = _key(name)
+    if key in _ALIASES:
+        key = _key(_ALIASES[key])
+    return _names().get(key)
 
 
 @lru_cache(maxsize=8)

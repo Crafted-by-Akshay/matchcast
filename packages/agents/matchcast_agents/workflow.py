@@ -10,7 +10,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
 
 from matchcast_contracts import ContractError, validate
@@ -198,10 +198,14 @@ class MatchWorkflow:
         self.names = {**stored.get("names", {}), **(names or {})}
         self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
         # real pre-match facts for national teams (ADR-0020); None for fictional clubs
+        # the history cut-off is the day the match was created, so a rebuild keeps the same facts
+        self.history_on = (
+            date.fromisoformat(stored["history_on"]) if stored.get("history_on") else clock().date()
+        )
         self.history = (
             history
             if history is not None
-            else history_for_roster(self.roster.get("team_ids"), self.clubs, clock().date())
+            else history_for_roster(self.roster.get("team_ids"), self.clubs, self.history_on)
         )
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
@@ -219,6 +223,7 @@ class MatchWorkflow:
                 "roster": self.roster,
                 "names": self.names,
                 "clubs": self.clubs,
+                "history_on": self.history_on.isoformat(),
             },
         )
         self._restore()

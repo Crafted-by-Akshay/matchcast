@@ -103,3 +103,11 @@ def test_federation_named_competitions_become_a_generic_label() -> None:
     assert _competition("CONMEBOL–UEFA Cup of Champions") == "International competition"
     assert _competition("FIFA World Cup qualification") == "International competition"
     assert _competition("Friendly") == "Friendly"
+
+
+def test_default_slug_names_resolve_to_dataset_nations() -> None:
+    from matchcast_agents.history import resolve_team
+
+    assert resolve_team("Cura Ao") == "Curaçao"
+    assert resolve_team("C Te D Ivoire") == "Ivory Coast"
+    assert resolve_team("Bosnia And Herzegovina") == "Bosnia and Herzegovina"
