@@ -221,3 +221,28 @@ def test_a_first_event_that_fails_once_is_replayed_on_retry_not_refused(match, m
     run(clean.ingest(match["events"]))
     assert flow.rundown == clean.rundown
     assert flow.spawn_budget.used == clean.spawn_budget.used
+
+
+def test_a_fault_after_the_first_spend_is_replayed_to_one_clean_run(match, monkeypatch) -> None:
+    """A fault after the first moment's spend, before any checkpoint, must not leave the Producer
+    remembering that moment: the retry decides it again and ends where one clean run ends."""
+    goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
+    clean = build(match, MemoryStore())
+    run(clean.ingest([goal]))
+    flow = build(match, MemoryStore())
+    real_run_all = workflow_module.run_all
+    tripped: list[bool] = []
+
+    async def flaky_run_all(ctx, requests, registry):
+        if not tripped:
+            tripped.append(True)
+            raise RuntimeError("a fault after the first spend, before its checkpoint")
+        return await real_run_all(ctx, requests, registry)
+
+    monkeypatch.setattr(workflow_module, "run_all", flaky_run_all)
+    with pytest.raises(RuntimeError):
+        run(flow.ingest([goal]))
+    assert flow.spawn_budget.used > 0  # the fault came after the spend
+    run(flow.ingest([goal]))  # the retry
+    assert flow.rundown == clean.rundown
+    assert flow.spawn_budget.used == clean.spawn_budget.used

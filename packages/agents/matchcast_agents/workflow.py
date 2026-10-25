@@ -458,9 +458,13 @@ class MatchWorkflow:
         """Start from the last checkpoint: state and Producer memory before any partial event."""
         row = self.store.get_checkpoint(self.sk)
         if row is None:
-            # a fresh workflow replays from the first event: nothing of its own is counted yet
+            # a replay from the first event decides every moment again: this workflow's share of
+            # the pools, its ledger and the Producer's memory start at zero: nothing counts twice
             self._set_spent(0, 0)
             self.rundown = []
+            reset = getattr(self.agents.producer, "reset", None)
+            if reset:
+                reset()
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
