@@ -343,6 +343,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
         <p class="muted" id="ag-vision" role="status"></p>
         <ol class="ag-lanes" id="ag-lanes"><li class="empty">Waiting for the kick-off in Watch. Each claim shows its handoffs here: Analyst, Narrator, Verifier, then Producer.</li></ol>
       </section>
+      <div id="crew-score"></div>
       <section class="ag-panel" id="aq"><h3>Approval queue <span class="muted" id="aq-n"></span></h3>
         <div class="ag-filters"><label>Mode <select id="aq-mode"><option value="demo">Demo: verified lines air at once</option><option value="producer">Producer: a person approves each line</option></select></label>
           <span class="muted" id="aq-who">Signed in as Sam Producer (simulated account, Planned: Entra ID)</span></div>
@@ -359,6 +360,9 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
           <label>Metric <select id="lg-metric"><option value="">all</option><option>score</option><option>shot_xg</option><option>xg_total</option><option>moment</option><option>line</option></select></label>
           <button type="button" id="lg-export">Export CSV</button> <span class="muted" id="lg-hash" aria-live="polite"></span></div>
         <div class="ag-table"><table role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Time</th><th role="columnheader">Metric</th><th role="columnheader">Value</th><th role="columnheader">Units</th><th role="columnheader">Agent</th><th role="columnheader">Source</th><th role="columnheader">Verdict</th><th role="columnheader">Reason</th><th role="columnheader">Approval</th></tr></thead><tbody role="rowgroup" id="ag-claims"></tbody></table></div>
+      </section>
+      <section class="ag-panel" id="ag-drill-panel"><h3>Failure drill</h3>
+        <div class="ag-audit"><button id="ag-drill" type="button" aria-pressed="false">Cut the model</button> <span id="ag-drill-note" class="muted" role="status">Cuts this match's model calls on the agent api, mid-match. The rules twins keep the lines coming and every refusal is written to the audit chain as fallback_used. Press again to restore the model.</span></div>
       </section>
       <section class="ag-panel"><h3>Audit chain</h3>
         <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <span id="ag-bad-note" class="muted" role="status"></span> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
@@ -387,6 +391,8 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="feed.js"></script>
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
+<script src="crew.js"></script>
+<script src="crew-score.js"></script>
 <dialog id="status-dlg" aria-labelledby="status-h"><h2 id="status-h">What is running</h2><div id="status-box"></div><form method="dialog"><button class="pill">Close</button></form></dialog>
 <script src="speech.js"></script>
 <script src="status.js"></script>
@@ -542,7 +548,8 @@ function show(view) {
   }
   $('stage').classList.toggle('split', on.length > 1);
   $('split-bar').hidden = on.length < 2;
-  const tg = $('bc-toggle'); tg.hidden = !(view === 'watch' && wide.matches); tg.setAttribute('aria-pressed', String(bcBeside));
+  const tg = $('bc-toggle'); tg.hidden = true;   // the second 3D view is off the first screen for the sprint (AB#497); ?split=1 still opens it
+  tg.setAttribute('aria-pressed', String(bcBeside));
   for (const v of on) ensure(v);
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   paint();
@@ -735,6 +742,7 @@ function renderAgents() {
   const cardTag = LV.enabled ? 'In-page rules run' : who.tag;
   const card = (name, role, line, tag) => '<article class="ag-card"><div class="ag-top"><b>' + name + '</b><span class="tag">' + tag + '</span></div><small>' + role + '</small><p>' + line + '</p></article>';
   renderVision();
+  const drillBtn = $('ag-drill'); if (drillBtn && !drillBtn.disabled) { drillBtn.setAttribute('aria-pressed', String(LV.modelCut)); drillBtn.textContent = LV.modelCut ? 'Restore the model' : 'Cut the model'; }   // a new match starts with its model on
   $('ag-cards').innerHTML = [
     card('Producer', 'Picks moments and routes lines', st.moments + ' moments seen · ' + st.verified + ' approved · ' + st.abstained + ' held', cardTag),
     card('Analyst', 'Turns events into claims with evidence', st.claims + ' claims from ' + st.events + ' events', cardTag),
@@ -1020,6 +1028,20 @@ function init(list) {
       : b === 'late' ? 'In-page now. This match was already created, so the server Verifier gets it at the next match start.' : 'Will go to the server Verifier with the match (from minute 12) and happens in-page now.';
   };
   $('ag-bad').onchange = (e) => { AG.seedBad(e.target.checked); LV.seedBad(e.target.checked); badNote(); };
+  // the failure drill: cut this match's model on the api, watch the pill drop to Rules fallback while the lines keep coming, then restore it. No api: the page is on rules already, so there is nothing to cut
+  const drillNote = (t) => { $('ag-drill-note').textContent = t; };
+  $('ag-drill').onclick = async () => {
+    const b = $('ag-drill'), on = b.getAttribute('aria-pressed') !== 'true';
+    if (!LV.enabled) { drillNote('No agent api is connected: the rules agents in this page write every line already (Simulated), so there is no model to cut.'); return; }
+    b.disabled = true; drillNote(on ? 'Cutting the model…' : 'Restoring the model…');
+    try {
+      const j = await LV.drill(on);
+      drillNote(j.model_cut ? 'Model cut on the api. Each model call for this match now fails at once and the rules twin answers: the pill reads Rules fallback at the next moment, the audit chain records fallback_used for each refusal, and Ask and Talk answer from the rules too.'
+        : j.mode === 'rules' ? 'Model restored. This match runs on the rules agents (no model deployment or past the live allowance), so the cut changed nothing.'
+        : 'Model restored. Each agent\'s breaker stays open for up to 30 s and then needs one good call, so allow up to 30 s plus one model moment before the pill reads Live agents again.');
+    } catch (e) { drillNote('The api did not take the drill (' + (e.status || e.message) + '). Nothing changed.'); }
+    b.disabled = false; renderAgents();
+  };
   setInterval(badNote, 2000);
   // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
   M.lang = 'en'; M.persona = M.persona || 'fan'; CM.setPersona(M.persona);

@@ -254,9 +254,17 @@ const LV = (() => {
     const r = run; if (!r || !api()) return null;
     try { const res = await fetch(url('/v1/matches/' + r.id + '/vision/summary'), { cache: 'no-store' }); return res.ok ? await res.json() : null; } catch (e) { return null; }
   };
+  // the failure drill (ADR-0014 on camera): cut this match's model calls on the api so the rules twins take over mid-match, or restore them; throws when the api cannot
+  const drill = async (on) => {
+    const r = run; if (!r || !api()) throw Object.assign(new Error('no api'), { status: 0 });
+    if (!r.created) await create(r);
+    const res = await post('/v1/matches/' + r.id + '/drill', { session_id: r.key.session_id, model_cut: !!on });
+    if (!res.ok) throw Object.assign(new Error('drill ' + res.status), { status: res.status });
+    const j = await res.json(); if (run === r) r.cut = !!j.model_cut; return j;
+  };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); if (run && run.booth) run.booth.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, visionSummary, stop, talk, recap, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, visionEvents, visionSummary, stop, talk, recap, drill, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

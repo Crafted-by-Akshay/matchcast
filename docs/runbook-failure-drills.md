@@ -7,7 +7,7 @@ Rehearsals for the demo and for judges who ask "what happens when it breaks". Ea
 | 1 | Malformed event is refused with a problem document | local | Run 22 Oct |
 | 2 | The same batch twice is accepted once | local | Run 22 Oct |
 | 3 | Seeded bad claim is caught and repaired | local | Not run here (covered by api tests and the QUA-5 clip) |
-| 4 | Model unavailable: lines continue from the rules implementation | Azure | Not run |
+| 4 | Model unavailable: lines continue from the rules implementation | local or Azure, Agents tab "Cut the model" | Covered by `test_a_model_cut_mid_match_hands_the_lines_to_the_rules_twins` and the api drill test; live run pending |
 | 5 | Kill the api replica mid-match and resume from the stored events | Azure | Not run |
 | 6 | Event Hubs backlog wakes the api from zero | Azure | Not run (needs DAT-1 replay publisher; see docs/infra.md, Scaling proof) |
 | 7 | Cost alert fires | Azure | Not run (see docs/runbook-shutdown.md) |
@@ -27,7 +27,9 @@ Create a match with header `x-matchcast-seed-bad-claim: 1` (the value must be ex
 Expect: a `line_rejected` audit record followed by a repaired `line_verified`, and the rejected line never reaches a `publication`.
 
 ## 4. Model unavailable (Azure)
-The deployed api runs with `MATCHCAST_AGENT_MODE=rules` (containerapps.bicep), so the model is never called until you also set `MATCHCAST_AGENT_MODE=live`. Do that first, then set `FOUNDRY_MODEL_DEPLOYMENT` to a name that does not exist on the api container app (`az containerapp update ... --set-env-vars`), post events.
+On camera, use the drill cue instead of breaking the deployment: Agents tab, **Cut the model** (`POST /v1/matches/{id}/drill`, `model_cut: true`). It cuts only this match's model calls; each call fails at once, the rules twin answers, the pill drops to "Rules fallback" at the next moment, the audit chain shows `fallback_used` records, and the lines keep coming. Press **Restore the model**: each agent's breaker stays open for up to 30 s and then needs one successful call, so the pill reads "Live agents" again after up to 30 s plus one model moment (all four agents must be live). Ask and Talk are cut and restored with the agents. Other matches on the api are untouched.
+
+For the deployment-level version: the deployed api runs with `MATCHCAST_AGENT_MODE=rules` (containerapps.bicep), so the model is never called until you also set `MATCHCAST_AGENT_MODE=live`. Do that first, then set `FOUNDRY_MODEL_DEPLOYMENT` to a name that does not exist on the api container app (`az containerapp update ... --set-env-vars`), post events.
 Expected by design (not yet observed): after the timeout or error each step runs its rules implementation, audit shows `fallback_used` with a `fallback_reason`, the UI shows the rules chip, the circuit breaker opens after 3 failures in 60 s. Restore the setting afterwards and confirm the chip clears. The "Fallback spike" alert needs more than 20% rules lines for 10 minutes.
 
 ## 5. Kill and resume (Azure)
