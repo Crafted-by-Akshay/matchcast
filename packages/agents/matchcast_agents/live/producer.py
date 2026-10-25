@@ -67,6 +67,10 @@ class LiveProducer:
         # the rules keys stay at the top level, so a rules-only build restores this checkpoint too
         return {**self._rules.snapshot(), "aired": list(self._aired)}
 
+    def reset(self) -> None:
+        self._rules.reset()
+        self._aired = []
+
     def restore(self, data: dict[str, Any]) -> None:
         self._rules.restore(data)  # reads only its own keys; an older checkpoint has no "aired"
         self._aired = list(data.get("aired", []))

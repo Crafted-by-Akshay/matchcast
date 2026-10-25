@@ -261,8 +261,6 @@ class Registry:
     def __init__(self, require_role: bool) -> None:
         self.flows: dict[tuple[str, str], MatchWorkflow] = {}
         self.cuts: dict[tuple[str, str], ModelCut] = {}  # the failure drill's switch per match
-        # the specialist pools per match: the engine and Vision streams of one match share them
-        self.spawn_budgets: dict[str, MatchSpawnBudgets] = {}
         self.create_lock = asyncio.Lock()  # the stored-match check awaits, so creates take turns
         self.store = (
             build_store()
@@ -410,9 +408,13 @@ class Registry:
         sk = stream_key(vision)
         return lambda: pass_facts(self.store.events(sk))
 
-    def spawn_budgets_for(self, match_id: str) -> MatchSpawnBudgets:
-        """The match's specialist pools, shared by its engine and Vision workflows (CREW-2.1)."""
-        return self.spawn_budgets.setdefault(match_id, MatchSpawnBudgets())
+    def spawn_budgets_for(self, session_id: str, match_id: str) -> MatchSpawnBudgets | None:
+        """A Vision stream draws on its engine match's specialist pools, so the caps hold per match.
+        The pools live on the engine workflow: they last as long as its flow (CREW-2.1)."""
+        if not is_vision_stream({"session_id": session_id}):
+            return None
+        engine = self.flows.get((engine_stream_of(session_id), match_id))
+        return engine.spawn_budgets if engine is not None else None
 
     def truth_feed_for(
         self, session_id: str, match_id: str
@@ -484,7 +486,7 @@ class Registry:
                 knowledge=self.knowledge,
                 truth_feed=self.truth_feed_for(session_id, match_id),
                 vision_feed=self.vision_feed_for(session_id, match_id),
-                spawn_budgets=self.spawn_budgets_for(match_id),
+                spawn_budgets=self.spawn_budgets_for(session_id, match_id),
             )
             self.flows[key] = flow
             return flow
@@ -710,7 +712,9 @@ def build_router(registry: Registry) -> APIRouter:
                     knowledge=registry.knowledge,
                     truth_feed=registry.truth_feed_for(stream["session_id"], stream["match_id"]),
                     vision_feed=registry.vision_feed_for(stream["session_id"], stream["match_id"]),
-                    spawn_budgets=registry.spawn_budgets_for(stream["match_id"]),
+                    spawn_budgets=registry.spawn_budgets_for(
+                        stream["session_id"], stream["match_id"]
+                    ),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(

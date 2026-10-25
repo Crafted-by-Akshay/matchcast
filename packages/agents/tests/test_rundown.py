@@ -181,3 +181,21 @@ def test_a_missing_checkpoint_clears_the_ledger_and_this_workflows_spend(match) 
     flow._restore()  # no checkpoint in the store: nothing of this run is kept
     assert flow.rundown == []
     assert flow.spawn_budget.used == 0 and flow.quiet_budget.used == 0
+
+
+def test_a_replay_on_a_live_workflow_undoes_its_spend_and_decides_again(match) -> None:
+    """A live workflow has spent budget and written its ledger when its checkpoint is lost. The
+    replay must undo both and decide every moment again, so it ends where one clean run ends."""
+    clean = build(match, MemoryStore())
+    run(clean.ingest(match["events"]))
+    store = MemoryStore()
+    flow = build(match, store)
+    run(flow.ingest(match["events"]))
+    assert flow.spawn_budget.used > 0 and flow.rundown  # the state the replay has to undo
+    before = list(flow.rundown)
+    store._checkpoints.pop(flow.sk, None)  # the save never happened
+    run(flow._catch_up())
+    assert not any(new is old for new in flow.rundown for old in before)  # decided again, not kept
+    assert flow.spawn_budget.used == clean.spawn_budget.used > 0
+    assert flow.quiet_budget.used == clean.quiet_budget.used
+    assert flow.rundown == clean.rundown  # no moment twice, none missing

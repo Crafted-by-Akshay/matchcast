@@ -298,6 +298,7 @@ class MatchWorkflow:
         # a goal's specialists. The pools are the match's; this workflow's share of them is
         # checkpointed, so a restart adds back exactly what this workflow spent
         pools = spawn_budgets or MatchSpawnBudgets()
+        self.spawn_budgets = pools  # the engine stream's pools are handed to its Vision stream
         self.spawn_budget = pools.priority_one  # priority-1 moments
         self.quiet_budget = pools.quiet  # every other moment
         self._spent = {"priority_one": 0, "quiet": 0}  # what this workflow took from each pool
@@ -456,9 +457,13 @@ class MatchWorkflow:
         """Start from the last checkpoint: state and Producer memory before any partial event."""
         row = self.store.get_checkpoint(self.sk)
         if row is None:
-            # a replay from the first event starts this workflow's share and its ledger from zero
+            # a replay from the first event decides every moment again: this workflow's share
+            # of the pools, its ledger and the Producer's memory start at zero: no double count
             self._set_spent(0, 0)
             self.rundown = []
+            reset = getattr(self.agents.producer, "reset", None)
+            if reset:
+                reset()
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
