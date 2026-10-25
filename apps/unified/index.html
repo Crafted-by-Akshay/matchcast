@@ -343,6 +343,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
         <p class="muted" id="ag-vision" role="status"></p>
         <ol class="ag-lanes" id="ag-lanes"><li class="empty">Waiting for the kick-off in Watch. Each claim shows its handoffs here: Analyst, Narrator, Verifier, then Producer.</li></ol>
       </section>
+      <div id="crew-score"></div>
       <section class="ag-panel" id="aq"><h3>Approval queue <span class="muted" id="aq-n"></span></h3>
         <div class="ag-filters"><label>Mode <select id="aq-mode"><option value="demo">Demo: verified lines air at once</option><option value="producer">Producer: a person approves each line</option></select></label>
           <span class="muted" id="aq-who">Signed in as Sam Producer (simulated account, Planned: Entra ID)</span></div>
@@ -388,6 +389,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
 <script src="crew.js"></script>
+<script src="crew-score.js"></script>
 <dialog id="status-dlg" aria-labelledby="status-h"><h2 id="status-h">What is running</h2><div id="status-box"></div><form method="dialog"><button class="pill">Close</button></form></dialog>
 <script src="speech.js"></script>
 <script src="status.js"></script>
