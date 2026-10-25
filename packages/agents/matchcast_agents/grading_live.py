@@ -3,10 +3,11 @@ its own call budget.
 
 A live arm is its rules twin with the model in place (ADR-0014). Every model call goes through
 ``BudgetedClient``: a call past the budget is refused, and a call the model fails is counted. The
-rules twin answers both, so the arm still airs lines, and it reports how many calls it sent and how
-many fell back. A live run is recorded once by ``scripts/scoreboard_live.py``; the scoreboard route
-shows its arms as precomputed, labelled with the run id, and never calls a model (docs/architecture/
-16, section 4.1).
+rules twin answers both, and so it answers any rejected answer or open circuit. Each arm reports
+how many calls it sent, how many failed or were refused, and how many agent calls a fallback
+answered (mode ``mixed``). A live run is recorded once by ``scripts/scoreboard_live.py``; the
+scoreboard route shows its arms as precomputed, labelled with the run id, and never calls a model
+(docs/architecture/16, section 4.1).
 """
 
 from __future__ import annotations
@@ -14,14 +15,17 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Mapping
 
 from .grading import (
     ARMS,
+    DEFAULT_SEED,
+    MODEL_METHODS,
     PERSONAS,
     SEED_RATE,
     SeededAnalyst,
@@ -45,12 +49,14 @@ from .rules.analyst import ClaimResult
 from .workflow import AgentSet
 
 RUN_KIND = "crew_live_run"
+MAX_CALLS_PER_ARM = 1000  # the recording script's ceiling, enforced here too
+log = logging.getLogger(__name__)
 
 
 @dataclass
 class CallBudget:
-    """One arm's model calls. ``attempted`` calls were sent; ``refused`` were past the cap and never
-    sent; ``failed`` were sent and raised. Both refused and failed calls fall back to the rules."""
+    """One arm's model calls. ``attempted`` were sent; ``refused`` were past the cap and never
+    sent; ``failed`` were sent and raised. Refused and failed calls fall back to the rules."""
 
     max_calls: int
     attempted: int = 0
@@ -85,6 +91,41 @@ class BudgetedClient:
         except Exception:
             self.budget.failed += 1
             raise
+
+
+@dataclass
+class _Tally:
+    """One arm's agent calls. ``answered_by_rules`` counts the calls a fallback answered."""
+
+    agent_calls: int = 0
+    answered_by_rules: int = 0
+
+
+class _Tallied:
+    """Wraps an agent: counts its calls and those a fallback answered. Other attributes pass."""
+
+    def __init__(self, inner: Any, tally: _Tally) -> None:
+        self._inner = inner
+        self._tally = tally
+
+    @property
+    def mode(self) -> str:
+        return getattr(self._inner, "mode", "live")
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._inner, name)
+        if name not in MODEL_METHODS:
+            return attr
+        inner, tally = self._inner, self._tally
+
+        async def call(*args: Any, **kwargs: Any) -> Any:
+            result = await attr(*args, **kwargs)
+            tally.agent_calls += 1
+            if hasattr(inner, "take_fallbacks") and inner.take_fallbacks():
+                tally.answered_by_rules += 1
+            return result
+
+        return call
 
 
 class _LiveSeededAnalyst:
@@ -126,6 +167,12 @@ def _live_crew(model: ModelClient, seeded: frozenset[str], *, unchecked: bool) -
     )
 
 
+class _Unused:
+    """The live arms count calls on their budget, so the rules ledger is never written."""
+
+    calls = 0
+
+
 def _live_arm(
     match: Mapping[str, Any],
     key: str,
@@ -139,6 +186,7 @@ def _live_arm(
 ) -> dict[str, Any]:
     budget = CallBudget(max_calls)
     model = BudgetedClient(client, budget)
+    tally = _Tally()
     start = time.perf_counter()
     if key == "single_agent":
         run = asyncio.run(
@@ -146,17 +194,19 @@ def _live_arm(
                 match,
                 chosen,
                 ledger=_Unused(),
-                analyst=_live_analyst(model, chosen),
-                narrator=_live_narrator(model),
+                analyst=_Tallied(_live_analyst(model, chosen), tally),
+                narrator=_Tallied(_live_narrator(model), tally),
             )
         )
     else:
-        agents = _live_crew(model, chosen, unchecked=key == "crew_no_verifier")
+        unchecked = key == "crew_no_verifier"
+        crew = _live_crew(model, chosen, unchecked=unchecked)
+        agents = AgentSet(**{f.name: _Tallied(getattr(crew, f.name), tally) for f in fields(crew)})
         run = asyncio.run(
             _crew(
                 match,
                 chosen,
-                unchecked=key == "crew_no_verifier",
+                unchecked=unchecked,
                 ledger=_Unused(),
                 clock=clock,
                 agents=agents,
@@ -164,24 +214,22 @@ def _live_arm(
         )
     total = round((time.perf_counter() - start) * 1000, 3)
     run["model_calls"] = budget.attempted
-    arm = _report(key, run, match, seed, seeded_claims, mode="live")
+    mode = "mixed" if tally.answered_by_rules else "live"
+    arm = _report(key, run, match, seed, seeded_claims, mode=mode)
     arm["latency_ms"]["total"] = total
     arm["cost"] = {
         **arm["cost"],
         "model_calls": budget.attempted,
         "model_errors": budget.failed,
         "budget_refused": budget.refused,
+        "agent_calls": tally.agent_calls,
+        "answered_by_rules": tally.answered_by_rules,
         "max_calls": max_calls,
-        "basis": "agent calls sent to the model; refused and failed calls fell back to the rules. "
-        "No price applied here.",
+        "basis": "model calls through the budget, one per complete() call (the SDK may retry one "
+        "request inside a call). Refused and failed calls, rejected answers and open circuits fell "
+        "back to the rules (answered_by_rules). No price applied here.",
     }
     return arm
-
-
-class _Unused:
-    """The live arms count calls on their budget, so the rules ledger is never written."""
-
-    calls = 0
 
 
 def live_run(
@@ -189,14 +237,14 @@ def live_run(
     *,
     client: ModelClient,
     max_calls: int,
-    seed: int = 2026,
+    seed: int = DEFAULT_SEED,
     rate: float = SEED_RATE,
     run_date: str | None = None,
 ) -> dict[str, Any]:
     """The three arms on the model, each with its own budget of ``max_calls``. Returns the run
     record a scoreboard reads as precomputed arms."""
-    if max_calls < 1:
-        raise ValueError("a live run needs a call budget of at least one call per arm")
+    if not 1 <= max_calls <= MAX_CALLS_PER_ARM:
+        raise ValueError(f"a live run needs 1 to {MAX_CALLS_PER_ARM} model calls per arm")
     as_of = run_date or datetime.now(UTC).date().isoformat()
     clock = _pinned_clock(as_of)
     chosen, seeded_claims = seeded_set(match, seed=seed, rate=rate, clock=clock)
@@ -238,12 +286,24 @@ def live_run(
     }
 
 
-def load_live_run(path: str, *, match_id: str) -> dict[str, dict[str, Any]] | None:
-    """The recorded arms of a live run for this match, or None when there is no such run."""
+def load_live_run(
+    path: str, *, match_id: str, seed: int = DEFAULT_SEED, rate: float = SEED_RATE
+) -> dict[str, dict[str, Any]] | None:
+    """The recorded arms of a live run for this match, seed and rate, or None when there is no
+    such run. A file that does not parse is logged and treated as no run."""
     file = Path(path)
     if not file.is_file():
         return None
-    record = json.loads(file.read_text())
-    if record.get("kind") != RUN_KIND or record.get("match_id") != match_id:
+    try:
+        record = json.loads(file.read_text())
+    except (OSError, ValueError):
+        log.warning("scoreboard live run %s does not parse; showing rules arms", path)
         return None
-    return record["arms"]
+    if not isinstance(record, dict) or record.get("kind") != RUN_KIND:
+        return None
+    if record.get("match_id") != match_id or record.get("seed") != seed:
+        return None
+    if record.get("seed_rate") != rate:
+        return None
+    arms = record.get("arms")
+    return arms if isinstance(arms, dict) else None

@@ -2,14 +2,15 @@
 each with its own call budget. The scoreboard route shows the recorded run as precomputed arms.
 
     uv run python scripts/scoreboard_live.py \
-        --match packages/agents/tests/fixtures/match-short.json --max-calls 300 \
-        --out scoreboard-live.json
+        --match packages/agents/tests/fixtures/match-short.json \
+        --max-calls 300 --out scoreboard-live.json
     MATCHCAST_SCOREBOARD_LIVE_RUN=scoreboard-live.json  (read by the api on each scoreboard request)
 
 `--match` is a JSON file with `events`, `roster`, `names` and `teams`, the shape the api builds for
-a match. The run sends at most 3 x --max-calls model calls (one budget per arm) and never more
-than MAX_CALLS_CEILING per arm. Calls past a budget are refused and fall back to the rules, and the
-record says how many. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
+a match. Each arm has its own budget of --max-calls model calls, one per complete() call
+(the SDK may retry one request inside a call). Calls past a budget are refused and fall back to
+the rules. The record says how many were sent, failed or refused, and how many agent calls a
+fallback answered. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
 """
 
 from __future__ import annotations
@@ -20,10 +21,8 @@ import sys
 from pathlib import Path
 
 from matchcast_agents.grading import SEED_RATE
-from matchcast_agents.grading_live import live_run
+from matchcast_agents.grading_live import MAX_CALLS_PER_ARM, live_run
 from matchcast_agents.live.client import FoundryModelClient
-
-MAX_CALLS_CEILING = 1000  # per arm; a run above this is refused, whatever the flag says
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,8 +34,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rate", type=float, default=SEED_RATE)
     parser.add_argument("--run-date", default=None, help="YYYY-MM-DD; default today")
     args = parser.parse_args(argv)
-    if not 1 <= args.max_calls <= MAX_CALLS_CEILING:
-        print(f"--max-calls must be between 1 and {MAX_CALLS_CEILING}", file=sys.stderr)
+    if not 1 <= args.max_calls <= MAX_CALLS_PER_ARM:
+        print(f"--max-calls must be between 1 and {MAX_CALLS_PER_ARM}", file=sys.stderr)
         return 2
     match = json.loads(args.match.read_text())
     print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)

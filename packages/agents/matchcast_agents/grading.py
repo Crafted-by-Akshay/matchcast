@@ -369,7 +369,14 @@ async def _crew(
         if line.status in AIRED:
             claims = [flow.store.get_claim(flow.sk, c)["packet"] for c in line.claim_ids]
             lines.append((line.text, line.line_id, line.moment_id, claims))
-    return {"lines": lines, "latency_ms": latencies, "model_calls": ledger.calls}
+    made = {c["packet"]["claim_id"] for c in flow.store.claims(flow.sk)}
+    produced = frozenset(f"claim-{m}-1" for m in seeded if f"claim-{m}-1" in made)
+    return {
+        "lines": lines,
+        "latency_ms": latencies,
+        "model_calls": ledger.calls,
+        "produced": produced,
+    }
 
 
 async def _single(
@@ -384,6 +391,7 @@ async def _single(
     rules Analyst and Narrator unless a live pair is given."""
     analyst = analyst or _Counted(SeededAnalyst(seeded), ledger)
     narrator = narrator or _Counted(NarratorRules(), ledger)
+    made: set[str] = set()
     stream = match["roster"]["stream"]
     state, prefix = MatchState(), []
     lines, latencies = [], []
@@ -418,12 +426,19 @@ async def _single(
             reason=reason,
         )
         results = await analyst.analyse(ctx, task)
+        made |= {r.packet["claim_id"] for r in results}
         claims = [r.packet for r in results]
         if claims:
             drafts = await narrator.write(ctx, task, claims)
             lines.extend((d.text, d.line_id, task.moment_id, claims) for d in drafts)
         latencies.append((time.perf_counter() - start) * 1000)
-    return {"lines": lines, "latency_ms": latencies, "model_calls": ledger.calls}
+    produced = frozenset(f"claim-{m}-1" for m in seeded if f"claim-{m}-1" in made)
+    return {
+        "lines": lines,
+        "latency_ms": latencies,
+        "model_calls": ledger.calls,
+        "produced": produced,
+    }
 
 
 def _allowed(match: Mapping[str, Any]) -> set[str]:
@@ -470,7 +485,9 @@ def _report(
             for c in g["claims"]
             if c["verdict"] == "incorrect" and c["claim_value"] in wrong_here
         }
-    caught = len(seeded_claims - set(stated))
+    # a seeded moment the crew skipped made no claim, so it is not a claim the arm missed
+    produced = frozenset(run["produced"]) if "produced" in run else seeded_claims
+    caught = len(produced - set(stated))
     lines = len(grades)
     calls = run["model_calls"]
     run_id = hashlib.sha256(
@@ -499,7 +516,8 @@ def _report(
         "catch_rate": {
             "caught": caught,
             "seeded": len(seeded_claims),
-            "rate": _rate(caught, len(seeded_claims)),
+            "produced": len(produced),
+            "rate": _rate(caught, len(produced)),
         },
         "latency_ms": {
             "p50": _percentile(latency, 0.5),
@@ -530,10 +548,13 @@ def seeded_set(
     return chosen, frozenset(f"claim-{m}-1" for m in chosen)
 
 
+DEFAULT_SEED = 2026  # the scoreboard's seed; a recorded live run must match it to be shown
+
+
 def scoreboard(
     match: Mapping[str, Any],
     *,
-    seed: int = 2026,
+    seed: int = DEFAULT_SEED,
     rate: float = SEED_RATE,
     run_date: str | None = None,
     precomputed: Mapping[str, Mapping[str, Any]] | None = None,
