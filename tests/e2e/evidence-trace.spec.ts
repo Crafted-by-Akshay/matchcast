@@ -65,7 +65,7 @@ test('evidence trace: a line from the api says what is not sent yet instead of s
   await expect(ev).toBeVisible();
   await expect(ev).toContainText('Planned (AB#498)');
   await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
-  await expect(ev.locator('.tp-tools')).toContainText('Planned (AB#498)');
+  await expect(ev.locator('.tp-tools')).toContainText('sent no tool_call_ids');
   await expect(ev.locator('.tp-rows li')).toHaveCount(0);
 });
 
@@ -124,7 +124,8 @@ test('evidence trace: an onair record and the claim fields fill an api line with
   const rows = ev.locator('.tp-rows li');
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText(ev0);
-  await expect(rows.nth(1)).toContainText('an api event id this page no longer holds or never sent');
+  await expect(rows.first(), 'this page never sent the event to a mock api, so the id cannot be resolved and says so').toContainText('an api event id this page no longer holds or never sent');
+  await expect(rows.nth(1)).toContainText('e-gone');
   await expect(ev.locator('.tp-history')).toContainText('results row 41230');
   await expect(ev.locator('.tp-history')).toContainText('results row 7');
   await expect(ev.locator('.tp-history')).not.toContainText('Planned');
@@ -190,7 +191,7 @@ test('evidence trace: a new match drops the old records; odd fields neither cras
   const ev = page.locator('#tp .tp-evidence');
   await expect(ev.locator('.tp-tools')).toContainText('tc-ok');
   await expect(ev.locator('.tp-rows li')).toHaveCount(2);   // the number 12 and the string e1 once; null and {} are dropped
-  await expect(ev.locator('.tp-history'), 'evidence_ids that is not a list is not read as one').toContainText('has not sent');
+  await expect(ev.locator('.tp-history'), 'evidence_ids that is not a list is not read as one').toContainText('sent no evidence_ids');
   // a new match: the old record is gone, and a line of the same id in the next match takes none of it
   await crew(page, onair(ev0));
   await page.evaluate(() => { AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); AG.ingest({ publication_id: 'onair-casual-goal', line_id: 'L-17', claim_ids: [], text: 'A line in the next match.' }, 'live'); TP.open('onair-casual-goal'); });
@@ -256,4 +257,25 @@ test('evidence trace: an onair event on the api stream reaches the panel', async
   await expect(ev.locator('.tp-history')).toContainText('results row 7');
   expect(errs.filter((e) => !/EventSource/.test(e))).toEqual([]);
   } finally { server.closeAllConnections(); server.close(); }
+});
+
+test('evidence trace: a claim card shows its own claim fields; a translation or a later drop is a note on the line that aired, never a replacement', async ({ page }) => {
+  await openEvidence(page, '?evidence=1');
+  const ev0 = await apiLine(page);
+  await page.evaluate(() => TP.open('c-9'));
+  const ev = page.locator('#tp .tp-evidence');
+  await expect(ev.locator('.tp-tools')).toContainText('tc-1, tc-2');
+  await expect(ev.locator('.tp-trace')).toContainText('match-demo:m-e42');
+  await expect(ev.locator('.tp-history')).toContainText('results row 7');
+  await expect(ev).toContainText('open a line');
+  await expect(ev).not.toContainText('Planned (AB#498): the api has not');
+  await crew(page, onair(ev0));
+  await page.evaluate(() => TP.open('onair-casual-goal'));
+  await crew(page, { ...onair(ev0), lang: 'es' });
+  await crew(page, { ...drop(ev0), reason_code: 'translation' });
+  await expect(ev.locator('.tp-state')).toContainText('published');
+  await expect(ev.locator('.tp-state')).toContainText('en');
+  await expect(ev.locator('.tp-extra')).toContainText('also aired in es');
+  await expect(ev.locator('.tp-extra')).toContainText('a later row for this line was dropped (translation)');
+  await expect(ev.locator('.tp-crew-audit')).toHaveCount(0);
 });
