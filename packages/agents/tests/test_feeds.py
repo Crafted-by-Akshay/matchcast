@@ -65,7 +65,7 @@ def test_limits_come_from_the_stories() -> None:
     assert by_key["audio_description"].min_gap_ms == 2_000  # speaks only in gaps of 2 s
 
 
-def test_only_persona_backed_feeds_have_a_writer_today() -> None:
+def test_only_persona_backed_feeds_air_as_derived_lines_today() -> None:
     assert {feed.key for feed in FEEDS if feed.persona} == {"casual", "analyst"}
 
 
