@@ -39,7 +39,10 @@ def fetch_input(api: str, session_id: str, match_id: str) -> dict:
     query = urllib.parse.urlencode({"session_id": session_id})
     path = f"/v1/matches/{urllib.parse.quote(match_id, safe='')}/scoreboard/input?{query}"
     with urllib.request.urlopen(api.rstrip("/") + path, timeout=30) as response:
-        return json.loads(response.read())
+        match = json.loads(response.read())
+    if not isinstance(match, dict):
+        raise ValueError("the export is not a match object")
+    return match
 
 
 def main(argv: list[str] | None = None) -> int:

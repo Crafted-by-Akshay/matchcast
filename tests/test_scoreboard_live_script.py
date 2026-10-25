@@ -1,6 +1,7 @@
 """The recording script exports a match by its ids from the api, or reads a saved export (CREW-5.2).
 No test here reaches the api or a model."""
 
+import http.client
 import importlib.util
 import io
 import json
@@ -29,7 +30,7 @@ class Reply(io.BytesIO):
         return False
 
 
-def test_the_script_needs_a_match_or_all_three_ids(capsys) -> None:
+def test_the_script_needs_a_match_or_all_three_ids(capsys, tmp_path) -> None:
     script = load_script()
     code = script.main(
         [
@@ -42,7 +43,7 @@ def test_the_script_needs_a_match_or_all_three_ids(capsys) -> None:
             "--max-calls",
             "5",
             "--out",
-            "out.json",
+            str(tmp_path / "out.json"),
         ]
     )
     assert code == 2
@@ -131,35 +132,40 @@ def test_an_export_that_fails_is_a_message_not_a_traceback(monkeypatch, capsys, 
 def test_a_read_that_is_cut_off_is_a_message_too(monkeypatch, capsys, tmp_path) -> None:
     script = load_script()
 
-    class Cut(Reply):
+    class Timeout(Reply):
         def read(self, *args):
             raise TimeoutError("read timed out")
 
-    monkeypatch.setattr(script.urllib.request, "urlopen", lambda url, timeout: Cut(b""))
-    code = script.main(
-        [
-            "--api",
-            "https://api.example",
-            "--session-id",
-            "s1",
-            "--match-id",
-            "m1",
-            "--fixture",
-            "N001",
-            "--max-calls",
-            "5",
-            "--out",
-            str(tmp_path / "o.json"),
-        ]
-    )
-    assert code == 1
-    assert "could not export the match" in capsys.readouterr().err
+    class Truncated(Reply):
+        def read(self, *args):
+            raise http.client.IncompleteRead(b"")
+
+    for reply in (Timeout, Truncated):
+        monkeypatch.setattr(script.urllib.request, "urlopen", lambda url, timeout, r=reply: r(b""))
+        code = script.main(
+            [
+                "--api",
+                "https://api.example",
+                "--session-id",
+                "s1",
+                "--match-id",
+                "m1",
+                "--fixture",
+                "N001",
+                "--max-calls",
+                "5",
+                "--out",
+                str(tmp_path / "o.json"),
+            ]
+        )
+        assert code == 1
+        assert "could not export the match" in capsys.readouterr().err
 
 
 def test_a_dot_segment_is_not_a_match_id(monkeypatch) -> None:
     script = load_script()
     monkeypatch.setattr(script.urllib.request, "urlopen", lambda url, timeout: Reply(b"{}"))
-    for match_id in ("..", "."):
+    for match_id in ("", ".", ".."):
         with pytest.raises(ValueError):
             script.fetch_input("https://api.example", "s1", match_id)
 
