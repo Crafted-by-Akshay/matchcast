@@ -6,11 +6,11 @@ four-agent arm is not graded by its own checker.
 
     uv run --all-packages python eval/compare.py            # offline: rules arm vs fake model
     uv run --all-packages python eval/compare.py --runs 3 --out eval/results/offline.json
-    uv run --all-packages python eval/compare.py --live        # Foundry, once the quota exists
+    uv run --all-packages python eval/compare.py --live        # Foundry, against the deployed model
 
 The single-agent arm takes any `ModelClient` (prompt -> text). Offline it is `FakeModel`, a
 seeded stand-in with a configurable slip rate. Live runs pass a Foundry client once the
-gpt-6-luna quota exists; nothing here calls Azure.
+Live runs pass a Foundry client; nothing here calls Azure by default.
 """
 
 from __future__ import annotations
@@ -236,7 +236,7 @@ def compare(
         "runs": runs,
         "single_model": "FakeModel (offline stand-in)" if client_factory is None else "live",
         "note": "Offline numbers show the harness works, not model quality. "
-        "Live run needs gpt-6-luna quota.",
+        "Live run: compare.py --live.",
     }
 
 
@@ -266,7 +266,7 @@ def compare_frozen(runs: int = 3, slip: float = 0.15) -> dict[str, Any]:
         "matches": len(chosen),
         "single_model": "FakeModel (offline stand-in)",
         "note": "30 frozen moments from the season. Offline numbers show the harness works, "
-        "not model quality. Live run needs gpt-6-luna quota.",
+        "not model quality. Live run: compare.py --live.",
     }
 
 
@@ -314,7 +314,7 @@ class LiveSingle:
 def compare_live(runs: int = 1) -> dict[str, Any]:
     """Rules four-agent, live four-agent and a live single agent on the same frozen moments.
 
-    Needs FOUNDRY_PROJECT_ENDPOINT (and FOUNDRY_MODEL_DEPLOYMENT, default gpt-6-luna) and an
+    Needs FOUNDRY_PROJECT_ENDPOINT (and FOUNDRY_MODEL_DEPLOYMENT, default gpt-5-mini) and an
     `az login`. Each run plays the match once per live arm, so check the cost caps first."""
     previous = os.environ.get("MATCHCAST_LIVE_MAX_PRIORITY")
     os.environ["MATCHCAST_LIVE_MAX_PRIORITY"] = (
@@ -381,7 +381,7 @@ def _compare_live(runs: int) -> dict[str, Any]:
             "single_agent_live": agg(single),
         },
         "runs": runs,
-        "single_model": os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-6-luna"),
+        "single_model": os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-5-mini"),
         "usage": {"four_agent_live": four_usage, "single_agent_live": single_usage},
         "four_agent_live_fallbacks": stats.get("fallbacks", 0),
         "four_agent_live_lines": stats.get("lines", 0),

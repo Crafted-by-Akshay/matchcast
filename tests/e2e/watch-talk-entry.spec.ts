@@ -4,7 +4,7 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 // UX review pass 8: talking to a player has a visible entry point, "Talk to a player", beside the Copilot button. It opens the Copilot Talk tab
 // (roster, Follow, message box), gets out of the way while the drawer is open, comes back when it closes, and never sits on top of the Copilot button
 // or the other HUD pieces. The tour's Watch step names it (see tour.spec.ts).
-for (const [name, width, height] of [['desktop', 1440, 900], ['laptop', 1024, 768], ['phone', 390, 844], ['small phone', 320, 640]] as const) {
+for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 1280, 720], ['laptop', 1024, 768], ['phone', 390, 844], ['small phone', 320, 640]] as const) {
   test(`Watch on ${name}: a visible Talk to a player control opens the Talk tab and clears the other controls`, async ({ page }) => {
     test.setTimeout(300_000);
     const errs = collectErrors(page);
@@ -29,6 +29,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['laptop', 1024, 76
     for (const [id, box] of Object.entries(g.others)) if (box) expect(hit(t, box), `clear of ${id}`).toBe(false);
     // the camera and speed chips; a 320 px screen is already crowded by the Copilot button itself, so that width only checks the Copilot button
     if (width > 340) expect(g.chips.filter((c) => hit(t, c)).length, 'clear of the camera and speed chips').toBe(0);
+    if (width > 340) expect(g.chips.filter((c) => hit(g.cp!, c)).length, 'the Copilot button is clear of the camera and speed chips (Watch is a pane, not the whole window)').toBe(0);
     if (width <= 560) expect(t.h, 'a 44 px target').toBeGreaterThanOrEqual(43);
     await talk.focus();
     await page.keyboard.press('Enter');   // keyboard activation

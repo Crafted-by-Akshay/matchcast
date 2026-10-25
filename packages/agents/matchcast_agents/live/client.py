@@ -1,6 +1,6 @@
 """The model client behind the live agents: structured JSON out, Entra ID auth, no API key.
 
-``FoundryModelClient`` talks to the gpt-6-luna deployment through the Azure OpenAI client with a
+``FoundryModelClient`` talks to the gpt-5-mini deployment through the Azure OpenAI client with a
 bearer-token provider. Failures are mapped to the exceptions ``ResilientAgent`` understands, so a
 slow, throttled or malformed answer falls back to the rules twin. ``ScriptedModelClient`` replays
 recorded answers for tests and for running without quota.
@@ -27,7 +27,7 @@ def prompt(name: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.startswith("version:")).strip()
 
 
-REASONING_EFFORT = "low"  # keeps a call well inside the 20 s wait
+REASONING_EFFORT = "minimal"  # measured Oct 25: a live match took 92 s, against 321 s on low
 # moments up to this priority use the model: goals, cards, shots on target, half and full time
 MODEL_PRIORITY = 2
 
@@ -80,7 +80,7 @@ class FoundryModelClient:
         *,
         client: Any = None,
     ) -> None:
-        self.deployment = deployment or os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-6-luna")
+        self.deployment = deployment or os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-5-mini")
         self.usage = Usage()
         self._endpoint = endpoint or os.environ.get("FOUNDRY_PROJECT_ENDPOINT", "")
         self._injected = client is not None

@@ -107,13 +107,16 @@ On reconnect with `Last-Event-ID`, the server replays publications and audit rec
 | Route | Limit | Key |
 | --- | --- | --- |
 | `/events` | 20 batches a second (**Planned**, not enforced yet) | stream key |
+| `POST /matches` | live for the first 10 created an hour from one address and 100 an hour in all, later ones run on the rules (the page works as before, labelled "Rules fallback"); 2,000 an hour in all is a memory guard, then 429 and the page falls back to its local simulation | client address; one api process |
 | `/ask` | 20 a minute | `browser_session_id` (or IP) |
 | `/talk` | 20 a minute, a budget of its own | `browser_session_id` (or IP) |
+| `/ask` and `/talk` together | 60 a minute and 100 an hour, whatever session ids are sent | client address |
+| model calls | match agents 3,000 a UTC day (`MATCHCAST_MODEL_CALLS_PER_DAY`), Ask and Talk answers 1,000 (`MATCHCAST_ANSWER_CALLS_PER_DAY`), so a question loop cannot turn the commentary to rules; `MATCHCAST_MODEL_OFF=true` stops them all | one api process; a refused call falls back to the rules twin (ADR-0014) and is audited as `fallback_used` |
 | `/ds/ask` | 5 a minute | client address |
 | `/vision/identify` | 15 a minute and 3,000 in total (`VISION_MAX_CALLS`) | one api process (a cost cap, shared by all callers) |
 | `/speech/token` | 10 a minute | IP |
 
-Limits are kept in memory in the single `api` replica (ADR-0005). When `CORS_ORIGINS` (a comma list of origins) is set the api answers those origins and exposes `Retry-After`, so a cross-origin browser can read it on a 429; with it unset no CORS headers are sent.
+Limits are kept in memory in the single `api` replica (ADR-0005). The model limits are the cost guard (`services/api/app/budget.py`): a viewer needs no sign-in, so a loop of new matches or questions must not be able to spend the Azure budget. Past them the app keeps publishing from the rules agents and only model spend stops. The kill switch takes effect with `az containerapp update -g rg-matchcast -n ca-api-matchcast-dev --set-env-vars MATCHCAST_MODEL_OFF=true` (a new revision; the next provision clears it). When `CORS_ORIGINS` (a comma list of origins) is set the api answers those origins and exposes `Retry-After`, so a cross-origin browser can read it on a 429; with it unset no CORS headers are sent.
 
 ## Seeded bad claim (demo cue)
 

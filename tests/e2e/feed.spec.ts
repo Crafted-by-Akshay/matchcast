@@ -51,6 +51,7 @@ test('Ask counts from the event log and says so', async ({ page }) => {
 });
 
 test('Broadcast card draws the feed lines it is given', async ({ page }) => {
+  test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
@@ -73,6 +74,14 @@ test('a talk order always gets a reply in the chat, checked or not', async ({ pa
   // no agent api in this test: the rules fallback answers in the chat, inside the role bounds, rather than staying silent
   await expect.poll(() => f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).length), { timeout: 20_000 }).toBeGreaterThan(0);
   await expect(f.locator('#tk-note')).toContainText('Rules fallback', { timeout: 20_000 });
+});
+
+test('a typed question with no agent api says plainly that it cannot answer here, and gives no "I hear you"', async ({ page }) => {
+  test.setTimeout(300_000);
+  const f = await openWatch(page);
+  await f.evaluate(() => { const w = window as any; w.__tp = w.__mc.players[0]; w.mcTalkApi(w.__tp, 'Where should you pass next?'); });
+  await expect.poll(() => f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).join('|')), { timeout: 20_000 }).toContain("can't act on or answer that here");
+  expect(await f.evaluate(() => (window as any).__mcTalkLog((window as any).__tp).join('|'))).not.toContain('I hear you');
 });
 
 test('the booth calls the play between the key events, counted from the actions', async ({ page }) => {
