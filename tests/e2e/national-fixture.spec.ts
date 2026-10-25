@@ -3,6 +3,9 @@ import { collectErrors, openShell, viewFrame } from './helpers';
 
 // A national-team fixture (fx.national) has synthetic squads and no recorded result: it is the default pick when present,
 // the match bar says "Synthetic squad" instead of "Recorded", and the Analyst is not routed to a run that does not exist.
+// every season club in apps/unified/shared/clubs.json: a national fixture must not show one of them
+const SEASON_CLUBS = /Harbor City|Ridgeview|Coloso Ciudad|Navigli United|Thames Rovers|Montaña CF|Guanabara FC|Lombardia Nord/;
+
 test('a national fixture is the default, says Synthetic squad, and is not routed to the Analyst', async ({ page }) => {
   const errs = collectErrors(page);
   await page.route('**/shared/fixtures.json', async (rt) => {
@@ -35,13 +38,13 @@ test('the shipped Argentina v Brazil fixture is the default and shows no score',
   await expect(page.locator('#score-l')).toHaveText('Synthetic squad');
 });
 
-// Before kick-off the Broadcast caption must not name a season club on a national fixture. The shipped N001 is Argentina v Brazil.
+// The pre-kick-off caption must not name a season club on a national fixture. The wording is set at build time (build.py NEUTRAL), so this guards that text, not names().
 test('the Broadcast caption does not name a season club on a national fixture', async ({ page }) => {
   await openShell(page, 'broadcast', '?seed=2026&fx=N001');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 120_000 }).toMatch(/Kick-off|Players are out/);
   const caption = await f.locator('#cap1').textContent();
-  expect(caption, 'the caption names no season club').not.toMatch(/Harbor City|Ridgeview|Coloso Ciudad/);
+  expect(caption, 'the caption names no season club').not.toMatch(SEASON_CLUBS);
 });
 
 // Once the national match runs, the Broadcast scoreboard names the fixture's clubs (the shipped N001 is Argentina v Brazil).
@@ -69,7 +72,7 @@ test.fixme('no visible desk line names a season club on a national fixture', asy
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       const t = (n.textContent || '').trim();
       const el = n.parentElement;
-      if (!el || !/Harbor City|Ridgeview|Coloso Ciudad|Navigli United|Thames Rovers|Montaña CF|Guanabara FC|Lombardia Nord/.test(t)) continue;
+      if (!el || !SEASON_CLUBS.test(t)) continue;
       const cs = getComputedStyle(el);
       if (cs.display !== 'none' && cs.visibility !== 'hidden' && el.getBoundingClientRect().width > 0 && !el.closest('[hidden]')) out.push(t.slice(0, 80));
     }
