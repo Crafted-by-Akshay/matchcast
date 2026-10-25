@@ -832,15 +832,13 @@ class MatchWorkflow:
                     raise failure
 
     def _call_aired(self, task: ProducerTask) -> bool:
-        """Some play-by-play line of this moment was not turned away (or the moment has none)."""
+        """Some play-by-play line of this moment passed its checks (or the moment has none)."""
         calls = [
             ln
             for ln in self.store.lines(self.sk)
             if ln.moment_id == task.moment_id and ln.persona == "booth:pbp"
         ]
-        return not calls or any(
-            ln.status not in ("rejected", "abstained", "killed") for ln in calls
-        )
+        return not calls or any(ln.status in ("verified", "approved", "published") for ln in calls)
 
     def _wants_desk(self, task: ProducerTask) -> bool:
         # priority 1 always; any other moment only when the Producer asked for it
