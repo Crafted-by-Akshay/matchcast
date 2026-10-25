@@ -49,7 +49,9 @@ def test_lines_that_passed_a_check_or_a_person_are_remembered(match, status) -> 
     assert [beat["text"] for beat in already_said(ctx, g["payload"])] == ["A passed goal line."]
 
 
-@pytest.mark.parametrize("status", ["drafted", "verifying", "review", "rejected", "killed"])
+@pytest.mark.parametrize(
+    "status", ["drafted", "verifying", "repairing", "abstained", "review", "rejected", "killed"]
+)
 def test_lines_not_yet_passed_are_never_remembered(match, status) -> None:
     g = goal(match)
     ctx = context(match, [line("a", g, "An unchecked goal line.", status)])
@@ -90,7 +92,32 @@ def test_the_producer_is_told_what_was_already_said(match) -> None:
     )
     run(LiveProducer(client, ProducerRules()).decide(ctx, shot))
     assert client.calls, "an on-target shot is a priority 2 moment, so the model decides it"
-    assert '"already_said_about_this_play"' in client.calls[0]["user"]
+    assert "Northgate FC lead." in client.calls[0]["user"]
+
+
+def test_lines_in_the_same_minute_keep_their_order(match) -> None:
+    g = goal(match)
+    later = dict(g, event_id="g-later", stream_sequence=g["stream_sequence"] + 1)
+    ctx = MatchContext(
+        match["roster"]["stream"],
+        match["roster"],
+        match["names"],
+        match["teams"],
+        MatchState(),
+        (g, later),
+    )
+    # the later line is listed first, so only the sequence can put the two in order
+    ctx.extra["storylines"] = storylines(
+        ctx, [line("b", later, "Second.", "verified"), line("a", g, "First.", "verified")]
+    )
+    assert [beat["text"] for beat in already_said(ctx, g["payload"])] == ["First.", "Second."]
+
+
+def test_the_cut_for_a_talk_leaves_out_the_storylines(match) -> None:
+    g = goal(match)
+    ctx = context(match, [line("a", g, "A passed goal line.", "verified")])
+    assert "storylines" in ctx.extra
+    assert "storylines" not in ctx.as_of().extra
 
 
 def test_agents_see_at_most_the_latest_two_lines(match) -> None:
