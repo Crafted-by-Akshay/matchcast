@@ -3,6 +3,7 @@ import { collectErrors, openShell, stepSim, viewFrame } from './helpers';
 
 // Experience lane, continuous commentary feed (apps/unified/feed.js, embed/feed.js): a seeded Watch match keeps a line on screen,
 // Broadcast draws the same feed, Ask counts from the event log, and a talk order always gets a reply in the chat.
+declare const post: (view: string, msg: unknown) => void; // top-level function of the shell
 declare const AG: any;
 
 async function openWatch(page: Page, query = '?seed=2026&speed=4'): Promise<Frame> {
@@ -50,21 +51,30 @@ test('Ask counts from the event log and says so', async ({ page }) => {
   expect(keeper.verdict).toBe('abstained');
 });
 
-test('Broadcast card draws the feed lines it is given', async ({ page }) => {
+test('Broadcast draws the same feed', async ({ page }) => {
   test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
+  // the shell also pushes its own feed, so post again until the whole frame state matches
   const lines = [
     { id: 'l1', minute: 3, text: 'Shot for Thames Rovers. xG 0.12.', kind: 'shot', tone: '', source: 'rules', label: 'Rules · recounted', chain: ['Producer', 'Analyst', 'Narrator', 'Verifier'] },
     { id: 'l2', minute: 4, text: 'GOAL! A header from the corner.', kind: 'goal', tone: 'big', source: 'live', label: 'Live agents · verified', chain: ['Producer', 'Analyst', 'Narrator', 'Verifier', 'Live agents'] },
   ];
-  // the message and the check run in one step inside the card, so the shell's own feed cannot replace the lines in between
-  await expect.poll(() => f.evaluate((items) => {
-    window.dispatchEvent(new MessageEvent('message', { data: { src: 'matchcast-shell', type: 'feed-lines', items } }));
-    const rows = [...document.querySelectorAll('#mcf-list li')];
-    return rows.length === 2 && rows.some((li) => li.classList.contains('big') && /Live agents/.test(li.textContent || '')) && /GOAL! A header/.test(document.getElementById('mcf-top')!.textContent || '');
-  }, lines), { timeout: 15_000 }).toBe(true);
+  await expect.poll(async () => {
+    await page.evaluate((items) => post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items }), lines);
+    return f.evaluate(() => ({
+      top: document.getElementById('mcf-top')!.textContent,
+      rows: document.querySelectorAll('#mcf-list li').length,
+      big: document.querySelector('#mcf-list li.big')?.textContent ?? '',
+    }));
+  }, { timeout: 60_000, message: 'the frame never drew the posted lines' }).toMatchObject({
+    top: expect.stringContaining('GOAL! A header from the corner.'),
+    rows: 2,
+    big: expect.stringContaining('Live agents'),
+  });
+  await f.click('#mcf-tog');
+  await expect(f.locator('#mcf-list')).toBeVisible();
 });
 
 test('a talk order always gets a reply in the chat, checked or not', async ({ page }) => {
