@@ -214,20 +214,22 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const style = document.createElement('style');
   style.textContent = '#mc-feeds{display:flex;flex-direction:column;gap:4px;padding-bottom:6px;border-bottom:1px solid #22395c}'
     + '#mc-feeds ul{margin:0;padding:0;list-style:none}'
+    + '#mc-feed-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px}'   // six feeds in two columns, so the drops are nearer the top of the desk; a cell takes the column's width, the label wraps and the status line ellipsises
     + '#mc-feeds li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #22395c}'
     + '#mc-feeds li>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    + '#mc-feeds li[data-off="true"]{opacity:.6}'
-    + '#mc-feeds .mcp-v{font-size:11px;color:#9fb6d6}';
+    + '#mc-feeds li[data-off="true"]{opacity:.85}'   // a killed feed is the step the viewer must read: its label says so, in full
+    + '#mc-feeds .mcp-v{font-size:12px;color:#c3d4ee}';   // on camera the monitor is read at 1080p: 12 px, not the 11 px of the other notes
   document.head.append(style);
   const box = document.createElement('section');
   box.id = 'mc-feeds'; box.setAttribute('aria-label', 'Six feeds, simulated: what each aired, the drops, and a kill per feed');
   box.innerHTML = '<div class="mcp-row"><b>Feeds</b> <span class="mcp-v">simulated · English · no human approval</span></div>'
     + '<ul id="mc-feed-list">' + FEEDS.map(([k, label]) => '<li data-feed="' + k + '"><b>' + label + '</b><span class="mcp-v"></span><button type="button" data-kill>Kill</button></li>').join('') + '</ul>'
     + '<div><b>Dropped</b> <ul id="mc-drop-list"></ul></div>';
-  document.getElementById('mc-overlay').before(box);
+  document.getElementById('mc-producer').after(box);   // right under the approval queue: a booth line is approved, then a feed airs, then a kill, read top to bottom
   const render = (k) => {
     const s = feeds[k], row = box.querySelector('[data-feed="' + k + '"]');
     row.dataset.off = String(!s.on);
+    row.querySelector('b').textContent = s.label + (s.on ? '' : ' · killed');   // the label carries the kill: the status text beside it is cut to fit a half-width cell
     row.querySelector('span').textContent = (s.on ? '' : 'Killed on this desk · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
     row.querySelector('[data-kill]').textContent = s.on ? 'Kill' : 'Resume';
   };

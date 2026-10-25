@@ -43,12 +43,14 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
 
   await f.locator('[data-feed="casual"] [data-kill]').click();
   await expect(f.locator('[data-feed="casual"]')).toContainText('Killed on this desk');
+  await expect(f.locator('[data-feed="casual"] b')).toHaveText('Casual · killed');   // the label carries the kill in the half-width cell
   await post(page, { type: 'feed-air', record: casual('P3', 'A line that must not count while the feed is killed.') });
   await post(page, { type: 'feed-air', record: { ...casual('S1', 'Sentinel for analyst again.'), feed: 'analyst' } });
   await expect(f.locator('[data-feed="analyst"]')).toContainText('3 aired');
   await expect(f.locator('[data-feed="casual"]')).toContainText('1 aired');
   await f.locator('[data-feed="casual"] [data-kill]').click();
   await expect(f.locator('[data-feed="casual"]')).not.toContainText('Killed');
+  await expect(f.locator('[data-feed="casual"] b')).toHaveText('Casual');
 });
 
 test('the desk keys its dedupe by match: the same ids from another match both count', async ({ page }) => {
