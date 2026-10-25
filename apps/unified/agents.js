@@ -13,7 +13,7 @@ const AG = (() => {
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
     roll: { score: [0, 0], xg: [0, 0], nextXg: 1 },
-    stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0, dropped: 0 } });
+    stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0, dropped: 0 }, aired: new Set() });
   const teamIx = (k) => (!run || k == null) ? -1 : k === run.names.hk ? 0 : k === run.names.ak ? 1 : -1;
   const teamName = (t) => (t === 0 ? run.names.home : run.names.away);
   const min = (m) => Math.floor(m) + "'";
@@ -277,11 +277,14 @@ const AG = (() => {
   // A line the server Verifier dropped (contract 1.2.0 `feed_drop`, docs/contracts.md): a card in the Agents tab with the Verifier's closed reason_code and the api's audit_id.
   // Its text is not on the stream (it stays in the audit chain), so the card has none. A line that aired is never turned into a drop: a dropped translation is a note on it (trace-panel.js).
   const sstr = (x, n) => (typeof x === 'string' ? x : Number.isFinite(x) ? String(x) : '').slice(0, n || 120);
+  const noteAired = (id) => { if (run && typeof id === 'string' && id) run.aired.add(id.slice(0, 200)); };
   const ingestDrop = (d, status) => {
     if (!run || !d || typeof d !== 'object') return false;
     const id = sstr(d.publication_id, 200); if (!id) return false;
+    if (d.reason_code === 'translation' || run.aired.has(id)) return false;   // a dropped translation means the English line aired; a line the page has seen air is not a drop
     let c = run.claims.find((x) => x.id === id);
     if (c && !c.dropped) return false;
+    if (!c && run.stat.dropped >= 500) return false;
     const code = sstr(d.reason_code, 60), feed = sstr(d.feed, 40), ms = Number(d.match_time_ms);
     const fresh1 = !c;
     if (!c) {
@@ -290,9 +293,10 @@ const AG = (() => {
       run.claims.push(c); run.stat.dropped = (run.stat.dropped || 0) + 1;
       hop(c, 'verifier', 'dropped');
     }
-    c.feed = feed; c.reasonCode = code; c.auditId = sstr(d.audit_id, 200); c.repairs = Number.isFinite(d.repair_count) ? d.repair_count : null;
+    c.feed = feed; c.reasonCode = code; c.auditId = sstr(d.audit_id, 200); c.repairs = Number.isInteger(d.repair_count) && d.repair_count >= 0 ? d.repair_count : null;
+    c.eventIds = (Array.isArray(d.source_event_ids) ? d.source_event_ids : []).map((x) => sstr(x, 60)).filter(Boolean).slice(0, 50);
     c.reason = 'Verifier dropped' + (code ? ' · ' + code : '') + (c.repairs ? ' after ' + c.repairs + ' repair' : '');
-    if (fresh1) say('Verifier', c.minute, 'dropped a ' + (feed || 'feed') + ' line' + (code ? ': ' + code : '') + '. The text stays in the audit chain.', 'warn');
+    if (fresh1) say('Verifier', c.minute, 'dropped a line on the ' + (feed || 'unnamed') + ' feed' + (code ? ': ' + code : '') + '. The text stays in the audit chain.', 'warn');
     changed(); return true;
   };
 
@@ -329,6 +333,10 @@ const AG = (() => {
       run.claims.push(c);
       c.seenAt = clock();
       if (!c.pub) hop(c, 'analyst', 'claim');
+    }
+    if (d.publication_id) {   // the line aired: the page now knows it, and a drop card made before its publication arrived becomes the published line it is
+      run.aired.add(String(d.publication_id).slice(0, 200));
+      if (c.dropped) { c.dropped = false; c.pub = true; c.kind = 'line'; c.agent = 'analyst'; c.approval = undefined; c.route = null; c.reasonCode = ''; run.stat.dropped = Math.max(0, run.stat.dropped - 1); }
     }
     // contract 1.2.0 optional claim fields (docs/contracts.md, Derived feed lines): ids only, kept for the evidence trace
     if (Array.isArray(d.tool_call_ids)) c.toolCallIds = d.tool_call_ids.filter((x) => typeof x === 'string').slice(0, 50);
@@ -370,5 +378,5 @@ const AG = (() => {
     c.hops.push({ agent, step, mode: c.source === 'model' ? 'model' : 'rules', ms: c.seenAt != null ? +(clock() - c.seenAt).toFixed(0) : null });
   };
   const queue = () => (run ? run.claims.filter((c) => c.approval === 'pending').map((c) => Object.assign(air(c), { approval: 'pending', waiting_ms: Math.round(clock() - c.born), escalated: !!c.escalated, escalation: c.escalation || null })) : []);
-  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending' && !x.escalated)) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, ingestDrop, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending' && !x.escalated)) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, ingestDrop, noteAired, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();
