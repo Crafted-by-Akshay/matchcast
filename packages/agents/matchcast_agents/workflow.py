@@ -24,6 +24,7 @@ from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip,
 from .personas import BOOTH, MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
+from .rules.producer import BOOTH_MOMENTS
 from .safety import LocalSafetyScreen, SafetyScreen
 from .season_clubs import season_code
 from .state import MatchState, apply
@@ -253,7 +254,7 @@ class MatchWorkflow:
     # ---- helpers -----------------------------------------------------------------------
 
     def _ctx(self) -> MatchContext:
-        return MatchContext(
+        ctx = MatchContext(
             stream=self.stream,
             roster=self.roster,
             names=self.names,
@@ -264,6 +265,11 @@ class MatchWorkflow:
             truth=tuple(self._truth_feed()) if self._truth_feed else (),
             extra={"history": self.history} if self.history else {},
         )
+        if all(p in (*self.config.personas, *self.extra_personas) for p in BOOTH):
+            ctx.extra["booth"] = (
+                True  # kick-off and quiet-spell moments only when a viewer has the booth
+            )
+        return ctx
 
     def vision_summary(self) -> dict[str, Any]:
         """What Vision contributes on this stream: passes in, the lines the Verifier passed on them,
@@ -457,7 +463,12 @@ class MatchWorkflow:
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
-        if isinstance(decision, ProducerTask) and self.extra_personas:
+        if (
+            isinstance(decision, ProducerTask)
+            and self.extra_personas
+            and decision.reason
+            not in BOOTH_MOMENTS  # the booth's own moments keep the booth voices
+        ):
             # a colour moment is the analyst's line (and the booth's), never a watch mode's
             extra = [p for p in self.extra_personas if decision.reason != "colour" or p in BOOTH]
             both = dict.fromkeys([*decision.personas, *extra])
