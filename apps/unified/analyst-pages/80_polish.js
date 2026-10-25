@@ -2,6 +2,7 @@
 {
   const st = document.createElement('style');
   st.textContent = '.mc-src{margin-left:6px;white-space:nowrap}'
+    + '#top .brand em,#top .tenant small,#top #search kbd,#top .envtag,#nav .ng,.kpi .k{font-size:12px!important}'   // type floor: 12 px for the text that was 10 to 11 px (UX review pass 6, finding 18)
     // phone: the indices table stacks label and value, the sparkline fills the row; the Copilot button keeps its name
     + '@media (max-width:560px){'
     + '#idx-panel .tbl tr{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;padding:8px 0;border-top:1px solid var(--line)}'
