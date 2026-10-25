@@ -342,3 +342,14 @@ def test_history_metrics_need_history_and_stay_off_the_analysts_menu(match) -> N
         raise AssertionError("a match without history must not make up a rating")
     bare = verdict(plain, line("Northgate FC are rated 1843."), [claim(plain, "elo:home", 1843)])
     assert bare.reason_code == "number_mismatch"
+
+
+def test_history_subject_must_be_a_side_of_the_match_and_elo_rounds_half_up(match) -> None:
+    import dataclasses
+
+    ctx = dataclasses.replace(
+        with_history(match), extra={"history": {**HISTORY, "elo": {"home": 1842.5, "away": 1800}}}
+    )
+    assert verdict(ctx, line("Rated 1843."), [claim(ctx, "elo:home", 1843)]).verdict == "verified"
+    stray = verdict(ctx, line("They have met 12 times."), [claim(ctx, "h2h_played:nobody", 12)])
+    assert stray.reason_code == "number_mismatch"
