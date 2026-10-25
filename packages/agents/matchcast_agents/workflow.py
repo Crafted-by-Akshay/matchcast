@@ -77,10 +77,8 @@ ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale
 RUNDOWN_KEEP = 400
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
-# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1).
-# History is built but not in the pool: a goal's four slots go to the four above, so it has no slot
-# until the planner's cap is decided (see 04-agents.md §2.1).
-SPAWN_POOL = ("replay", "tactics", "stats", "rhythm")
+# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1)
+SPAWN_POOL = ("replay", "tactics", "stats", "rhythm", "history")
 QUIET_SPAWNS_PER_MATCH = 40  # the quiet moments' own allowance, apart from the priority-1 pool
 
 

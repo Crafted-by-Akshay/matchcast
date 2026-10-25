@@ -88,3 +88,12 @@ def test_every_specialist_in_the_workflow_pool_is_planned_for_some_moment() -> N
         )
         planned |= {r.name for r in plan.requests}
     assert planned == set(SPAWN_POOL)
+
+
+def test_a_priority_one_moment_spawns_all_five_specialists_of_the_pool() -> None:
+    """A goal or red card fans out to every specialist in the pool, History included."""
+    from matchcast_agents.workflow import SPAWN_POOL
+
+    plan = plan_spawns(priority=1, moment_id="m-1", available=SPAWN_POOL, budget=SpawnBudget(50))
+    assert [r.name for r in plan.requests] == list(SPAWN_POOL)
+    assert "history" in SPAWN_POOL
