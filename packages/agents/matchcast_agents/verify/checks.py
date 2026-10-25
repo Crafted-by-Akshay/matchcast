@@ -214,13 +214,21 @@ def check_persona(line: DraftLine) -> Check:
     return Check(name="persona", passed=True, detail="within persona limits")
 
 
+# words many clubs share: on their own they do not name one
+CLUB_WORDS = frozenset("united city town real athletic rovers county".split())
+
+
 def is_generic(ctx: MatchContext, text: str) -> bool:
     """A reaction that names no player, no club and carries no number could be said of any match."""
     if extract_numbers(text):
         return False
-    words = {w.casefold() for w in re.findall(r"[\w'’-]+", text)}
-    named = {w.casefold() for n in (*ctx.names.values(), *ctx.clubs.values()) for w in n.split()}
-    return not (words & {w for w in named if len(w) >= 3 and w not in OPENERS})
+    words = {w.casefold() for w in re.findall(r"\w+", text)}  # "Dunne's" -> dunne, "s"
+    named = {
+        w.casefold()
+        for n in (*ctx.names.values(), *ctx.clubs.values())
+        for w in re.findall(r"\w+", n)
+    }
+    return not (words & {w for w in named if len(w) >= 3 and w not in OPENERS | CLUB_WORDS})
 
 
 def check_specific(ctx: MatchContext, line: DraftLine) -> Check:

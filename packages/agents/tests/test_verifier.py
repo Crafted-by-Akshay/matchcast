@@ -364,5 +364,8 @@ def test_a_generic_booth_colour_line_is_refused_and_a_specific_one_passes(match)
     assert bad.verdict == "rejected" and bad.reason_code == "unsupported_statement"
     for text in ("Northgate FC are pressing higher now.", f"{shots} shots says they are brave."):
         assert verdict(ctx, line(text, "booth:colour", 180), [c]).verdict != "rejected", text
+    for text in ("Northgate's shape is stretching.", "Northgate’s press is high."):
+        assert verdict(ctx, line(text, "booth:colour", 180), [c]).verdict != "rejected", text
+    assert verdict(ctx, line("United look flat.", "booth:colour", 180), [c]).verdict == "rejected"
     # only the colour voice has to be specific
     assert verdict(ctx, line("The ball is in play.", "booth:pbp", 180), [c]).verdict != "rejected"
