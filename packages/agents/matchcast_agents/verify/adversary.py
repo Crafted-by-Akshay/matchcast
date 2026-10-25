@@ -40,7 +40,12 @@ def score_attribution(
     only asks that each number is some claim's value, so "Harbour United 1" would pass for a
     score of Northgate FC 1, Harbour United 0 that has its two sides swapped."""
     for team, club in ctx.clubs.items():
-        own = [c for c in claims if c["metric"].split(":", 1)[1] == team]
+        # a meetings count is about the pair, not a score of either side, so it is never "own"
+        own = [
+            c
+            for c in claims
+            if c["metric"].split(":", 1)[1] == team and not c["metric"].startswith("h2h_")
+        ]
         pattern = rf"(?<!\w){re.escape(club)}\s+(\d+(?:\.\d+)?)(?!\w)(?!\.\d)"
         for match in re.finditer(pattern, draft.text):
             if not any(_within(float(match.group(1)), c) for c in own):

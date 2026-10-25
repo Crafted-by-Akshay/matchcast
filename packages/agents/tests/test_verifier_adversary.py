@@ -100,6 +100,15 @@ def test_a_swapped_score_is_falsified_by_the_attribution_attempt(match) -> None:
     assert failed_names(result.checks) == ["adversary:score_attribution"]
 
 
+def test_a_meetings_count_is_not_a_score_for_its_club(match) -> None:
+    """The head-to-head claim names a side, but it counts meetings: "Northgate FC 3" is not backed
+    by three meetings on record."""
+    ctx = context(match)
+    draft = line("Northgate FC 3.")
+    checks = adversary.adversary_checks(ctx, draft, [claim(ctx, f"h2h_played:{ctx.home}", 3)])
+    assert "adversary:score_attribution" in failed_names(checks)
+
+
 def test_a_minute_no_claim_carries_is_falsified(match) -> None:
     ctx = context(match)  # the claims are 4.3 minutes in
     draft = line("Harbour United have scored at minute 2.")

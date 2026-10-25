@@ -6,9 +6,12 @@ from pathlib import Path
 import pytest
 from app import matches
 from app.main import create_app
+from app.matches import wanted_on_stream
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 from matchcast_agents.grading import SEED_RATE
+from matchcast_agents.hub import StreamEvent
+from matchcast_agents.personas import BOOTH
 from matchcast_contracts import validate
 from matchcast_contracts.audit import verify_chain
 
@@ -37,6 +40,16 @@ def post_all(client: TestClient) -> None:
             "/v1/matches/match-short/events", params=Q, json={"events": events[start : start + 50]}
         )
         assert response.status_code == 202, response.text
+
+
+def register_booth(client: TestClient) -> None:
+    # the derived feeds (casual, analyst) never wait for the producer; only booth lines do
+    assert client.get("/v1/matches/match-short/booth", params=Q).json()["ready"]
+
+
+def waiting_lines(client: TestClient, headers: dict[str, str] | None = None) -> list[dict]:
+    items = client.get("/v1/matches/match-short/lines", params=Q, headers=headers).json()["items"]
+    return [ln for ln in items if ln["status"] == "verified"]
 
 
 @pytest.fixture
@@ -120,6 +133,24 @@ def test_stream_replays_publications_then_audit_as_sse(client: TestClient) -> No
     assert f"id: {first_audit}\n" not in later.text
 
 
+def _event(name: str, data: dict) -> StreamEvent:
+    return StreamEvent(event=name, id=None, data=data)
+
+
+def test_feed_records_reach_every_stream_and_publications_stay_per_persona() -> None:
+    # AB#499: the desk monitor counts all six feeds from whichever lens is open, so derived feed
+    # records reach every stream; publications still belong to their persona
+    casual = ("casual",)
+    booth = tuple(BOOTH)
+    for keep in ((), casual, ("broadcast",), booth):
+        assert wanted_on_stream(_event("onair", {"feed": "analyst"}), keep)
+        assert wanted_on_stream(_event("feed_drop", {"feed": "casual"}), keep)
+        assert wanted_on_stream(_event("line_verified", {"persona": "analyst"}), keep)
+    assert wanted_on_stream(_event("publication", {"persona": "casual"}), casual)
+    assert not wanted_on_stream(_event("publication", {"persona": "analyst"}), casual)
+    assert wanted_on_stream(_event("publication", {"persona": "analyst"}), ("analyst",))
+
+
 def test_bad_batch_is_a_problem_with_the_event_index(client: TestClient) -> None:
     create(client)
     events = json.loads(json.dumps(FIXTURE["events"][:3]))
@@ -154,14 +185,18 @@ def test_roster_for_another_match_is_rejected(client: TestClient) -> None:
 def test_producer_approval_flow_and_role_gate(client: TestClient) -> None:
     client.app.state.matches.require_role = True  # type: ignore[attr-defined]
     create(client, approval_mode="producer")
+    register_booth(client)
     producer = {"X-MatchCast-Role": "Producer"}
     events = FIXTURE["events"][:60]
     client.post("/v1/matches/match-short/events", params=Q, json={"events": events[:50]})
     client.post("/v1/matches/match-short/events", params=Q, json={"events": events[50:]})
 
     assert client.get("/v1/matches/match-short/lines", params=Q).status_code == 403
-    queue = client.get("/v1/matches/match-short/lines", params=Q, headers=producer).json()["items"]
-    assert queue and {ln["status"] for ln in queue} == {"verified"}
+    queue = waiting_lines(client, producer)
+    assert queue
+    booth_rows = client.get("/v1/matches/match-short/lines", params=Q, headers=producer).json()
+    booth_rows = [ln for ln in booth_rows["items"] if ln["persona"].startswith("booth:")]
+    assert {ln["status"] for ln in booth_rows} == {"verified"}  # the whole booth queue waits
 
     ids = {"session_id": "short", "match_id": "match-short"}
     denied = client.post(f"/v1/lines/{queue[0]['line_id']}/approve", json=ids)
@@ -394,10 +429,23 @@ def test_a_rebuilt_match_keeps_its_approval_mode_and_demo_seed() -> None:
     restarted.app.state.matches.store = first.app.state.matches.store
     info = restarted.get("/v1/matches/match-short", params=Q).json()
     assert info["approval_mode"] == "producer"
+    register_booth(restarted)
     post_all(restarted)  # the seeded wrong claim still fires and is rejected
     assert _rejections(restarted)
-    published = restarted.get("/v1/matches/match-short/lines", params=Q).json()["items"]
-    assert not [ln for ln in published if ln["status"] in ("approved", "published")]
+    lines = restarted.get("/v1/matches/match-short/lines", params=Q).json()["items"]
+    booth = [ln for ln in lines if ln["persona"].startswith("booth:")]
+    assert not [ln for ln in booth if ln["status"] in ("approved", "published")]
+    # derived lines air on verify in every mode, so the seed is checked on them through the
+    # rejected drafts: a rejected line never airs under its own id (its repair is a new line)
+    rejected = {r["subject_id"] for r in _rejections(restarted)}
+    aired = {ln["line_id"] for ln in lines if ln["status"] in ("approved", "published")}
+    assert rejected and not rejected & aired
+    # the seeded claim is the one the rejected lines cite: no aired line may cite it either
+    seeded = {c for ln in lines if ln["status"] == "rejected" for c in ln["claim_ids"]}
+    cited = {
+        c for ln in lines if ln["status"] in ("approved", "published") for c in ln["claim_ids"]
+    }
+    assert seeded and not seeded & cited
 
 
 def test_a_match_rebuilt_past_the_cue_does_not_fire_the_seed_again() -> None:
@@ -581,10 +629,11 @@ def test_easy_auth_approval_records_the_signed_in_name_in_the_audit(
     monkeypatch.setenv("MATCHCAST_EASY_AUTH", "1")
     client.app.state.matches.require_role = True  # type: ignore[attr-defined]
     create(client, approval_mode="producer")
+    register_booth(client)
     events = FIXTURE["events"][:60]
     client.post("/v1/matches/match-short/events", params=Q, json={"events": events[:50]})
     client.post("/v1/matches/match-short/events", params=Q, json={"events": events[50:]})
-    queue = client.get("/v1/matches/match-short/lines", params=Q, headers=headers).json()["items"]
+    queue = waiting_lines(client, headers)
     ids = {"session_id": "short", "match_id": "match-short"}
     ok = client.post(f"/v1/lines/{queue[0]['line_id']}/approve", json=ids, headers=headers)
     assert ok.status_code == 200
@@ -924,13 +973,13 @@ def test_a_desk_feed_kill_and_resume_are_audited(
         headers=producer,
     )
     assert killed.status_code == 200 and killed.json()["state"] == "killed"
-    assert killed.json()["enforced"] is False and killed.json()["audit_id"]
+    assert killed.json()["enforced"] is True and killed.json()["audit_id"]
     resumed = client.post("/v1/matches/match-short/feeds/casual/resume", json=ids, headers=producer)
     assert resumed.status_code == 200 and resumed.json()["state"] == "live"
     audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
     actions = [r["action"] for r in audit if r["subject_id"] == "casual"]
     assert actions == ["feed_killed", "feed_resumed"]
-    assert all(r["details"]["enforced"] is False for r in audit if r["subject_id"] == "casual")
+    assert all(r["details"]["enforced"] is True for r in audit if r["subject_id"] == "casual")
     assert published.count("audit") == 2  # each switch reaches the live audit stream
     assert verify_chain(audit)["valid"] is True
 
@@ -972,6 +1021,25 @@ def test_a_recorded_live_run_replaces_the_rules_arms_with_its_run_id(
     assert board["arms"]["full_crew"]["mode"] == "precomputed"
     assert board["arms"]["full_crew"]["run_id"] == "full_crew-live"
     assert "run full_crew-live" in board["arms"]["full_crew"]["label"]
+
+
+def test_lines_route_withholds_the_text_of_a_safety_refused_line() -> None:
+    from matchcast_agents.messages import LineRecord
+
+    refused = LineRecord(
+        line_id="l1",
+        moment_id="m1",
+        claim_ids=["c1"],
+        persona="casual",
+        text="something unsafe",
+        status="rejected",
+        reason_code="unsafe_content",
+        created_at="2026-10-25T00:00:00Z",
+        snapshot_revision=1,
+    )
+    out = matches._line_json(refused)
+    assert out["text"] != "something unsafe" and "unsafe" not in out["text"].replace("Safety", "")
+    assert out["status"] == "rejected" and out["reason_code"] == "unsafe_content"
 
 
 def test_the_scoreboard_is_three_rules_arms_and_is_labelled_rules(client: TestClient) -> None:

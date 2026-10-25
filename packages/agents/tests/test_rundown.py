@@ -10,12 +10,15 @@ from matchcast_agents.workflow import MatchSpawnBudgets, WorkflowError
 
 
 def build(
-    match, store: MemoryStore, spawn_budgets: MatchSpawnBudgets | None = None
+    match,
+    store: MemoryStore,
+    spawn_budgets: MatchSpawnBudgets | None = None,
+    history: dict | None = None,
 ) -> MatchWorkflow:
     return MatchWorkflow(
         stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
         clubs=match["teams"], agents=rules_agents(), config=WorkflowConfig(), store=store,
-        clock=fixed_clock(), spawn_budgets=spawn_budgets,
+        clock=fixed_clock(), spawn_budgets=spawn_budgets, history=history,
     )  # fmt: skip
 
 
@@ -30,7 +33,7 @@ def test_a_goal_gets_an_entry_naming_the_agents_it_called(match) -> None:
     entry = entry_for(flow, goal)
     spawned = {s["name"] for s in entry["spawns"]}
     assert set(entry["called"]) == {"analyst", "narrator", "verifier"} | spawned
-    assert spawned == {"replay", "tactics", "stats", "rhythm"}
+    assert spawned == {"replay", "tactics", "stats", "rhythm", "history"}
     assert entry["skipped"] == ["stats_desk"]  # no Stats Desk is wired into this build
     assert entry["why"] == "goal"
     assert entry["routed_by"] == "rules"

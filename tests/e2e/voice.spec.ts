@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     (window as any).__spoken = [];
     (window as any).SpeechSynthesisUtterance = function (this: any, t: string) { this.text = t; };
-    Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u: any) => { (window as any).__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 10); }, cancel() {} }, configurable: true });
+    Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u: any) => { (window as any).__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 10); }, cancel() {}, getVoices: () => [] }, configurable: true });
   });
 });
 

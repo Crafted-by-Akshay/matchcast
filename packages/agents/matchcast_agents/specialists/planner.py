@@ -1,6 +1,6 @@
 """Spawn planner: how many specialists the Showrunner calls for one moment (CREW-2.1, AB#385).
 
-Importance sets the number. A priority-1 moment (a goal or a red card) gets up to four specialists,
+Importance sets the number. A priority-1 moment (a goal or a red card) gets up to five specialists,
 all run in parallel. Any other moment gets at most one, so a quiet pass costs less than a goal.
 Two budgets stop the spawns: priority-1 moments draw on one pool, every other moment on a quiet
 pool, so quiet play cannot use up a goal's specialists. When the pool it draws on is spent, the
@@ -12,9 +12,12 @@ from dataclasses import dataclass
 
 from .base import SpawnRequest
 
-PRIORITY_ONE_CAP = 4
+PRIORITY_ONE_CAP = (
+    5  # every specialist in the pool: a goal's historical comparison is the best line
+)
 OTHER_CAP = 1
-SPAWNS_PER_MATCH = 60  # a cost guard, not a target: a match has a few dozen priority-1 moments
+SPAWNS_PER_MATCH = 60  # a cost guard, not a target: at five a moment it covers twelve goals or
+# red cards; the later ones get "budget exhausted" and go without Rhythm and History
 
 # the specialists built so far; a name not listed here is not spawned, whatever the pool says
 OBJECTIVES = {

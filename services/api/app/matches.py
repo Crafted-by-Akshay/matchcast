@@ -46,7 +46,7 @@ from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
 from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
-from matchcast_agents.workflow import WorkflowError
+from matchcast_agents.workflow import WorkflowError, feed_kills_in, public_line
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
@@ -133,7 +133,7 @@ class MatchCreate(BaseModel):
     names: dict[str, str] = Field(default_factory=dict)
     clubs: dict[str, str] = Field(default_factory=dict)
     approval_mode: Literal["auto", "producer"] = "auto"
-    hold_booth: bool = False  # with approval_mode producer: hold the booth voices too
+    hold_booth: bool = True  # with approval_mode producer: hold the booth voices for the producer
     seed_bad_claim: bool = False
     seed_bad_claim_at_ms: int = Field(default=720_000, ge=0)
     # descriptive fields from docs/architecture/12-api.md; stored with the match, not used by agents
@@ -465,7 +465,7 @@ class Registry:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
             config = WorkflowConfig(
                 approval_mode=info.get("approval_mode", "auto"),
-                hold_booth=bool(info.get("hold_booth", False)),
+                hold_booth=bool(info.get("hold_booth", True)),
             )
             live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
@@ -496,6 +496,11 @@ class Registry:
                 vision_feed=self.vision_feed_for(session_id, match_id),
                 spawn_budgets=self.spawn_budgets_for(session_id, match_id),
             )
+            if is_vision_stream({"session_id": session_id}):
+                # a Vision match created after a desk kill must not air from the killed feed
+                flow.killed_feeds |= await asyncio.to_thread(
+                    _engine_kills, self.store, session_id, match_id
+                )
             self.flows[key] = flow
             return flow
 
@@ -549,6 +554,29 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "local"
 
 
+def wanted_on_stream(item: StreamEvent, keep: tuple[str, ...]) -> bool:
+    """Whether a viewer reading the personas in `keep` gets this event (empty keep: all of them).
+
+    Publications belong to the persona they were written for. Line records and derived feed
+    records (onair, feed_drop) stay on every stream: the desk monitor counts the six feeds from
+    whichever lens is open, and it reads them by feed key (AB#499)."""
+    if not keep:
+        return True
+    if item.event == "publication":
+        return item.data["persona"] in keep
+    return True
+
+
+def _engine_kills(store: Any, vision_session: str, match_id: str) -> set[str]:
+    """The desk's feed kills on a Vision session's engine match, from its audit chain (AB#499)."""
+    engine = {
+        "tenant_id": TENANT,
+        "session_id": engine_stream_of(vision_session),
+        "match_id": match_id,
+    }
+    return feed_kills_in(store, stream_key(engine))
+
+
 def _is_stored(store: Any, sk: str) -> bool:
     hydrate = getattr(store, "hydrate", None)
     if hydrate is not None:
@@ -557,7 +585,7 @@ def _is_stored(store: Any, sk: str) -> bool:
 
 
 def _line_json(line: LineRecord) -> dict[str, Any]:
-    return line.model_dump()
+    return public_line(line)
 
 
 def _claim_verdict(lines: list[LineRecord], claim_id: str) -> str:
@@ -728,6 +756,10 @@ def build_router(registry: Registry) -> APIRouter:
                 raise Problem(
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
+            if is_vision_stream(stream):  # the Vision match is created after the desk's kills
+                flow.killed_feeds |= _engine_kills(
+                    registry.store, stream["session_id"], stream["match_id"]
+                )
             registry.flows[key] = flow
             registry.cuts[key] = cut
             registry.count_new_match(request, live)
@@ -841,10 +873,7 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
-            # publications belong to the persona they were written for; line records stay on
-            # every stream because the Broadcast producer queue reads all personas' lines
-            own = item.event == "publication" and keep
-            return not (own and item.data["persona"] not in keep)
+            return wanted_on_stream(item, keep)
 
         async def localised(item: StreamEvent) -> StreamEvent:
             """The publication with a checked `variants[lang]`, or untouched (English)."""
@@ -1009,11 +1038,20 @@ def build_router(registry: Registry) -> APIRouter:
         flow = await registry.flow_for(body.session_id, match_id)
         reason = body.reason or ("killed on desk" if killed else "resumed")
         record = await flow.set_feed(feed, killed, reason, actor[0], actor[1])
+        if not is_vision_stream({"session_id": body.session_id}):
+            # the Vision session is its own workflow and its analyst lines air too: the kill
+            # reaches it, so a Vision pass cannot air from a feed the desk has killed
+            try:
+                vision = await registry.flow_for(f"{body.session_id}.vision", match_id)
+            except Problem:  # no Vision match was ever created: nothing from it can air
+                vision = None
+            if vision is not None:
+                await vision.set_feed(feed, killed, reason, actor[0], actor[1])
         return {
             "feed": feed,
             "state": "killed" if killed else "live",
             "audit_id": record["audit_id"],
-            "enforced": False,
+            "enforced": True,
         }
 
     @router.post("/matches/{match_id}/feeds/{feed}/kill")
