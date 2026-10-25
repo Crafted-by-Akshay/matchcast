@@ -27,7 +27,9 @@
     "pressure.json",
     "audit-record.json",
     "onair.json",
-    "feed-drop.json"
+    "feed-drop.json",
+    "crew-ledger.json",
+    "crew-spawn.json"
   ],
   "invalid": [
     {
@@ -523,6 +525,16 @@
     },
     {
       "file": "invalid/onair-old-version.json",
+      "code": "invalid_schema",
+      "with_roster": false
+    },
+    {
+      "file": "invalid/crew-spawn-unknown-status.json",
+      "code": "invalid_schema",
+      "with_roster": false
+    },
+    {
+      "file": "invalid/crew-ledger-old-version.json",
       "code": "invalid_schema",
       "with_roster": false
     }
