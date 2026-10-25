@@ -1,4 +1,7 @@
-"""The six derived fan feeds (CREW-7.1 to 7.6) and the lane each line airs on.
+"""The six fan feeds (CREW-7.1 to 7.6) and the lane each verified line airs on.
+
+Not yet wired into MatchWorkflow. The gate and repair change that uses these functions
+lands in a separate PR, which also migrates the producer-mode tests it affects.
 
 Three lanes decide what a verified line does next:
 
@@ -8,8 +11,9 @@ Three lanes decide what a verified line does next:
 - queue: every other persona (broadcast, the watch modes, anything malformed). These keep
   today's behaviour and fail closed: they wait for the producer in any mode but auto.
 
-The other four feeds (audio description, catch-me-up, half-time, ticker) have no writer yet.
-They join DERIVED_PERSONAS when their writers land. Until then they are not in any lane.
+The other four feeds (audio description, catch-me-up, half-time, ticker) have no writer yet
+and no persona, so no line can be tagged with them. They join DERIVED_PERSONAS when their
+writers land.
 """
 
 from dataclasses import dataclass
@@ -65,7 +69,11 @@ def feed_for(persona: str) -> Feed | None:
 
 
 def lane_for(persona: str) -> str:
-    """The lane a persona's verified lines air on. Unknown personas fail closed to the queue."""
+    """The lane a server persona's verified lines air on. Unknown strings fail closed to the queue.
+
+    Takes the server's persona, after normalise() in personas.py. A raw viewer alias such as
+    "fan" is not a persona and is not looked up here.
+    """
     if persona in BOOTH:
         return BOOTH_LANE
     if persona in DERIVED_PERSONAS:
@@ -77,8 +85,11 @@ def waits_for_producer(persona: str, approval_mode: str) -> bool:
     """Whether a verified line waits in the producer queue before it airs.
 
     Derived lines never wait, whatever the approval mode (CREW-4.3 criterion 2). Every other
-    line waits in any mode except "auto". That includes booth lines, which wait in producer
-    mode (decision of 25 Oct). An unknown mode therefore fails closed: the line waits.
+    line waits in any mode except "auto". That includes booth lines: the producer approves
+    the main booth line in producer mode, per the 25 Oct decision. The commentary booth
+    paragraph in docs/architecture/04-agents.md still describes the older rule (booth airs
+    unless hold_booth is set), and the wiring PR updates it. An unknown mode fails closed:
+    the line waits.
     """
     if lane_for(persona) == DERIVED_LANE:
         return False
@@ -86,5 +97,9 @@ def waits_for_producer(persona: str, approval_mode: str) -> bool:
 
 
 def drops_on_failed_repair(persona: str) -> bool:
-    """A derived line that fails repair is dropped, not escalated to a person (CREW-4.3)."""
+    """A derived line that fails repair is dropped, not escalated to a person (CREW-4.3).
+
+    This only says whether to drop. The audit record is written by the workflow when it is
+    wired in. The existing line_abstained record carries the reason code.
+    """
     return lane_for(persona) == DERIVED_LANE

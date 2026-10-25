@@ -1,4 +1,4 @@
-"""The six derived feeds (CREW-7.1 to 7.6): the registry and the lane rule (CREW-4.3)."""
+"""The six fan feeds (CREW-7.1 to 7.6): the registry and the lane rule (CREW-4.3)."""
 
 import pytest
 from matchcast_agents.feeds import (
@@ -46,10 +46,16 @@ def test_only_feed_personas_map_to_a_feed(persona: str) -> None:
 
 
 @pytest.mark.parametrize("key", ["audio_description", "catch_me_up", "half_time", "ticker"])
-def test_feeds_without_a_writer_have_no_persona_and_no_lane(key: str) -> None:
+def test_feeds_without_a_writer_have_no_persona(key: str) -> None:
     feed = next(f for f in FEEDS if f.key == key)
     assert feed.persona is None
-    assert feed.persona not in DERIVED_PERSONAS
+    assert key not in DERIVED_PERSONAS
+
+
+def test_a_raw_viewer_alias_is_not_a_persona() -> None:
+    # lane_for takes server personas. "fan" only becomes "casual" in normalise(), so the
+    # lane rule must be applied after normalising, never to the raw string.
+    assert lane_for("fan") == QUEUE_LANE
 
 
 def test_limits_come_from_the_stories() -> None:
