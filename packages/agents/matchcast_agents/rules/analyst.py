@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from ..context import MatchContext
 from ..messages import ProducerTask
 from ..metrics_spec import derivation_version
+from ..specialists.rhythm import share_percent
 from ..tools import InProcessTools, McpMetrics, ToolCall, ToolError
 from ..vision import is_vision_stream
 
@@ -148,9 +149,48 @@ class AnalystRules:
                     },
                 )
             )
-        if len(claims) < MAX_CLAIMS and (meetings := self._meetings(ctx, task, len(claims) + 1)):
-            claims.append(meetings)
+        for extra in (self._meetings, self._rhythm):
+            if len(claims) < MAX_CLAIMS and (claim := extra(ctx, task, len(claims) + 1)):
+                claims.append(claim)
         return claims
+
+    @staticmethod
+    def _rhythm(ctx: MatchContext, task: ProducerTask, index: int) -> ClaimResult | None:
+        """The swing the Rhythm specialist cites on a priority-1 moment: the team's share of the
+        on-ball actions over the five minutes that end at the swing. The Verifier recounts it."""
+        report = ctx.extra.get("specialists", {}).get("rhythm")
+        swing = ctx.extra.get("rhythm", {}).get("swing")
+        if report is None or report.status != "ok" or swing is None or task.priority != 1:
+            return None
+        events = [e for e in ctx.events if e["stream_sequence"] <= ctx.state.max_sequence]
+        share = share_percent(events, swing["team"], swing["end_ms"], ctx.home, ctx.away)
+        metric = f"rhythm_share:{swing['team']}-{swing['end_ms']}"
+        snapshot = ctx.state.snapshot()
+        packet = {
+            "kind": "claim",
+            "schema_version": "1.1.0",
+            "stream": ctx.stream,
+            "claim_id": f"claim-{task.moment_id}-{index}",
+            "source": {
+                "type": "interval",
+                "from_event_time_ms": 0,
+                "to_event_time_ms": snapshot["event_time_ms"],
+                "from_stream_sequence": 1,
+                "to_stream_sequence": snapshot["max_evidence_sequence"],
+            },
+            "metric": metric,
+            "value": share,
+            "units": "count",
+            "derivation_version": derivation_version("rhythm_share"),
+            "snapshot": snapshot,
+            "max_evidence_sequence": snapshot["max_evidence_sequence"],
+            "approval_status": "pending",
+        }
+        return ClaimResult(
+            packet=packet,
+            tool_call_ids=(),  # no metric tool: the Rhythm specialist's swing is the source
+            formula_inputs={"metric": metric, "tool": "rhythm", "value": share},
+        )
 
     @staticmethod
     def _meetings(ctx: MatchContext, task: ProducerTask, index: int) -> ClaimResult | None:

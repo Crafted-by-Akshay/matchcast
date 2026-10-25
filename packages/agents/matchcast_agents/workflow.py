@@ -1470,8 +1470,9 @@ class MatchWorkflow:
                 if target == "analyst":
                     fresh_ctx = self._ctx()
                     # the same specialist reports the first analysis read, not a new fan-out
-                    if "specialists" in ctx.extra:
-                        fresh_ctx.extra["specialists"] = ctx.extra["specialists"]
+                    for key in ("specialists", "rhythm"):
+                        if key in ctx.extra:
+                            fresh_ctx.extra[key] = ctx.extra[key]
                     fresh_claims = await self._analyse(fresh_ctx, task, repair=True)
                 written = (
                     await self._call(

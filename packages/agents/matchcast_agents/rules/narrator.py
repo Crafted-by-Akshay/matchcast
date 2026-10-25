@@ -114,6 +114,15 @@ class NarratorRules:
             if meetings is not None:
                 record = f"They have met {_meetings(meetings)} on record."
                 analyst = _with_clause(analyst, f" {record}", "analyst")
+            # the Rhythm specialist's swing, as a share of the on-ball actions
+            swing = next((c for c in claims if c["metric"].startswith("rhythm_share:")), None)
+            if swing is not None:
+                side = ctx.club_name(swing["metric"].split(":", 1)[1].rsplit("-", 1)[0])
+                clause = (
+                    f" The rhythm had swung to {side}, with {swing['value']}% of the on-ball "
+                    "actions in the run-up to the swing."
+                )
+                analyst = _with_clause(analyst, clause, "analyst")
             texts = {
                 "casual": f"Goal for {club}! {who} scores, goal number {n} for them. "
                 + why["casual"].format(club=club),
