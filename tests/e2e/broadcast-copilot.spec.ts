@@ -37,7 +37,7 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
     const api = 'http://127.0.0.1:' + (server.address() as any).port;
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api) + ';' }));
-    await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+    await page.goto('/index.html?split=1', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
     await page.evaluate(() => { LV.persona('club:thr', 'en'); LV.begin('k1', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }); });
 
