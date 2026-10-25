@@ -5,6 +5,7 @@ import { collectErrors, openShell, stepSim, viewFrame } from './helpers';
 // Broadcast draws the same feed, Ask counts from the event log, and a talk order always gets a reply in the chat.
 declare const post: (view: string, msg: unknown) => void; // top-level function of the shell
 declare const AG: any;
+declare const VC: any;
 
 async function openWatch(page: Page, query = '?seed=2026&speed=4'): Promise<Frame> {
   await openShell(page, 'watch', query);
@@ -163,6 +164,43 @@ test('a run of passes is counted across calls, within one minute', async ({ page
     return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
   });
   expect(text.at(-1)).toBe('Ridgeview keep the ball: 9 passes, last from Cal.');
+});
+
+test('the pre-match build-up is a play-by-play call and a colour line, each on its own voice', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  await page.evaluate(() => { VC.set(true); });
+  const spoken = await page.evaluate(async () => {
+    const calls: [string, string][] = [];
+    const say = VC.say;
+    VC.say = (text: string, o: any) => { calls.push([text, o.role]); return say(text, o); };
+    CM.reset('kick', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    await new Promise((r) => setTimeout(r, 600));
+    VC.say = say;
+    return { calls, lines: CM.view().filter((l: any) => l.kind === 'buildup').map((l: any) => ({ text: l.text, speaker: l.speaker })) };
+  });
+  expect(spoken.lines.map((l) => l.speaker), 'the build-up has a call, then a colour line').toEqual(['pbp', 'colour']);
+  expect(spoken.lines[0].text).toContain('Ridgeview');
+  // the Watch frame may post its own batches meanwhile, so only the two build-up lines are checked
+  const booth = spoken.calls.filter(([text]) => spoken.lines.some((l) => l.text === text));
+  expect(booth, 'each line is spoken once, on the voice its speaker has').toEqual([
+    [spoken.lines[0].text, 'playByPlay'],
+    [spoken.lines[1].text, 'analyst'],
+  ]);
+});
+
+test('a quiet stretch gets a booth exchange drawn from the match state, and not again straight away', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('fill', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 1.5, type: 'pass', team: 'H', player: 'Ben' }, { minute: 2, type: 'pass', team: 'H', player: 'Cal' }], []);
+    CM.fill(Date.now() + 9000);   // nine seconds of real time with no line
+    const first = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text }));
+    CM.fill(Date.now());         // straight after: the booth is still talking, so nothing new
+    return { first, after: CM.view().filter((l: any) => l.kind === 'filler').length };
+  });
+  expect(out.first.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out.first[0].text, 'the play-by-play line counts the passes from the events').toContain('Ridgeview: 3 passes in the last two minutes.');
+  expect(out.after).toBe(2);
 });
 
 test('the booth speaks each new feed line once, play-by-play and colour on different voices', async ({ page }) => {
