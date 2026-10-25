@@ -2,12 +2,15 @@
 each with its own call budget. The scoreboard route shows the recorded run beside the rules arms.
 
     uv run python scripts/scoreboard_live.py \
-        --match <match.json> --fixture <fixture id, e.g. M001> \
-        --max-calls 300 --out scoreboard-live.json
+        --api <api base URL> --session-id <session> --match-id <match> \
+        --fixture <fixture id, e.g. M001> --max-calls 300 --out scoreboard-live.json
+    uv run python scripts/scoreboard_live.py --match <match.json> \
+        --fixture <fixture id, e.g. M001> --max-calls 300 --out scoreboard-live.json
     MATCHCAST_SCOREBOARD_LIVE_RUN=scoreboard-live.json  (read by the api on each scoreboard request)
 
-`--match` is a JSON file with `events`, `roster`, `names` and `teams`, the shape the api builds for
-a match. Each arm has its own budget of --max-calls model calls, one per complete() call
+Either export the match from the api (`--api`, `--session-id`, `--match-id`, read-only) or read
+a saved export (`--match`, a JSON file with `events`, `roster`, `names` and `teams`, the shape the
+api builds for a match). Each arm has its own budget of --max-calls model calls, one per complete() call
 (the SDK may retry one request inside a call). Calls past a budget are refused and fall back to
 the rules. The record says how many were sent, failed or refused, and how many agent calls a
 fallback answered. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
@@ -18,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -30,7 +34,7 @@ from matchcast_agents.live.client import FoundryModelClient
 def fetch_input(api: str, session_id: str, match_id: str) -> dict:
     """The stored match of a live session, from the read-only scoreboard input export."""
     query = urllib.parse.urlencode({"session_id": session_id})
-    path = f"/v1/matches/{urllib.parse.quote(match_id)}/scoreboard/input?{query}"
+    path = f"/v1/matches/{urllib.parse.quote(match_id, safe='')}/scoreboard/input?{query}"
     with urllib.request.urlopen(api.rstrip("/") + path, timeout=30) as response:
         return json.loads(response.read())
 
@@ -53,10 +57,18 @@ def main(argv: list[str] | None = None) -> int:
     if not 1 <= args.max_calls <= MAX_CALLS_PER_ARM:
         print(f"--max-calls must be between 1 and {MAX_CALLS_PER_ARM}", file=sys.stderr)
         return 2
+    from_api = bool(args.api and args.session_id and args.match_id)
+    if args.match is not None and (args.api or args.session_id or args.match_id):
+        print("give --match alone, or --api with --session-id and --match-id", file=sys.stderr)
+        return 2
     if args.match is not None:
         match = json.loads(args.match.read_text())
-    elif args.api and args.session_id and args.match_id:
-        match = fetch_input(args.api, args.session_id, args.match_id)
+    elif from_api:
+        try:
+            match = fetch_input(args.api, args.session_id, args.match_id)
+        except (urllib.error.URLError, ValueError) as error:  # HTTPError is a URLError
+            print(f"could not export the match from {args.api}: {error}", file=sys.stderr)
+            return 1
     else:
         print("give --match, or all of --api, --session-id and --match-id", file=sys.stderr)
         return 2
