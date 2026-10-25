@@ -238,3 +238,27 @@ def test_half_the_recent_screens_on_the_local_word_list_is_degraded_and_recovers
     for _ in range(WINDOW):
         run(screen.analyze("x"))
     assert not screen.degraded and screen.recent_local == 0
+
+
+def test_a_refused_lines_text_never_leaves_the_workflow(match) -> None:
+    from matchcast_agents.workflow import WITHHELD, public_line
+
+    flow = build(match, safety=UnsafeScreen())
+    run(flow.ingest(match["events"]))
+    unsafe = [ln for ln in flow.store.lines(flow.sk) if ln.reason_code == "unsafe_content"]
+    assert unsafe and all("scores" in ln.text for ln in unsafe)  # the store keeps it for audit
+    for ln in unsafe:
+        out = public_line(ln)
+        assert out["text"] == WITHHELD and out["status"] == ln.status
+        assert out["reason_code"] == "unsafe_content" and out["line_id"] == ln.line_id
+    clean = next(ln for ln in flow.store.lines(flow.sk) if ln.reason_code is None)
+    assert public_line(clean) == clean.model_dump()
+    # and nor does the stream: the hub's line events carry the withheld text
+    seen = [e.data for e in flow.hub.history() if e.event == "line"]
+    refused = [d for d in seen if d["reason_code"] == "unsafe_content"]
+    assert refused and all(d["text"] == WITHHELD for d in refused)
+    # the verdict itself never reaches a viewer with the text; the draft event that came before
+    # the check is the producer desk's working copy and is not covered here
+    assert not [
+        d for d in seen if d["status"] in ("rejected", "abstained") and "scores" in d["text"]
+    ]

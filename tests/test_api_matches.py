@@ -694,9 +694,7 @@ def test_a_persona_stream_gets_no_publications_of_other_personas(client: TestCli
     events = [
         e for e in body.split("\n\n") if '"persona": "casual"' in e or '"persona":"casual"' in e
     ]
-    assert not [e for e in events if e.startswith("event: publication")], events[
-        :1
-    ]
+    assert not [e for e in events if e.startswith("event: publication")], events[:1]
     assert "event: line" in body or "event: publication" in body  # producer queue keeps lines
 
 
@@ -934,3 +932,22 @@ def test_a_desk_feed_kill_and_resume_are_audited(
     assert all(r["details"]["enforced"] is False for r in audit if r["subject_id"] == "casual")
     assert published.count("audit") == 2  # each switch reaches the live audit stream
     assert verify_chain(audit)["valid"] is True
+
+
+def test_lines_route_withholds_the_text_of_a_safety_refused_line() -> None:
+    from matchcast_agents.messages import LineRecord
+
+    refused = LineRecord(
+        line_id="l1",
+        moment_id="m1",
+        claim_ids=["c1"],
+        persona="casual",
+        text="something unsafe",
+        status="rejected",
+        reason_code="unsafe_content",
+        created_at="2026-10-25T00:00:00Z",
+        snapshot_revision=1,
+    )
+    out = matches._line_json(refused)
+    assert out["text"] != "something unsafe" and "unsafe" not in out["text"].replace("Safety", "")
+    assert out["status"] == "rejected" and out["reason_code"] == "unsafe_content"

@@ -51,6 +51,18 @@ TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|card
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 
 
+WITHHELD = "[withheld: refused by Content Safety]"
+
+
+def public_line(line: LineRecord) -> dict[str, Any]:
+    """The line as a viewer or the producer desk may read it: the text of a line Content Safety
+    refused is withheld (the store keeps it for the audit chain), its status and reason stay."""
+    out = line.model_dump()
+    if line.reason_code == "unsafe_content":
+        out["text"] = WITHHELD
+    return out
+
+
 def repair_feedback(draft: DraftLine, verdict: Verdict) -> str:
     """What to tell the Narrator on its one redraft, in words: no figure from the failed check
     (a limit or a number named there would be echoed into the line)."""
@@ -422,7 +434,7 @@ class MatchWorkflow:
 
     def _save_line(self, line: LineRecord) -> None:
         self.store.put_line(self.sk, line)
-        self.hub.publish("line", f"line:{line.line_id}:{line.status}", line.model_dump())
+        self.hub.publish("line", f"line:{line.line_id}:{line.status}", public_line(line))
 
     # ---- ingest ------------------------------------------------------------------------
 

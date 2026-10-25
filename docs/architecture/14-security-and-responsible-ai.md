@@ -7,7 +7,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: PLT-4, PLT-5, AGT
 1. No secret in the repo, the browser, chat, logs, prompts or the video. gitleaks runs before every commit (hook) and in CI.
 2. Managed identity for every Azure call that supports it. The only stored secrets are the two AI Search keys, in Key Vault.
 3. Unauthenticated users may view and ask; only the Producer or Admin role may approve, edit or kill. The role is checked in `api`, not only in the UI.
-4. All model output is untrusted until the Verifier and Content Safety pass it.
+4. All model output is untrusted until the Verifier and Content Safety pass it. The text of a line Content Safety refused is withheld from `GET /lines`, the stream's `line` events and the other line routes once it is refused (status and `reason_code` stay; the store keeps the text for the audit). The draft event that precedes the check still carries the draft text on the producer desk's stream.
 5. All user text (Ask, Talk, edits) and all retrieved text is untrusted input to the models.
 
 ## 2. Trust boundaries
