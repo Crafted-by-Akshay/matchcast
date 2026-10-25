@@ -22,6 +22,25 @@ retry() {
     sleep 60
   done
 }
+
+# `azd provision` checks for Docker because azure.yaml declares Docker services, so the acr path
+# deploys main.bicep with az and the parameters azd would pass (scripts/azd_params.py).
+provision_acr() {
+  local params
+  params=$(mktemp)
+  azd env get-values -e "$ENV_NAME" | python3 scripts/azd_params.py infra/main.parameters.json > "$params"
+  az deployment group create -g rg-matchcast -n "$ENV_NAME-$(date +%s)" \
+    -f infra/main.bicep -p "@$params" --only-show-errors -o none
+  rm -f "$params"
+}
+
+provision() {
+  if [ "$BUILD" = acr ]; then
+    provision_acr
+  else
+    azd provision -e "$ENV_NAME" --no-prompt
+  fi
+}
 SERVICES=("$@")
 [ ${#SERVICES[@]} -eq 0 ] && SERVICES=(api web mcp)
 
@@ -40,7 +59,7 @@ if [ "$BUILD" = acr ]; then
       current=$(az containerapp show -g rg-matchcast -n "ca-$s-matchcast-$ENV_NAME" --query 'properties.template.containers[0].image' -o tsv)
       if [ -n "$current" ]; then azd env set "$(echo "$s" | tr a-z A-Z)_IMAGE" "$current" -e "$ENV_NAME"; fi
     done
-    retry azd provision -e "$ENV_NAME" --no-prompt
+    retry provision
     ACR=$(az acr list -g rg-matchcast --query "[?starts_with(name, 'acrmatchcast')].name | [0]" -o tsv)
   fi
   REGISTRY=$(az acr show -n "$ACR" --query loginServer -o tsv)
@@ -77,7 +96,7 @@ for s in api web mcp; do
   if [ -n "$current" ]; then azd env set "$(echo "$s" | tr a-z A-Z)_IMAGE" "$current" -e "$ENV_NAME"; fi
 done
 
-retry azd provision -e "$ENV_NAME" --no-prompt
+retry provision
 azd deploy recap -e "$ENV_NAME" --no-prompt || echo "warning: azd deploy recap failed; the recap function keeps its previous code"
 
 API_URI=$(azd env get-value API_URI -e "$ENV_NAME")
