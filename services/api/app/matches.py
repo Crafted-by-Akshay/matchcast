@@ -1084,6 +1084,18 @@ def build_router(registry: Registry) -> APIRouter:
         flow = await registry.flow_for(session_id, match_id)
         return {"items": flow.store.audit_records(flow.sk, from_seq, limit)}
 
+    @router.get("/matches/{match_id}/scoreboard/input")
+    async def scoreboard_input(match_id: str, session_id: str) -> dict[str, Any]:
+        """The stored events, roster, names and teams of one match: the input of a live scoreboard
+        recording (scripts/scoreboard_live.py). Read-only, with the scoreboard's session check."""
+        flow = await registry.flow_for(session_id, match_id)
+        return {
+            "events": flow.store.events(flow.sk),
+            "roster": flow.roster,
+            "names": flow.names,
+            "teams": flow.clubs,
+        }
+
     @router.get("/matches/{match_id}/scoreboard")
     async def crew_scoreboard(match_id: str, session_id: str) -> dict[str, Any]:
         """The three-arm crew scoreboard for this match (CREW-5.2). The arms run on the stored
