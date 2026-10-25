@@ -39,8 +39,28 @@ const VC = (() => {
     caption(text);
     source = o.audio ? 'azure' : 'browser'; onChange();
     if (on && !(o.id && spoken.has(o.id))) {
+      if (o.tone === 'big') swell();
       if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' }); next(); }
   };
-  const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; } onChange(); };
-  return { load, say, set, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
+  // the crowd bed (simulated): low noise under the commentary while Voice is on. It is synthesised here, not a recording, and it swells for a big moment.
+  let crowd = null, swellT = 0;
+  const crowdStart = () => {
+    if (crowd || !('AudioContext' in window)) return;
+    try {
+      const ctx = new AudioContext(), len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+      let last = 0; for (let i = 0; i < len; i++) { last = (last + (Math.random() * 2 - 1) * 0.02) / 1.02; d[i] = last * 3.5; }   // brown noise: a murmur, not hiss
+      const src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = buf; src.loop = true; lp.type = 'lowpass'; lp.frequency.value = 900; g.gain.value = 0.04;
+      src.connect(lp); lp.connect(g); g.connect(ctx.destination); src.start(); if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      crowd = { ctx, src, g };
+    } catch (e) { crowd = null; }   // no audio here: the commentary still plays
+  };
+  const crowdStop = () => { clearTimeout(swellT); if (crowd) { try { crowd.src.stop(); crowd.ctx.close(); } catch (e) { /* already stopped */ } crowd = null; } };
+  const swell = () => {
+    if (!crowd) return; const t = crowd.ctx.currentTime, g = crowd.g.gain;
+    g.cancelScheduledValues(t); g.setTargetAtTime(0.22, t, 0.3);
+    clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(0.04, crowd.ctx.currentTime, 1.5); }, 3000);
+  };
+  const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
+  return { load, say, set, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();

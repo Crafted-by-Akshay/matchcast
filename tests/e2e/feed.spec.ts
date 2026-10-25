@@ -144,3 +144,54 @@ test('a run of passes is counted across calls, within one minute', async ({ page
   });
   expect(text.at(-1)).toBe('Ridgeview keep the ball: 9 passes, last from Cal.');
 });
+
+test('the booth speaks each new feed line once, play-by-play and colour on different voices', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  await page.evaluate(() => { VC.set(true); });
+  const spoken = await page.evaluate(async () => {
+    const calls: [string, string][] = [];
+    const say = VC.say;
+    VC.say = (text: string, o: any) => { calls.push([text, o.role]); return say(text, o); };
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('voice', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([pass(1, 'H', 'Ana'), { minute: 1.6, type: 'slide_tackle', team: 'A', player: 'Dev' }], []);
+    CM.api('Dev tries to win it back and the referee waves play on.', 1.6, 'summary', 'voice-1');
+    await new Promise((r) => setTimeout(r, 600));
+    VC.say = say;
+    return calls;
+  });
+  const play = spoken.filter(([t]) => /Dev challenges/.test(t));
+  const colour = spoken.filter(([t]) => /referee waves/.test(t));
+  expect(play, 'the play line is spoken once').toEqual([['Dev challenges for Thames Rovers.', 'playByPlay']]);
+  expect(colour, 'the colour line is spoken once, by the analyst voice').toEqual([['Dev tries to win it back and the referee waves play on.', 'analyst']]);
+});
+
+test('Voice on starts the crowd bed, labelled simulated, and Voice off stops it', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  await page.evaluate(() => VC.set(false));
+  await page.click('#voice-btn');
+  await expect(page.locator('#voice-src')).toContainText('crowd bed (simulated)');
+  expect(await page.evaluate(() => VC.crowd)).toBe(true);
+  await page.click('#voice-btn');
+  expect(await page.evaluate(() => VC.crowd)).toBe(false);
+});
+
+test('the booth voices a new match, even though its line ids start again', async ({ page }) => {
+  // the Agents view runs no Watch match, so nothing resets the feed between the two calls below
+  await openShell(page, 'agents');
+  await page.evaluate(() => { VC.set(true); });
+  const spoken = await page.evaluate(async () => {
+    const calls: string[] = [];
+    const say = VC.say;
+    VC.say = (text: string, o: any) => { calls.push(text); return say(text, o); };
+    CM.reset('first', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.api('First match colour.', 2, 'summary', 'first-1');
+    await new Promise((r) => setTimeout(r, 400));
+    CM.reset('second', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.api('Second match colour.', 2, 'summary', 'second-1');
+    await new Promise((r) => setTimeout(r, 400));
+    VC.say = say;
+    return calls;
+  });
+  expect(spoken).toEqual(expect.arrayContaining(['First match colour.', 'Second match colour.']));
+});

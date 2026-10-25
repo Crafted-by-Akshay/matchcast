@@ -19,7 +19,7 @@ test('speech: with a token Azure speaks with the role and language voice; the br
   await expect.poll(() => page.evaluate(() => (window as any).__azure.voices)).toEqual(['en-GB-RyanNeural', 'en-GB-SoniaNeural', 'es-ES-ElviraNeural', 'hi-IN-SwaraNeural']);
   expect(new Set((await page.evaluate(() => (window as any).__azure.tokens)).map((t: string[]) => t.join('@')))).toEqual(new Set(['tok-abc@eastus2']));   // used as issued, one fetch shared by the four lines
   expect(calls).toBe(1);
-  await expect(page.locator('#voice-src')).toHaveText('Azure Speech');
+  await expect(page.locator('#voice-src')).toContainText('Azure Speech');
   expect(await page.evaluate(() => (window as any).__spoken.length)).toBe(0);
   expect(await page.evaluate(() => SPX.listen('en-GB'))).toBe('who is on the ball');
 
@@ -36,7 +36,7 @@ test('speech: 503 not_ready and 429 fall back to the browser voice with its labe
   await page.click('#voice-btn');
   await page.evaluate(() => { VC.say('One.', { id: 'b1' }); VC.say('Two.', { id: 'b2' }); });
   await expect.poll(() => page.evaluate(() => (window as any).__spoken)).toEqual(['One.', 'Two.']);
-  await expect(page.locator('#voice-src')).toHaveText('Browser voice (simulated)');
+  await expect(page.locator('#voice-src')).toContainText('Browser voice (simulated)');
   expect(calls).toBe(1);   // one failed fetch, then a minute of quiet
   expect(await page.evaluate(() => SPX.reason)).toBe('no Speech resource configured');
   expect(await page.evaluate(() => SPX.listen('en-GB'))).toBeNull();   // null = Azure unavailable, so the caller falls back
