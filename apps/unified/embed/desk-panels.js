@@ -203,7 +203,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
 
 // ---- Six-feed monitor (Broadcast): the six English derived feeds, what each has aired, the lines the Verifier dropped and why, and a kill per feed.
 // Derived lines never enter the producer queue: booth lines keep it. The record fields are the matchcast.onair/1 1.2.0 onair and feed_drop packets (AB#498, merged; docs/contracts.md).
-// The shell forwards the stream's onair and feed_drop records as feed-air and feed-drop (AB#499). A kill is sent to the api, which stops that feed at the air gate, once the match run exists and an api is configured; this desk shows the kill at once either way.
+// The shell forwards the stream's onair and feed_drop records as feed-air and feed-drop (AB#499). A kill is sent to the api, which stops that feed at the air gate, once the match is created and an api is configured (a kill made before that is sent then); this desk shows the kill at once either way.
 (() => {
   if (!framed) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
