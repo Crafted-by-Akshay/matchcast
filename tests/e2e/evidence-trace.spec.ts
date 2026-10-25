@@ -297,7 +297,7 @@ test('evidence trace: a feed_drop becomes a "Verifier dropped" card in the Agent
   await expect(row.locator('td.v')).toContainText('dropped');
   await expect(row).toContainText('number_mismatch');
   await expect(row).toContainText('feed analyst');
-  await expect(page.locator('#ag-cards')).toContainText('1 dropped');
+  await expect(page.locator('#ag-cards')).toContainText('1 caught');
   await expect(page.locator('#ag-feed')).toContainText('dropped a line on the analyst feed: number_mismatch');
   await row.click();
   const prov = page.locator('#ag-prov');
@@ -340,7 +340,7 @@ test('evidence trace: a drop never shows for a line that aired, whatever order t
   expect(await page.evaluate((x) => { AG.noteAired('pub-a'); return AG.ingestDrop(x, 'live'); }, dropOf('pub-a'))).toBe(false);
   // the drop first, the publication after: the card becomes the published line and the count goes back down
   await page.evaluate((x) => AG.ingestDrop(x, 'live'), dropOf('pub-late'));
-  await expect(page.locator('#ag-cards')).toContainText('1 dropped');
+  await expect(page.locator('#ag-cards')).toContainText('1 caught');
   await page.evaluate(() => AG.ingest({ publication_id: 'pub-late', line_id: 'L-9', claim_ids: [], text: 'Goal for Northgate FC.' }, 'live'));
   const c = await page.evaluate(() => { const k = AG.run.claims.find((x: any) => x.id === 'pub-late'); return { dropped: k.dropped, pub: k.pub, approval: k.approval, kind: k.kind, n: AG.run.stat.dropped }; });
   expect(c).toEqual({ dropped: false, pub: true, approval: undefined, kind: 'line', n: 0 });
@@ -362,4 +362,62 @@ test('evidence trace: a drop never shows for a line that aired, whatever order t
   // a flood of distinct ids is bounded
   expect(await page.evaluate(() => { for (let i = 0; i < 520; i++) AG.ingestDrop({ publication_id: 'flood-' + i, reason_code: 'repeat' }, 'live'); return AG.run.claims.filter((k: any) => k.dropped).length; })).toBe(500);
   expect(errs).toEqual([]);
+});
+
+// the demo path today: the api's bad-claim switch makes the Verifier reject a line (a `line` event, status rejected, with its reason and failed checks), the repair verifies, and a repair that fails is abstained
+const lineEv = (id: string, status: string, extra: object = {}) => ({ line_id: id, moment_id: 'm-e42', claim_ids: ['c-9'], persona: 'casual', text: 'Argentina lead 2-0 after 12 minutes.', status, ...extra });
+const badChecks = [{ name: 'numbers', passed: false, detail: 'score says 2-0, the event log says 1-0' }, { name: 'names', passed: true, detail: 'ok' }];
+
+test('evidence trace: a rejected line event is a "Verifier rejected" card that follows its repair; a line that gave up is dropped', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openEvidence(page, '?evidence=1');
+  await apiLine(page);
+  await page.evaluate(() => (document.getElementById('tp') as HTMLDialogElement).close());
+  const rej = lineEv('L-5', 'rejected', { reason_code: 'number_mismatch', checks: badChecks });
+  await page.evaluate((x) => { AG.ingest(x, 'live'); AG.ingest(x, 'live'); }, rej);   // a replayed event is one card
+  const row = page.locator('#ag-claims tr[data-id="pub-L-5"]');
+  await expect(row.locator('td.v')).toContainText('rejected');
+  await expect(row).toContainText('Verifier rejected · number_mismatch · one repair requested');
+  await expect(row).toContainText('feed casual');
+  await expect(page.locator('#ag-cards')).toContainText('1 caught');
+  await expect(page.locator('#ag-feed')).toContainText('rejected a line on the casual feed: number_mismatch. One repair follows.');
+  expect(await page.evaluate(() => AG.run.claims.find((c: any) => c.id === 'pub-L-5').text), 'the rejected draft is not shown').toBe('');
+  // the redraft names it in repair_of and verifies
+  await page.evaluate((x) => { AG.ingest(x, 'live'); AG.ingest({ ...x, status: 'verified' }, 'live'); }, lineEv('L-6', 'drafted', { repair_of: 'L-5' }));
+  await expect(row).toContainText('repaired, L-6 verified');
+  await expect(page.locator('#ag-feed')).toContainText('the repair L-6 verified');
+  await row.click();
+  const prov = page.locator('#ag-prov');
+  await expect(prov).toContainText('Verifier rejected');
+  await expect(prov).toContainText('Failed checks: numbers (score says 2-0, the event log says 1-0)');
+  await expect(prov).toContainText('line event · status rejected');
+  await prov.locator('.ag-how').click();
+  const ev = page.locator('#tp .tp-evidence');
+  await expect(ev.locator('.tp-state')).toContainText('rejected');
+  await expect(ev.locator('.tp-verifier')).toContainText('number_mismatch');
+  await expect(ev.locator('.tp-checks')).toContainText('the event log says 1-0');
+  await expect(ev.locator('.tp-tools')).toContainText('tc-1, tc-2');   // from the claim the line cites
+  await expect(ev).toContainText('names its claims, not events');
+  await page.locator('#tp .tp-x').click();
+  // a repair that failed too: abstained, so dropped
+  await page.evaluate((x) => AG.ingest(x, 'live'), lineEv('L-5', 'abstained', { reason_code: 'number_mismatch', checks: badChecks, repair_of: 'L-4' }));
+  await expect(row.locator('td.v')).toContainText('dropped');
+  await expect(row).toContainText('Verifier dropped · number_mismatch after 1 repair');
+  await expect(page.locator('#ag-cards')).toContainText('1 caught');
+  await expect(page.locator('#ag-feed')).toContainText('after one repair. It did not air.');
+  // an escalated booth line keeps its own card; hostile fields are text
+  await page.evaluate((x) => AG.ingest(x, 'live'), lineEv('L-7', 'rejected', { persona: '<b>x</b>', reason_code: '<img src=x onerror=window.__xss=1>', checks: [null, { name: { toString: 1 }, passed: false, detail: 7 }] }));
+  await expect(page.locator('#ag-claims tr[data-id="pub-L-7"]')).toContainText('<img src=x onerror=window.__xss=1>');
+  expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  expect(errs).toEqual([]);
+});
+
+test('evidence trace: a line event that is not rejected or abstained, or whose id aired, makes no card', async ({ page }) => {
+  await openEvidence(page, '?evidence=1');
+  await apiLine(page);
+  await page.evaluate(() => (document.getElementById('tp') as HTMLDialogElement).close());
+  await page.evaluate(() => { AG.ingest({ line_id: 'L-8', claim_ids: [], persona: 'casual', status: 'drafted', text: 'x' }, 'live'); AG.ingest({ line_id: 'L-8', claim_ids: [], persona: 'casual', status: 'verified', text: 'x' }, 'live'); AG.noteAired('pub-L-9'); AG.ingest({ line_id: 'L-9', claim_ids: [], persona: 'casual', status: 'rejected', reason_code: 'repeat', text: 'x' }, 'live'); });
+  await expect(page.locator('#ag-claims tr[data-id="pub-L-8"]')).toHaveCount(0);
+  await expect(page.locator('#ag-claims tr[data-id="pub-L-9"]')).toHaveCount(0);
+  expect(await page.evaluate(() => AG.run.stat.dropped)).toBe(0);
 });
