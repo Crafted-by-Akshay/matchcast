@@ -107,12 +107,12 @@ def test_tactics_names_the_pressing_team_and_the_side_of_the_move() -> None:
 
 
 def test_tactics_calls_a_quick_move_after_a_turnover_a_counter() -> None:
-    """Three passes after the turnover, then the goal five seconds on: a counter."""
-    quick = _goal_move()[:4]  # the turnover, then passes at 2 s and 4 s and 6 s
+    """The turnover, then passes at 2 s, 4 s and 6 s, and the goal at 7 s: a counter."""
+    quick = _goal_move()[:4]
     goal_at = {"x": 95.0, "y": PITCH_CENTRE_Y, "z": 0}
     goal = _event(
         8,
-        5_000,
+        7_000,
         {
             "type": "goal",
             "team_id": "home",
@@ -123,6 +123,59 @@ def test_tactics_calls_a_quick_move_after_a_turnover_a_counter() -> None:
     )
     report = _run([SpawnRequest("tactics", "m-e8", "", 0)], _context(quick + [goal]))[0]
     assert any("counter" in f.text for f in report.findings)
+
+
+def test_the_attacks_own_last_win_of_the_ball_decides_counter_not_the_latest_change() -> None:
+    """Home win the ball at 0 s, pass at 2 s, away take it at 3 s, home score at 5 s: a counter."""
+    possession = {"type": "possession_change", "from_team_id": "away", "to_team_id": "home"}
+    events = [
+        _event(1, 0, {**possession, "cause": "tackle"}),
+        _event(2, 2_000, _pass("home", "home1", "home2", 60.0)),
+        _event(
+            3,
+            3_000,
+            {
+                "type": "possession_change",
+                "from_team_id": "home",
+                "to_team_id": "away",
+                "cause": "tackle",
+            },
+        ),  # fmt: skip
+        _event(
+            4,
+            5_000,
+            {
+                "type": "goal",
+                "team_id": "home",
+                "player_id": "home2",
+                "position_unit": "m",
+                "position": {"x": 95.0, "y": 34.0, "z": 0},
+            },
+        ),  # fmt: skip
+    ]
+    report = _run([SpawnRequest("tactics", "m-e4", "", 0)], _context(events))[0]
+    assert any("counter" in f.text for f in report.findings)
+
+
+def test_a_build_up_finding_cites_every_pass_it_counted() -> None:
+    """Four passes after the turnover at 0 s, the goal at 10 s: build-up, all four cited."""
+    events = _goal_move()[:5]  # the turnover and four passes, at 2 s to 8 s
+    goal_at = {"x": 95.0, "y": PITCH_CENTRE_Y, "z": 0}
+    goal = _event(
+        9,
+        10_000,
+        {
+            "type": "goal",
+            "team_id": "home",
+            "player_id": "home7",
+            "position_unit": "m",
+            "position": goal_at,
+        },
+    )
+    report = _run([SpawnRequest("tactics", "m-e9", "", 0)], _context(events + [goal]))[0]
+    style = next(f for f in report.findings if "build-up" in f.text or "counter" in f.text)
+    assert "build-up" in style.text
+    assert {"e1", "e2", "e3", "e4", "e5"} <= set(style.evidence_ids)
 
 
 def test_stats_reuses_the_analyst_metrics_and_cites_the_shot_events() -> None:
@@ -136,6 +189,23 @@ def test_stats_reuses_the_analyst_metrics_and_cites_the_shot_events() -> None:
     home = next(f for f in report.findings if "Northgate FC" in f.text)
     assert home.figures["shots"] == 1
     assert home.evidence_ids == ("e0",)
+
+
+def test_stats_does_not_count_a_shot_after_the_moment() -> None:
+    late = _event(9, 20_000, {"type": "shot", "team_id": "home", "player_id": "home6",
+                              "position_unit": "m", "position": {"x": 88.0, "y": 34.0, "z": 0},
+                              "on_target": True})  # fmt: skip
+    report = _run([SpawnRequest("stats", "m-e8", "", 0)], _context(_goal_move() + [late]))[0]
+    home = next(f for f in report.findings if "Northgate FC" in f.text)
+    assert home.figures["shots"] == 0
+    assert "e9" not in home.evidence_ids
+
+
+def test_the_real_planner_order_still_fans_a_goal_out_to_stats() -> None:
+    """The pool in the order the Showrunner lists it: history last, stats still in the four."""
+    pool = ("replay", "tactics", "stats", "rhythm", "history")
+    plan = plan_spawns(priority=1, moment_id="m-e8", available=pool, budget=SpawnBudget(50))
+    assert {r.name for r in plan.requests} >= {"replay", "tactics", "stats"}
 
 
 def test_a_quiet_spell_spawns_one_specialist() -> None:

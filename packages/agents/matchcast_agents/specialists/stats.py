@@ -5,7 +5,10 @@ Verifier's recount come from one place. Each team's finding cites its shot event
 its shots and expected goals come from.
 """
 
+from dataclasses import replace
+
 from ..context import MatchContext
+from ..state import MatchState, apply
 from ..tools.inprocess import InProcessTools, ToolError
 from .base import Finding, SpawnRequest, SpecialistReport
 from .shared import moment_event
@@ -20,7 +23,12 @@ class StatsSpecialist:
         moment = moment_event(ctx, request)
         if moment is None:
             return SpecialistReport(self.name, request.moment_id, "no_data")
-        tools = InProcessTools(ctx, up_to_sequence=moment["stream_sequence"])
+        cut = moment["stream_sequence"]
+        state = MatchState()
+        for e in sorted(ctx.events, key=lambda e: e["stream_sequence"]):
+            if e["stream_sequence"] <= cut:
+                state = apply(state, e)  # the counts as they stood at the moment, not after it
+        tools = InProcessTools(replace(ctx, state=state), up_to_sequence=cut)
         names = [f"{m}:{team}" for team in (ctx.home, ctx.away) for m in METRICS]
         try:
             _, result = tools.get_metrics(names)
@@ -35,7 +43,7 @@ class StatsSpecialist:
             cited = tuple(
                 e["event_id"]
                 for e in ctx.events
-                if e["stream_sequence"] <= moment["stream_sequence"]
+                if e["stream_sequence"] <= cut
                 and e["payload"]["type"] == "shot"
                 and e["payload"].get("team_id") == team
             )

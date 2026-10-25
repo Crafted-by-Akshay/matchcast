@@ -31,9 +31,18 @@ class ReplaySpecialist:
             p = e["payload"]
             if p["type"] == "possession_change":
                 break
-            if p.get("team_id") not in (None, team) and p["type"] in ("tackle", "foul"):
+            if p.get("team_id") not in (None, team) and p["type"] in (
+                "tackle",
+                "foul",
+                "pass",
+                "carry",
+                "shot",
+            ):
                 break
             if p["type"] == "pass" and p.get("team_id") == team:
+                # walking back, each earlier pass must have been played to the next one's passer
+                if passes and p["recipient_player_id"] != passes[-1]["payload"]["player_id"]:
+                    break
                 passes.append(e)
         if not passes:
             return SpecialistReport(self.name, request.moment_id, "no_data")

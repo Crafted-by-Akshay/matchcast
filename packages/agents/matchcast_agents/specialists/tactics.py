@@ -69,21 +69,24 @@ class TacticsSpecialist:
 
     @staticmethod
     def _style(ctx, moment, earlier, attacking) -> tuple[str, tuple[str, ...]]:
-        """Counter when the attack began within ten seconds with few passes, else build-up."""
-        for e in earlier:
-            if e["payload"]["type"] != "possession_change":
-                continue
-            if e["payload"].get("to_team_id") != attacking:
-                return "build-up", ()
-            if moment["event_time_ms"] - e["event_time_ms"] > COUNTER_MS:
-                return "build-up", ()
-            passes = [
-                p
-                for p in earlier
-                if p["stream_sequence"] > e["stream_sequence"]
-                and p["payload"]["type"] == "pass"
-                and p["payload"].get("team_id") == attacking
-            ]
-            style = "counter" if len(passes) <= COUNTER_MAX_PASSES else "build-up"
-            return style, (e["event_id"],)
-        return "build-up", ()
+        """Counter when the attack won the ball within ten seconds and kept it for few passes."""
+        won = next(
+            (
+                e
+                for e in earlier
+                if e["payload"]["type"] == "possession_change"
+                and e["payload"].get("to_team_id") == attacking
+            ),
+            None,
+        )
+        if won is None or moment["event_time_ms"] - won["event_time_ms"] > COUNTER_MS:
+            return "build-up", ()
+        passes = [
+            p
+            for p in earlier
+            if p["stream_sequence"] > won["stream_sequence"]
+            and p["payload"]["type"] == "pass"
+            and p["payload"].get("team_id") == attacking
+        ]
+        style = "counter" if len(passes) <= COUNTER_MAX_PASSES else "build-up"
+        return style, (won["event_id"], *(p["event_id"] for p in passes))
