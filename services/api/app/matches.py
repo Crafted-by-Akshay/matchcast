@@ -10,6 +10,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from collections import deque
@@ -18,7 +19,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Literal
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, WebSocket
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.ask import kb_root
@@ -44,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app import budget
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
+from app.call import CallSocket
 from app.pipeline import Pipeline
 from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
@@ -970,6 +972,50 @@ def build_router(registry: Registry) -> APIRouter:
                 except VoiceError:
                     pass  # the reply is still shown, just not spoken
         return result
+
+    @router.websocket("/matches/{match_id}/call")
+    async def call(websocket: WebSocket, match_id: str) -> None:
+        """The voice call (EXP-18): talks and their spoken replies over one socket, both ways."""
+        session_id = websocket.query_params.get("session_id", "")
+        if not re.fullmatch(ID, session_id):
+            await websocket.close(code=1008)
+            return
+        try:
+            flow = await registry.flow_for(session_id, match_id)
+        except Problem:
+            await websocket.close(code=1008)
+            return
+        await websocket.accept()
+        voice = registry.voice
+        ip = client_ip(websocket)
+
+        async def talk(target: str, utterance: str, position: str | None) -> dict[str, Any]:
+            registry.allow_question(websocket)  # a turn counts as a question, as in the talk route
+            try:
+                result = await flow.talk(target, utterance, position=position)
+            except WorkflowError as error:
+                raise Problem(STATUS[error.code], error.code, str(error)) from error
+            result["lang"] = "en"
+            return result
+
+        async def speak(sentence: str, voice_name: str) -> bytes | None:
+            if not voice.ready:
+                return None
+            # a new clip uses the caller's voice allowance; once spent, the reply is written only
+            if voice.get(clip_key(sentence, voice_name)) is None and not voice.allow(ip):
+                return None
+            try:
+                return await voice.clip(sentence, voice_name)
+            except VoiceError:
+                return None
+
+        await CallSocket(
+            websocket,
+            talk=talk,
+            speak=speak,
+            voice_for=voice.voice_for,
+            allow_talk=lambda: registry.allow_talk(session_id),
+        ).serve()
 
     @router.get("/voice/audition.mp3")
     async def audition(request: Request) -> Response:

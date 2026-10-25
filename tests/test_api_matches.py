@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from app import matches
 from app.main import create_app
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 from matchcast_contracts import validate
 from matchcast_contracts.audit import verify_chain
@@ -694,6 +695,36 @@ def test_the_registry_store_comes_from_matchcast_store(monkeypatch) -> None:
     monkeypatch.setenv("MATCHCAST_STORE", "bogus")
     with pytest.raises(ValueError, match="MATCHCAST_STORE"):
         create_app()
+
+
+def test_the_call_socket_answers_a_talk_over_one_socket(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json({"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"})
+        reply = ws.receive_json()
+        assert reply["type"] == "reply" and reply["id"] == 1
+        assert reply["verdict"] == "verified" and "audio_url" not in reply
+        frames = []
+        while True:
+            message = ws.receive()
+            if "text" in message and message["text"] is not None:
+                frames.append(json.loads(message["text"]))
+                if frames[-1]["type"] == "audio_end":
+                    break
+        assert frames[-1] == {"type": "audio_end", "id": 1, "cancelled": False}
+
+
+def test_the_call_socket_refuses_an_unknown_match_or_a_bad_session(client: TestClient) -> None:
+    create(client)
+    for path in (
+        "/v1/matches/ghost/call?session_id=short",
+        "/v1/matches/match-short/call?session_id=-",
+    ):
+        with pytest.raises(WebSocketDisconnect) as refused:
+            with client.websocket_connect(path):
+                pass
+        assert refused.value.code == 1008
 
 
 @pytest.fixture(autouse=True)
