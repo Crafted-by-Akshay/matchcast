@@ -16,7 +16,7 @@ from azure.identity import DefaultAzureCredential
 
 def main() -> int:
     endpoint = os.environ.get("FOUNDRY_PROJECT_ENDPOINT")
-    deployment = os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-6-luna")
+    deployment = os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-5-mini")
     if not endpoint:
         print("FOUNDRY_PROJECT_ENDPOINT is not set", file=sys.stderr)
         return 2
