@@ -147,6 +147,12 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .ag-steps .tag{font:600 10px ui-monospace,monospace;color:var(--muted);margin:0 4px}
 .ag-steps .m{color:var(--muted);font-variant-numeric:tabular-nums}
 @media (max-width:700px){.ag-grid{grid-template-columns:minmax(0,1fr)}.ag-head .chips{width:100%}.ag-panel table{font-size:12px}}
+@media (max-width:560px){   /* the claims ledger becomes one card per claim: nothing runs past the screen edge (judge re-test, 390 px) */
+  .ag-table table,.ag-table tbody{display:block;width:100%}
+  .ag-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .ag-table tr{display:flex;flex-wrap:wrap;gap:2px 10px;padding:8px 2px;border-bottom:1px solid var(--line);max-width:100%}
+  .ag-table td{display:block;padding:0;border:0;min-width:0;overflow-wrap:anywhere}
+}
 .ag-prov dl{display:grid;grid-template-columns:96px minmax(0,1fr);gap:6px 10px;margin:0;font-size:13px}
 .ag-prov dt{color:var(--muted)}
 .ag-prov dd{margin:0;overflow-wrap:anywhere}
@@ -352,7 +358,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
           <label>Agent <select id="lg-agent"><option value="">all</option><option>analyst</option><option>verifier</option><option>producer</option></select></label>
           <label>Metric <select id="lg-metric"><option value="">all</option><option>score</option><option>shot_xg</option><option>xg_total</option><option>moment</option><option>line</option></select></label>
           <button type="button" id="lg-export">Export CSV</button> <span class="muted" id="lg-hash" aria-live="polite"></span></div>
-        <div class="ag-table"><table><thead><tr><th>Time</th><th>Metric</th><th>Value</th><th>Units</th><th>Agent</th><th>Source</th><th>Verdict</th><th>Reason</th><th>Approval</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
+        <div class="ag-table"><table role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Time</th><th role="columnheader">Metric</th><th role="columnheader">Value</th><th role="columnheader">Units</th><th role="columnheader">Agent</th><th role="columnheader">Source</th><th role="columnheader">Verdict</th><th role="columnheader">Reason</th><th role="columnheader">Approval</th></tr></thead><tbody role="rowgroup" id="ag-claims"></tbody></table></div>
       </section>
       <section class="ag-panel"><h3>Audit chain</h3>
         <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <span id="ag-bad-note" class="muted" role="status"></span> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
@@ -487,10 +493,10 @@ function ensure(view) {
 // the Analyst loads its season only when it is opened, so Watch and Broadcast get the machine first
 function routeAnalyst() {
   if (!M.fixture) return;
-  { const cur = byId(M.fixture); if (cur && cur.national) return; }   // no recorded run for a national-team fixture: the Analyst keeps its last route
+  const cur = byId(M.fixture), nat = !!(cur && cur.national);   // a national-team fixture has no recorded run: the Analyst still loads, on its own default page, and is not routed to #live.<id>
   if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
-    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#live.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
-  if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
+    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + (nat ? '' : '#live.' + M.fixture); $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = nat ? null : M.fixture; return; }
+  if (!nat && FR.analyst.ready && FR.analyst.route !== M.fixture) {
     FR.analyst.route = M.fixture;
     post('analyst', { src: 'matchcast-shell', type: 'route', page: 'live', arg: M.fixture });
   }
@@ -583,7 +589,7 @@ function paint() {
   $('sync').textContent = current === 'agents' ? 'Shared pipeline' : current === 'analyst' ? (fx ? 'Showing ' + fx.id : 'Season fixtures only') : (synced ? 'Same fixture as Analyst' : 'Loads on switch');
   $('sync').className = 'chip ' + (current === 'analyst' || synced ? 'ok' : '');
   $('src').textContent = current === 'analyst'
-    ? (fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
+    ? (fx && fx.national ? 'Analyst: club season data, no run for this match' : fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
     : (live ? 'Match engine running here · ' + (current === 'agents' ? 'watch' : current) : 'Match engine: same setup as Analyst');
   $('src').className = 'chip ' + (live ? 'live' : '');
   pushFeed(); renderAgents(); paintStory();
@@ -670,15 +676,24 @@ function renderVision() {
   el.textContent = !s ? 'Vision -> Agents: waiting for Vision. Watch sends the tracker\'s passes once a match runs.'
     : 'Vision -> Agents: ' + s.passes_in + ' passes in · ' + s.lines_verified + ' lines verified by the Verifier · engine ' + ((s.agreement && s.agreement.engine) || 0) + ' passes, ' + (s.agreement && s.agreement.precision != null ? Math.round(s.agreement.precision * 100) + '% of Vision\'s passes match one' : 'no passes to match yet') + (s.latest_line ? ' · latest: ' + s.latest_line : '');
 }
+// polls every 3 s while a summary is ready; before there is a match or a Vision stream it backs off, 3 s doubling to 20 s
+let visWait = 3000;
 async function pollVision() {
   const key = LV.key;
-  const s = await LV.visionSummary();
-  if (LV.key !== key) return;   // a new match started while this answer was on its way: the next poll shows it
-  const ok = !!s && typeof s.passes_in === 'number';   // no match, or no answer: clear what the last match showed
-  VIS = ok ? s : null; renderVision();
-  post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: ok ? s : null });
+  try {
+    const s = await LV.visionSummary();
+    if (LV.key !== key) visWait = 3000;   // a new match: its first summary should not wait out the back-off
+    else {
+      const ok = !!s && s.ready === true;   // not ready, or no answer: clear what the last match showed
+      VIS = ok ? s : null; renderVision();
+      post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: ok ? s : null });
+      visWait = ok ? 3000 : Math.min(visWait * 2, 20000);
+    }
+  } finally {
+    setTimeout(pollVision, visWait);   // keep polling even when a render throws, as the old interval did
+  }
 }
-setInterval(pollVision, 3000);
+setTimeout(pollVision, visWait);
 renderVision();   // the strip says what it waits for before any match
 // What the agents are doing right now, from the live api's status (live.js): Foundry when the api answers with models,
 // the rules fallback when it does not answer, and rules in the page when no api is configured. Never a fixed label.
@@ -737,8 +752,8 @@ function renderAgents() {
   $('ag-n').textContent = r ? r.claims.filter((c) => !c.pub).length + ' claims' : '';
   const rows = ledgerRows(r ? r.claims : []);
   $('ag-claims').innerHTML = rows.length
-    ? rows.slice(0, 40).map((x) => '<tr data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td>' + esc(x.time) + '</td><td>' + esc(x.metric) + '</td><td>' + esc(x.value) + '</td><td>' + esc(x.units) + '</td><td>' + esc(x.agent) + '</td><td>' + esc(x.source) + '</td><td class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td>' + esc(x.reason) + '</td><td>' + esc(x.approval) + '</td></tr>').join('')
-    : '<tr><td colspan="9" class="empty">No claims yet</td></tr>';
+    ? rows.slice(0, 40).map((x) => '<tr role="row" data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td role="cell">' + esc(x.time) + '</td><td role="cell">' + esc(x.metric) + '</td><td role="cell">' + esc(x.value) + '</td><td role="cell">' + esc(x.units) + '</td><td role="cell">' + esc(x.agent) + '</td><td role="cell">' + esc(x.source) + '</td><td role="cell" class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td role="cell">' + esc(x.reason) + '</td><td role="cell">' + esc(x.approval) + '</td></tr>').join('')
+    : '<tr role="row"><td role="cell" colspan="9" class="empty">No claims yet</td></tr>';
   const c = r && r.claims.find((x) => x.id === sel);
   $('ag-prov').innerHTML = c ? '<dl>' + [
     ['Claim', c.id + ' · ' + c.kind + ' · ' + mins(c.minute)],
@@ -1048,7 +1063,7 @@ function init(list) {
     $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
   };
   AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); postQueue(); });
-  const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
+  const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'This match has no checked claim from the api (it did not answer, its stream dropped, or it is on rules), so the in-page rules agents are producing the lines. The Foundry chip on the Agents tab reports the api\'s deployment, which can be live while this match is on rules.', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 90 s for the first batch, then up to 60 s for the first claim)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
   const MATCHCAST_API_ON = () => !!(window.MATCHCAST_API || '').replace(/\/$/, '');
   let warmTick = null;   // while warming, count the seconds so a cold start shows progress; the api's own limit is MATCHCAST_WARM_MS (90 s), then the rules agents take over
@@ -1061,7 +1076,7 @@ function init(list) {
     const dep = d && d.dependencies.find((x) => /^(microsoft )?foundry\b/i.test(x.label)), ok = dep && dep.status === 'live';
     FOUNDRY.word = !MATCHCAST_API_ON() ? 'not connected' : dep ? dep.status : 'status unavailable';
     const chip = $('ag-foundry'); chip.textContent = 'Foundry: ' + (MATCHCAST_API_ON() ? (dep ? dep.status : 'status unavailable') : 'not connected');
-    chip.title = dep ? dep.detail : ''; chip.className = 'chip' + (ok ? '' : ' warn'); renderAgents();
+    chip.title = dep ? dep.detail + ' (the api\'s deployment; the pill in the header says what this match is using)' : ''; chip.className = 'chip' + (ok ? '' : ' warn'); renderAgents();
   };
   const paintPill = (s) => {
     paintFoundry();

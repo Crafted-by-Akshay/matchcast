@@ -702,18 +702,21 @@ def build_router(registry: Registry) -> APIRouter:
     @router.get("/matches/{match_id}/vision/summary")
     async def vision_summary(match_id: str, session_id: str) -> dict[str, Any]:
         """What Vision contributes to the agents on this match (ADR-0022): passes in, the lines the
-        Verifier passed on them, the latest such line, and agreement with the engine's passes."""
-        await registry.flow_for(session_id, match_id)  # the engine match must exist
+        Verifier passed on them, the latest such line, and agreement with the engine's passes.
+        ``ready`` is false until the match and its Vision stream exist; the page polls this before
+        a match starts, so that is an answer, not an error."""
         try:
+            await registry.flow_for(session_id, match_id)  # the engine match must exist
             vision = await registry.flow_for(f"{session_id}.vision", match_id)
-        except Problem:  # no Vision has been sent for this match yet
+        except Problem:  # no engine match yet, or no Vision has been sent for this match
             return {
+                "ready": False,
                 "passes_in": 0,
                 "lines_verified": 0,
                 "latest_line": None,
                 "agreement": agreement([], []),
             }
-        return vision.vision_summary()
+        return {"ready": True, **vision.vision_summary()}
 
     @router.get("/matches/{match_id}/stream")
     async def stream(

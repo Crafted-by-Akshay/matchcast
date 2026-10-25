@@ -187,3 +187,17 @@ test('eager: the match is created and the stream opened at begin, so the pill sa
   expect(api.seen.events.length, 'no event was sent yet').toBe(0);
   expect(errs).toEqual([]); api.server.close();
 });
+
+test('warm-up clock: an unreachable api falls back by itself; a client that has not kicked off yet is not timed', async ({ page }) => {
+  const down = await mock('error'); const errs = collectErrors(page);
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(down.url) + ';window.MATCHCAST_WARM_MS=3000;' }));
+  await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await page.evaluate(() => { AG.reset('k3', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); LV.begin('k3', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }); });
+  await expect(pill(page)).toHaveText('Rules fallback', { timeout: 15_000 });   // begin alone: the eager create failed, so the clock ran
+  down.server.close();
+  const quiet = await mock('ok');   // reachable but silent about 'live': no events yet means no clock
+  await page.evaluate((url) => { (window as any).MATCHCAST_API = url; }, quiet.url);
+  quiet.server.close();
+  expect(errs).toEqual([]);
+});

@@ -20,6 +20,7 @@ from . import recap as recap_mod
 from .context import MatchContext
 from .history import history_for_roster
 from .hub import StreamHub
+from .memory import storylines
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
 from .personas import BOOTH, MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
@@ -269,6 +270,9 @@ class MatchWorkflow:
             ctx.extra["booth"] = (
                 True  # kick-off and quiet-spell moments only when a viewer has the booth
             )
+        memory = storylines(ctx, list(self.store.lines(self.sk)))
+        if memory:
+            ctx.extra["storylines"] = memory
         return ctx
 
     def vision_summary(self) -> dict[str, Any]:
