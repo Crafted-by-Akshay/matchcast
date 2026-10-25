@@ -29,6 +29,7 @@ from .rules.analyst import ClaimResult
 from .rules.producer import BOOTH_MOMENTS
 from .safety import LocalSafetyScreen, SafetyScreen
 from .season_clubs import season_code
+from .specialists import SpawnBudget, default_registry, plan_spawns, run_all
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
@@ -76,6 +77,9 @@ ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale
 RUNDOWN_KEEP = 400
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
+# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1)
+SPAWN_POOL = ("replay", "tactics", "stats", "rhythm", "history")
+QUIET_SPAWNS_PER_MATCH = 40  # the quiet moments' own allowance, apart from the priority-1 pool
 
 
 class WorkflowError(Exception):
@@ -278,6 +282,11 @@ class MatchWorkflow:
         )
         self.rundown: list[dict[str, Any]] = []  # the Showrunner ledger, see _record_rundown
         self._routing: dict[str, Any] | None = None  # the entry of the moment being run
+        # the match's cost guard for specialists, in two pools: quiet moments cannot use up
+        # a goal's specialists
+        self.spawn_budget = SpawnBudget()  # priority-1 moments
+        self.quiet_budget = SpawnBudget(QUIET_SPAWNS_PER_MATCH)  # every other moment
+        self._specialists = default_registry()
         self._restore()
         self.stats = {
             "events": 0,
@@ -579,7 +588,28 @@ class MatchWorkflow:
             return None
         self.stats["moments"] += 1
         self._record_rundown(decision)
+        await self._spawn(ctx, decision)
         return decision
+
+    async def _spawn(self, ctx: MatchContext, task: ProducerTask) -> None:
+        """The specialists for this moment: planned inside the match budget, run in parallel, and
+        written into the moment's rundown entry (names in ``called``, and a ``spawns`` list)."""
+        plan = plan_spawns(
+            priority=int(task.priority),
+            moment_id=task.moment_id,
+            available=SPAWN_POOL,
+            budget=self.spawn_budget if task.priority == 1 else self.quiet_budget,
+        )
+        entry = self.rundown[-1]
+        entry["spawns"] = []
+        if not plan.requests:
+            entry["spawn_reason"] = plan.reason
+            return
+        for report in await run_all(ctx, plan.requests, self._specialists):
+            entry["spawns"].append(
+                {"name": report.name, "status": report.status, "findings": len(report.findings)}
+            )
+            self._note_called(report.name)
 
     def _record_rundown(self, task: ProducerTask) -> None:
         """One rundown entry per moment the crew takes: the agents it calls, skips and why."""

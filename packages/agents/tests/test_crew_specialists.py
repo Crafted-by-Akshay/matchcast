@@ -226,3 +226,24 @@ def test_no_moment_event_means_no_data_not_a_guess() -> None:
 def test_apply_is_the_reducer_the_stats_counts_come_from() -> None:
     state = MatchState()
     assert apply(state, _goal_move()[-1]).score == {"home": 1}
+
+
+class _Broken:
+    name = "broken"
+
+    async def run(self, ctx, request):
+        raise RuntimeError("a bug in one specialist")
+
+
+def test_a_specialist_that_raises_is_reported_failed_and_the_others_still_run() -> None:
+    """One broken specialist must not take the goal's other reports down with it."""
+    registry = {"broken": _Broken(), **default_registry()}
+    requests = [SpawnRequest("broken", "m-e8", "", 0), SpawnRequest("replay", "m-e8", "", 0)]
+    reports = _run_with(requests, _context(_goal_move()), registry)
+    assert [r.name for r in reports] == ["broken", "replay"]
+    assert reports[0].status == "failed" and reports[0].findings == ()
+    assert reports[1].status == "ok"
+
+
+def _run_with(requests, ctx, registry):
+    return asyncio.run(run_all(ctx, requests, registry))
