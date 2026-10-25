@@ -21,9 +21,11 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
+from matchcast_agents.live.knowledge import TalkKnowledge
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, normalise
 from matchcast_agents.safety import safety_from_env
@@ -248,6 +250,9 @@ class Registry:
         self.vision = VisionService()
         self.speech = SpeechTokenService()
         self.voice = VoiceService()  # Azure Speech synthesis, EXP-16 (docs/architecture/10)
+        self.knowledge = TalkKnowledge.from_kb(
+            kb_root()
+        )  # squads and kb passages for talk (EXP-18)
         self.pipeline: Pipeline | None = None  # set by install() when MATCHCAST_PIPELINE says so
         self.translation = TranslationService()
         self.safety = safety_from_env()  # Azure Content Safety when CONTENT_SAFETY_ENDPOINT is set
@@ -349,6 +354,7 @@ class Registry:
                 stats_desk=self.stats_desk,
                 safety=self.safety,
                 answer_model=self.model_client(),  # Ask and talk answer on the model when live
+                knowledge=self.knowledge,
             )
             self.flows[key] = flow
             return flow

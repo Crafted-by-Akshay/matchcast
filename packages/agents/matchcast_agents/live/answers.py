@@ -319,16 +319,26 @@ class LiveAnswers:
         return AskResult(text, "live", False, citations, mode="live", retrieval="local"), ""
 
     async def talk(
-        self, ctx: MatchContext, target: str, utterance: str, position: str | None
+        self,
+        ctx: MatchContext,
+        target: str,
+        utterance: str,
+        position: str | None,
+        *,
+        sheet: dict[str, list[str]] | None = None,
+        passages: list[str] | None = None,
     ) -> tuple[str, dict, str] | None:
         """(reply, facts, order) in the player's voice, or None when no checked reply came back.
 
         The order is the one he says he heard, from the list his role allows; the role guard in the
-        workflow still decides whether it reaches the sim.
+        workflow still decides whether it reaches the sim. `sheet` is both squads as
+        `name, position` lines and `passages` is knowledge-base background: their names may be said.
         """
         stats = player_stats(ctx, target)
         if stats is None:
             return None
+        sheet = sheet or {}
+        squad_names = [line.split(",")[0] for lines in sheet.values() for line in lines]
         recent = [
             line
             for e in ctx.events
@@ -341,6 +351,7 @@ class LiveAnswers:
         match_names = [
             ctx.player_name(e["payload"]["player_id"]) for e in known if "player_id" in e["payload"]
         ]
+        match_names += squad_names
         home, away = _score(ctx)
         facts = {
             "you": {
@@ -358,6 +369,8 @@ class LiveAnswers:
                 "key_events": key_events,  # every goal and card of the match
                 "team_totals": _team_totals(ctx),  # the log's counts for each club
             },
+            "team_sheet": sheet,  # both squads: who plays where, in words, no shirt numbers
+            "knowledge": passages or [],  # club and player background from the knowledge base
             "instruction_from_the_manager": utterance,
         }
         answer = await self._call(prompt("player"), facts, TALK_SCHEMA)

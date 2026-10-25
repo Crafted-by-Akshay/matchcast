@@ -116,6 +116,8 @@ MCS.progress('Loading the stadium and players');
   const box = document.createElement('div'); box.id = 'mcx-box';
   box.innerHTML = '<div id="mcx-live" aria-live="polite"></div><div id="mcx-log" hidden></div><button class="mcx-b" id="mcx-tog" hidden>Pulse log (0)</button>';
   document.body.appendChild(box);
+  // the Pulse log sits over the Copilot drawer's Talk input, so it steps aside while the drawer is open
+  setInterval(() => { const dr = document.getElementById('copilot'); box.style.display = dr && !dr.hidden ? 'none' : ''; }, 300);
   const live = box.querySelector('#mcx-live'), log = box.querySelector('#mcx-log'), tog = box.querySelector('#mcx-tog');
   const cards = new Map(), esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const mode = () => (typeof FAN !== 'undefined' ? FAN.mode : 'analyst');
@@ -189,7 +191,7 @@ MCS.progress('Loading the stadium and players');
   const MC_NO_ANSWER = 'I can\'t act on or answer that here: this is the rules fallback (no checked answer from the agent api), which only follows plain orders such as press, mark or shoot.';
   const mcRulesFallback = (p, text) => { const k = mcKeyword(text); if (k === 'none') { talkLine(p, 'pl', MC_NO_ANSWER); renderTalk(); } else mcRulesOrder(p, k, text); $('tk-note').textContent = 'Rules fallback: the agent api did not answer for this match, so orders follow the keyword rules.'; };
   window.mcTalk = (p, text, quick) => (quick ? mcRulesOrder(p, quick, text) : window.mcTalkApi(p, text));   // called by sendToPlayer (build.py) for every line: a quick order is checked here, a typed line goes to the api
-  window.mcTalkApi = (p, text) => { const id = ++talkN; talks.set(id, { p, text }); MCS.send({ type: 'talk', id, player: p.name, position: p.pos, utterance: text }); setTimeout(() => { if (talks.delete(id)) mcRulesFallback(p, text); }, 24000); };
+  window.mcTalkApi = (p, text) => { const id = ++talkN; talks.set(id, { p, text }); MCS.send({ type: 'talk', id, player: p.name, position: p.pos, utterance: text, call: !!(window.mcCallOn && window.mcCallOn()) }); setTimeout(() => { if (talks.delete(id)) mcRulesFallback(p, text); }, 24000); };
   window.addEventListener('message', (e) => {
     const d = e.data || {};
     if (d.src !== 'matchcast-shell' || d.type !== 'talk-reply' || !talks.has(d.id)) return;
@@ -198,6 +200,7 @@ MCS.progress('Loading the stadium and players');
     const r = d.reply;
     if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) {   // the player's own answer, checked against the match record
       talkLine(p, 'pl', r.text);
+      if (window.mcCallSpeak) window.mcCallSpeak(r.audioUrl, r.text);   // on a call the checked reply is spoken, and a cut-in stops it (EXP-18)
       if (r.order && r.order.accepted) setOrder(p, r.order.key, text);   // the api's role guard passed this order
       renderTalk(); return;
     }
@@ -305,6 +308,68 @@ window.addEventListener('message', (e) => {
       else document.getElementById('tk-note').textContent = 'Could not hear that. Try again or type.';
     });
   }, true);
+})();
+
+// ---- EXP-18: Talk call. Call keeps the mic open: each finished phrase is sent as a talk, the player's checked reply plays in his
+// own voice, and the fan can cut in, which stops it. The transcript stays on screen. Azure Speech when the api has a Speech
+// resource; otherwise the browser's speech recognition, labelled as Simulated.
+(() => {
+  const mic = document.getElementById('tk-mic'), q = document.getElementById('tk-q'), form = document.getElementById('tk-form');
+  if (!mic || !q || !form || !mic.parentNode) return;
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.id = 'tk-call'; btn.textContent = 'Call'; btn.setAttribute('aria-pressed', 'false');
+  btn.title = 'Start a voice call: the player listens, answers in his own voice, and stops when you speak';
+  btn.style.cssText = 'font:600 12px var(--f-body,system-ui,sans-serif);padding:0 10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap';
+  mic.parentNode.insertBefore(btn, mic);
+  let on = false, handle = null, audio = null, quietUntil = 0, via = '';
+  const say = (t) => { const n = document.getElementById('tk-note'); if (n) n.textContent = t; };
+  const cutIn = () => {   // the fan spoke: stop the player's voice (his own echo on the speakers is ignored for a moment)
+    if (Date.now() < quietUntil) return;
+    if (audio) { audio.pause(); audio = null; }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  };
+  const send = (text) => { if (on && text) { q.value = text.slice(0, 300); form.requestSubmit(); } };
+  window.mcCallOn = () => on;
+  // the reply in his voice: the api's clip when there is one, else the browser voice
+  window.mcCallSpeak = (url, text) => {
+    if (!on) return;
+    cutIn(); quietUntil = Date.now() + 1500;
+    if (url) { audio = new Audio(url); audio.onended = () => { audio = null; }; audio.play().catch(() => { audio = null; }); return; }
+    if ('speechSynthesis' in window && text) window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  };
+  const browserListen = (lang) => {
+    const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!R) return false;
+    const rec = new R(); rec.continuous = true; rec.interimResults = true; rec.lang = lang;
+    rec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i], t = r[0].transcript.trim();
+        if (r.isFinal) send(t); else if (t.split(/\s+/).length >= 2) cutIn();
+      }
+    };
+    rec.onend = () => { if (on && handle === rec) rec.start(); };   // the browser stops after a pause: keep the call open
+    rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { say('The mic is blocked. Allow it for this page to call, or type.'); stopCall(); } };
+    handle = rec; via = 'browser speech (Simulated: the api has no Speech resource)';
+    rec.start();
+    return true;
+  };
+  const stopCall = () => {
+    on = false;
+    if (handle) { const h = handle; handle = null; h.stop(); }
+    cutIn();
+    btn.textContent = 'Call'; btn.setAttribute('aria-pressed', 'false'); q.placeholder = 'Talk to the player…';
+  };
+  const startCall = async () => {
+    const lang = FAN.lang === 'es' ? 'es-ES' : FAN.lang === 'hi' ? 'hi-IN' : 'en-US';
+    on = true; btn.textContent = 'End call'; btn.setAttribute('aria-pressed', 'true'); q.placeholder = 'Listening…';
+    let az = null; try { az = window.parent !== window && window.parent.SPX && typeof window.parent.SPX.listenOn === 'function' ? window.parent.SPX : null; } catch (e) { /* cross-origin parent */ }
+    const h = az ? await az.listenOn(lang, cutIn, send) : null;
+    if (!on) { if (h) h.stop(); return; }   // ended while the Speech resource was being reached
+    if (h) { handle = h; via = 'Azure Speech'; }
+    else if (!browserListen(lang)) { say('Calls need speech recognition, which this browser does not have. You can still type.'); stopCall(); return; }
+    say('Call on, via ' + via + '. Speak to the player; he stops when you cut in. The transcript stays below.');
+  };
+  btn.addEventListener('click', () => { if (on) { stopCall(); say('Call ended.'); } else startCall(); });
 })();
 
 // ---- EXP-17: the shell's language selector (EN, ES, HI) sets Watch's language too; Watch's own picker keeps the others (Tamil, French, Arabic).
