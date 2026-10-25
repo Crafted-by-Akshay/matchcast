@@ -2,6 +2,7 @@
 crew_spawn on start and on end of each specialist. Each frame validates against the contract."""
 
 from conftest import run
+from matchcast_agents.messages import ProducerTask
 from matchcast_contracts import validate
 
 SPAWN_STATUSES = {"running", "done", "no_data", "failed", "budget_exhausted"}
@@ -58,3 +59,26 @@ def test_no_free_text_with_numbers_reaches_the_wire(make_workflow, match) -> Non
     assert all(f["why"] == "" for f in frames(flow, "crew_spawn"))
     for frame in frames(flow, "crew_ledger"):
         assert not any(char.isdigit() for char in frame["why"])
+
+
+def test_a_model_route_why_never_reaches_the_ledger(make_workflow, match) -> None:
+    # the Producer's model route carries a free-text why with numbers; the ledger sends only the
+    # reason code, so this fails on any version that copies task.why onto the wire
+    flow = make_workflow()
+    task = ProducerTask(
+        moment_id="m-model-route",
+        match_id=flow.stream["match_id"],
+        event_ids=(match["events"][0]["event_id"],),
+        up_to_sequence=match["events"][0]["stream_sequence"],
+        priority=2,
+        personas=("analyst",),
+        reason="buildup",
+        routed_by="model",
+        why="The model says 62% of the on-ball actions came from one side",
+    )
+    flow._record_rundown(task)
+    flow._publish_ledger(flow.rundown[-1])
+    (frame,) = frames(flow, "crew_ledger")
+    validate(frame)
+    assert frame["why"] == "buildup"
+    assert frame["routed_by"] == "model"
