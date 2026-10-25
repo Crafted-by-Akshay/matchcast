@@ -60,7 +60,7 @@ class ProducerExecutor(Executor):
 
     @handler
     async def decide(self, message: Incoming, out: WorkflowContext[Tasked]) -> None:
-        task = await self._flow._decide(message.ctx, message.event)
+        task = await self._flow._decide_moment(message.ctx, message.event)
         if task is not None:  # a Skip ends the run here, already audited
             await out.send_message(Tasked(message.ctx, task))
 

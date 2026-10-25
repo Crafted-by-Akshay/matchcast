@@ -10,7 +10,7 @@ from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
 from ..personas import max_numbers
 from ..state import counted
-from ..vision import agreement, pass_facts
+from ..vision import VISION_METRICS, agreement, pass_facts, vision_value
 from ..xg import team_xg
 
 FRESH_REVISIONS = 5
@@ -130,6 +130,16 @@ def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any
             except (KeyError, TypeError, ValueError):
                 return Check(
                     name="numbers", passed=False, detail=f"{claim['metric']} has no history here"
+                )
+        elif name in VISION_METRICS:  # Vision's own count or share, recounted from its passes
+            feed = ctx.extra.get("vision_passes")
+            expected = None if feed is None else vision_value(
+                name, claim["metric"].split(":", 1)[1], feed(), ctx.events,
+                claim["source"]["to_event_time_ms"],
+            )  # fmt: skip
+            if expected is None:
+                return Check(
+                    name="numbers", passed=False, detail=f"{claim['metric']} has no Vision here"
                 )
         else:
             expected = recompute(ctx.events, claim["metric"], claim["max_evidence_sequence"])

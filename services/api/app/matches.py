@@ -34,7 +34,7 @@ from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
-from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream
+from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
@@ -355,6 +355,21 @@ class Registry:
         window.append(now)
         return True
 
+    def vision_feed_for(
+        self, session_id: str, match_id: str
+    ) -> Callable[[], list[dict[str, Any]]] | None:
+        """An engine match's Vision passes, as pass facts, from the store: its one Vision moment
+        counts them beside its own (ADR-0022). None for a Vision stream."""
+        if is_vision_stream({"session_id": session_id}):
+            return None
+        vision = {
+            "tenant_id": TENANT,
+            "session_id": f"{session_id}.vision",
+            "match_id": match_id,
+        }
+        sk = stream_key(vision)
+        return lambda: pass_facts(self.store.events(sk))
+
     def truth_feed_for(
         self, session_id: str, match_id: str
     ) -> Callable[[], list[dict[str, Any]]] | None:
@@ -423,6 +438,7 @@ class Registry:
                 answer_model=self.model_client("answers") if live else None,
                 knowledge=self.knowledge,
                 truth_feed=self.truth_feed_for(session_id, match_id),
+                vision_feed=self.vision_feed_for(session_id, match_id),
             )
             self.flows[key] = flow
             return flow
@@ -645,6 +661,7 @@ def build_router(registry: Registry) -> APIRouter:
                     answer_model=registry.model_client("answers") if live else None,
                     knowledge=registry.knowledge,
                     truth_feed=registry.truth_feed_for(stream["session_id"], stream["match_id"]),
+                    vision_feed=registry.vision_feed_for(stream["session_id"], stream["match_id"]),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
