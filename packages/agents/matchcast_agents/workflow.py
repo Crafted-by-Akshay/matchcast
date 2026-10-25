@@ -1310,19 +1310,20 @@ class MatchWorkflow:
         record.status = "abstained"
         self._save_line(record)
         self.stats["abstained"] += 1
-        audit = self._audit(
-            "agent",
-            a.producer.agent_id,
-            "line_abstained",
-            record.line_id,
-            {
-                "mode": getattr(a.producer, "mode", "live"),
-                "reason_code": verdict.reason_code,
-                "persona": record.persona,
-                **_repair_link(record.repair_of),
-            },
-        )
         feed = feed_for(record.persona)
+        # a line the Verifier could not confirm has no code; a dropped feed line is unsupported
+        reason_code = verdict.reason_code
+        details: dict[str, Any] = {
+            "mode": getattr(a.producer, "mode", "live"),
+            "reason_code": reason_code,
+            "persona": record.persona,
+            **_repair_link(record.repair_of),
+        }
+        if feed is not None:  # the dropped text stays in the audit chain (docs/contracts.md)
+            reason_code = reason_code or "unsupported_statement"
+            details["reason_code"] = reason_code
+            details["text"] = record.text
+        audit = self._audit("agent", a.producer.agent_id, "line_abstained", record.line_id, details)
         if feed is not None and drops_on_failed_repair(record.persona) and event_ids:
             drop = {
                 "kind": "feed_drop",
@@ -1331,8 +1332,7 @@ class MatchWorkflow:
                 "publication_id": f"pub-{record.line_id}",
                 "feed": feed.key,
                 "source_event_ids": list(event_ids),
-                # a line the Verifier could not confirm has no code; it is dropped as unsupported
-                "reason_code": verdict.reason_code or "unsupported_statement",
+                "reason_code": reason_code,
                 "repair_count": 1,
                 "audit_id": audit["audit_id"],
                 "match_time_ms": self.store.get_state(self.sk).event_time_ms,
@@ -1464,16 +1464,18 @@ class MatchWorkflow:
     ) -> dict[str, Any]:
         """The desk's per-feed kill or resume (AB#499). enforced stays false until the air gate."""
         async with self._lock:
+            details = {"feed": feed, "reason": reason[:200], "enforced": True}
+            if actor_name:
+                details["actor_name"] = actor_name[:80]
+            # audit first: if the append fails, the kill is not in force in memory either
+            record = self._audit(
+                "person", actor_id, "feed_killed" if killed else "feed_resumed", feed, details
+            )
             if killed:
                 self.killed_feeds.add(feed)
             else:
                 self.killed_feeds.discard(feed)
-            details = {"feed": feed, "reason": reason[:200], "enforced": True}
-            if actor_name:
-                details["actor_name"] = actor_name[:80]
-            return self._audit(
-                "person", actor_id, "feed_killed" if killed else "feed_resumed", feed, details
-            )
+            return record
 
     def _restore_feed_state(self) -> None:
         """Rebuild the kill state from the audit chain, so a restart keeps a kill in force."""
@@ -1499,6 +1501,8 @@ class MatchWorkflow:
         """Replace the text, run the Verifier again, and approve only if it passes."""
         async with self._lock:
             line = self._line(line_id)
+            if feed_for(line.persona) is not None:  # derived lines air on verify, never by edit
+                raise WorkflowError("not_approvable", "a derived feed line is not edited")
             if line.status in ("published", "killed"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
             if (

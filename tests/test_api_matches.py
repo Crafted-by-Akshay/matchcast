@@ -6,8 +6,11 @@ from pathlib import Path
 import pytest
 from app import matches
 from app.main import create_app
+from app.matches import wanted_on_stream
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
+from matchcast_agents.hub import StreamEvent
+from matchcast_agents.personas import BOOTH
 from matchcast_contracts import validate
 from matchcast_contracts.audit import verify_chain
 
@@ -127,6 +130,28 @@ def test_stream_replays_publications_then_audit_as_sse(client: TestClient) -> No
         headers={"Last-Event-ID": first_audit},
     )
     assert f"id: {first_audit}\n" not in later.text
+
+
+def _event(name: str, data: dict) -> StreamEvent:
+    return StreamEvent(event=name, id=None, data=data)
+
+
+def test_a_persona_stream_gets_only_its_own_feed_records() -> None:
+    # AB#499: a derived feed record reaches the stream of its own feed key, and no other
+    casual = ("casual",)
+    onair_casual = _event("onair", {"feed": "casual"})
+    onair_analyst = _event("onair", {"feed": "analyst"})
+    drop_analyst = _event("feed_drop", {"feed": "analyst"})
+    assert wanted_on_stream(onair_casual, casual)
+    assert not wanted_on_stream(onair_analyst, casual)
+    assert not wanted_on_stream(drop_analyst, casual)
+    assert wanted_on_stream(onair_analyst, ())  # an all-streams viewer gets every feed
+    booth = tuple(BOOTH)
+    assert not wanted_on_stream(onair_casual, booth) and not wanted_on_stream(drop_analyst, booth)
+    line = _event("line_verified", {"persona": "casual"})
+    assert wanted_on_stream(line, booth)  # line records stay on every stream
+    pub = _event("publication", {"persona": "analyst"})
+    assert not wanted_on_stream(pub, casual) and wanted_on_stream(pub, ("analyst",))
 
 
 def test_bad_batch_is_a_problem_with_the_event_index(client: TestClient) -> None:
@@ -407,9 +432,14 @@ def test_a_rebuilt_match_keeps_its_approval_mode_and_demo_seed() -> None:
     register_booth(restarted)
     post_all(restarted)  # the seeded wrong claim still fires and is rejected
     assert _rejections(restarted)
-    published = restarted.get("/v1/matches/match-short/lines", params=Q).json()["items"]
-    booth = [ln for ln in published if ln["persona"].startswith("booth:")]
+    lines = restarted.get("/v1/matches/match-short/lines", params=Q).json()["items"]
+    booth = [ln for ln in lines if ln["persona"].startswith("booth:")]
     assert not [ln for ln in booth if ln["status"] in ("approved", "published")]
+    # derived lines air on verify in every mode, so the seed is checked on them through the
+    # rejected drafts: a rejected line never airs under its own id (its repair is a new line)
+    rejected = {r["subject_id"] for r in _rejections(restarted)}
+    aired = {ln["line_id"] for ln in lines if ln["status"] in ("approved", "published")}
+    assert rejected and not rejected & aired
 
 
 def test_a_match_rebuilt_past_the_cue_does_not_fire_the_seed_again() -> None:

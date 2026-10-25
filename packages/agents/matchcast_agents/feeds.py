@@ -100,7 +100,7 @@ def waits_for_producer(persona: str, approval_mode: str, hold_booth: bool = True
 def drops_on_failed_repair(persona: str) -> bool:
     """A derived line that fails repair is dropped, not escalated to a person (CREW-4.3).
 
-    This only says whether to drop. The audit record is written by the workflow when it is
-    wired in. The existing line_abstained record carries the reason code.
+    This only says whether to drop. The workflow writes the line_abstained audit record (with
+    the reason code and text) and the feed_drop record that points to it.
     """
     return lane_for(persona) == DERIVED_LANE

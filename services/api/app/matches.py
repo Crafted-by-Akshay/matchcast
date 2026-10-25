@@ -526,6 +526,22 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "local"
 
 
+def wanted_on_stream(item: StreamEvent, keep: tuple[str, ...]) -> bool:
+    """Whether a viewer reading the personas in `keep` gets this event (empty keep: all of them).
+
+    Publications belong to the persona they were written for. Line records stay on every stream
+    because the Broadcast producer queue reads all personas' lines. Derived feed records (onair,
+    feed_drop) belong to their feed, and casual and analyst are the feeds whose keys match a
+    persona (AB#499)."""
+    if not keep:
+        return True
+    if item.event == "publication":
+        return item.data["persona"] in keep
+    if item.event in ("onair", "feed_drop"):
+        return item.data["feed"] in keep
+    return True
+
+
 def _is_stored(store: Any, sk: str) -> bool:
     hydrate = getattr(store, "hydrate", None)
     if hydrate is not None:
@@ -815,17 +831,7 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
-            # publications belong to the persona they were written for; line records stay on
-            # every stream because the Broadcast producer queue reads all personas' lines.
-            # Derived feed records (onair, feed_drop) belong to their feed, and casual and
-            # analyst are the feeds whose keys match a persona.
-            if not keep:
-                return True
-            if item.event == "publication":
-                return item.data["persona"] in keep
-            if item.event in ("onair", "feed_drop"):
-                return item.data["feed"] in keep
-            return True
+            return wanted_on_stream(item, keep)
 
         async def localised(item: StreamEvent) -> StreamEvent:
             """The publication with a checked `variants[lang]`, or untouched (English)."""

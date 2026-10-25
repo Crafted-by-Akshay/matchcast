@@ -1,6 +1,6 @@
 # 12 Interfaces: REST, SSE, MCP, A2A, events
 
-Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file is the final word on field types; this file is the design it must match.
+Status: **Agreed design**. Last reviewed 25 Oct 2026. The generated OpenAPI file is the final word on field types; this file is the design it must match.
 
 ## 1. Conventions
 
@@ -68,8 +68,8 @@ Every match route rebuilds the workflow of a stored match from its roster when t
 | `publication` | publication with the variant for `lang` (+ English) | `pub:<publication_id>` |
 | `audit` | audit record | `audit:<sequence>` |
 | `recap_ready` | personas available | `recap` |
-| `onair` | the `onair` record of a derived feed line that aired (AB#498 contract, AB#499 wiring; `docs/contracts.md`, "Derived feed lines"). A persona stream gets only its own feed's records; feeds with no persona reach all-streams viewers only | `onair:<publication_id>:<lang>` |
-| `feed_drop` | the `feed_drop` record of a derived line that did not air; the text stays in the audit chain | `feed_drop:<publication_id>` |
+| `onair` | the `onair` record of a derived feed line that aired (AB#498 contract, AB#499 wiring; `docs/contracts.md`, "Derived feed lines"). A persona stream gets only its own feed's records; feeds with no persona reach all-streams viewers only | `onair:<publication_id>` |
+| `feed_drop` | the `feed_drop` record of a derived line that did not air; the text stays in the audit chain (the `line_abstained` record it points to) | `drop:<line_id>` |
 | `status` | `{status, reason?}`: `live`, `rules_fallback` (with `reason` from the `fallback_reason` list in 04-agents.md §4) or `warming_up`. Sent only when the status or reason changes; every refusal is still audited as `fallback_used` | none |
 | `heartbeat` | server time | none, every 15 s |
 
