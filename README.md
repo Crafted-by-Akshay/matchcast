@@ -46,6 +46,8 @@ Four agents with separate jobs: **Producer** (picks moments, routes lines, asks 
 
 `eval/compare.py` compares a single agent against the four-agent workflow on the same frozen moments with a judge that does not use the Verifier. The numbers recorded so far come from an offline run with a seeded stand-in model, so they prove the harness, not model quality. A live run against the deployed gpt-5-mini agents is not recorded yet. See [`eval/README.md`](eval/README.md) and [`eval/results/offline.json`](eval/results/offline.json).
 
+**Verifier, rules mode (offline):** the Verifier catches 99.3% of 151 planted content mutations with the right reason code, and rejects none of 34 honest lines (0.0% false rejects). Full tables and the per-agent checks are in [`docs/eval/agents-eval.md`](docs/eval/agents-eval.md). Reproduce with `uv run --all-packages python eval/agents_eval.py` (no cloud account needed). The live Foundry run of the same set is `eval/agents_eval.py --live` and is not recorded yet.
+
 ## Microsoft technology used
 
 | Technology | Use | Code |
@@ -60,7 +62,7 @@ Four agents with separate jobs: **Producer** (picks moments, routes lines, asks 
 | Azure AI Content Safety | Screens every line when `CONTENT_SAFETY_ENDPOINT` is set, with the local rules as the first pass and the fallback; `/v1/status` shows whether it is live | [`packages/agents/matchcast_agents/safety.py`](packages/agents/matchcast_agents/safety.py) |
 | Azure AI Speech | Voiced commentary and talk replies (clips for on-air lines at `/v1/matches/{id}/lines/{line_id}/audio.mp3`, and an `audio_url` on verified talk replies); push-to-talk through a short-lived token | [`services/api/app/voice.py`](services/api/app/voice.py), [`services/api/app/speech.py`](services/api/app/speech.py) |
 | Azure AI Translator | Spanish and Hindi variants of the published lines, made for viewers who pick ES or HI and sent only after the Verifier re-checks numbers and names | [`packages/agents/matchcast_agents/translate.py`](packages/agents/matchcast_agents/translate.py), [`docs/architecture/10-voice-and-translation.md`](docs/architecture/10-voice-and-translation.md) |
-| Azure AI Vision | Shirt-number OCR as a second opinion for player identification (at most 15 calls a minute) | [`services/api/app/vision.py`](services/api/app/vision.py) |
+| Azure AI Vision | Shirt-number OCR as a second opinion for player identification (at most 15 calls a minute). A vision tracker reads the rendered broadcast and measures its accuracy against the simulator's ground truth; its output is a measured side-channel, not an input to the agents yet | [`services/api/app/vision.py`](services/api/app/vision.py) |
 | azd, Bicep, local CI | Provisioning and deploy run from a laptop with `scripts/deploy_local.sh`; checks run with `scripts/local_ci.sh`. The GitHub Actions workflows are manual-only on purpose (cost) | [`scripts/`](scripts/), [`.github/workflows/`](.github/workflows/) |
 
 Service states are what the deployed api reports in `/v1/status` on 24 Oct, except Key Vault and Application Insights, which that endpoint does not report. The services are provisioned in the `rg-matchcast` resource group (see [`docs/infra.md`](docs/infra.md)). Event Hubs is simulated by an in-process stream. Databricks and Fabric are planned and not connected. The architecture docs mark each one; nothing here is claimed as running that does not run.
@@ -77,7 +79,7 @@ Service states are what the deployed api reports in `/v1/status` on 24 Oct, exce
 
 ## Responsible AI
 
-Every published line passes the Verifier and, in Producer mode, a human approval. A local screen checks text (Azure Content Safety screens lines when its endpoint is set; `/v1/status` shows whether it is live), a red-team set is kept in `eval/`, and all people and clubs are fictional. See [`docs/responsible-ai.md`](docs/responsible-ai.md) and [`docs/architecture/14-security-and-responsible-ai.md`](docs/architecture/14-security-and-responsible-ai.md).
+Every published line passes the Verifier. In Producer mode a person approves each line before it airs; the demo runs in auto mode by default, which airs a line once the Verifier passes it, and the app shows which mode is on. A local screen checks text (Azure Content Safety screens lines when its endpoint is set; `/v1/status` shows whether it is live), a red-team set is kept in `eval/`, and all people and clubs are fictional. See [`docs/responsible-ai.md`](docs/responsible-ai.md) and [`docs/architecture/14-security-and-responsible-ai.md`](docs/architecture/14-security-and-responsible-ai.md).
 
 ## Run locally
 
