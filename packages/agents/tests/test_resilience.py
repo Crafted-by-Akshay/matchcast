@@ -162,7 +162,9 @@ def test_unrepairable_line_is_escalated_after_exactly_one_repair(match) -> None:
     records = flow.store.audit_records(flow.sk)
     assert flow.store.publications(flow.sk) == []
     # an unknown name is a checkable fact: the failing lines wait for a person, none are dropped
-    escalated = [r for r in records if r["action"] == "line_review" and r["details"]["escalated"]]
+    escalated = [
+        r for r in records if r["action"] == "line_review" and r["details"].get("escalated")
+    ]
     assert escalated and flow.stats["escalated"] == len(escalated)
     assert flow.stats["abstained"] == 0
     repairs: dict[str, int] = {}
