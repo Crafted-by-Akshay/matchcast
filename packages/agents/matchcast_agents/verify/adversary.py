@@ -15,7 +15,7 @@ from typing import Any
 from ..context import MatchContext
 from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import TOLERANCE
-from .moment import NOT_A_MOMENT, moment_players
+from .moment import NOT_A_MOMENT, moment_event, moment_players
 from .text import EPSILON, extract_numbers
 
 Attack = Callable[[MatchContext, DraftLine, list[dict[str, Any]]], str | None]
@@ -62,6 +62,8 @@ def named_minute(ctx: MatchContext, draft: DraftLine, claims: list[dict[str, Any
 def surname_alone(ctx: MatchContext, draft: DraftLine, claims: list[dict[str, Any]]) -> str | None:
     """A capitalised first name or surname of a roster player who is not in the moment. Check 4
     only reads whole names (two or more words), so "Cato is in the box" passes it."""
+    if moment_event(ctx, claims) is None:  # cannot tell whose player it is: refuse, do not guess
+        raise LookupError("no stored event at the moment's evidence sequence")
     allowed = moment_players(ctx, claims)
     if allowed is None:  # a summary or period end is about both sides: not put to this attempt
         return None
@@ -124,9 +126,15 @@ REASON_BY_CHECK: dict[str, ReasonCode] = {f"adversary:{a.name}": a.reason for a 
 def adversary_checks(
     ctx: MatchContext, draft: DraftLine, claims: list[dict[str, Any]]
 ) -> list[Check]:
-    """One recorded check per attempt, in order. Nothing for an Ask answer, a recap or no claim."""
-    if draft.line_id.startswith(NOT_A_MOMENT) or not claims:
+    """One recorded check per attempt, in order. Nothing for an Ask answer or a recap. A moment
+    line with no claim cannot be tried against anything, so every attempt refuses it."""
+    if draft.line_id.startswith(NOT_A_MOMENT):
         return []
+    if not claims:
+        return [
+            Check(name=f"adversary:{a.name}", passed=False, detail="could not decide: no claim")
+            for a in ATTEMPTS
+        ]
     checks = []
     for attempt in ATTEMPTS:
         name = f"adversary:{attempt.name}"

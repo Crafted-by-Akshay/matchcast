@@ -143,18 +143,16 @@ def test_each_attempt_that_cannot_decide_fails_closed(match, monkeypatch) -> Non
     def cannot_decide(ctx, draft, claims):
         raise RuntimeError("no answer")
 
-    attempts = tuple(
-        replace(a, attack=cannot_decide) if a.name == "named_minute" else a
-        for a in adversary.ATTEMPTS
-    )
+    attempts = tuple(replace(a, attack=cannot_decide) for a in adversary.ATTEMPTS)
     monkeypatch.setattr(adversary, "ATTEMPTS", attempts)
     ctx = context(match)
     result = run(
         VerifierRules().check(ctx, line("Dev Hale scores."), [claim(ctx, "goals:home", 1)])
     )
     assert (result.verdict, result.reason_code) == ("rejected", "number_mismatch")
-    refused = next(c for c in result.checks if c.name == "adversary:named_minute")
-    assert not refused.passed and refused.detail.startswith("could not decide")
+    refused = [c for c in result.checks if c.name.startswith("adversary:")]
+    assert len(refused) == len(attempts)
+    assert all(not c.passed and c.detail.startswith("could not decide") for c in refused)
 
 
 def test_ask_answers_and_recaps_are_not_put_to_the_adversary(match) -> None:
@@ -179,3 +177,21 @@ def test_every_verified_line_in_a_workflow_run_records_each_attempt(make_workflo
         assert [
             c["name"] for c in record["details"]["checks"] if c["name"].startswith("adversary:")
         ] == expected
+
+
+def test_a_line_whose_moment_event_is_missing_is_refused_by_the_name_attempt(match) -> None:
+    ctx = context(match)
+    missing = claim(ctx, "goals:home", 1)
+    missing["max_evidence_sequence"] = 10**6  # no stored event carries this sequence
+    checks = adversary.adversary_checks(
+        ctx, line("Dev Hale scores, and Cato is in the box."), [missing]
+    )
+    refused = next(c for c in checks if c.name == "adversary:surname_alone")
+    assert not refused.passed and refused.detail.startswith("could not decide")
+
+
+def test_a_moment_line_with_no_claim_is_refused_by_every_attempt(match) -> None:
+    ctx = context(match)
+    checks = adversary.adversary_checks(ctx, line("Dev Hale scores."), [])
+    assert adversary_names(checks) == [f"adversary:{a.name}" for a in adversary.ATTEMPTS]
+    assert not any(c.passed for c in checks)

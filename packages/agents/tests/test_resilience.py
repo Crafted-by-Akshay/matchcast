@@ -205,9 +205,8 @@ def test_unrepairable_line_is_escalated_after_exactly_one_repair(match) -> None:
         if r["action"] == "line_repair_requested":
             repairs[r["subject_id"]] = repairs.get(r["subject_id"], 0) + 1
     assert repairs and max(repairs.values()) == 1
-    assert all(
-        ln.status == "review" and ln.escalated for ln in lines if ln.repair_of and ln.escalated
-    )
+    repaired_derived = [ln for ln in lines if ln.repair_of and ln.persona not in BOOTH]
+    assert repaired_derived and all(ln.status == "abstained" for ln in repaired_derived)
     assert all(ln.status in ("rejected", "review", "abstained") for ln in lines)
     assert verify_chain(records)["valid"] is True
 

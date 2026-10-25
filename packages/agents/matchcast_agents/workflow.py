@@ -1122,7 +1122,12 @@ class MatchWorkflow:
         verdict = await self._screen(draft, verdict)
         record.checks = list(verdict.checks)
         record.reason_code = verdict.reason_code
-        if verdict.verdict == "rejected":
+        # a derived feed never waits for a person: a line the Verifier sends to review is refused
+        # and goes through the same one repair as a rejected line (CREW-4.3)
+        refused = verdict.verdict == "rejected" or (
+            verdict.verdict == "review" and draft.persona not in BOOTH
+        )
+        if refused:
             record.status = "rejected"
             self._save_line(record)
             self._agent(
@@ -1130,7 +1135,7 @@ class MatchWorkflow:
                 a.verifier,
                 draft.line_id,
                 reason_code=verdict.reason_code,
-                checks=[c.model_dump() for c in verdict.checks if not c.passed],
+                checks=[c.model_dump() for c in verdict.checks],
                 **_repair_link(repair_of),
             )
             if attempt == 0:

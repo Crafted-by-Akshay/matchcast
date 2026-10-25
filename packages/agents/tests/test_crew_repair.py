@@ -7,7 +7,7 @@ from conftest import colour_producer, fixed_clock, run
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.messages import DraftLine
 from matchcast_agents.personas import BOOTH
-from matchcast_agents.rules import NarratorRules
+from matchcast_agents.rules import NarratorRules, VerifierRules
 from matchcast_contracts.audit import verify_chain
 
 
@@ -92,6 +92,8 @@ def test_a_seeded_wrong_claim_is_repaired_and_the_corrected_line_airs(make_workf
         if r["action"] == "line_rejected" and r["subject_id"] in {w.line_id for w in wrong}
     ]
     assert rejected and all(r["details"]["reason_code"] == "number_mismatch" for r in rejected)
+    # the rejected line's audit names every check it went through, the passed ones too
+    assert all(any(c["passed"] for c in r["details"]["checks"]) for r in rejected)
     assert verify_chain(records)["valid"] is True
 
 
@@ -136,3 +138,38 @@ def test_an_unrepairable_colour_line_is_queued_while_the_call_it_reacts_to_airs(
     dropped = {r["subject_id"] for r in records if r["action"] == "line_abstained"}
     assert {ln.line_id for ln in derived} <= dropped
     assert verify_chain(records)["valid"] is True
+
+
+class ReviewingVerifier(VerifierRules):
+    """Sends every derived-feed line to review, as a meaning check that cannot decide does."""
+
+    async def check(self, ctx, line, claims):
+        verdict = await super().check(ctx, line, claims)
+        if line.persona in BOOTH:
+            return verdict
+        return verdict.model_copy(update={"verdict": "review"})
+
+
+def test_a_derived_line_the_verifier_cannot_pass_is_dropped_not_queued(match) -> None:
+    base = rules_agents()
+    config = WorkflowConfig()
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"],
+        roster=match["roster"],
+        names=match["names"],
+        clubs=match["teams"],
+        agents=AgentSet(
+            colour_producer(config.personas), base.analyst, base.narrator, ReviewingVerifier()
+        ),
+        config=config,
+        clock=fixed_clock(),
+    )
+    assert flow.add_personas(BOOTH)
+    run(flow.ingest(match["events"]))
+    lines = flow.store.lines(flow.sk)
+    derived = [ln for ln in lines if ln.persona not in BOOTH]
+    assert derived
+    assert not [ln for ln in derived if ln.status == "review" or ln.escalated]
+    assert any(ln.status == "abstained" for ln in derived)
+    assert not [p for p in flow.store.publications(flow.sk) if p["persona"] not in BOOTH]
+    assert verify_chain(flow.store.audit_records(flow.sk))["valid"] is True
