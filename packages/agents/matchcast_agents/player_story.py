@@ -38,6 +38,8 @@ class PlayerStory:
     summarised_minute: int | None = None  # the last involvement a quiet-spell summary covered
 
     def switch(self, player_id: str) -> "PlayerStory":
+        if player_id == self.player_id:
+            return self  # re-selecting the same player keeps this spell's summary guard
         return replace(self, player_id=player_id, summarised_minute=None)
 
     def summarised(self, minute: int) -> "PlayerStory":
@@ -67,15 +69,23 @@ def totals(events: Any, player_id: str, upto: int) -> dict[str, int]:
     return out
 
 
-def story_line(ctx: MatchContext, event: dict[str, Any], story: PlayerStory) -> str | None:
-    """One line for a verified event that involves the followed player; None for any other."""
+def _storyline_play(event: dict[str, Any], player_id: str) -> bool:
+    """A play that gets a line for this player: goal, shot, won tackle, foul or card."""
     payload = event["payload"]
-    if payload.get("player_id") != story.player_id or payload["type"] not in PLAYS:
-        return None
+    if payload.get("player_id") != player_id or payload["type"] not in PLAYS:
+        return False
     if payload["type"] == "goal" and payload.get("own_goal"):
+        return False
+    return not (payload["type"] == "tackle" and payload.get("outcome") != "won")
+
+
+def story_line(ctx: MatchContext, event: dict[str, Any], story: PlayerStory) -> str | None:
+    """One line for an event that involves the followed player; None for any other.
+
+    The caller passes only verified events: this module does not check verification itself."""
+    if not _storyline_play(event, story.player_id):
         return None
-    if payload["type"] == "tackle" and payload.get("outcome") != "won":
-        return None  # a lost tackle is not a storyline beat
+    payload = event["payload"]
     verb, metric, label = PLAYS[payload["type"]]
     if payload["type"] == "card" and payload.get("colour") != "yellow":
         verb, metric, label = SENT_OFF
@@ -90,7 +100,9 @@ def _last_involvement_minute(ctx: MatchContext, player_id: str, now_ms: int) -> 
     minutes = [
         e["event_time_ms"] // 60_000
         for e in ctx.events
-        if e["event_time_ms"] <= now_ms and e["payload"].get("player_id") == player_id
+        if e["event_time_ms"] <= now_ms
+        and e["payload"].get("player_id") == player_id
+        and e["payload"]["type"] not in ("correction", "retraction")
     ]
     return max(minutes) if minutes else None
 
@@ -108,9 +120,15 @@ def quiet_summary(ctx: MatchContext, story: PlayerStory, now_ms: int) -> str | N
         return None
     if last == story.summarised_minute:
         return None  # this spell already has its summary
-    beats = ctx.extra.get("storylines", {}).get(f"player:{story.player_id}", ())
+    # only remembered beats that are storyline plays count: a pass or pressure line is no beat
+    by_sequence = {e["stream_sequence"]: e for e in ctx.events}
+    beats = [
+        b
+        for b in ctx.extra.get("storylines", {}).get(f"player:{story.player_id}", ())
+        if (e := by_sequence.get(b["sequence"])) is not None and _storyline_play(e, story.player_id)
+    ]
     if not beats:
-        return None  # nothing remembered: no involvement to summarise
+        return None  # nothing remembered as a storyline beat: no involvement to summarise
     count = _WORDS[len(beats)] if len(beats) < len(_WORDS) else "many"
     moments = "moment" if len(beats) == 1 else "moments"
     return (
@@ -121,6 +139,8 @@ def quiet_summary(ctx: MatchContext, story: PlayerStory, now_ms: int) -> str | N
 
 def total_check(ctx: MatchContext, player_id: str, metric: str, upto: int, stated: int) -> Check:
     """The Verifier's recount of a running total a player line states."""
+    if metric not in TRACKED:
+        return Check(name="player_totals", passed=False, detail=f"{metric} is not a player total")
     recount = totals(ctx.events, player_id, upto)[metric]
     return Check(
         name="player_totals",

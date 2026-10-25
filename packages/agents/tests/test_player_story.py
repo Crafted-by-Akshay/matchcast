@@ -198,3 +198,47 @@ def test_quiet_summary_counts_remembered_moments_in_words(match) -> None:
     summary = quiet_summary(ctx, PlayerStory(player_id=player), now_ms=(last + 10) * 60_000)
     assert summary is not None and "after two moments" in summary
     assert extract_numbers(summary) == [float(last)]
+
+
+def test_a_pass_beat_does_not_count_toward_the_summary(match) -> None:
+    goal = goal_event(match)
+    player = goal["payload"]["player_id"]
+    base = context(match)
+    last = max(
+        e["event_time_ms"] // 60_000
+        for e in match["events"]
+        if e["payload"].get("player_id") == player
+    )
+    passer = next(
+        e
+        for e in match["events"]
+        if e["payload"]["type"] == "pass" and e["payload"].get("player_id") == player
+    )
+    records = [
+        LineRecord(
+            line_id="p1",
+            moment_id=f"m-{passer['event_id']}",
+            claim_ids=[],
+            persona="casual",
+            text="a pass",
+            status="verified",
+            created_at="2026-10-25T14:00:00Z",
+            snapshot_revision=0,
+        )
+    ]
+    ctx = replace(base, extra={"storylines": storylines(base, records)})
+    assert quiet_summary(ctx, PlayerStory(player_id=player), now_ms=(last + 10) * 60_000) is None
+
+
+def test_reselecting_the_same_player_keeps_the_summary_guard() -> None:
+    story = PlayerStory(player_id="home9").summarised(12)
+    assert story.switch("home9").summarised_minute == 12
+    assert story.switch("away2").summarised_minute is None
+
+
+def test_an_unknown_metric_fails_the_check_instead_of_raising(match) -> None:
+    goal = goal_event(match)
+    check = total_check(
+        context(match), goal["payload"]["player_id"], "xg", goal["stream_sequence"], 0
+    )
+    assert not check.passed
