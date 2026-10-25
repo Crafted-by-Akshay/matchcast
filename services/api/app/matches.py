@@ -328,6 +328,11 @@ class Registry:
             client = cut.guard(client)
         return live_agents(client, personas, tool_call=tool_call, **seed)
 
+    def answers_for(self, live: bool, cut: ModelCut) -> ModelClient | None:
+        """Ask and Talk answer on the model when live; the failure drill cuts them too."""
+        client = self.model_client("answers") if live else None
+        return cut.guard(client) if client is not None else None
+
     def tool_call(self) -> ToolCall | None:
         """With MATCHCAST_TOOLS=mcp the Analyst calls the MCP tools in memory, against this
         process's store. A separate `mcp` container needs the shared store first (DAT-2)."""
@@ -438,7 +443,7 @@ class Registry:
                 stats_desk=self.stats_desk,
                 safety=self.safety,
                 # Ask and talk answer on the model when live
-                answer_model=self.model_client("answers") if live else None,
+                answer_model=self.answers_for(live, cut),
                 knowledge=self.knowledge,
                 truth_feed=self.truth_feed_for(session_id, match_id),
             )
@@ -662,7 +667,7 @@ def build_router(registry: Registry) -> APIRouter:
                     store=registry.store,
                     stats_desk=registry.stats_desk,
                     safety=registry.safety,
-                    answer_model=registry.model_client("answers") if live else None,
+                    answer_model=registry.answers_for(live, cut),
                     knowledge=registry.knowledge,
                     truth_feed=registry.truth_feed_for(stream["session_id"], stream["match_id"]),
                 )
@@ -684,6 +689,7 @@ def build_router(registry: Registry) -> APIRouter:
                     "live": live,
                     "seed_bad_claim": seed,
                     "seed_bad_claim_at_ms": body.seed_bad_claim_at_ms,
+                    "model_cut": cut.on,  # a drill that landed first is not overwritten
                 },
             )
         return {"stream": stream, "approval_mode": body.approval_mode, "mode": flow.agents.mode}
@@ -699,7 +705,7 @@ def build_router(registry: Registry) -> APIRouter:
         """The failure drill: cut or restore one match's model calls. While cut, each model call
         fails at once and the rules twin answers; every refusal is audited as fallback_used."""
         flow = await registry.flow_for(body.session_id, match_id)
-        cut = registry.cuts[(body.session_id, match_id)]
+        cut = registry.cuts.setdefault((body.session_id, match_id), ModelCut())
         cut.on = body.model_cut
         sk = flow.sk
 

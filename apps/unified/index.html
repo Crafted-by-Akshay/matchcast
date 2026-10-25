@@ -1032,9 +1032,9 @@ function init(list) {
     b.disabled = true; drillNote(on ? 'Cutting the model…' : 'Restoring the model…');
     try {
       const j = await LV.drill(on);
-      drillNote(j.model_cut ? 'Model cut on the api. Each model call for this match now fails at once and the rules twin answers: the pill reads Rules fallback at the next moment and the audit chain records fallback_used for each refusal.'
+      drillNote(j.model_cut ? 'Model cut on the api. Each model call for this match now fails at once and the rules twin answers: the pill reads Rules fallback at the next moment, the audit chain records fallback_used for each refusal, and Ask and Talk answer from the rules too.'
         : j.mode === 'rules' ? 'Model restored. This match runs on the rules agents (no model deployment or past the live allowance), so the cut changed nothing.'
-        : 'Model restored. The next model call that succeeds brings the pill back to Live agents.');
+        : 'Model restored. Each agent\'s breaker stays open for up to 30 s and then needs one good call, so allow up to 30 s plus one model moment before the pill reads Live agents again.');
     } catch (e) { drillNote('The api did not take the drill (' + (e.status || e.message) + '). Nothing changed.'); }
     b.disabled = false; renderAgents();
   };

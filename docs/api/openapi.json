@@ -1754,7 +1754,7 @@
     },
     "/v1/matches/{match_id}/drill": {
       "post": {
-        "description": "The failure drill: cut or restore one match's model calls. While cut, each model call\nfails at once and the rules twin answers; the audit records every refusal as fallback_used.",
+        "description": "The failure drill: cut or restore one match's model calls. While cut, each model call\nfails at once and the rules twin answers; every refusal is audited as fallback_used.",
         "operationId": "failure_drill_v1_matches__match_id__drill_post",
         "parameters": [
           {
