@@ -215,3 +215,13 @@ A desk that joins mid-match is sent the approval queue and mode, the commentary 
 - 12 px floor: the Verifier chip, the "Sound is off" line and the producer's verdict lines are 12 px.
 - Agents tab at 390 and 320 px: the claims ledger becomes one card per claim (the 600 px table made 17 elements run past the edge); the header row is visually hidden and the table keeps explicit ARIA table roles so a screen reader still hears the column names. Spec: `shell-layout.spec.ts`.
 - The header pill (this match's agents: live, rules fallback, warming) and the Foundry chip (the api's deployment from `/v1/status`) can differ: Foundry can be live while one match is on rules. Their tooltips now say so.
+
+## Evidence trace (CREW-6.2, AB#444), behind `?evidence=1`
+The trace panel ("How was this made?", `trace-panel.js`) gets an **Evidence** section when the page is opened with `?evidence=1`. For a line from the rules agents it lists:
+- **Agents**: the agents in the claim's trace, in order (Producer, Analyst, Narrator, Verifier).
+- **Tool calls**: the tools the trace steps report (for example `event_log.goals`, `score_counter`).
+- **Data rows**: the match events (or the moment) the claim's `evidence` ids point at, resolved against the run's event log, with their ids; a running total says it cites no single event (it covers the shots up to its minute).
+- **History rows**: head-to-head and Elo rows are CREW-2.2 and not built, so the panel says "Planned" unless a claim carries `history` (`[{label, value, dataset}]`); it never invents rows.
+- **Audit**: each hash on the claim is checked against the in-page hash chain ("matches the chain record" or "no matching chain record"), and the whole chain is recomputed ("Chain intact: N records").
+
+A line from the live api carries no trace, event ids or history on the stream yet (per the orchestration lane, `ClaimPacket` has no claim-level evidence until the AB#498 contract batch), so the panel says "Planned (AB#498)" for its agents, tool calls and data rows instead of guessing. The api's side record (`moment_id`, `tool_call_ids`, `formula_inputs`) is not on the stream. Without the flag the panel is unchanged. The OpenTelemetry GenAI spans and the Application Insights export of CREW-6.2 are the orchestration and Platform lanes' parts. Spec: `evidence-trace.spec.ts`.
