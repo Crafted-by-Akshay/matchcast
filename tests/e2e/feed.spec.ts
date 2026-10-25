@@ -3,7 +3,6 @@ import { collectErrors, openShell, stepSim, viewFrame } from './helpers';
 
 // Experience lane, continuous commentary feed (apps/unified/feed.js, embed/feed.js): a seeded Watch match keeps a line on screen,
 // Broadcast draws the same feed, Ask counts from the event log, and a talk order always gets a reply in the chat.
-declare const post: (view: string, msg: unknown) => void; // top-level function of the shell
 declare const AG: any;
 
 async function openWatch(page: Page, query = '?seed=2026&speed=4'): Promise<Frame> {
@@ -51,7 +50,7 @@ test('Ask counts from the event log and says so', async ({ page }) => {
   expect(keeper.verdict).toBe('abstained');
 });
 
-test('Broadcast draws the same feed', async ({ page }) => {
+test('Broadcast card draws the feed lines it is given', async ({ page }) => {
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
