@@ -235,7 +235,7 @@ const concrete = new THREE.MeshStandardMaterial({ color: 0x29303A, roughness: 0.
 const seatMat = new THREE.MeshStandardMaterial({ color: 0x1A2432, roughness: 0.8 });
 const ROWS = 24, DEPTH = 0.85, RISE = 0.5;
 const stands = [{ len: 128, off: 46, ax: 'z', s: -1 }, { len: 128, off: 46, ax: 'z', s: 1 }, { len: 92, off: 66, ax: 'x', s: -1, home: 0.88 }, { len: 92, off: 66, ax: 'x', s: 1, home: 0.12 }];
-// Fans are low-poly people, about 1.7 m tall with feet at y = 0 (legs, torso with arms, head, hair; about 127 triangles).
+// Fans are low-poly people, about 1.7 m tall with feet at y = 0 (legs, torso with arms, head, hair; about 140 triangles).
 // Each body part is one InstancedMesh. The parts of a chunk share one instance order, so one fan's parts always move together.
 // A chunk is a LOD group: beyond LOD_FAR metres it draws a torso and a head only.
 const crowd = { kind: 'humanoid', fans: 0, parts: ['body', 'legs', 'head', 'hair'], lod: 2, trisPerFan: 0, lowTrisPerFan: 0 };
@@ -266,10 +266,10 @@ const crowdU = { uTime: { value: 0 }, uHype: { value: 0 } };
   const FAN_SHAPE = {
     body: mergeFan([prim(cyl(0.19, 0.16, 0.62, 6), 0, 1.16, 0), prim(cyl(0.05, 0.042, 0.62, 5, true), -0.25, 1.09, 0, -1), prim(cyl(0.05, 0.042, 0.62, 5, true), 0.25, 1.09, 0, 1)]),
     legs: mergeFan([prim(cyl(0.075, 0.065, 0.85, 5, true), -0.09, 0.425, 0), prim(cyl(0.075, 0.065, 0.85, 5, true), 0.09, 0.425, 0)]),
-    head: mergeFan([prim(new THREE.SphereGeometry(0.11, 7, 4), 0, 1.6, 0)]),
-    hair: mergeFan([prim(new THREE.SphereGeometry(0.118, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2), 0, 1.61, 0)]),
+    head: mergeFan([prim(new THREE.SphereGeometry(0.11, 7, 4), 0, 1.58, 0)]),
+    hair: mergeFan([prim(new THREE.SphereGeometry(0.118, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2), 0, 1.59, 0)]),
     lowBody: mergeFan([prim(cyl(0.19, 0.16, 0.62, 6), 0, 1.16, 0)]),
-    lowHead: mergeFan([prim(new THREE.SphereGeometry(0.11, 7, 3), 0, 1.6, 0)]),
+    lowHead: mergeFan([prim(new THREE.SphereGeometry(0.11, 7, 3), 0, 1.58, 0)]),
   };
   // hype raises the arms of a share of the fans (the share grows with the hype); the rest sway a little.
   // An arm turns about its shoulder at x = ±0.25, y = 1.40, so the torso (aArm = 0) stays put.
@@ -305,6 +305,7 @@ const crowdU = { uTime: { value: 0 }, uHype: { value: 0 } };
   const hash01 = (i, s) => { const x = Math.sin(i * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); };
   const m4 = new THREE.Matrix4(), hair4 = new THREE.Matrix4(), col = new THREE.Color();
   let gi = 0;
+  const allChunks = [];
   for (const st of stands) {
     const slots = Math.floor(st.len / 0.6), nChunks = Math.ceil(st.len / CHUNK), per = Math.ceil(slots / nChunks);
     const chunks = [];
@@ -335,6 +336,7 @@ const crowdU = { uTime: { value: 0 }, uHype: { value: 0 } };
       }
     }
     for (const ch of chunks) for (const m of Object.values(ch.parts)) { m.count = ch.count; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    allChunks.push(...chunks);
     // pitch-side wall carrying the fascia LED ribbon
     const wallLen = st.len; const wall = new THREE.Mesh(new THREE.BoxGeometry(st.ax === 'z' ? wallLen : 0.3, 1.2, st.ax === 'z' ? 0.3 : wallLen), concrete);
     const wd = st.off - 0.6; if (st.ax === 'z') wall.position.set(0, 0.6, st.s * wd); else wall.position.set(st.s * wd, 0.6, 0); scene.add(wall);
@@ -351,6 +353,7 @@ const crowdU = { uTime: { value: 0 }, uHype: { value: 0 } };
   }
   const tris = (g) => g.index.count / 3;
   crowd.fans = gi;
+  crowd.chunks = allChunks.map((ch) => ({ count: ch.count, parts: Object.values(ch.parts).map((m) => m.count) }));
   crowd.trisPerFan = tris(FAN_SHAPE.body) + tris(FAN_SHAPE.legs) + tris(FAN_SHAPE.head) + tris(FAN_SHAPE.hair);
   crowd.lowTrisPerFan = tris(FAN_SHAPE.lowBody) + tris(FAN_SHAPE.lowHead);
 }
