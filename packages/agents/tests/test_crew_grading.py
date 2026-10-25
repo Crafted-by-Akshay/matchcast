@@ -271,3 +271,11 @@ def test_a_club_name_is_matched_in_any_case_and_each_number_is_counted_once() ->
     grade = grade_line("harbour united 2 shots.", claims, LOG, ALLOWED, clubs=CLUBS)
     assert grade["numbers_stated"] == 1
     assert grade["wrong_numbers"] == 1
+
+
+def test_a_number_before_the_club_name_in_its_sentence_is_judged_against_that_club() -> None:
+    claims = [claim("shots:home", 2, 3, cid="c-home"), claim("shots:away", 1, 3, cid="c-away")]
+    for text in ("2 shots for Harbour United.", "Harbour United, 2 shots."):
+        grade = grade_line(text, claims, LOG, ALLOWED, clubs=CLUBS)
+        assert grade["wrong_numbers"] == 1, text
+        assert grade["verdict"] == "incorrect", text

@@ -86,11 +86,12 @@ def _engine_value(events: Sequence[Mapping[str, Any]], claim: Mapping[str, Any])
 
 
 def _attributed_numbers(text: str, clubs: Mapping[str, str]) -> list[tuple[str, float]]:
-    """Each number with the side of the club named before it in the same clause, where a clause
-    ends at a comma, semicolon, full stop not inside a number, ! or ?. "Harbour United shots: 2"
-    and "Harbour United have 2 shots" are both the away side's; "Northgate FC 2, Harbour United 1"
-    gives each number its own club. The Verifier's score attribution is a narrower rule, and this
-    grader does not import it, so the two checks stay independent."""
+    """Each number with the side of the club name nearest to it in the same sentence. A sentence
+    ends at a full stop not inside a number, ! or ?. "2 shots for Harbour United", "Harbour United,
+    2 shots" and "Harbour United shots: 2" are all the away side's; "Northgate FC 2, Harbour United
+    1" gives each number its own club. A sentence with no club name leaves its numbers
+    unattributed. The Verifier's score attribution is narrower, and this grader does not import
+    it, so the two checks stay independent."""
     names = sorted(((club, side) for side, club in clubs.items()), key=lambda p: -len(p[0]))
     if not names:
         return []
@@ -100,13 +101,22 @@ def _attributed_numbers(text: str, clubs: Mapping[str, str]) -> list[tuple[str, 
         re.IGNORECASE,
     )
     found: list[tuple[str, float]] = []
-    for clause in re.split(r"[,;!?]|\.(?!\d)", text):
-        side = None
-        for hit in token.finditer(clause):
-            if hit.group(1):
-                side = side_of[hit.group(1).casefold()]
-            elif side is not None:
-                found.append((side, float(hit.group(2))))
+    for sentence in re.split(r"[!?]|\.(?!\d)", text):
+        clubs_here = [
+            (hit.start(), hit.end(), side_of[hit.group(1).casefold()])
+            for hit in token.finditer(sentence)
+            if hit.group(1)
+        ]
+        if not clubs_here:
+            continue
+        for hit in token.finditer(sentence):
+            if hit.group(2) is None:
+                continue
+            ns, ne = hit.span()
+            side = min(clubs_here, key=lambda c: max(0, ns - c[1], c[0] - ne))[
+                2
+            ]  # the gap between the number and the club's span; the first on a tie
+            found.append((side, float(hit.group(2))))
     return found
 
 
