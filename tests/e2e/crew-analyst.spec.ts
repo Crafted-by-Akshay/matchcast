@@ -189,14 +189,15 @@ test('crew: Watch shows no weather chip and no camera presets unless ?demo=1', a
   await expect(g.locator('#cams')).toBeVisible();
 });
 
-// flag off: Watch keeps Demo controls and shows the weather chip and camera presets once they are opened, as before
-test('flag off: Watch still has Demo controls, camera presets and the weather chip', async ({ page }) => {
+// flag off: Watch keeps Demo controls and shows the weather chip once they are opened; the camera presets stay off the screen (AB#497, first-screen.spec) unless ?demo=1
+test('flag off: Watch still has Demo controls and the weather chip, camera presets stay hidden', async ({ page }) => {
   test.setTimeout(300_000);
   await openShell(page, 'watch');
   await ready('watch')(page);
   const f = await viewFrame(page, 'watch');
   await expect(f.locator('#mc-demo')).toBeVisible();
   await f.locator('#mc-demo').click();
-  await expect(f.locator('#cams')).toBeVisible();
   await expect(f.locator('#wxchip')).toBeVisible();
+  await expect(f.locator('#cams')).toHaveCount(1);
+  await expect(f.locator('#cams')).toBeHidden();
 });

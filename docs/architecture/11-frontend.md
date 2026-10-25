@@ -239,7 +239,7 @@ Behind `?crew=1` (`CREW.enabled`, see `crew.js`; flag off changes nothing) the A
 - **Storyline ledger**: verified claims grouped per club and player, with how many were aired (approved).
 - **Favourite club**: there is no shell-level favourite setting, so the view has a two-club select (stored in `localStorage` `mc-crew-fav`); the chosen side is marked `data-fav` and starred.
 - **Full console**: the button creates the same iframe as before, with the same `routeAnalyst` routing (`#live.<id>`, none for a national fixture). `routeAnalyst` does nothing while the live view shows, so the console loads only when asked for. A "Live view" button returns.
-- **Watch**: with `?crew=1` and no `?demo=1`, `embed/democtl.js` also hides the Demo controls button, the weather chip and the camera presets. `?demo=1` restores them. Pause, Vision and Copilot stay.
+- **Watch**: with `?crew=1` and no `?demo=1`, `embed/democtl.js` also hides the Demo controls button, the weather chip and the camera presets. `?demo=1` restores them. Without `?crew=1` the presets stay hidden (AB#497) and `?demo=1` also shows them. Pause, Vision and Copilot stay.
 Spec: `tests/e2e/crew-analyst.spec.ts`. Not done here: per-team territory (no honest source), and ledger lines from the crew fixture (they carry no player).
 
 ## Crew accuracy scoreboard (AB#442, flagged `?crew=1`)
