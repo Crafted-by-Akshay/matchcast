@@ -47,19 +47,19 @@ const TP = (() => {
       return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') }
         : m ? { id, text: Math.floor(m.minute) + "' moment · " + (m.title || m.type) } : { id, text: 'not in the event log' };
     });
-    const audit = (c.audit || []).map((a) => { const rec = chain[a.seq - 1]; return { seq: a.seq, hash: a.hash, ok: !!rec && rec.ref === c.id && rec.hash.slice(0, a.hash.length) === a.hash, action: rec ? rec.agent + ' ' + rec.action : '' }; });
+    const audit = (c.audit || []).map((a) => { const rec = chain[a.seq - 1]; return { seq: a.seq, hash: a.hash, ok: !!rec && typeof a.hash === 'string' && a.hash.length >= 12 && rec.ref === c.id && rec.hash.slice(0, a.hash.length) === a.hash, action: rec ? rec.agent + ' ' + rec.action : '' }; });
     return { api: !!c.api, agents: [...new Set(tr.map((s) => s.agent))], tools: [...new Set(tr.flatMap((s) => s.tools || []))], rows, history: c.history || null, audit };
   };
   const evidenceHtml = (c) => {
     const x = evidence(c);
-    const none = x.api && !x.rows.length;
+    const planned = '<span class="m">Planned (AB#498): the api does not send its agents, tool calls or event ids on the stream yet.</span>';
     return '<section class="tp-evidence"><h4>Evidence</h4>'
-      + '<p class="tp-agents"><b>Agents</b> ' + (x.agents.length ? x.agents.map(esc).join(' → ') : '<span class="m">not in the stream (Planned, AGT-3)</span>') + '</p>'
-      + '<p class="tp-tools"><b>Tool calls</b> ' + (x.tools.length ? x.tools.map(esc).join(', ') : '<span class="m">none reported</span>') + '</p>'
+      + '<p class="tp-agents"><b>Agents</b> ' + (x.api ? planned : x.agents.length ? x.agents.map(esc).join(' → ') : '<span class="m">none recorded</span>') + '</p>'
+      + '<p class="tp-tools"><b>Tool calls</b> ' + (x.api ? planned : x.tools.length ? x.tools.map(esc).join(', ') : '<span class="m">none reported</span>') + '</p>'
       + '<p><b>Data rows</b></p>' + (x.rows.length ? '<ol class="tp-rows">' + x.rows.map((o) => '<li data-id="' + esc(o.id) + '">' + esc(o.text) + ' <span class="m">' + esc(o.id) + '</span></li>').join('') + '</ol>'
-        : '<p class="m">' + (none ? 'Planned (AB#498): the api does not send claim-level event ids yet.' : 'This line cites no single event (a running total over the whole match).') + '</p>')
+        : '<p class="m">' + (x.api ? 'Planned (AB#498): the api does not send claim-level event ids yet.' : 'This line cites no single event (a running total over the shots up to its minute).') + '</p>')
       + '<p class="tp-history"><b>History rows</b> ' + (x.history && x.history.length ? x.history.map((h) => esc(h.label) + ' ' + esc(h.value) + ' <span class="m">' + esc(h.dataset || '') + '</span>').join(' · ') : '<span class="m">none used. Planned (CREW-2.2): head-to-head and Elo rows are not built yet.</span>') + '</p>'
-      + '<p><b>Audit</b></p>' + (x.audit.length ? '<ol class="tp-audit">' + x.audit.map((a) => '<li class="' + (a.ok ? 'ok' : 'bad') + '">#' + a.seq + ' <code>' + esc(a.hash) + '</code> ' + esc(a.action) + ' · ' + (a.ok ? 'in the chain' : 'not in the chain') + '</li>').join('') + '</ol>' : '<p class="m">no audit record yet</p>')
+      + '<p><b>Audit</b></p>' + (x.audit.length ? '<ol class="tp-audit">' + x.audit.map((a) => '<li class="' + (a.ok ? 'ok' : 'bad') + '">#' + esc(a.seq) + ' <code>' + esc(a.hash) + '</code> ' + esc(a.action) + ' · ' + (a.ok ? 'matches the chain record' : 'no matching chain record') + '</li>').join('') + '</ol>' : '<p class="m">no audit record yet (they are written as each agent acts; reopen to refresh)</p>')
       + '<p class="tp-chain note">Checking the chain…</p></section>';
   };
   const open = (id) => {
@@ -68,7 +68,7 @@ const TP = (() => {
     if (!dlg) build();
     const body = dlg.querySelector('.tp-b');
     body.innerHTML = html(c) + (FLAG ? evidenceHtml(c) : '');
-    if (FLAG) MCC.verify().then((v) => { const el = body.querySelector('.tp-chain'); if (el) el.textContent = v.ok ? 'Chain intact: ' + v.count + ' records (in-page chain, recomputed now)' : 'Chain broken at record #' + v.brokenAt; });
+    if (FLAG) MCC.verify().then((v) => { const el = body.querySelector('.tp-chain'); if (el) el.textContent = v.ok ? 'Chain intact: ' + v.count + ' records (in-page chain, recomputed now)' : 'Chain broken at record #' + v.brokenAt; }).catch(() => { const el = body.querySelector('.tp-chain'); if (el) el.textContent = 'The chain check could not run in this browser'; });
     if (!dlg.open) dlg.showModal();
     return true;
   };
