@@ -15,10 +15,11 @@ PRIORITY_ONE_CAP = 4
 OTHER_CAP = 1
 SPAWNS_PER_MATCH = 60  # a cost guard, not a target: a match has a few dozen priority-1 moments
 
+# the specialists built so far; a name not listed here is not spawned, whatever the pool says
 OBJECTIVES = {
     "rhythm": "control, swings and the rhythm of play around this moment, from the raw events",
     "history": "the last meetings and form between the two teams, from the real results file",
-}  # a name without an objective is a specialist not built yet, and gets the name as its objective
+}
 
 
 class SpawnBudget:
@@ -54,7 +55,7 @@ def plan_spawns(
 ) -> SpawnPlan:
     """The specialists to run for one moment, in the order the pool lists them."""
     cap = PRIORITY_ONE_CAP if priority == 1 else OTHER_CAP
-    chosen = list(available)[:cap]
+    chosen = [name for name in available if name in OBJECTIVES][:cap]
     if not chosen:
         return SpawnPlan(reason="no specialist for this moment")
     if budget.remaining <= 0:
@@ -62,9 +63,7 @@ def plan_spawns(
     count = min(len(chosen), budget.remaining)
     budget.take(count)
     requests = tuple(
-        SpawnRequest(
-            name=name, moment_id=moment_id, objective=OBJECTIVES.get(name, name), token_budget=0
-        )
+        SpawnRequest(name=name, moment_id=moment_id, objective=OBJECTIVES[name], token_budget=0)
         for name in chosen[:count]
     )
     return SpawnPlan(requests=requests)

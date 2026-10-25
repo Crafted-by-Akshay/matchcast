@@ -207,7 +207,7 @@ class RhythmSpecialist:
             on_ball = at_swing.counts["on_ball"]
             share = _percent(on_ball[swing.to_team], sum(on_ball.values()))
             why = (
-                f"{ctx.club_name(swing.to_team)} took control in minute {swing.minute}, "
+                f"The rhythm swung to {ctx.club_name(swing.to_team)} in minute {swing.minute}, "
                 f"with {share}% of the on-ball actions over the five minutes to that minute"
             )
             why_evidence = tuple(e["event_id"] for e in window(events, swing.end_ms))

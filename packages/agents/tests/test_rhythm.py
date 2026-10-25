@@ -183,4 +183,4 @@ def test_a_why_line_names_a_club_whose_team_id_is_not_home_or_away() -> None:
         events, now_ms=12 * 60_000, home="argentina", away="brazil", names=("Argentina", "Brazil")
     )
     report = _run(ctx)
-    assert report.why is not None and report.why.startswith("Brazil took control")
+    assert report.why is not None and report.why.startswith("The rhythm swung to Brazil")
