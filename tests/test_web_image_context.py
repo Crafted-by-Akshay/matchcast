@@ -13,7 +13,7 @@ def test_build_py_runs_with_only_the_web_build_context(tmp_path: Path) -> None:
         ["git", "archive", "HEAD", "apps/unified"], cwd=ROOT, capture_output=True, check=True
     ).stdout
     subprocess.run(["tar", "-x", "-C", str(tmp_path)], input=archive, check=True)
-    # the tracked tree, as a clean checkout has it, with nothing of the repo around it
+    # the committed tree (an uncommitted build.py edit is not covered), as a clean checkout has it, with nothing of the repo around it
     app = tmp_path / "context"
     (tmp_path / "apps/unified").rename(app)
     run = subprocess.run(
@@ -24,4 +24,11 @@ def test_build_py_runs_with_only_the_web_build_context(tmp_path: Path) -> None:
         timeout=300,
     )
     assert run.returncode == 0, run.stderr[-2000:]
-    assert (app / "watch/index.html").exists()
+    for out in (
+        "watch/index.html",
+        "broadcast/index.html",
+        "analyst/index.html",
+        "shared",
+        "config.js",
+    ):
+        assert (app / out).exists(), out  # what the Dockerfile's cp step copies
