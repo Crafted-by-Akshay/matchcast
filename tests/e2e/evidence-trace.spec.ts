@@ -94,7 +94,7 @@ test('evidence trace: an unknown event id, a history row and a hostile name are 
 });
 
 // AB#498 (proposal: matchcast-v2/vision/interfaces/crew-frames-proposal.md): a crew_trace frame for a line fills the Evidence section of an api line.
-// The whole mapping from the frame's field names is one function in trace-panel.js (CT.fromFrame), so a rename there is the only change.
+// The whole mapping from the frame's field names is one function in trace-panel.js (fromFrame), so a rename there is the only change.
 const apiLine = (page: Page) => page.evaluate(() => {
   AG.ingest({ claim_id: 'c-9', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved' }, 'live');
   AG.ingest({ publication_id: 'pub-L-17', line_id: 'L-17', claim_ids: ['c-9'], text: 'Goal for Northgate FC.' }, 'live');
@@ -117,7 +117,7 @@ test('evidence trace: a crew_trace frame fills an api line with its agents, even
   const rows = ev.locator('.tp-rows li');
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText(ev0);
-  await expect(rows.nth(1)).toContainText('an api event id this page did not send');
+  await expect(rows.nth(1)).toContainText('an api event id this page no longer holds or never sent');
   await expect(ev.locator('.tp-history')).toContainText('results row 41230');
   await expect(ev.locator('.tp-history')).not.toContainText('Planned');
   await expect(ev.locator('.tp-verifier')).toContainText('(as the api reports it)');
@@ -153,7 +153,8 @@ test('evidence trace: a malformed crew_trace frame is ignored, and the flag off 
   const page2 = await page.context().newPage();
   await openEvidence(page2, '');
   await apiLine(page2);
-  await page2.evaluate(() => { (window as any).mcCrewTrace({ line_id: 'L-17', called: ['analyst'] }); TP.open('pub-L-17'); });
+  expect(await page2.evaluate(() => (window as any).mcCrewTrace({ line_id: 'L-17', called: ['analyst'] })), 'with the flag off the frame is refused and nothing is kept').toBe(false);
+  await page2.evaluate(() => TP.open('pub-L-17'));
   await expect(page2.locator('#tp .tp-evidence')).toHaveCount(0);
   await page2.close();
 });
@@ -176,6 +177,12 @@ test('evidence trace: a new match drops the old frames; hostile or odd frames ne
   const ev0 = await apiLine(page);
   const ok = await page.evaluate((f) => [(window as any).mcCrewTrace({ ...f, claims: [null, 7, { claim_id: 'c-9', source_event_ids: [f.claims[0].source_event_ids[0], 12, {}, null], history_row_ids: [41230] }] }), (window as any).mcCrewTrace({ line_id: { toString: 1 } })], frame(ev0));
   expect(ok[0]).toBe(true);
+  // fields that are not strings (an object whose toString is not callable) are shown as nothing, and the panel still opens
+  await page.evaluate(() => {
+    (window as any).mcCrewTrace({ line_id: 'L-odd', state: { toString: 1 }, called: [{ toString: 1 }, 'analyst'], verifier: { verdict: { toString: 1 }, checks: [{ toString: 1 }] }, audit_hash: { toString: 1 } });
+    AG.ingest({ publication_id: 'pub-L-odd', line_id: 'L-odd', claim_ids: [], text: 'A line with an odd frame.' }, 'live'); TP.open('pub-L-odd');
+  });
+  await expect(page.locator('#tp .tp-evidence .tp-agents')).toContainText('analyst');
   await page.evaluate(() => TP.open('pub-L-17'));
   const ev = page.locator('#tp .tp-evidence');
   await expect(ev.locator('.tp-rows li')).toHaveCount(2);   // the string id and the number 12; null and {} are dropped
@@ -216,7 +223,8 @@ test('evidence trace: a crew_trace event on the api stream reaches the panel', a
     send('claim', { claim_id: 'c-9', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved' });
     send('publication', { publication_id: 'pub-L-17', line_id: 'L-17', claim_ids: ['c-9'], text: 'Goal for Northgate FC.' });
     send('crew_trace', frame0);
-  }).listen(0);
+  });
+  await new Promise<void>((res) => server.listen(0, res));
   const api = 'http://127.0.0.1:' + (server.address() as any).port;
   try {
   await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api) + ';window.MATCHCAST_WARM_MS=6000;' }));
@@ -235,7 +243,7 @@ test('evidence trace: a crew_trace event on the api stream reaches the panel', a
   const rows = ev.locator('.tp-rows li');
   await expect(rows.first(), 'the api\'s e1 is the goal it was sent, not the page\'s own e1 (the whistle)').toContainText('goal · A One');
   await expect(rows.first()).not.toContainText('whistle');
-  await expect(rows.nth(1)).toContainText('an api event id this page did not send');
+  await expect(rows.nth(1)).toContainText('an api event id this page no longer holds or never sent');
   await expect(ev.locator('.tp-history')).toContainText('results row 7');
   await expect(ev.locator('.tp-crew-audit')).toContainText('sha256:cdcd');
   expect(errs.filter((e) => !/EventSource/.test(e))).toEqual([]);

@@ -45,10 +45,11 @@ const TP = (() => {
   const fromFrame = (f) => {
     const cl = (Array.isArray(f.claims) ? f.claims : []).filter((k) => k && typeof k === 'object'), v = f.verifier && typeof f.verifier === 'object' ? f.verifier : {};
     const id = (x) => (typeof x === 'string' && x) || (Number.isFinite(x) ? String(x) : '');
+    const str = (x) => id(x).slice(0, 200), list = (a) => (Array.isArray(a) ? a : []).slice(0, 20).map(str).filter(Boolean);   // every shown field is a short string, whatever the frame carried
     const uniq = (a) => [...new Set((Array.isArray(a) ? a : []).map(id).filter(Boolean))];
-    return { line: id(f.line_id), state: f.state || '', feed: f.feed || '',
+    return { line: id(f.line_id), state: str(f.state), feed: str(f.feed),
       claims: cl.map((k) => ({ id: id(k.claim_id) })), events: uniq(cl.flatMap((k) => (Array.isArray(k.source_event_ids) ? k.source_event_ids : []))), history: uniq(cl.flatMap((k) => (Array.isArray(k.history_row_ids) ? k.history_row_ids : []))),
-      verdict: v.verdict || '', reason: v.reason_code || '', checks: Array.isArray(v.checks) ? v.checks : [], repairOf: id(f.repair_of), called: Array.isArray(f.called) ? f.called : [], audit: f.audit_hash || '' };
+      verdict: str(v.verdict), reason: str(v.reason_code), checks: list(v.checks), repairOf: str(f.repair_of), called: list(f.called), audit: str(f.audit_hash) };
   };
   // a published line's card is `pub-<line id>`: match by line id only. A claim card is cited by several lines, so it takes no line's trace (open the trace from the published line).
   const crewFor = (c) => { const t = String(c.id).startsWith('pub-') || c.pub ? CT.get(String(c.id).replace(/^pub-/, '')) : null; return t && t.run === AG.run ? t : null; };
@@ -56,7 +57,7 @@ const TP = (() => {
   // the api's own event ids (live.js numbers only the events it sent) are looked up in live.js's table of what it sent, never matched to the page's own ids, which count every event
   const apiRow = (id) => {
     const e = typeof LV !== 'undefined' && LV.apiEvent ? LV.apiEvent(id) : null;
-    return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') } : { id, text: 'an api event id this page did not send' };
+    return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') } : { id, text: 'an api event id this page no longer holds or never sent (it keeps the last 2000)' };
   };
   const evidence = (c) => {
     const r = AG.run, chain = MCC.records();
