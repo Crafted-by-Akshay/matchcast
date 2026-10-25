@@ -185,7 +185,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const render = (d) => {
     for (const b of box.querySelectorAll('#mc-pmode [data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === (d.mode === 'demo' ? 'demo' : 'producer')));
     const items = (Array.isArray(d.items) ? d.items : []).slice().sort((a, b) => !!b.alert - !!a.alert);   // priority 1 alerts first, as in the Agents queue
-    list.innerHTML = items.length ? items.map(item).join('') : '<li class="mcp-v">' + (d.mode === 'demo' ? 'Auto-air: verified lines go straight to air.' : 'Booth lines wait here for your approval. Nothing airs until you approve, or switch to Auto-air.') + '</li>';
+    list.innerHTML = items.length ? items.map(item).join('') : '<li class="mcp-v">' + (d.mode === 'demo' ? 'Auto-air: verified lines go straight to air.' : 'No booth line is waiting for approval. In Approve each line mode a booth line waits here until you approve it, or switch to Auto-air.') + '</li>';
   };
   const showAired = () => {
     note.textContent = last ? 'Event to air: ' + (last.aired_ms / 1000).toFixed(1) + ' s' + (last.repaired ? ' · the wording was repaired before it aired' : '') : 'Event to air: no line on air yet.';
