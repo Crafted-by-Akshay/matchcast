@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, stepSim, viewFrame } from './helpers';
 
+declare const AG: any;
 // Audit follow-up: the Watch first screen shows the same moment as an analyst and as a casual fan side by side (personalisation visible without a click), the Verifier's measured record is a small chip that opens the Verify tab, and the header has fewer status pills.
 test('Watch shows one moment in two voices, and the Verifier chip opens the Verify tab', async ({ page }) => {
   test.setTimeout(420_000);
@@ -53,4 +54,39 @@ test('Hindi casual lines keep every name and number, and a line with no rule sta
   expect(goal).toContain('Harbor City 1, Thames Rovers 0');   // the score line keeps its names and numbers
   expect(none).toBeNull();
   expect(errs).toEqual([]);
+});
+
+test('Camera presets, speed and names sit behind Demo controls, one click away', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errs = collectErrors(page);
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  const btn = f.locator('#mc-demo');
+  await expect(btn).toBeVisible();
+  await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  await expect(f.locator('#cams')).toBeHidden();
+  await expect(f.locator('#play')).toBeHidden();
+  await expect(f.locator('#mc-pause')).toBeVisible();          // Pause stays one tap away while the speed group is folded (it presses the real button)
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-expanded', 'true');
+  await expect(f.locator('#cams')).toBeVisible();
+  await expect(f.locator('#play')).toBeVisible();
+  await expect(f.locator('#cpbtn')).toBeVisible();   // Copilot stays on the first screen
+  expect(errs).toEqual([]);
+});
+
+test('the first Verifier-checked line comes early: within the first match minute, about 20 s at normal speed', async ({ page }) => {
+  test.setTimeout(300_000);
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  let steps = 0, found: { text: string; minute: number } | null = null;
+  for (let i = 0; i < 100 && !found; i++) {   // 20 steps of 0.05 s = 1 s at normal speed
+    await stepSim(f, 20); steps += 20;
+    found = await page.evaluate(() => { const c = AG.run && AG.run.claims.find((x: any) => x.verdict === 'verified'); return c ? { text: c.text, minute: c.minute } : null; });
+  }
+  expect(found, 'a verified claim within 100 s at normal speed').not.toBeNull();
+  expect(found!.minute).toBeLessThanOrEqual(2);
+  expect(steps * 0.05, 'seconds at 1x until the first verified claim').toBeLessThanOrEqual(45);
 });

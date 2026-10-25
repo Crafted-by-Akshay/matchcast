@@ -21,8 +21,10 @@ def main() -> int:
         print("FOUNDRY_PROJECT_ENDPOINT is not set", file=sys.stderr)
         return 2
 
+    from matchcast_agents.live.client import API_VERSION  # the version the agents call with
+
     project = AIProjectClient(endpoint=endpoint, credential=DefaultAzureCredential())
-    client = project.get_openai_client()
+    client = project.get_openai_client(api_version=API_VERSION)
     started = time.perf_counter()
     reply = client.chat.completions.create(
         model=deployment,

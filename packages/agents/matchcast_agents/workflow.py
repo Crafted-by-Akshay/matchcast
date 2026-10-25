@@ -31,6 +31,7 @@ from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .tools import InProcessTools, ToolCall, ToolError
+from .vision import agreement, is_vision_stream, pass_facts
 
 if TYPE_CHECKING:
     from .live.client import ModelClient
@@ -125,6 +126,7 @@ def rules_agents(
 @dataclass
 class WorkflowConfig:
     approval_mode: str = "auto"  # auto | producer
+    hold_booth: bool = False  # producer mode also holds the booth voices (dead air if it does)
     publication_ttl_s: int = 30
     personas: tuple[Persona, ...] = ("casual", "analyst")
     # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
@@ -184,10 +186,15 @@ class MatchWorkflow:
         answer_model: "ModelClient | None" = None,
         history: dict[str, Any] | None = None,
         knowledge: "TalkKnowledge | None" = None,
+        truth_feed: Callable[[], list[dict[str, Any]]] | None = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
         self.stats_desk = stats_desk
+        # a Vision stream reads the engine match's events here, to check them (ADR-0022)
+        self._truth_feed = truth_feed
+        self._vision_lines = 0
+        self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
         self._knowledge = knowledge  # squads and the knowledge base for talk (EXP-18)
         self._verified_claims: dict[str, dict[str, Any]] = {}
@@ -255,6 +262,7 @@ class MatchWorkflow:
             state=self.store.get_state(self.sk),
             events=tuple(self.store.events(self.sk)),
             personas=self.config.personas,
+            truth=tuple(self._truth_feed()) if self._truth_feed else (),
             extra={"history": self.history} if self.history else {},
         )
         if all(p in (*self.config.personas, *self.extra_personas) for p in BOOTH):
@@ -262,6 +270,18 @@ class MatchWorkflow:
                 True  # kick-off and quiet-spell moments only when a viewer has the booth
             )
         return ctx
+
+    def vision_summary(self) -> dict[str, Any]:
+        """What Vision contributes on this stream: passes in, the lines the Verifier passed on them,
+        the latest such line, and how far Vision's passes agree with the engine's (ADR-0022)."""
+        passes = pass_facts(self.store.events(self.sk))
+        truth = list(self._truth_feed()) if self._truth_feed else []
+        return {
+            "passes_in": len(passes),
+            "lines_verified": self._vision_lines,
+            "latest_line": self._latest_vision_line,
+            "agreement": agreement(passes, truth),
+        }
 
     def _audit(
         self, actor_kind: str, actor_id: str, action: str, subject: str, details: dict[str, Any]
@@ -1037,10 +1057,16 @@ class MatchWorkflow:
         )
         if record.status == "verified":
             self.stats["verified"] += 1
+            if is_vision_stream(self.stream):
+                self._vision_lines += 1
+                if draft.persona == "analyst":
+                    self._latest_vision_line = draft.text
             for claim in claims:
                 if claim["claim_id"] in record.claim_ids:
                     self._verified_claims[claim["claim_id"]] = claim
-            if self.config.approval_mode == "auto":
+            # the booth is live talk: verified is enough unless the producer asked to hold it too
+            booth = record.persona in BOOTH and not self.config.hold_booth
+            if self.config.approval_mode == "auto" or booth:
                 self._approve(record, "agent", a.producer.agent_id)
 
     async def _screen(self, draft: DraftLine, verdict: Verdict) -> Verdict:
@@ -1211,6 +1237,8 @@ class MatchWorkflow:
             line = self._line(line_id)
             if line.status not in ("verified", "review"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
+            if line.escalated:
+                raise WorkflowError("not_approvable", "an escalated line can only be killed")
             self._approve(line, "person", actor_id, actor_name)
             return line
 
@@ -1246,6 +1274,10 @@ class MatchWorkflow:
             line = self._line(line_id)
             if line.status in ("published", "killed"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
+            if (
+                line.escalated
+            ):  # an edit that passes the Verifier would approve, so it waits for kill
+                raise WorkflowError("not_approvable", "an escalated line can only be killed")
             shield = await self.safety.shield(text)
             if shield.attack_detected:
                 self._audit("system", "content-safety", "safety_blocked", line_id,

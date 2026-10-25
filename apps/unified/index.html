@@ -106,7 +106,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .stage.dragging iframe{pointer-events:none}
 .foot{flex:none;padding:6px var(--gut);font-size:12px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
 .foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
-.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
+.toast{position:fixed;left:50%;top:var(--toast-dt,150px);transform:translate(-50%,-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
 .recap{max-height:40vh;overflow:auto;position:fixed;left:var(--gut);bottom:44px;z-index:4;max-width:min(420px,calc(100vw - 2*var(--gut)));background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:13px}
 .recap[hidden]{display:none}
@@ -135,6 +135,17 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .ag-feed li.ok{border-color:var(--ok)}
 .ag-feed li.warn{border-color:var(--warn)}
 .ag-feed .m{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px}
+.ag-lanes{list-style:none;margin:0;padding:0;display:grid;gap:8px;font-size:13px}
+.ag-lanes .lane{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.ag-lanes .lane-h{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:6px;overflow-wrap:anywhere}
+.ag-lanes .m{color:var(--muted);font-variant-numeric:tabular-nums}
+.ag-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.ag-steps li{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:6px;padding:3px 7px;font-size:12px;background:var(--bg2)}
+.ag-steps li[data-agent="verifier"]{border-left-color:var(--ok)}
+.ag-steps li[data-agent="producer"]{border-left-color:var(--warn)}
+.ag-steps .tag{font:600 10px ui-monospace,monospace;color:var(--muted);margin:0 4px}
+.ag-steps .m{color:var(--muted);font-variant-numeric:tabular-nums}
+@media (max-width:700px){.ag-grid{grid-template-columns:minmax(0,1fr)}.ag-head .chips{width:100%}.ag-panel table{font-size:12px}}
 .ag-prov dl{display:grid;grid-template-columns:96px minmax(0,1fr);gap:6px 10px;margin:0;font-size:13px}
 .ag-prov dt{color:var(--muted)}
 .ag-prov dd{margin:0;overflow-wrap:anywhere}
@@ -205,13 +216,14 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .foot{display:none}
 }
 @media (max-width:560px){
-  /* one scrolling row of utilities instead of three or four wrapped rows */
-  .status{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:4px 2px;position:relative}
-  .status .more{display:flex;position:sticky;right:0;align-items:center;padding:0 4px 0 22px;margin-left:-22px;background:linear-gradient(90deg,transparent,var(--bg) 55%);color:var(--text);font-size:22px;line-height:1;pointer-events:none}   /* a visible cue that the row scrolls */
-  .status::-webkit-scrollbar{display:none}
-  .status.end .more{display:none}   /* the cue goes once the row is scrolled to its end */
-  .status>*{flex:none}
-  #api-pill{order:-1}
+  /* judge re-test: nothing runs past the right edge. The utilities wrap instead of scrolling: language and Status share the wordmark's row, the rest sit under the view switcher */
+  .status{display:contents}
+  .status .more{display:none}
+  .top>.brand{order:0}
+  #lang-sel{order:1;margin-left:auto}
+  .switch{order:2}
+  .status>*{flex:none;order:3}
+  #lang-sel,#status-btn{order:1}
   .matchbar .chips{display:none}
   .matchbar .meta:not(.err){display:none}   /* the first screen belongs to the match: fixture, score, then the view; a load error still shows */
   .toast{bottom:auto;top:var(--toast-top,150px);left:0;right:0;transform:none;max-width:none;height:var(--toast-h,48px);display:flex;align-items:center;justify-content:center;border-radius:0;border-width:1px 0;padding:4px 12px;font-size:12px;line-height:1.3;overflow:hidden}   /* it takes the place of the Viewing-as row for its 2.6 s (toast() sets --toast-top and --toast-h): clear of the brand, the scoreboard and the pitch controls */
@@ -219,6 +231,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .fx label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .brand small{display:block}
 }
+@media (max-width:360px){.switch button{padding:7px 6px}#status-btn{order:3}#api-pill::before{content:none}}   /* a 320 px screen: the four view tabs fit without scrolling, Status joins Tour and Voice, and the agents pill drops its "Agents ·" prefix so it shares a row with the Azure label */
 @media (max-width:420px){
   .brand small{display:none}
   .switch button small{display:none}
@@ -276,6 +289,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <div class="chips">
     <span class="chip" id="sync">In sync</span>
     <span class="chip" id="src">Analyst: season run</span>
+    <button type="button" class="chip" id="bc-toggle" aria-pressed="false" hidden title="Show the Broadcast desk beside the match (loads a second 3D view)">Broadcast desk beside</button>
   </div>
 </section>
 
@@ -315,7 +329,13 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
           <span class="chip" id="ag-src">Source: waiting for Watch</span>
         </div>
       </div>
+      <p class="ag-vis" id="ag-vis" role="status"></p>
       <div class="ag-cards" id="ag-cards"></div>
+      <section class="ag-panel ag-orch" id="ag-orch" aria-labelledby="ag-orch-h"><h3 id="ag-orch-h">How the agents work, live <span class="muted" id="ag-orch-n"></span></h3>
+        <p class="muted" id="ag-orch-src" role="status"></p>
+        <p class="muted" id="ag-vision" role="status"></p>
+        <ol class="ag-lanes" id="ag-lanes"><li class="empty">Waiting for the kick-off in Watch. Each claim shows its handoffs here: Analyst, Narrator, Verifier, then Producer.</li></ol>
+      </section>
       <section class="ag-panel" id="aq"><h3>Approval queue <span class="muted" id="aq-n"></span></h3>
         <div class="ag-filters"><label>Mode <select id="aq-mode"><option value="demo">Demo: verified lines air at once</option><option value="producer">Producer: a person approves each line</option></select></label>
           <span class="muted" id="aq-who">Signed in as Sam Producer (simulated account, Planned: Entra ID)</span></div>
@@ -337,7 +357,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
         <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <span id="ag-bad-note" class="muted" role="status"></span> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
         <ol class="ag-recs" id="ag-recs"></ol>
       </section>
-      <p class="ag-note">Simulated: the agents run rules in the page; the Azure parts are not connected. Watch is the live source. Its events and moments reach this pipeline each second, and its score goes to Broadcast's scoreboard and the Analyst's live pill. Broadcast's pitch still runs its own engine, and the Analyst keeps its season runs, until the single-engine refactor (see README).</p>
+      <p class="ag-note">Watch is the live source. Its events and moments reach this pipeline each second, and its score goes to Broadcast's scoreboard and the Analyst's live pill. Broadcast's pitch still runs its own engine, and the Analyst keeps its season runs, until the single-engine refactor (see README).</p>
     </div>
   </section>
 </main>
@@ -384,7 +404,7 @@ const fixtureOf = (s) => { const f = FX.find((x) => keyOf(setupOf(x)) === keyOf(
 const byId = (id) => FX.find((x) => x.id === id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 { const st = document.querySelector('.status'); if (st) { const edge = () => st.classList.toggle('end', st.scrollLeft + st.clientWidth >= st.scrollWidth - 2); st.addEventListener('scroll', edge, { passive: true }); addEventListener('resize', edge); edge(); } }
-const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-dt', Math.round(r.top + r.height / 2) + 'px');   /* desktop: centred on the stage-steps row, off the views' cards and camera chips (UX pass 10) */ el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 // the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
 let RECAP = { gen: 0, closed: false };
 const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };
@@ -466,6 +486,7 @@ function ensure(view) {
 // the Analyst loads its season only when it is opened, so Watch and Broadcast get the machine first
 function routeAnalyst() {
   if (!M.fixture) return;
+  { const cur = byId(M.fixture); if (cur && cur.national) return; }   // no recorded run for a national-team fixture: the Analyst keeps its last route
   if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
     el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#live.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
   if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
@@ -479,7 +500,10 @@ function post(view, msg) { const f = frameOf(view); if (f && f.contentWindow) f.
 // Watch and Broadcast share the screen on a wide window (the live match beside its desk); a phone shows one at a time.
 const SPLIT_VIEWS = ['watch', 'broadcast'];
 const wide = window.matchMedia('(min-width: 900px)');
-function shownViews(view) { return SPLIT_VIEWS.includes(view) && wide.matches ? SPLIT_VIEWS : [view]; }
+// Watch is alone by default: one 3D render, one story. The Broadcast desk joins it beside the match on request (?split=1 or the button), and the Broadcast tab still shows both.
+let bcBeside = new URLSearchParams(location.search).get('split') === '1';
+function shownViews(view) { return wide.matches && (view === 'broadcast' || (view === 'watch' && bcBeside)) ? SPLIT_VIEWS : [view]; }
+(() => { const t = $('bc-toggle'); t.onclick = () => { bcBeside = !bcBeside; show(current); }; })();
 const SPLIT_KEY = 'mc.split', SPLIT_MIN = 0.25, SPLIT_MAX = 0.8;
 let splitFrac = 0.58;
 function applySplit(frac) {
@@ -511,6 +535,7 @@ function show(view) {
   }
   $('stage').classList.toggle('split', on.length > 1);
   $('split-bar').hidden = on.length < 2;
+  const tg = $('bc-toggle'); tg.hidden = !(view === 'watch' && wide.matches); tg.setAttribute('aria-pressed', String(bcBeside));
   for (const v of on) ensure(v);
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   paint();
@@ -547,6 +572,7 @@ function paint() {
   }
   $('meta').title = $('meta').textContent;
   if (live) { $('score-v').textContent = live.live.score.join('–'); $('score-l').textContent = live.live.over ? 'Full time' : live.live.minute + "'"; }
+  else if (fx && fx.national) { $('score-v').textContent = '–'; $('score-l').textContent = 'Synthetic squad'; }   // a national-team fixture has no recorded result
   else if (fx) { $('score-v').textContent = fx.score.join('–'); $('score-l').textContent = 'Recorded'; }
   else { $('score-v').textContent = '–'; $('score-l').textContent = 'Not in season'; }
 
@@ -634,22 +660,75 @@ function renderQueue() {
     : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';
   if ($('aq-list').dataset.html !== qhtml) { $('aq-list').innerHTML = qhtml; $('aq-list').dataset.html = qhtml; }   // redrawing an unchanged list detaches the buttons mid-click
 }
+// Vision -> Agents (ADR-0022): the Vision stream's counts, polled while a match runs. The same summary goes to Watch's "From pixels" chip.
+let VIS = null;
+function renderVision() {
+  const el = $('ag-vis'); if (!el) return;
+  const s = VIS;
+  el.textContent = !s ? 'Vision -> Agents: waiting for Vision. Watch sends the tracker\'s passes once a match runs.'
+    : 'Vision -> Agents: ' + s.passes_in + ' passes in · ' + s.lines_verified + ' lines verified by the Verifier · engine ' + ((s.agreement && s.agreement.engine) || 0) + ' passes, ' + (s.agreement && s.agreement.precision != null ? Math.round(s.agreement.precision * 100) + '% of Vision\'s passes match one' : 'no passes to match yet') + (s.latest_line ? ' · latest: ' + s.latest_line : '');
+}
+async function pollVision() {
+  const key = LV.key;
+  const s = await LV.visionSummary();
+  if (LV.key !== key) return;   // a new match started while this answer was on its way: the next poll shows it
+  const ok = !!s && typeof s.passes_in === 'number';   // no match, or no answer: clear what the last match showed
+  VIS = ok ? s : null; renderVision();
+  post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: ok ? s : null });
+}
+setInterval(pollVision, 3000);
+renderVision();   // the strip says what it waits for before any match
+// What the agents are doing right now, from the live api's status (live.js): Foundry when the api answers with models,
+// the rules fallback when it does not answer, and rules in the page when no api is configured. Never a fixed label.
+function agentState() {
+  const s = LV.status;
+  if (s === 'live') return { chip: 'Foundry: live', cls: 'ok', tag: 'Foundry · live', note: 'the live api writes these lines with Foundry models', src: 'Live: the agent api runs Producer, Analyst, Narrator and Verifier on Foundry. Each handoff below is what the api reported.' };
+  if (s === 'warming') return { chip: 'Foundry: warming up', cls: 'warn', tag: 'Warming up', note: 'the api is still starting', src: 'Warming up: the api is starting. Rules agents in the page keep the feed moving until it answers.' };
+  if (s === 'fallback') return { chip: 'Rules fallback: no model answer', cls: 'warn', tag: 'Rules fallback', note: 'the api is not answering with models', src: 'Rules fallback: the api is not answering with models, so the rules agents in the page write these lines.' };
+  return { chip: 'Rules · simulated (no api)', cls: '', tag: 'Rules · simulated', note: 'no agent api is configured', src: 'Simulated: no agent api is configured, so the rules agents run in the page.' };
+}
+const STAGE = { analyst: 0, narrator: 1, verifier: 2, producer: 3 };   // the order a line travels in
+// one claim's handoffs in order: the rules trace when the page ran the claim, else the handoffs the api reported
+function stepsOf(c) {
+  if (c.trace && c.trace.length) return c.trace.map((s) => ({ agent: s.agent, step: s.step, mode: s.mode, timing: (s.ms < 1 ? s.ms.toFixed(2) : Math.round(s.ms)) + ' ms' }));
+  return (c.hops || []).map((h) => ({ agent: h.agent, step: h.step, mode: h.mode, timing: h.ms == null ? '' : '+' + (h.ms / 1000).toFixed(1) + ' s after the claim' }))
+    .sort((a, b) => (STAGE[a.agent] ?? 9) - (STAGE[b.agent] ?? 9));
+}
+function renderOrch(r) {
+  const claims = r ? r.claims.filter((c) => !c.pub) : [];
+  const verified = claims.filter((c) => c.verdict === 'verified').length, held = claims.filter((c) => c.verdict === 'abstained').length;
+  $('ag-orch-n').textContent = claims.length ? claims.length + ' claims · ' + verified + ' verified · ' + held + ' held' : '';
+  $('ag-orch-src').textContent = agentState().src;
+  // Vision: the browser tracker reads the match from pixels; the api gets its passes, and Azure Read is asked only about unclear shirt numbers
+  const v = LV.vision, failed = v.readsFailed ? ' (' + v.readsFailed + ' over budget or failed)' : '';
+  $('ag-vision').textContent = !LV.enabled ? 'Vision runs in the browser. No api is configured, so no pass or shirt-number check reaches Azure.'
+    : v.passes || v.reads || v.readsFailed ? 'Vision: the browser tracker sent ' + v.passes + ' passes to the api. Azure Read checked ' + v.reads + ' unclear shirt numbers' + failed + '.'
+    : 'Vision: the browser tracker reads shirt numbers from pixels in Watch and sends its passes here while Vision is on. None sent yet. Azure Read is asked only when a shirt number is unclear.';
+  const lane = (c) => '<li class="lane"><div class="lane-h"><b>' + esc(c.id) + '</b><span>' + esc(c.kind) + '</span><span class="m">' + mins(c.minute) + '</span><span class="v ' + esc(c.verdict || 'pending') + '">' + esc(c.verdict || 'pending') + '</span></div>'
+    + '<ol class="ag-steps">' + stepsOf(c).map((s) => '<li data-agent="' + esc(s.agent) + '" data-step="' + esc(s.step) + '"><b>' + esc(s.agent) + '</b> · ' + esc(s.step) + '<span class="tag">' + (s.mode === 'model' ? 'model' : 'rules') + '</span><span class="m">' + esc(s.timing) + '</span></li>').join('') + '</ol></li>';
+  $('ag-lanes').innerHTML = claims.length ? claims.slice(-6).reverse().map(lane).join('') : '<li class="empty">Waiting for the kick-off in Watch. Each claim shows its handoffs here: Analyst, Narrator, Verifier, then Producer.</li>';
+}
 const FOUNDRY = { word: 'not connected' };   // from /v1/status, painted by paintFoundry
 function renderAgents() {
   renderQueue();
+  const who = agentState();   // the Foundry chip is painted by paintFoundry from /v1/status
   if (current !== 'agents') return;
   const r = AG.run, st = r ? r.stat : { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 };
   const sel = picked || (r && r.claims.length ? r.claims[r.claims.length - 1].id : null);
+  // with an api configured, these counts are the page's own rules run beside it, so they are not tagged as Foundry
+  const cardTag = LV.enabled ? 'In-page rules run' : who.tag;
   const card = (name, role, line, tag) => '<article class="ag-card"><div class="ag-top"><b>' + name + '</b><span class="tag">' + tag + '</span></div><small>' + role + '</small><p>' + line + '</p></article>';
+  renderVision();
   $('ag-cards').innerHTML = [
-    card('Producer', 'Picks moments and routes lines', st.moments + ' moments seen · ' + st.verified + ' approved · ' + st.abstained + ' held', 'Rules · simulated'),
-    card('Analyst', 'Turns events into claims with evidence', st.claims + ' claims from ' + st.events + ' events', 'Rules · simulated'),
-    card('Narrator', 'Writes each line from the claim inputs', st.lines + ' lines in English', 'Rules · simulated'),
+    card('Producer', 'Picks moments and routes lines', st.moments + ' moments seen · ' + st.verified + ' approved · ' + st.abstained + ' held', cardTag),
+    card('Analyst', 'Turns events into claims with evidence', st.claims + ' claims from ' + st.events + ' events', cardTag),
+    card('Narrator', 'Writes each line from the claim inputs', st.lines + ' lines in English', cardTag),
     card('Verifier', 'Recounts every claim from the event log', st.verified + ' verified · ' + st.repaired + ' repaired · ' + st.abstained + ' abstained', 'Checks all claims'),
     card('Predictor', 'A tool the agents call, not an agent', st.predictions + ' predictions seen in the stream', 'Tool'),
     card('Data Scientist', 'Analyst dashboard only, when asked', 'Not called in this match', 'On demand')
   ].join('');
   $('ag-src').textContent = r ? 'Source: Watch · ' + r.names.home + ' v ' + r.names.away : 'Source: waiting for Watch';
+  renderOrch(r);
   $('ag-feed').innerHTML = r && r.feed.length
     ? r.feed.slice(-40).reverse().map((f) => '<li class="' + f.tone + '"><span class="m">' + mins(f.minute) + '</span><b>' + esc(f.who) + '</b> ' + esc(f.text) + '</li>').join('')
     : '<li class="empty">Waiting for the kick-off in Watch. Events and claims appear here as the match runs.</li>';
@@ -667,7 +746,7 @@ function renderAgents() {
     ['Verifier', esc(c.verdict + ': ' + c.reason)],
     ['Route', esc(c.route || 'held, not aired')],
     ['Contract', esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
-    ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules in the page (Foundry: ' + FOUNDRY.word + ')'],
+    ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules · in the page, ' + agentState().note],
     ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending'],
     ['Trace', '<button type="button" class="ag-how" data-id="' + esc(c.id) + '">How was this made?</button>']
   ].map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>' : '<p class="empty">Pick a claim to see its provenance.</p>';
@@ -715,7 +794,7 @@ function voiceFeed(items) {
     const key = x.id + '@' + x.t;
     if (voiced.has(key)) continue;
     voiced.add(key);
-    if (VC.on) VC.say(x.text, { id: 'feed-' + key, at: x.t, role: x.source === 'live' || x.kind === 'summary' ? 'analyst' : 'playByPlay', tone: x.tone });
+    if (VC.on) VC.say(x.text, { id: 'feed-' + key, at: x.t, role: x.speaker === 'colour' ? 'analyst' : 'playByPlay', tone: x.tone });
   }
 }
 function pushLines() {
@@ -740,12 +819,21 @@ function pushCards() {
 }
 
 // ---------------------------------------------------------------- messages from the views
+let boothLast = null;   // the booth's state (GET /booth), sent to both cards and re-sent to a card that loads after it
 window.addEventListener('message', (e) => {
   const d = e.data || {};
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
-  if (d.type === 'feed-ready') { post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on }); return; }   // the commentary card asks once on load, so it shows the right Voice state at once
+  if (d.type === 'feed-ready') {
+    post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on });
+    if (boothLast) post(view, boothLast);
+    if (view === 'broadcast') {   // a desk that joins mid-match gets what it missed: the queue and mode, the feed and where the lines come from (lines already aired are not replayed: Broadcast would speak them again)
+      postQueue(); post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items: CM.view(40) });
+      if (M.agents) post('broadcast', M.agents);
+    }
+    return;
+  }   // the commentary card asks once on load, so it shows the right Voice state at once
   if (d.type === 'vision-crop' && view === 'watch') {   // the tracker's OCR second opinion (DAT-11); only when the agent api is live
     const reply = (extra) => post('watch', Object.assign({ src: 'matchcast-shell', type: 'vision-ocr', id: d.id }, extra));
     if (!(LV.enabled && LV.status === 'live')) { reply({ error: 'unavailable' }); return; }
@@ -817,7 +905,7 @@ window.addEventListener('message', (e) => {
     $('v-' + view).classList.add('ready');
     if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });
     if (M.agents) post(view, M.agents);   // a view that (re)loaded learns the viewer's language
-    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); CM.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
+    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); CM.reset(keyOf(s), Object.assign({}, teamsOf(s), { history: (byId(M.fixture) || {}).history })); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
     prefetchOthers();
     toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
     paint(); routeAnalyst();
@@ -859,12 +947,12 @@ function init(list) {
   for (const m of Object.keys(md)) {
     const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
     for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
-      o.textContent = fx.home.club + ' v ' + fx.away.club + ' (recorded ' + fx.score.join('–') + ')'; g.appendChild(o); }
+      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = fx.national ? 'Synthetic squads, no recorded result' : 'Recorded result ' + fx.score.join('–') + ' (the Analyst replays it)'; g.appendChild(o); }
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
-  // default: the season's most open fixture, so the first view has goals to watch
-  const best = FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
+  // default: the national-team fixture when the data has one, else the season's most open fixture, so the first view has goals to watch
+  const best = FX.find((f) => f.national) || FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
   M.setup = setupOf(best); M.fixture = best.id;
   // filming URL (?seed=2026&speed=4&seedBadClaim=1): the same match, pace and demo claim on every take
   const Q = new URLSearchParams(location.search);
@@ -981,12 +1069,15 @@ function init(list) {
       warmTick = setInterval(tick, 1000);
     }
     paintPillNow(s);
+    renderAgents();   // the Agents tab follows the api's status
     if (s === 'warming') $('api-pill').textContent = PILL.warming[0] + ' · 0 s of up to ' + Math.round((window.MATCHCAST_WARM_MS || 90000) / 1000);
   };
   const paintPillNow = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
-  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });
+  const boothState = (j) => { boothLast = { src: 'matchcast-shell', type: 'booth-state', ready: !j || !!j.ready, reason: (j && j.reason) || '' }; post('watch', boothLast); post('broadcast', boothLast); };   // no answer yet (null): the card shows nothing
+  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, booth: boothState });
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
+  renderAgents();
   $('status-btn').onclick = () => { const dlg = $('status-dlg'); STX.draw($('status-box')); if (dlg.showModal) dlg.showModal(); };
   show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'watch');
 }

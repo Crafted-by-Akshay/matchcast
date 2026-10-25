@@ -16,4 +16,4 @@ There is no offside from a goal kick, a throw-in or a corner kick. A player in t
 
 ## What happens
 
-The other team gets an indirect free kick where the offending player was when the ball was played. Official wording is in the [Laws of the Game published by IFAB](https://www.theifab.com/laws-of-the-game-documents/); this page is our own summary.
+The other team gets an indirect free kick where the offending player was when the ball was played. Official wording is in the [official Laws of the Game](https://www.theifab.com/laws-of-the-game-documents/); this page is our own summary.

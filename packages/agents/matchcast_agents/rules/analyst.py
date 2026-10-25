@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from ..context import MatchContext
 from ..messages import ProducerTask
 from ..tools import InProcessTools, McpMetrics, ToolCall, ToolError
+from ..vision import is_vision_stream
 
 DERIVATION_VERSION = "1.0.0"
 # {h} and {a} are the roster's first and second team, {t} the team of the picked event
@@ -28,13 +29,18 @@ COLOUR_METRICS = {
 }
 
 
+# a Vision stream sees passes only, so its summary counts those (ADR-0022)
+VISION_COUNT_METRICS = {**COUNT_METRICS, "summary": ("passes:{h}", "passes:{a}")}
+
+
 def metrics_for(ctx: MatchContext, task: ProducerTask, event: dict[str, Any]) -> list[str]:
     payload = event["payload"]
     team = payload.get("team_id", ctx.home)
+    counts = VISION_COUNT_METRICS if is_vision_stream(ctx.stream) else COUNT_METRICS
     names = (
         COLOUR_METRICS.get(payload["type"], ())
         if task.reason == "colour"
-        else COUNT_METRICS.get(task.reason, ())
+        else counts.get(task.reason, ())
     )
     return [m.format(t=team, h=ctx.home, a=ctx.away) for m in names]
 

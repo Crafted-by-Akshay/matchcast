@@ -256,6 +256,11 @@
             ],
             "title": "Engine Version"
           },
+          "hold_booth": {
+            "default": false,
+            "title": "Hold Booth",
+            "type": "boolean"
+          },
           "home_team_id": {
             "anyOf": [
               {
@@ -1544,6 +1549,60 @@
         ]
       }
     },
+    "/v1/matches/{match_id}/booth": {
+      "get": {
+        "description": "Register the commentary booth for this match, or say plainly why it is not available,\nso the client can fall back to the rules booth instead of waiting on a stream that 429s.",
+        "operationId": "booth_status_v1_matches__match_id__booth_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Booth Status V1 Matches  Match Id  Booth Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Booth Status",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/matches/{match_id}/claims": {
       "get": {
         "operationId": "claims_v1_matches__match_id__claims_get",
@@ -2372,6 +2431,60 @@
           }
         },
         "summary": "Vision Identify",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/vision/summary": {
+      "get": {
+        "description": "What Vision contributes to the agents on this match (ADR-0022): passes in, the lines the\nVerifier passed on them, the latest such line, and agreement with the engine's passes.",
+        "operationId": "vision_summary_v1_matches__match_id__vision_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Vision Summary V1 Matches  Match Id  Vision Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Vision Summary",
         "tags": [
           "matches"
         ]

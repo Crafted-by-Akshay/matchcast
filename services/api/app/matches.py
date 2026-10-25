@@ -13,7 +13,7 @@ import os
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 from urllib.parse import urlencode
@@ -34,6 +34,7 @@ from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
+from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
@@ -120,6 +121,7 @@ class MatchCreate(BaseModel):
     names: dict[str, str] = Field(default_factory=dict)
     clubs: dict[str, str] = Field(default_factory=dict)
     approval_mode: Literal["auto", "producer"] = "auto"
+    hold_booth: bool = False  # with approval_mode producer: hold the booth voices too
     seed_bad_claim: bool = False
     seed_bad_claim_at_ms: int = Field(default=720_000, ge=0)
     # descriptive fields from docs/architecture/12-api.md; stored with the match, not used by agents
@@ -353,6 +355,20 @@ class Registry:
         window.append(now)
         return True
 
+    def truth_feed_for(
+        self, session_id: str, match_id: str
+    ) -> Callable[[], list[dict[str, Any]]] | None:
+        """A Vision stream's truth: the engine match's own events, from the store (ADR-0022)."""
+        if not is_vision_stream({"session_id": session_id}):
+            return None
+        engine = {
+            "tenant_id": TENANT,
+            "session_id": engine_stream_of(session_id),
+            "match_id": match_id,
+        }
+        sk = stream_key(engine)
+        return lambda: self.store.events(sk)
+
     async def flow_for(self, session_id: str, match_id: str) -> MatchWorkflow:
         """The workflow of a match, rebuilt from its stored roster after a restart (F1)."""
         key = (session_id, match_id)
@@ -364,6 +380,9 @@ class Registry:
         # no time under the lock (every stream retry for an id that is not there lands here)
         if await asyncio.to_thread(self.store.get_match, sk) is None:
             raise Problem(404, "not_found", f"unknown match {match_id}")
+        if is_vision_stream({"session_id": session_id}):
+            # its Verifier reads the engine's events from the store, so the engine match comes first
+            await self.flow_for(engine_stream_of(session_id), match_id)
         async with self.create_lock:
             if (flow := self.flows.get(key)) is not None:
                 return flow
@@ -375,7 +394,10 @@ class Registry:
             info = await asyncio.to_thread(stored)
             if info is None:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
-            config = WorkflowConfig(approval_mode=info.get("approval_mode", "auto"))
+            config = WorkflowConfig(
+                approval_mode=info.get("approval_mode", "auto"),
+                hold_booth=bool(info.get("hold_booth", False)),
+            )
             live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
             # the seeded wrong claim fires once; a match rebuilt past its cue has already had it
@@ -400,6 +422,7 @@ class Registry:
                 # Ask and talk answer on the model when live
                 answer_model=self.model_client("answers") if live else None,
                 knowledge=self.knowledge,
+                truth_feed=self.truth_feed_for(session_id, match_id),
             )
             self.flows[key] = flow
             return flow
@@ -598,7 +621,7 @@ def build_router(registry: Registry) -> APIRouter:
                 raise Problem(
                     422, "contract_invalid", "roster stream must match this match", "/roster/stream"
                 )
-            config = WorkflowConfig(approval_mode=body.approval_mode)
+            config = WorkflowConfig(approval_mode=body.approval_mode, hold_booth=body.hold_booth)
             players = body.roster.get("players")
             teams = body.roster.get("team_ids")
             try:
@@ -621,6 +644,7 @@ def build_router(registry: Registry) -> APIRouter:
                     safety=registry.safety,
                     answer_model=registry.model_client("answers") if live else None,
                     knowledge=registry.knowledge,
+                    truth_feed=registry.truth_feed_for(stream["session_id"], stream["match_id"]),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
@@ -635,6 +659,7 @@ def build_router(registry: Registry) -> APIRouter:
                 {
                     **(registry.store.get_match(flow.sk) or {}),
                     "approval_mode": body.approval_mode,
+                    "hold_booth": body.hold_booth,
                     "live": live,
                     "seed_bad_claim": seed,
                     "seed_bad_claim_at_ms": body.seed_bad_claim_at_ms,
@@ -674,6 +699,22 @@ def build_router(registry: Registry) -> APIRouter:
             "last_sequence": max(e["stream_sequence"] for e in body.events),
         }
 
+    @router.get("/matches/{match_id}/vision/summary")
+    async def vision_summary(match_id: str, session_id: str) -> dict[str, Any]:
+        """What Vision contributes to the agents on this match (ADR-0022): passes in, the lines the
+        Verifier passed on them, the latest such line, and agreement with the engine's passes."""
+        await registry.flow_for(session_id, match_id)  # the engine match must exist
+        try:
+            vision = await registry.flow_for(f"{session_id}.vision", match_id)
+        except Problem:  # no Vision has been sent for this match yet
+            return {
+                "passes_in": 0,
+                "lines_verified": 0,
+                "latest_line": None,
+                "agreement": agreement([], []),
+            }
+        return vision.vision_summary()
+
     @router.get("/matches/{match_id}/stream")
     async def stream(
         match_id: str,
@@ -698,7 +739,10 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
-            return not (item.event == "publication" and keep and item.data["persona"] not in keep)
+            # publications belong to the persona they were written for; line records stay on
+            # every stream because the Broadcast producer queue reads all personas' lines
+            own = item.event == "publication" and keep
+            return not (own and item.data["persona"] not in keep)
 
         async def localised(item: StreamEvent) -> StreamEvent:
             """The publication with a checked `variants[lang]`, or untouched (English)."""
@@ -766,6 +810,20 @@ def build_router(registry: Registry) -> APIRouter:
         page = rows[cursor : cursor + limit]
         more = cursor + limit < len(rows)
         return {"items": page, "next_cursor": cursor + limit if more else None}
+
+    @router.get("/matches/{match_id}/booth")
+    async def booth_status(match_id: str, session_id: str) -> dict[str, Any]:
+        """Register the commentary booth for this match, or say plainly why it is not available,
+        so the client can fall back to the rules booth instead of waiting on a stream that 429s."""
+        flow = await registry.flow_for(session_id, match_id)
+        ready = flow.add_personas(BOOTH)
+        return {
+            "ready": ready,
+            "personas": list(BOOTH),
+            "reason": None if ready else "watch_mode_cap",
+            "mode": flow.agents.mode,  # live (model) or rules (stock reading)
+            "held": flow.config.hold_booth and flow.config.approval_mode == "producer",
+        }
 
     @router.get("/matches/{match_id}/lines")
     async def lines(

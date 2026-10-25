@@ -190,3 +190,29 @@ def test_a_booth_is_registered_whole_or_not_at_all(match) -> None:
     assert flow.add_personas(("booth:pbp", "booth:colour"))
     assert flow.add_personas(("booth:pbp", "booth:colour"))  # again: nothing new, still fine
     assert len(flow.extra_personas) == 8
+
+
+def test_the_booth_is_not_held_for_approval_unless_the_producer_asks(match) -> None:
+    def statuses(hold: bool) -> dict[str, set[str]]:
+        config = WorkflowConfig(
+            personas=("casual", "booth:pbp", "booth:colour"),
+            approval_mode="producer",
+            hold_booth=hold,
+        )
+        flow = MatchWorkflow(
+            stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+            clubs=match["teams"], agents=rules_agents(config.personas), config=config,
+        )  # fmt: skip
+        run(flow.ingest(match["events"]))
+        out: dict[str, set[str]] = {}
+        for line in flow.store.lines(flow.sk):
+            out.setdefault(line.persona, set()).add(line.status)
+        return out
+
+    free, held = statuses(False), statuses(True)
+    assert free["casual"] == {"verified"}  # producer mode still holds the ordinary lines
+    assert free["booth:pbp"] <= {"approved", "published"} and free["booth:colour"] <= {
+        "approved",
+        "published",
+    }
+    assert held["booth:pbp"] == {"verified"} and held["booth:colour"] == {"verified"}
