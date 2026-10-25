@@ -34,14 +34,15 @@ if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and c
   st.textContent = '@media (max-width:560px){'
     + '#mc-tele{left:8px!important;right:8px!important;top:8px!important;width:auto!important;max-height:2.4em!important;overflow:hidden!important}'
     + '#mc-replay{left:8px!important;right:8px!important;top:64px!important;flex-wrap:wrap!important}'
-    + '#mc-replay>span{flex:1 0 100%}#mc-replay button,#mc-replay label{white-space:nowrap;min-height:44px}'   // a heading row, then the buttons on one row: no label breaks ("Slow- / mo"), 44 px targets
+    + '#mc-replay>span{display:none}#mc-replay{gap:4px!important}#mc-replay button,#mc-replay label{white-space:nowrap;min-height:44px}#mc-replay button[data-sec]{padding:4px 5px!important}#mc-replay button[data-sec="10"]::before{content:"↺ "}'   // one row of the three clip buttons and Slow-mo (the group keeps its aria-label "Instant replay"; the arrow on the first button is the visible cue): no label breaks ("Slow- / mo"), 44 px targets, and the bar clears the lower-third in the 260 px phone stage; a heading does not fit in the 316 px content width beside them
+    + '#mc-replay.rp-on button[data-sec],#mc-replay.rp-on label{display:none!important}'   // while a replay plays, "Back to live" takes the clips' place so the bar stays one row
     + '#mc-l3{left:8px!important;right:8px!important;bottom:76px!important;max-width:none!important;font-size:13px!important}'
     + '#mc-onair{left:8px!important;right:8px!important;bottom:8px!important;flex-wrap:wrap}}';
   document.head.append(st);
   const live = bar.querySelector('#mc-replay-live');
   let timer = 0;
   const stop = () => {
-    clearInterval(timer); RP.on = false; tag.hidden = true; live.hidden = true;
+    clearInterval(timer); RP.on = false; tag.hidden = true; live.hidden = true; bar.classList.remove('rp-on');
     const last = BUF[BUF.length - 1]; if (last) { CONS.frame = last.frame; CONS.at = performance.now(); S.paused = !!last.frame.paused; consumerStep(0.016, true); }
   };
   // start(seconds, rate): play back from `seconds` ago at `rate` (1 or 0.5). Returns false when the buffer is shorter than a second.
@@ -51,7 +52,7 @@ if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and c
     const nowT = BUF[BUF.length - 1].at, from = Math.max(BUF[0].at, nowT - sec * 1000);
     const clip = BUF.filter((b) => b.at >= from);
     if (clip.length < 2) return false;
-    RP.on = true; tag.hidden = false; live.hidden = false; tag.textContent = rate < 1 ? 'REPLAY · SLOW-MO' : 'REPLAY';
+    RP.on = true; tag.hidden = false; live.hidden = false; bar.classList.add('rp-on'); tag.textContent = rate < 1 ? 'REPLAY · SLOW-MO' : 'REPLAY';
     const t0 = performance.now(); let i = 0;
     timer = setInterval(() => {
       const el = (performance.now() - t0) * rate + clip[0].at;

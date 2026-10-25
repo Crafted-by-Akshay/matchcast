@@ -30,7 +30,11 @@ MCS.progress('Loading the stadium and players');
   st.textContent += '#pulse,#visp,#datap,#fan-strip{--panel:rgb(9,13,19)}#px-body .px-row{flex-wrap:wrap;gap:0 8px}#px-ctlv{margin-left:auto}';   // panels fully opaque so player labels do not show through (pass 4; 96 percent in pass 3 still showed a ghost); the control line wraps instead of running into its label (UX review pass 3)
   st.textContent += '@media (max-width:640px){#fan-strip,#fan-metric{display:none !important}}';   // phone: the live stats strip sat under the Match Pulse bar; Match data holds the numbers (UX review, finding 14)
   st.textContent += '#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
+  st.textContent += '@media (max-width:1100px){#third{display:none !important}}';   // phone and small laptop: there is no room beside the commentary card, which says the same and used to cover this card
   document.head.appendChild(st);
+  // desktop: the On-the-ball card and the Live commentary card both docked bottom left, one under the other; keep the card to the right of the commentary card
+  const beside = () => { const t = document.getElementById('third'), m = document.getElementById('mcf'); if (t && m && m.getBoundingClientRect().width) t.style.left = Math.round(m.getBoundingClientRect().right + 12) + 'px'; };
+  beside(); setInterval(beside, 1000); addEventListener('resize', beside);
   const box = document.createElement('div'); box.id = 'mcx-box';
   box.innerHTML = '<div id="mcx-live" aria-live="polite"></div><div id="mcx-log" hidden></div><button class="mcx-b" id="mcx-tog" hidden>Pulse log (0)</button>';
   document.body.appendChild(box);

@@ -35,11 +35,13 @@ test('instant replay plays earlier frames, shows a REPLAY tag, then returns to l
     (document.querySelector('#mc-replay button[data-sec="10"]') as HTMLElement).click();
     await new Promise((x) => setTimeout(x, 120));
     const m = (window as any).__mc;
-    const out = { tag: !q('mc-replay-tag').hidden, playing: (window as any).MCReplay.playing, ball: [m.ball.p.x, m.ball.p.y], clock: m.S.mclock, score: m.S.score.slice() };
+    const out = { rpOn: q('mc-replay').classList.contains('rp-on'), tag: !q('mc-replay-tag').hidden, playing: (window as any).MCReplay.playing, ball: [m.ball.p.x, m.ball.p.y], clock: m.S.mclock, score: m.S.score.slice() };
     q('mc-replay-live').click();
-    return { ...out, tagAfter: !q('mc-replay-tag').hidden, playingAfter: (window as any).MCReplay.playing };
+    return { ...out, tagAfter: !q('mc-replay-tag').hidden, playingAfter: (window as any).MCReplay.playing, rpOnAfter: q('mc-replay').classList.contains('rp-on') };
   });
   expect(r.tag).toBe(true);
+  expect(r.rpOn, 'the bar is in its replaying state (phone: Back to live replaces the clips)').toBe(true);
+  expect(r.rpOnAfter).toBe(false);
   expect(r.playing).toBe(true);
   expect(Math.hypot(r.ball[0] - liveState.ball[0], r.ball[1] - liveState.ball[1]), 'replay shows the ball where it was').toBeGreaterThan(0.3);
   expect(r.clock, 'clock stays live').toBeGreaterThan(live - 2);
