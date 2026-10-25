@@ -49,3 +49,16 @@ test('on a phone the pill is hidden, the Copilot button has its name and the ind
   expect(m.svgW, 'the sparkline keeps its own width and stays inside the row').toBeLessThanOrEqual(200);
   expect(await f.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
+
+// UX review pass 7: at 0' the Live match page says it is waiting for kick-off; Watch's own "vision on" line is not listed as a match event.
+test("Live match at 0' says it is waiting for kick-off and does not list the vision bookkeeping line", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const f = await openPage(page, 'live');
+  await page.evaluate(() => post('analyst', { src: 'matchcast-shell', type: 'feed', on: true, fixture: M.fixture, score: [0, 0], minute: 0, over: false, last: [{ minute: 0, type: 'vision_on' }], stats: null }));
+  await expect(f.locator('#live-wait')).toContainText('Waiting for kick-off');
+  await expect(f.locator('#pg')).toContainText('Waiting for kick-off. Events appear here');
+  await expect(f.locator('#pg')).not.toContainText('vision on');
+  await page.evaluate(() => post('analyst', { src: 'matchcast-shell', type: 'feed', on: true, fixture: M.fixture, score: [1, 0], minute: 12, over: false, last: [{ minute: 11, type: 'goal', player: 'Z. Chacourt' }], stats: null }));
+  await expect(f.locator('#live-wait')).toHaveCount(0);
+  await expect(f.locator('#pg')).toContainText('goal · Z. Chacourt');
+});
