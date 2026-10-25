@@ -484,6 +484,7 @@ function ensure(view) {
 // the Analyst loads its season only when it is opened, so Watch and Broadcast get the machine first
 function routeAnalyst() {
   if (!M.fixture) return;
+  { const cur = byId(M.fixture); if (cur && cur.national) return; }   // no recorded run for a national-team fixture: the Analyst keeps its last route
   if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
     el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#live.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
   if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
@@ -569,6 +570,7 @@ function paint() {
   }
   $('meta').title = $('meta').textContent;
   if (live) { $('score-v').textContent = live.live.score.join('–'); $('score-l').textContent = live.live.over ? 'Full time' : live.live.minute + "'"; }
+  else if (fx && fx.national) { $('score-v').textContent = '–'; $('score-l').textContent = 'Synthetic squad'; }   // a national-team fixture has no recorded result
   else if (fx) { $('score-v').textContent = fx.score.join('–'); $('score-l').textContent = 'Recorded'; }
   else { $('score-v').textContent = '–'; $('score-l').textContent = 'Not in season'; }
 
@@ -941,12 +943,12 @@ function init(list) {
   for (const m of Object.keys(md)) {
     const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
     for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
-      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = 'Recorded result ' + fx.score.join('–') + ' (the Analyst replays it)'; g.appendChild(o); }
+      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = fx.national ? 'Synthetic squads, no recorded result' : 'Recorded result ' + fx.score.join('–') + ' (the Analyst replays it)'; g.appendChild(o); }
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
-  // default: the season's most open fixture, so the first view has goals to watch
-  const best = FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
+  // default: the national-team fixture when the data has one, else the season's most open fixture, so the first view has goals to watch
+  const best = FX.find((f) => f.national) || FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
   M.setup = setupOf(best); M.fixture = best.id;
   // filming URL (?seed=2026&speed=4&seedBadClaim=1): the same match, pace and demo claim on every take
   const Q = new URLSearchParams(location.search);
