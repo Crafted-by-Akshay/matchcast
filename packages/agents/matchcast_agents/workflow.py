@@ -41,7 +41,7 @@ TALK_PHRASES = {
     "tackles won": "tackles_won", "fouls": "fouls", "cards": "cards",
 }  # fmt: skip
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
-AUDIT_SKIPPED = ("rate_limited", "duplicate_moment")
+AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 
 
@@ -430,6 +430,7 @@ class MatchWorkflow:
                     self.agents.producer,
                     decision.moment_id,
                     reason=decision.reason,
+                    why=decision.why,
                 )
             return None
         self.stats["moments"] += 1
@@ -793,7 +794,8 @@ class MatchWorkflow:
                 raise failure
 
     def _wants_desk(self, task: ProducerTask) -> bool:
-        return task.priority == 1 and self.stats_desk is not None
+        # priority 1 always; any other moment only when the Producer asked for it
+        return (task.priority == 1 or task.call_stats_desk) and self.stats_desk is not None
 
     async def _desk_after_verify(self, task: ProducerTask) -> None:
         if not self._wants_desk(task):
@@ -927,6 +929,8 @@ class MatchWorkflow:
             claim_ids=list(draft.claim_ids),
             moment=task.reason,
             mode="rules" if draft.origin == "template" else "live",  # what wrote this very line
+            routed_by=task.routed_by,
+            why=task.why,
         )
         verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
         verdict = await self._screen(draft, verdict)

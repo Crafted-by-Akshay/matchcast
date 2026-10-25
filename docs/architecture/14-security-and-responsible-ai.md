@@ -48,7 +48,7 @@ flowchart LR
 | Repudiation | "I didn't approve that" | Audit record with actor kind, Entra object ID and display name | EXP-11 |
 | Information disclosure | Keys in the page or env vars | Managed identity; Key Vault references; CSP; no secrets in SSE | PLT-4 checks |
 | Information disclosure | Personal data in Ask history | 24-hour deletion; fictional players only | Sweep test |
-| Denial of service / cost | Flooding Ask, Talk, OCR, events | Rate limits ([12-api.md](12-api.md) §7); max replicas; budget alerts at $40 and $50 | Load smoke |
+| Denial of service / cost | Flooding Ask, Talk, OCR, events | Rate limits and the model cost guard (daily call cap, rules matches past an address's live allowance, `MATCHCAST_MODEL_OFF` kill switch; [12-api.md](12-api.md) §7); max replicas; budget alerts | Load smoke |
 | Elevation of privilege | Prompt injection makes an agent call a write tool | Agents have no write tools; MCP tools are read-only and time-scoped; Data Scientist SQL is SELECT-only on allowed views | Red-team set in `eval/` |
 
 ## 4. AI safety controls

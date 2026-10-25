@@ -51,6 +51,7 @@ class ProducerRules:
         self._last_task_ms: int | None = None
         self._next_summary_ms = SUMMARY_EVERY_MS
         self._seen: set[str] = set()
+        self._spent: tuple[int | None, float | None] = (None, None)  # before the last task
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -70,6 +71,10 @@ class ProducerRules:
         return (
             self._last_colour is None or self._clock() - self._last_colour >= self._colour_every_s
         )
+
+    def hand_back(self) -> None:
+        """A model skip of the task just decided gives back its rate window and colour budget."""
+        self._last_task_ms, self._last_colour = self._spent
 
     async def decide(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | Skip:
         moment_id = f"m-{event['event_id']}"
@@ -98,6 +103,7 @@ class ProducerRules:
             and now - self._last_task_ms < RATE_WINDOW_MS
         ):
             return Skip(moment_id=moment_id, reason="rate_limited")
+        self._spent = (self._last_task_ms, self._last_colour)
         self._last_task_ms = now
         if colour:
             self._last_colour = self._clock()

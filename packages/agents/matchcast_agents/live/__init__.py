@@ -11,6 +11,7 @@ from .analyst import LiveAnalyst
 from .answers import LiveAnswers
 from .client import FoundryModelClient, ModelClient, ScriptedModelClient, model_priority
 from .narrator import LiveNarrator
+from .producer import LiveProducer
 from .verifier import LiveVerifier
 
 COLOUR_EVERY_S = 45.0  # at most one colour line (one model pass) per match in this much wall time
@@ -29,6 +30,7 @@ __all__ = [
     "LiveAnalyst",
     "LiveAnswers",
     "LiveNarrator",
+    "LiveProducer",
     "LiveVerifier",
     "ModelClient",
     "ScriptedModelClient",
@@ -45,7 +47,7 @@ def live_agents(
     failing_tools: frozenset[str] = frozenset(),
     tool_call: ToolCall | None = None,
 ) -> AgentSet:
-    """The Producer stays rules (its rate rule is code); the other three run on the model."""
+    """The Producer picks among rules candidates on the model, as do the other three agents."""
     analyst_rules = AnalystRules(
         corrupt_first_claim=seed_bad_claim,
         failing_tools=failing_tools,
@@ -59,7 +61,7 @@ def live_agents(
         return task.priority > model_priority() and task.reason != "colour"
 
     return AgentSet(
-        ProducerRules(personas, colour_every_s=colour_every_s()),
+        LiveProducer(client, ProducerRules(personas, colour_every_s=colour_every_s())),
         ResilientAgent(LiveAnalyst(client, analyst_rules), analyst_rules, skip=quiet),
         ResilientAgent(LiveNarrator(client), NarratorRules(), skip=quiet),
         ResilientAgent(LiveVerifier(client), VerifierRules()),
