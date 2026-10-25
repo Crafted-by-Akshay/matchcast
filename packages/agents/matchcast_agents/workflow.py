@@ -18,6 +18,7 @@ from opentelemetry import trace
 
 from . import recap as recap_mod
 from .context import MatchContext
+from .history import history_for_roster
 from .hub import StreamHub
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
 from .personas import MAX_WATCH_MODES, known
@@ -194,7 +195,11 @@ class MatchWorkflow:
         self.names = {**stored.get("names", {}), **(names or {})}
         self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
         # real pre-match facts for national teams (ADR-0020); None for fictional clubs
-        self.history = history
+        self.history = (
+            history
+            if history is not None
+            else history_for_roster(self.roster.get("team_ids"), self.clubs)
+        )
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)

@@ -1,6 +1,7 @@
 """Pre-match history from the martj42 results: real past results, cut at the match date."""
 
 from datetime import date
+from pathlib import Path
 
 from matchcast_agents.history import RESULTS, pre_match
 
@@ -52,3 +53,38 @@ def test_for_match_is_none_for_fictional_clubs_and_set_for_national_teams() -> N
     assert for_match("Harbor City", "Ridgeview", on=date(2026, 10, 25)) is None
     block = for_match("England", "Brazil", on=date(2026, 10, 25))
     assert block is not None and block["h2h"]["played"] > 0
+
+
+def test_federation_names_are_removed_from_competitions() -> None:
+    from matchcast_agents.history import _matches, pre_match
+
+    fifa = [m for m in _matches() if "FIFA" in m[5] or "UEFA" in m[5]]
+    assert fifa, "the dataset has federation-named competitions, so the check has teeth"
+    block = pre_match("Brazil", "Argentina", on=date(2026, 10, 25))
+    assert "FIFA" not in str(block) and "UEFA" not in str(block)
+
+
+def test_team_names_match_regardless_of_case_and_known_aliases() -> None:
+    from matchcast_agents.history import resolve_team
+
+    assert resolve_team("Bosnia And Herzegovina") == "Bosnia and Herzegovina"
+    assert resolve_team("Korea Republic") == "South Korea"
+    assert resolve_team("Atlantis FC") is None
+    e = pre_match("Bosnia And Herzegovina", "Atlantis FC", on=date(2026, 10, 25))["elo"]
+    assert e["home"] is not None and e["away"] is None
+
+
+def test_roster_history_needs_exactly_two_teams_named_by_clubs() -> None:
+    from matchcast_agents.history import history_for_roster
+
+    clubs = {"ENG": "England", "BRA": "Brazil", "HAR": "Harbor City"}
+    assert history_for_roster(["ENG", "BRA"], clubs) is not None
+    one_known = history_for_roster(["ENG", "HAR"], clubs)  # England is real, Harbor City is not
+    assert one_known is not None and one_known["elo"]["away"] is None
+    assert history_for_roster(["ENG"], clubs) is None
+    assert history_for_roster(None, clubs) is None
+
+
+def test_the_api_image_ships_the_results_file() -> None:
+    dockerfile = (Path(__file__).resolve().parents[3] / "services/api/Dockerfile").read_text()
+    assert "COPY data/history data/history" in dockerfile

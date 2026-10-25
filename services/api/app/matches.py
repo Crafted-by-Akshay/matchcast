@@ -22,7 +22,6 @@ from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.data_scientist import ask as ds_ask_season
-from matchcast_agents.history import for_match
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
@@ -41,6 +40,7 @@ from matchcast_mcp.server import create_server
 from mcp import Client
 from pydantic import BaseModel, ConfigDict, Field
 
+from app import budget
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 from app.pipeline import Pipeline
 from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
@@ -61,6 +61,7 @@ TENANT = "demo"
 HEARTBEAT_S = 15
 ASK_PER_MINUTE = 20  # Copilot questions per browser session; a judge's quick run stays under it
 TALK_PER_MINUTE = 20  # player and producer replies per browser session, a budget of their own
+ASK_PER_IP_MINUTE = 60  # asks and talks from one address, whatever session ids it sends
 DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 STATUS = {
@@ -243,6 +244,14 @@ class Registry:
         self._model_client: ModelClient | None = None
         self.asked: dict[str, deque[float]] = {}
         self.talked: dict[str, deque[float]] = {}
+        self.ip_questions: dict[str, deque[float]] = {}
+        # every model call asks a budget first (cost guard): match agents, and Ask/Talk answers
+        self.budgets = {
+            "agents": budget.ModelBudget(),
+            "answers": budget.ModelBudget("MATCHCAST_ANSWER_CALLS_PER_DAY", budget.ANSWERS_PER_DAY),
+        }
+        self._budgeted: dict[str, budget.BudgetedModelClient] = {}
+        self.new_matches = budget.HourlyWindows()
         self.exports: dict[str, tuple[bytes, str, str]] = {}
         self.season = local.season if local else None
         self.ds_asked: dict[str, deque[float]] = {}
@@ -261,9 +270,35 @@ class Registry:
         """At most TALK_PER_MINUTE talks per browser session per rolling minute."""
         return _within(self.talked, session_id, TALK_PER_MINUTE, now)
 
-    def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
+    def allow_question(self, request: Request) -> None:
+        """Asks and talks share per-address limits, so new session ids buy nothing."""
+        ip = client_ip(request)
+        if not _within(self.ip_questions, ip, ASK_PER_IP_MINUTE, None):
+            detail = f"at most {ASK_PER_IP_MINUTE} questions a minute from one address"
+            raise Problem(429, "rate_limited", detail, retry_after=60)
+        if not self.new_matches.allow("q:" + ip, budget.QUESTIONS_PER_IP_HOUR):
+            detail = f"at most {budget.QUESTIONS_PER_IP_HOUR} questions an hour from one address"
+            raise Problem(429, "rate_limited", detail, retry_after=600)
+
+    def live_allowed(self, request: Request) -> bool:
+        """Whether a new match may run live; refuses only past the MATCHES_PER_HOUR memory guard.
+        Rules matches cost no model call, so past the live allowances a match runs on the rules."""
+        if self.new_matches.full("*", budget.MATCHES_PER_HOUR):
+            raise Problem(429, "rate_limited", "too many new matches this hour", retry_after=600)
+        return not (
+            self.new_matches.full("live:*", budget.LIVE_MATCHES_PER_HOUR)
+            or self.new_matches.full("live:" + client_ip(request), budget.LIVE_MATCHES_PER_IP_HOUR)
+        )
+
+    def count_new_match(self, request: Request, live: bool) -> None:
+        """Only a match that was really created uses an allowance."""
+        self.new_matches.add("*")
+        if live:
+            self.new_matches.add("live:*", "live:" + client_ip(request))
+
+    def agents_for(self, personas: tuple[str, ...], *, live: bool = True, **seed: Any) -> AgentSet:
         """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
-        client = self.model_client()
+        client = self.model_client() if live else None
         tool_call = self.tool_call()
         if client is None:
             return rules_agents(personas, tool_call=tool_call, **seed)
@@ -285,13 +320,20 @@ class Registry:
 
         return call
 
-    def model_client(self) -> ModelClient | None:
+    def model_client(self, pool: str = "agents") -> ModelClient | None:
+        """The model behind a daily budget; None (rules) when live is off or switched off."""
         if self._model_client is None and os.environ.get("MATCHCAST_AGENT_MODE") == "live":
             try:
                 self._model_client = FoundryModelClient()
             except Exception:  # noqa: BLE001 - no endpoint, SDK or credential: stay on rules
                 logging.getLogger(__name__).warning("live mode requested; using rules agents")
-        return self._model_client
+        client = self._model_client
+        if client is None or budget.model_off():
+            return None
+        wrapped = self._budgeted.get(pool)
+        if wrapped is None or wrapped.inner is not client:
+            wrapped = self._budgeted[pool] = self.budgets[pool].wrap(client)
+        return wrapped
 
     def allow_ds(self, client: str, now: float | None = None) -> bool:
         """At most DS_PER_MINUTE Data Scientist questions per client per rolling minute."""
@@ -329,6 +371,7 @@ class Registry:
             if info is None:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
             config = WorkflowConfig(approval_mode=info.get("approval_mode", "auto"))
+            live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
             # the seeded wrong claim fires once; a match rebuilt past its cue has already had it
             cue = info.get("seed_bad_claim_at_ms", 720_000)
@@ -344,12 +387,13 @@ class Registry:
                 roster=info["roster"],
                 names=info.get("names", {}),
                 clubs=info.get("clubs", {}),
-                agents=self.agents_for(config.personas, **seeds),
+                agents=self.agents_for(config.personas, live=live, **seeds),
                 config=config,
                 store=self.store,
                 stats_desk=self.stats_desk,
                 safety=self.safety,
-                answer_model=self.model_client(),  # Ask and talk answer on the model when live
+                # Ask and talk answer on the model when live
+                answer_model=self.model_client("answers") if live else None,
             )
             self.flows[key] = flow
             return flow
@@ -529,8 +573,10 @@ def build_router(registry: Registry) -> APIRouter:
     @router.post("/matches", status_code=201)
     async def create_match(
         body: MatchCreate,
+        request: Request,
         x_matchcast_seed_bad_claim: str | None = Header(default=None),
     ) -> dict[str, Any]:
+        live = registry.live_allowed(request)  # past the allowances a match runs on the rules
         async with registry.create_lock:
             key = (body.session_id, body.match_id)
             if key in registry.flows:
@@ -552,8 +598,6 @@ def build_router(registry: Registry) -> APIRouter:
             try:
                 names = {p["player_id"]: pretty(p["player_id"]) for p in players or []} | body.names
                 clubs = {team: pretty(team) for team in teams or []} | body.clubs
-                home_away = [clubs[t] for t in (teams or [])[:2]] if len(teams or []) == 2 else []
-                history = for_match(*home_away) if len(home_away) == 2 else None
                 flow = MatchWorkflow(
                     stream=stream,
                     roster=body.roster,
@@ -561,6 +605,7 @@ def build_router(registry: Registry) -> APIRouter:
                     clubs=clubs,
                     agents=registry.agents_for(
                         config.personas,
+                        live=live,
                         seed_bad_claim=body.seed_bad_claim or x_matchcast_seed_bad_claim == "1",
                         seed_bad_claim_at_ms=body.seed_bad_claim_at_ms,
                     ),
@@ -568,14 +613,14 @@ def build_router(registry: Registry) -> APIRouter:
                     store=registry.store,
                     stats_desk=registry.stats_desk,
                     safety=registry.safety,
-                    answer_model=registry.model_client(),
-                    history=history,
+                    answer_model=registry.model_client("answers") if live else None,
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
             registry.flows[key] = flow
+            registry.count_new_match(request, live)
             # what a rebuilt match needs to behave as this one does after a restart
             seed = body.seed_bad_claim or x_matchcast_seed_bad_claim == "1"
             registry.store.put_match(
@@ -583,6 +628,7 @@ def build_router(registry: Registry) -> APIRouter:
                 {
                     **(registry.store.get_match(flow.sk) or {}),
                     "approval_mode": body.approval_mode,
+                    "live": live,
                     "seed_bad_claim": seed,
                     "seed_bad_claim_at_ms": body.seed_bad_claim_at_ms,
                 },
@@ -897,6 +943,7 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(
                 429, "rate_limited", f"at most {TALK_PER_MINUTE} talks a minute", retry_after=60
             )
+        registry.allow_question(request)
         try:
             result = await flow.talk(body.target, body.utterance, position=body.position)
         except WorkflowError as error:
@@ -970,12 +1017,13 @@ def build_router(registry: Registry) -> APIRouter:
         return await _audio_parts(request, registry, parts, registry.voice.voice_for("commentary"))
 
     @router.post("/matches/{match_id}/ask")
-    async def ask(match_id: str, body: AskBody) -> dict[str, Any]:
+    async def ask(match_id: str, body: AskBody, request: Request) -> dict[str, Any]:
         flow = await registry.flow_for(body.session_id, match_id)
         if not registry.allow_ask(body.session_id):
             raise Problem(
                 429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
             )
+        registry.allow_question(request)
         try:
             result = await flow.ask(body.question, body.persona, surface=body.surface)
         except WorkflowError as error:
