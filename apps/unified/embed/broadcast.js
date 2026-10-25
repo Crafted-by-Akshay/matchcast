@@ -154,7 +154,7 @@ if (MCS.framed) {
   const pane = $('pane-desk'); if (pane) { new MutationObserver(attachMic).observe(pane, { childList: true, subtree: true }); attachMic(); }
 }
 // type floor: 12 px for the desk text that was 10 to 11 px (UX review pass 6, finding 18)
-(() => { const st = document.createElement('style'); st.textContent = '.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}'; document.head.appendChild(st); })();
+(() => { const st = document.createElement('style'); st.textContent = '#mcf-sound,#mc-pt,.mcp-v,.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}#bc-cams button[data-cam][aria-pressed=true]{color:#10151f!important}'; document.head.appendChild(st); })();   // the chosen camera chip is yellow: dark text (it was light on yellow, 1.4:1)
 // Judge re-test: on a phone the 3D renderer sizes its canvas (and the name-tag layer) to the window, but the live view is narrower, so the right edge was cut
 // off. Scale those layers down to the live view's width, from their top-left corner, so the whole pitch shows; nothing is scaled when they already fit.
 (() => {
@@ -167,4 +167,22 @@ if (MCS.framed) {
     }
   };
   fit(); setInterval(fit, 1000); addEventListener('resize', fit);
+})();
+
+// Pass 11: in a pane narrower than 700 px (the split next to Watch, or a phone) the fixed Live commentary card covered the camera chips and the stats strip.
+// There it sits in the page flow, right under the live view, so nothing is covered; a wider pane keeps the card over the view's corner.
+(() => {
+  const place = () => {
+    const m = document.getElementById('mcf'), left = document.querySelector('.bc-left'), view = document.getElementById('bc-view');
+    if (!m || !left || !view) return;
+    const narrow = innerWidth < 700, inFlow = m.previousElementSibling === view;
+    if (narrow && !inFlow) {
+      view.after(m);
+      for (const [k, v] of [['position', 'static'], ['width', 'auto'], ['max-height', 'none'], ['margin', '10px 0 0'], ['left', 'auto'], ['right', 'auto'], ['bottom', 'auto']]) m.style.setProperty(k, v, 'important');
+    } else if (!narrow && inFlow) {
+      view.append(m);
+      for (const k of ['position', 'width', 'max-height', 'margin', 'left', 'right', 'bottom']) m.style.removeProperty(k);
+    }
+  };
+  place(); setInterval(place, 1000); addEventListener('resize', place);
 })();

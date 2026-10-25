@@ -208,3 +208,10 @@ A desk that joins mid-match is sent the approval queue and mode, the commentary 
 - The shell's toast sits centred on the stage-steps row on a desktop, off the views' cards and camera chips (phone unchanged: it takes the Viewing-as row).
 - Analyst Trust page: the Match centre's Verifier tab is now "Trust · Verifier", and "How was this made?" links to it.
 - Checked, no change needed: the Broadcast Script teleprompter is readable at 1440 and 390 px (30 px white on black), and the Vision boxes are drawn at kick-off in Watch panes of 835 and 742 px.
+
+### Pass 11 and judge round 2 (25 Oct)
+- Broadcast in a pane under 700 px (the split next to Watch, or a phone): the Live commentary card sits in the page flow under the live view instead of floating over the camera chips and the stats strip (`embed/broadcast.js`). A wider pane keeps it over the view's corner. Spec: `broadcast-booth-dock.spec.ts`.
+- The chosen camera chip in the Broadcast desk has dark text on its yellow fill (it was light on yellow, 1.4:1; axe reported it once the commentary card stopped covering it).
+- 12 px floor: the Verifier chip, the "Sound is off" line and the producer's verdict lines are 12 px.
+- Agents tab at 390 and 320 px: the claims ledger becomes one card per claim (the 600 px table made 17 elements run past the edge); the header row is visually hidden and the table keeps explicit ARIA table roles so a screen reader still hears the column names. Spec: `shell-layout.spec.ts`.
+- The header pill (this match's agents: live, rules fallback, warming) and the Foundry chip (the api's deployment from `/v1/status`) can differ: Foundry can be live while one match is on rules. Their tooltips now say so.
