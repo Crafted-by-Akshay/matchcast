@@ -1,0 +1,19 @@
+{
+  "kind": "crew_spawn",
+  "schema_version": "1.3.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "moment_id": "m-event-goal",
+  "spawn_id": "m-event-goal:replay",
+  "agent_id": "replay",
+  "role": "replay",
+  "parent_id": "showrunner",
+  "status": "pending",
+  "started_ms": 10000,
+  "ended_ms": 10000,
+  "tokens": 0,
+  "why": "replay of the goal"
+}

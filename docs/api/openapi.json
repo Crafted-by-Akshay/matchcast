@@ -9,7 +9,14 @@
             "enum": [
               "en",
               "es",
-              "hi"
+              "pt",
+              "hi",
+              "ar",
+              "fr",
+              "de",
+              "id",
+              "ja",
+              "zh-Hans"
             ],
             "title": "Lang",
             "type": "string"
@@ -174,6 +181,33 @@
           "kind"
         ],
         "title": "ExportBody",
+        "type": "object"
+      },
+      "FeedAction": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "session_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "FeedAction",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -1954,6 +1988,196 @@
           }
         },
         "summary": "Create Export",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/feeds/{feed}/kill": {
+      "post": {
+        "operationId": "feed_kill_v1_matches__match_id__feeds__feed__kill_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "feed",
+            "required": true,
+            "schema": {
+              "title": "Feed",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-ms-client-principal",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ms-Client-Principal"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-matchcast-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Matchcast-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Feed Kill V1 Matches  Match Id  Feeds  Feed  Kill Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Feed Kill",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/feeds/{feed}/resume": {
+      "post": {
+        "operationId": "feed_resume_v1_matches__match_id__feeds__feed__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "feed",
+            "required": true,
+            "schema": {
+              "title": "Feed",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-ms-client-principal",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ms-Client-Principal"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-matchcast-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Matchcast-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Feed Resume V1 Matches  Match Id  Feeds  Feed  Resume Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Feed Resume",
         "tags": [
           "matches"
         ]

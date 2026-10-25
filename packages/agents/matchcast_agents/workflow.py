@@ -75,6 +75,15 @@ NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
 # the rundown ledger keeps this many moments (it is checkpointed with the match)
 RUNDOWN_KEEP = 400
+# the contract version of the crew frames (crew_ledger, crew_spawn); the audit stays on 1.1.0
+CREW_SCHEMA_VERSION = "1.3.0"
+# a specialist's report status, as the crew_spawn frame names it
+SPAWN_STATUS = {
+    "ok": "done",
+    "no_data": "no_data",
+    "budget_exhausted": "budget_exhausted",
+    "failed": "failed",
+}
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
 # the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1).
@@ -294,6 +303,7 @@ class MatchWorkflow:
         )
         self.rundown: list[dict[str, Any]] = []  # the Showrunner ledger, see _record_rundown
         self._routing: dict[str, Any] | None = None  # the entry of the moment being run
+        self._at_ms = 0  # the event time of the event being run, for the crew frames
         # the match's cost guard for specialists, in two pools: quiet moments cannot use up
         # a goal's specialists. The pools are the match's; this workflow's share of them is
         # checkpointed, so a restart adds back exactly what this workflow spent
@@ -506,10 +516,14 @@ class MatchWorkflow:
             await self._process(event)
 
     async def _process(self, event: dict[str, Any]) -> None:
+        self._at_ms = int(event["event_time_ms"])
         try:
             await self._process_event(event)
+            ran = self._routing
         finally:
             self._routing = None  # calls after the event (an edit, a talk) are not this moment's
+        if ran is not None:  # the moment's run has ended, so its entry is final
+            self._publish_ledger(ran)
         self._checkpoint(event["stream_sequence"])
 
     def add_persona(self, persona: str) -> bool:
@@ -649,11 +663,19 @@ class MatchWorkflow:
         pool = "priority_one" if priority_one else "quiet"
         self._spent[pool] += len(plan.requests)
         entry["spawns"] = []
+        for request in plan.requests:
+            self._publish_spawn(request.moment_id, request.name, "running")
         for report in await run_all(ctx, plan.requests, self._specialists):
             entry["spawns"].append(
                 {"name": report.name, "status": report.status, "findings": len(report.findings)}
             )
             self._note_called(report.name)
+            self._publish_spawn(
+                report.moment_id,
+                report.name,
+                SPAWN_STATUS[report.status],
+                ended=True,
+            )
 
     def _record_rundown(self, task: ProducerTask) -> None:
         """One rundown entry per moment the crew takes: the agents it calls, skips and why."""
@@ -663,7 +685,7 @@ class MatchWorkflow:
                 "moment_id": task.moment_id,
                 "called": [],  # filled in as each agent actually runs, see _note_called
                 "skipped": [] if desk else ["stats_desk"],
-                "why": task.why or task.reason,
+                "why": task.reason,  # the rules' or Producer's reason code, never model text
                 "routed_by": task.routed_by,
             }
         )
@@ -674,6 +696,52 @@ class MatchWorkflow:
         """An agent of the current moment actually ran: it goes into that moment's entry."""
         if self._routing is not None and agent_id not in self._routing["called"]:
             self._routing["called"].append(agent_id)
+
+    def _publish_ledger(self, entry: dict[str, Any]) -> None:
+        """The crew_ledger frame for one moment, sent once its run has ended (contract 1.3.0)."""
+        self.hub.publish(
+            "crew_ledger",
+            f"ledger:{entry['moment_id']}",
+            {
+                "kind": "crew_ledger",
+                "schema_version": CREW_SCHEMA_VERSION,
+                "stream": self.stream,
+                "moment_id": entry["moment_id"],
+                "at_ms": self._at_ms,
+                "called": list(entry["called"]),
+                "skipped": list(entry["skipped"]),
+                "why": str(entry["why"])[:200],
+                "routed_by": entry["routed_by"],
+                "spawn_reason": str(entry.get("spawn_reason", ""))[:200],
+            },
+        )
+
+    def _publish_spawn(
+        self, moment_id: str, name: str, status: str, *, ended: bool = False
+    ) -> None:
+        """A crew_spawn frame: a specialist starts (running) or ends (contract 1.3.0). Specialists
+        are deterministic here, so they make no model call and ``tokens`` is 0. ``why`` stays empty:
+        a specialist's line is free text with numbers the Verifier has not checked, so it does not
+        go on the wire."""
+        self.hub.publish(
+            "crew_spawn",
+            f"spawn:{moment_id}:{name}:{status}",
+            {
+                "kind": "crew_spawn",
+                "schema_version": CREW_SCHEMA_VERSION,
+                "stream": self.stream,
+                "moment_id": moment_id,
+                "spawn_id": f"{moment_id}:{name}",
+                "agent_id": name,
+                "role": name,
+                "parent_id": "showrunner",
+                "status": status,
+                "started_ms": self._at_ms,
+                "ended_ms": self._at_ms if ended else None,
+                "tokens": 0,
+                "why": "",
+            },
+        )
 
     def _state_json(self, state: MatchState) -> dict[str, Any]:
         return {
