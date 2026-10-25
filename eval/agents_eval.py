@@ -364,6 +364,7 @@ def eval_verifier(recorder: RecordingVerifier) -> dict[str, Any]:
 
     # an unseeded run: every line is honest, so any rejection is a false reject
     false_rejects = sum(v == "rejected" for _, _, _, v, _ in pairs)
+    why = Counter(code or "none" for _, _, _, v, code in pairs if v == "rejected")
     first_pass = [(c, ln, cl) for c, ln, cl, v, _ in pairs if v != "rejected"]
     caught: Counter[str] = Counter()
     tried: Counter[str] = Counter()
@@ -392,6 +393,7 @@ def eval_verifier(recorder: RecordingVerifier) -> dict[str, Any]:
         "pairs_replayed": len(first_pass),
         "honest_lines_checked": len(pairs),
         "false_reject_rate_on_clean": rate(false_rejects, len(pairs)),
+        "false_reject_reasons": dict(sorted(why.items())),
         "content_mutations_tried": sum(tried[k] for k in content),
         "catch_rate": rate(sum(caught[k] for k in content), sum(tried[k] for k in content)),
         "by_mutation": per_kind,
@@ -544,6 +546,8 @@ def report(r: dict[str, Any]) -> str:
     p, a, n, v, s, k = (r[x] for x in ("producer", "analyst", "narrator", "verifier",
                                        "seeded_bad_claim", "ask"))  # fmt: skip
     b = r["booth"]
+    reasons = v["false_reject_reasons"]
+    why = " (" + ", ".join(f"{k} {n}" for k, n in reasons.items()) + ")" if reasons else ""
 
     def mut_rows(structural: bool) -> str:
         return "\n".join(
@@ -583,7 +587,7 @@ Agents graded: **{r["agents"]}** on the frozen match `{r["match"]}`. Generated b
 | Seeded bad claim: injected, then rejected for the right reason | {pct(s["caught_rate"])} of {s["injected"]} injections ({s["trials"]} match times) |
 | Wrong claims that reached a screen in those runs | {s["wrong_claims_shown_total"]} |
 | Verifier catch rate over {v["content_mutations_tried"]} content mutations (right reason code required) | {pct(v["catch_rate"])} |
-| Verifier false rejects on {v["honest_lines_checked"]} honest lines | {pct(v["false_reject_rate_on_clean"])} |
+| Verifier false rejects on {v["honest_lines_checked"]} honest lines | {pct(v["false_reject_rate_on_clean"])}{why} |
 | Narrator first drafts that stay inside their claims and the roster | {pct(n["first_draft_faithful_rate"])} of {n["first_drafts"]} |
 | Unanswerable questions refused | {pct(k["unanswerable_refusal_rate"])} |
 | Prompt attacks stopped (shield, safety and the whole Ask path) | {pct(k["redteam_stopped_rate"])} of {k["redteam_prompts"]} |

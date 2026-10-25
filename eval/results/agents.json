@@ -34,6 +34,7 @@
     "pairs_replayed": 34,
     "honest_lines_checked": 34,
     "false_reject_rate_on_clean": 0.0,
+    "false_reject_reasons": {},
     "content_mutations_tried": 151,
     "catch_rate": 0.993,
     "by_mutation": {
