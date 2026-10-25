@@ -15,6 +15,7 @@ test('the desk panels and the approval queue show while three.js never loads, an
   await expect(f.locator('#mc-producer'), 'the producer section shows without the pitch').toBeVisible();
   await expect(f.locator('#mc-pitch')).toHaveText('3D pitch: loading');
   await expect(f.locator('#mc-cop [data-cop="highlights"]')).toBeVisible();
+  await expect(f.locator('#mc-pq'), 'a silent booth reads as a fault: the empty queue says the booth waits for the producer').toContainText('Booth lines wait here for your approval', { timeout: 30_000 });
 
   // a line the shell sends to the producer queue reaches the section while the pitch is still down
   await page.evaluate((n) => { AG.reset('k-panels', n); AG.ingest({ line_id: 'L9', status: 'review', escalated: true, reason_code: 'number_mismatch', text: "Thames Rovers lead 3-0 at 20'." }, 'live'); }, { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
