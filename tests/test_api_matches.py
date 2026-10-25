@@ -926,4 +926,5 @@ def test_a_desk_feed_kill_and_resume_are_audited(client: TestClient) -> None:
     audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
     actions = [r["action"] for r in audit if r["subject_id"] == "casual"]
     assert actions == ["feed_killed", "feed_resumed"]
+    assert all(r["details"]["enforced"] is False for r in audit if r["subject_id"] == "casual")
     assert verify_chain(audit)["valid"] is True

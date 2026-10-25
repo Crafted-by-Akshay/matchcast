@@ -987,6 +987,7 @@ def build_router(registry: Registry) -> APIRouter:
             details={
                 "feed": feed,
                 "reason": body.reason or ("killed on desk" if killed else "resumed"),
+                "enforced": False,  # the air gate does not read the switch yet
             },
             time=_now(),
         )  # fmt: skip
