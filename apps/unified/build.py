@@ -161,7 +161,7 @@ def build_watch():
         + "\n"
         + r(EMB + "roles.js")
         + "\n"
-        + r(EMB + "langpick.js")   # before watch.js, whose restore of the saved settings goes through its fanSet
+        + r(EMB + "langpick.js")   # before watch.js: its fanSet wrapper and the load-time wiring then see the replaced language list
         + "\n"
         + r(EMB + "watch.js")
         + "\n"

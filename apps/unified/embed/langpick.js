@@ -11,7 +11,6 @@
   const NAMES = { en: 'English', es: 'Español', pt: 'Português', hi: 'हिन्दी', ar: 'العربية', fr: 'Français', de: 'Deutsch', id: 'Bahasa Indonesia', ja: '日本語', 'zh-Hans': '简体中文' };
   const LOCALE = { en: 'en-GB', es: 'es-ES', pt: 'pt-BR', hi: 'hi-IN', ar: 'ar-SA', fr: 'fr-FR', de: 'de-DE', id: 'id-ID', ja: 'ja-JP', 'zh-Hans': 'zh-CN' };
   const ENGLISH = { pt: 'Portuguese', de: 'German', id: 'Indonesian', ja: 'Japanese', 'zh-Hans': 'Simplified Chinese' };   // the prototype's prompts name a language in English
-  const RTL = ['ar'];
   const codes = Array.isArray(window.MC_LANGS) && window.MC_LANGS.length > 1 ? window.MC_LANGS : FIXTURE;
   const name = (k) => (window.MC_LANG_NAMES || NAMES)[k] || NAMES[k] || k;
   const locale = (k) => (window.MC_SPEECH_LOCALE || LOCALE)[k] || LOCALE[k] || k;
@@ -29,11 +28,16 @@
   // A line reads right to left when it is written in Arabic, whatever the picked language: a line that fell back to English stays left to right (dir=auto), and the card chrome is not mirrored.
   const ARABIC = /[\u0600-\u06FF]/;
   const mark = (root) => {
-    const els = root.nodeType === 1 ? [root, ...root.querySelectorAll('li,p')] : [];
-    for (const e of els) { if (!/^(LI|P)$/.test(e.tagName)) continue; if (e.getAttribute('dir') !== 'auto') e.setAttribute('dir', 'auto'); const ar = ARABIC.test(e.textContent || ''); if (ar && e.lang !== 'ar') e.lang = 'ar'; else if (!ar && e.lang === 'ar') e.removeAttribute('lang'); }
+    // the lines (li, p), the newest line at the top of the commentary card and the caption's text (its card has an English label before it, so the card itself cannot decide)
+    const els = root.nodeType === 1 ? [root, ...root.querySelectorAll('li,p,#mcf-top,#cap1')].filter((e) => /^(LI|P)$/.test(e.tagName) || e.id === 'mcf-top' || e.id === 'cap1') : [];
+    for (const e of els) { if (e.getAttribute('dir') !== 'auto') e.setAttribute('dir', 'auto'); const ar = ARABIC.test(e.textContent || ''); if (ar && e.lang !== 'ar') e.lang = 'ar'; else if (!ar && e.lang === 'ar') e.removeAttribute('lang'); }
   };
   const watch = (id) => { const root = document.getElementById(id); if (!root) return; mark(root); new MutationObserver(() => mark(root)).observe(root, { childList: true, subtree: true, characterData: true }); };
-  const paint = () => { for (const id of ['mcf', 'mc-two', 'mcx-box']) if (!document.getElementById(id) || !document.getElementById(id).dataset.mcLang) { const e = document.getElementById(id); if (e) { e.dataset.mcLang = '1'; watch(id); } } };
+  const paint = () => { for (const id of ['mcf', 'mc-two', 'mcx-box', 'cap']) if (!document.getElementById(id) || !document.getElementById(id).dataset.mcLang) { const e = document.getElementById(id); if (e) { e.dataset.mcLang = '1'; watch(id); } } };
+
+  // the prototype sets the caption card's direction from the picked language on every change; the card stays left to right and the caption's own line decides here
+  const _apply = fanApply;
+  fanApply = function () { _apply(); const c = document.getElementById('cap'); if (c) { c.dir = 'ltr'; mark(c); } };
 
   // one note under the row replaces the prototype's: a line shows in the chosen language only once a checked translation has arrived
   const _pick = fanPicker;
@@ -57,5 +61,5 @@
     if (open && el) el.style.setProperty('--mc-pop-top', (parseInt(el.style.top, 10) || 130) + 'px');
   };
   window.addEventListener('load', paint);
-  setTimeout(paint, 1500);   // the cards are made by feed.js, twofans.js and watch.js, which run after this file or build their box later
+  setTimeout(paint, 1500);   // the cards are made by feed.js, twofans.js and watch.js during module evaluation, so `load` is enough today; this is the backstop
 })();

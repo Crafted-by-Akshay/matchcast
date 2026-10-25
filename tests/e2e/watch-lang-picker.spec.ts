@@ -58,12 +58,25 @@ test('Watch language picker: a pick sets the language, tells the shell, flips th
   expect(await reachable(f, '#fan-pop .fm-l[data-l="zh-Hans"]'), 'the last language is not under another card').toEqual({ onTop: true, inside: true });
   expect(await reachable(f, '#mc-lang-note'), 'the note is not under another card').toEqual({ onTop: true, inside: true });
   // a line reads right to left when it is Arabic; a line that fell back to English stays left to right; the card chrome is not mirrored
-  const dirs = await f.evaluate(() => {
-    const list = document.getElementById('mcf-list')!, mk = (t: string) => { const li = document.createElement('li'); li.textContent = t; list.append(li); return li; };
-    const ar = mk('هدف للأرجنتين في الدقيقة 10.'), en = mk('Goal for Argentina in minute 10.');
-    return new Promise<any>((res) => setTimeout(() => res({ ar: [getComputedStyle(ar).direction, ar.lang], en: [getComputedStyle(en).direction, en.lang], card: getComputedStyle(document.getElementById('mcf')!).direction }), 200));
-  });
-  expect(dirs).toEqual({ ar: ['rtl', 'ar'], en: ['ltr', ''], card: 'ltr' });
+  const AR = 'هدف للأرجنتين في الدقيقة 10.', EN = 'Goal for Argentina in minute 10.';
+  const dirOf = (sel: string) => f.evaluate((q) => { const e = document.querySelector(q) as HTMLElement | null; return e ? [getComputedStyle(e).direction, e.lang] : null; }, sel);
+  await f.evaluate(([ar, en]) => {
+    const add = (rootId: string, tag: string, cls: string, t: string) => { const e = document.createElement(tag); e.className = cls; e.textContent = t; document.getElementById(rootId)!.append(e); };
+    add('mcf-list', 'li', 'tl-ar', ar); add('mcf-list', 'li', 'tl-en', en);
+    add('mc-two', 'p', 'tt-ar', ar); add('mc-two', 'p', 'tt-en', en);
+    add('mcx-box', 'p', 'tx-ar', ar); add('mcx-box', 'p', 'tx-en', en);
+    const b = document.createElement('b'); b.id = 'tt-top'; b.textContent = ar; document.getElementById('mcf-top')!.replaceChildren(b);   // as feed.js draws it: the newest line, with nothing English before it
+    document.getElementById('cap1')!.textContent = ar;
+  }, [AR, EN]);
+  for (const k of ['.tl', '.tt', '.tx']) {
+    await expect.poll(() => dirOf(k + '-ar'), { message: `${k} Arabic line reads right to left` }).toEqual(['rtl', 'ar']);
+    await expect.poll(() => dirOf(k + '-en'), { message: `${k} English fallback line stays left to right` }).toEqual(['ltr', '']);
+  }
+  await expect.poll(() => dirOf('#mcf-top'), { message: 'the newest line at the top of the card' }).toEqual(['rtl', 'ar']);
+  await expect.poll(() => dirOf('#cap1'), { message: 'the caption line' }).toEqual(['rtl', 'ar']);
+  expect(await f.evaluate(() => getComputedStyle(document.getElementById('mcf')!).direction), 'the card chrome is not mirrored').toBe('ltr');
+  await f.evaluate((en) => { document.getElementById('cap1')!.textContent = en; document.getElementById('tt-top')?.remove(); }, EN);
+  await expect.poll(() => dirOf('#cap1'), { message: 'a fallback line does not leave the caption right to left' }).toEqual(['ltr', '']);
   await expect(f.locator('#mc-lang-note')).toBeVisible();
   const built = await builtSet(f);
   await expect(f.locator('#mc-lang-note')).toHaveText(built.includes('ar') ? 'Lines show in العربية once a checked translation arrives. Until then, or if translating fails, they stay in English.' : 'العربية is Planned: lines stay in English for now.');
