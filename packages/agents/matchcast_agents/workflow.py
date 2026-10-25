@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from .live.knowledge import TalkKnowledge
 
 STATS_DESK_BUDGET_S = 2.0
+MINUTE_MENTION = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)  # "minute 12": a log minute
 
 TALK_PHRASES = {
     "shots on target": "shots_on_target", "shots": "shots", "goals": "goals",
@@ -597,11 +598,18 @@ class MatchWorkflow:
         from .verify import extract_numbers
         from .verify.checks import recompute
 
-        numbers = extract_numbers(reply)
         if target == "producer":
+            numbers = extract_numbers(reply)
             upto = ctx.state.max_sequence
             goals = {recompute(ctx.events, f"goals:{t}", upto) for t in (ctx.home, ctx.away)}
             return all(n in goals for n in numbers)
+        from .live.answers import minute_claims_fit
+
+        if not minute_claims_fit(
+            ctx, target, reply
+        ):  # a minute must be one the named player's log event
+            return False
+        numbers = extract_numbers(MINUTE_MENTION.sub(" ", reply))
         recount = dict.fromkeys(TALK_PHRASES.values(), 0)
         for event in ctx.events:
             p = event["payload"]
