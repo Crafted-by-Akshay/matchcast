@@ -57,3 +57,37 @@ def test_hub_replays_only_publications_and_audit_after_last_id() -> None:
     assert [e.id for e in hub.replay_after(None)] == ["pub:a", "audit:1", "pub:b"]
     assert [e.id for e in hub.replay_after("audit:1")] == ["pub:b"]
     assert hub.history()[0].encode() == 'event: state\nid: state:1\ndata: {"r":1}\n\n'
+
+
+def test_colour_moment_is_capped_by_wall_time_and_off_by_default(match) -> None:
+    now = [100.0]
+    producer = ProducerRules(colour_every_s=45, clock=lambda: now[0])
+    plays = [
+        dict(e, event_id=f"c{i}", event_time_ms=10_000 * (i + 1))
+        for i, e in enumerate(
+            x
+            for x in match["events"]
+            if x["payload"]["type"] in ("foul", "tackle")
+            or (x["payload"]["type"] == "shot" and not x["payload"]["on_target"])
+        )
+    ][:4]
+    assert len(plays) == 4
+    first = run(producer.decide(ctx(match), plays[0]))
+    assert isinstance(first, ProducerTask) and first.reason == "colour"
+    assert first.personas == ("analyst",) and first.priority == 3
+    now[0] += 44
+    assert isinstance(run(producer.decide(ctx(match), plays[1])), Skip)  # inside the 45 s
+    now[0] += 2
+    assert run(producer.decide(ctx(match), plays[2])).reason == "colour"  # budget is back
+    off = ProducerRules()
+    assert isinstance(run(off.decide(ctx(match), plays[3])), Skip)
+
+
+def test_a_rate_limited_colour_moment_does_not_spend_the_budget(match) -> None:
+    producer = ProducerRules(colour_every_s=45, clock=lambda: 0.0)
+    goal = event(match, "goal")
+    assert run(producer.decide(ctx(match), goal)).reason == "goal"
+    foul = dict(event(match, "foul"), event_id="f1", event_time_ms=goal["event_time_ms"] + 1000)
+    assert run(producer.decide(ctx(match), foul)).reason == "rate_limited"
+    later = dict(foul, event_id="f2", event_time_ms=goal["event_time_ms"] + 20_000)
+    assert run(producer.decide(ctx(match), later)).reason == "colour"

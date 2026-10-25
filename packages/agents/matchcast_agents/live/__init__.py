@@ -11,6 +11,8 @@ from .client import FoundryModelClient, ModelClient, ScriptedModelClient, model_
 from .narrator import LiveNarrator
 from .verifier import LiveVerifier
 
+COLOUR_EVERY_S = 45.0  # at most one colour line (one model pass) per match in this much wall time
+
 __all__ = [
     "FoundryModelClient",
     "LiveAnalyst",
@@ -42,10 +44,11 @@ def live_agents(
 
     def quiet(args: tuple, kwargs: dict) -> bool:
         """(ctx, task, ...): a moment below the model's priority goes straight to the rules."""
-        return args[1].priority > model_priority()
+        task = args[1]
+        return task.priority > model_priority() and task.reason != "colour"
 
     return AgentSet(
-        ProducerRules(personas),
+        ProducerRules(personas, colour_every_s=COLOUR_EVERY_S),
         ResilientAgent(LiveAnalyst(client, analyst_rules), analyst_rules, skip=quiet),
         ResilientAgent(LiveNarrator(client), NarratorRules(), skip=quiet),
         ResilientAgent(LiveVerifier(client), VerifierRules()),
