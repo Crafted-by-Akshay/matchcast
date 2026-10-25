@@ -104,8 +104,7 @@ LEADER_ASK = re.compile(
 # most ...", "which player has more ...", "who is the best ..."): a ranking by a person or a club,
 # which no tool answers. "which formation ..." is a definition and is not caught.
 RANKING_Q = re.compile(
-    r"^\s*(?:who|which (?:player|team|club))\b.*\b(?:most|more|fewest|least|best|top)\b"
-    r"|^\s*(?:who|which (?:player|team|club))\s+(?:has|have|had)\b",
+    r"\b(?:who|which (?:player|team|club))\b.*\b(?:most|more|fewest|least|best|top)\b",
     re.IGNORECASE,
 )
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
@@ -191,14 +190,14 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     clauses = [c for c in CLAUSE.split(question) if c and c.strip()]
     metric = _metric_in(question)
     cue = bool(LIVE_CUE.search(question))
+    if RANKING_Q.search(question) and (metric is not None or SCORER_Q.search(question)):
+        if metric is not None and LEADER_ASK.match(question):
+            return Route("leader", metric, (), "")  # the plain club shot comparison
+        return Route("abstain", None, teams, "")  # a ranking by a count or by scorers: no tool
     if (SCORER_Q.search(question) or WHAT_GOALS_Q.search(question)) and (
         metric is None or metric[0] == "goals"
     ):
         return Route("goals", ("goals", "Goals"), teams, "")  # each goal, from the stored events
-    if RANKING_Q.search(question) and metric is not None:  # a ranking by a count
-        if LEADER_ASK.match(question):
-            return Route("leader", metric, (), "")  # the plain club shot comparison
-        return Route("abstain", None, teams, "")  # a ranking by a player or club: no tool
     which = _goal_ordinal(question)
     if IMPACT_Q.search(question) and GOAL_WORD.search(question) and which:
         return Route("goal_impact", ("goals", which), teams, "")  # the score change at one goal
@@ -209,7 +208,7 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
 
     asks_now = bool(STRONG_LIVE.search(clauses[0])) or not DEFINITIONAL.match(clauses[0])
     if metric is not None and cue and asks_now:
-        if PLAYER_Q.search(question):
+        if PLAYER_Q.search(question) and metric[0] != "goals":  # goal rankings: the gate above
             return Route("abstain", None, teams, "")  # per-player rankings have no tool
         live_at = next(i for i, c in enumerate(clauses) if _metric_in(c))
         others = " ".join(c for i, c in enumerate(clauses) if i != live_at)

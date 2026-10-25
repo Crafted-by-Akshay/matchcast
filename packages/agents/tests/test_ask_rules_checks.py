@@ -223,8 +223,22 @@ def test_a_ranking_of_goals_by_player_or_team_abstains(match) -> None:
         "Who has the most goals?",
         "Who have more goals?",
         "Which team has the most goals in football?",
+        "Who scored the most goals?",
+        "Who scored the most?",
+        "Tell me who scored the most goals",
+        "Who is the top scorer?",
     ):
         assert rules_answer(match, question).abstained, question
+
+
+def test_who_has_scored_is_answered_as_it_was_on_main(match) -> None:
+    result = rules_answer(match, "Who has scored?")
+    assert result.intent == "live" and not result.abstained
+    assert result.answer.startswith("Score: Northgate FC 1, Harbour United 2.")
+
+
+def test_a_formation_definition_with_the_best_word_is_still_a_definition(match) -> None:
+    assert rules_answer(match, "Which team formation is the best?").intent != "out_of_scope"
 
 
 def test_which_club_has_more_shots_on_target_is_the_club_comparison(match) -> None:
