@@ -642,6 +642,38 @@ def test_stream_with_the_booth_gets_both_voices_and_nothing_else(client: TestCli
     ]
 
 
+def test_booth_status_registers_both_voices_or_says_why_not(client: TestClient) -> None:
+    create(client)
+    ok = client.get("/v1/matches/match-short/booth", params=Q).json()
+    assert ok["ready"] is True and ok["personas"] == ["booth:pbp", "booth:colour"]
+    assert ok["reason"] is None and ok["held"] is False
+    flow = client.app.state.matches.get("short", "match-short")
+    flow.extra_personas[:] = [f"one-metric:{m}" for m in ("shots", "goals", "cards", "fouls")] + [
+        f"one-metric:{m}" for m in ("xg", "tackles_won", "red_cards")
+    ]
+    full = client.get("/v1/matches/match-short/booth", params=Q).json()
+    assert full["ready"] is False and full["reason"] == "watch_mode_cap"
+
+
+def test_a_persona_stream_gets_no_publications_of_other_personas(client: TestClient) -> None:
+    create(client)
+    got = client.get(
+        "/v1/matches/match-short/stream", params={**Q, "persona": "analyst", "follow": "false"}
+    )
+    assert got.status_code == 200
+    post_all(client)
+    body = client.get(
+        "/v1/matches/match-short/stream", params={**Q, "persona": "analyst", "follow": "false"}
+    ).text
+    events = [
+        e for e in body.split("\n\n") if '"persona": "casual"' in e or '"persona":"casual"' in e
+    ]
+    assert not [e for e in events if e.startswith("event: publication")], events[
+        :1
+    ]
+    assert "event: line" in body or "event: publication" in body  # producer queue keeps lines
+
+
 def test_stream_refuses_a_persona_that_is_not_real_for_this_match(client: TestClient) -> None:
     create(client)
     for bad in ("my-club:EvilFC", "club:nobody", "one-metric:bogus", "poet"):
