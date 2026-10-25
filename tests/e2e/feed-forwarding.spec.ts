@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { createServer } from 'node:http';
 
 // AB#499: the shell forwards the api's onair and feed_drop records to the desk, and the desk's per-feed kill calls the feed route.
-// The records are the docs/contracts.md "Derived feed lines" fields; the api is a fixture here, so no feed line is made by the shell.
+// The records are the docs/contracts.md "Derived feed lines" fields. The api is a mock server here: it streams the two records and takes the kill.
 declare const LV: any;
 
 const ONAIR = {
