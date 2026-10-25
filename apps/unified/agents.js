@@ -287,7 +287,7 @@ const AG = (() => {
     // Only a claim or a publication becomes a card; a line event updates the publication it belongs to.
     // A line the Verifier could not repair (status 'review', escalated) is the one line event that becomes a card: it waits for a person.
     const isLine = !!d.line_id && !d.publication_id && !d.claim_id;
-    const escalated = isLine && (!!d.escalated || d.status === 'review');
+    const escalated = isLine && !!d.escalated;   // status review alone is an ordinary line the Verifier did not verify: it makes no card
     const id = d.claim_id || d.publication_id || (isLine ? 'pub-' + d.line_id : null) || (d.claim_ids && d.claim_ids[0]);
     if (!id) return;
     let c = run.claims.find((x) => x.id === id);
@@ -303,10 +303,11 @@ const AG = (() => {
     if (isLine) {
       if (['abstained', 'rejected', 'killed'].includes(d.status)) { c.verdict = 'abstained'; c.reason = 'api: line ' + d.status; if (c.approval === 'pending') c.approval = 'killed'; }   // the api took it off the queue
       if (escalated) {   // the Verifier could not check it, so it is held: a person may kill it, but nothing airs it (approve and edit refuse it)
+        const wasEscalated = !!c.escalated;
         c.escalated = true; c.escalation = ESCALATION[d.reason_code] || 'the Verifier could not repair it';
         c.born = c.born || clock(); c.trace = c.trace || []; c.text = d.text || c.text; c.verdict = 'abstained'; c.reason = 'api: could not repair';
         if (!c.approval) c.approval = 'pending';
-        trace(c, 'verifier', 'escalated', clock(), { detail: c.escalation + ': a person decides' });
+        if (!wasEscalated) trace(c, 'verifier', 'escalated', clock(), { detail: c.escalation + ': a person decides' });   // a replayed event does not add a second step
       }
       if (Array.isArray(d.checks) && d.checks.length) c.apiChecks = d.checks;
       changed(); return;

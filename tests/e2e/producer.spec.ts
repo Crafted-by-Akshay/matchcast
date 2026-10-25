@@ -59,8 +59,11 @@ test('an escalated line waits with its reason and a marker: nothing airs it, Aut
   const f = await viewFrame(page, 'broadcast');
   await expect(f.locator('#mc-producer')).toBeVisible({ timeout: 240_000 });
   await ready('broadcast')(page);   // the view has taken its first queue message, so the line below is not sent to a view that is still loading
+  // a line waiting for review that the Verifier did not escalate is not a card: only an escalated line reaches the queue
+  await page.evaluate((n) => { AG.reset('k-escalated', n); AG.ingest({ line_id: 'L8', status: 'review', escalated: false, text: "Thames Rovers lead 2-0 at 10'." }, 'live'); }, names);
+  expect(await page.evaluate(() => AG.run.claims.some((c: any) => c.id === 'pub-L8')), 'a review line that was not escalated makes no card').toBe(false);
   // the api's line event for a line the Verifier could not repair (status review, escalated), as live.js hands it to AG.ingest
-  await page.evaluate((n) => { AG.reset('k-escalated', n); AG.ingest({ line_id: 'L9', status: 'review', escalated: true, reason_code: 'number_mismatch', text: "Thames Rovers lead 3-0 at 20'." }, 'live'); }, names);
+  await page.evaluate((n) => { AG.ingest({ line_id: 'L9', status: 'review', escalated: true, reason_code: 'number_mismatch', text: "Thames Rovers lead 3-0 at 20'." }, 'live'); }, names);
 
   const item = f.locator('#mc-pq li[data-id="pub-L9"]');
   await expect(item, 'the escalated line is marked and says why').toContainText('Escalated');
