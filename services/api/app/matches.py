@@ -987,7 +987,7 @@ def build_router(registry: Registry) -> APIRouter:
         }
         if result.broadcast is not None:  # the Broadcast Copilot's picks: highlights, focus or plan
             reply["broadcast"] = result.broadcast
-        if body.lang != "en" and not result.abstained:
+        if body.lang != "en" and not result.abstained and result.broadcast is None:  # the picks are English and the desk never reads variants
             key = "ask-" + hashlib.sha256(result.answer.encode()).hexdigest()[:12]
             variant = await registry.translation.variant(
                 f"{body.session_id}/{match_id}",

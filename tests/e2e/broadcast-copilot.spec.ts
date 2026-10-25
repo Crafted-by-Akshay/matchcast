@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures';
 import { createServer } from 'node:http';
 
-// ADR-0019 (Phases 2 and 4): the Broadcast Copilot asks the api with surface "broadcast" and shows its ranked picks; the production desk strip shows the agents' trace for the last aired line.
-// Watch shows a focus suggestion from Broadcast. The camera does not move yet (Planned), and the test checks the button says so.
+// ADR-0019 (Phases 2 and 4): the Broadcast Copilot asks the api with surface "broadcast" and shows its ranked picks; the production desk strip shows the agents' trace for the lines on air, newest first.
+// Watch shows a focus suggestion from Broadcast; "Go to it" moves the camera to that player, and the test checks the button says whether it did.
 declare const LV: any;
 
 const PICKS: Record<string, any> = {
@@ -43,6 +43,7 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
 
     const desk = page.frameLocator('#v-broadcast iframe');
     await expect(desk.locator('#mc-desk')).toBeVisible({ timeout: 60_000 });
+    await expect(page.frameLocator('#v-watch iframe').locator('#mc-focus'), 'no focus pill before Broadcast suggests one').toBeHidden();
     await desk.locator('[data-cop="highlights"]').click();
     await expect(desk.locator('#mc-cop-out')).toContainText('Ivan Ruiz', { timeout: 20_000 });
     expect(asks[0].surface, 'the Copilot asks with the broadcast surface').toBe('broadcast');
@@ -50,6 +51,14 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
     await desk.locator('[data-cop="plan"]').click();
     await expect(desk.locator('#mc-cop-out')).toContainText('drop deeper', { timeout: 20_000 });
     expect(asks.at(-1).surface).toBe('broadcast');
+
+    // Hide collapses the desk to its header and Show brings the body back
+    const open = await desk.locator('#mc-desk').boundingBox();
+    await desk.locator('#mc-desk-hide').click();
+    await expect(desk.locator('#mc-desk-body')).toBeHidden();
+    expect((await desk.locator('#mc-desk').boundingBox())!.height, 'Hide leaves the header and the replay row, and gives back the body').toBeLessThan(open!.height - 60);
+    await desk.locator('#mc-desk-hide').click();
+    await expect(desk.locator('#mc-desk-body')).toBeVisible();
 
     await desk.locator('[data-cop="focus"]').click();
     await expect(desk.locator('#mc-cop-go')).toBeVisible({ timeout: 20_000 });

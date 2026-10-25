@@ -10,6 +10,8 @@
     + '#mc-desk button{padding:4px 8px;border-radius:4px;border:1px solid #3aa0ff;background:#12294a;color:#fff;font:inherit;cursor:pointer}'
     + '#mc-desk button:disabled{opacity:.55;cursor:default}'
     + '#mc-desk-body{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto}'
+    + '#mc-desk-body[hidden]{display:none}'
+    + '@media (max-width:480px){#mc-desk{top:64px!important;bottom:auto!important;width:calc(100% - 20px)!important;background:none!important;padding:0!important;overflow:visible!important}#mc-desk>div:first-child,#mc-desk-body{display:none!important}#mc-replay{order:-1}}'   // a phone stage is about 180 px tall: only the replay row shows there, where it was before the desk; the Copilot and the strip need a wider pane
     + '#mc-desk ol,#mc-desk ul{margin:0;padding-left:18px}'
     + '.mcd-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}'
     + '.mcd-ch{padding:2px 6px;border-radius:999px;background:#17283F;border:1px solid #2c4a72;font-size:11px}'
@@ -31,6 +33,17 @@
   const rb = document.getElementById('mc-replay');
   if (rb) { rb.style.cssText += ';position:static;box-sizing:border-box;width:100%;max-width:none;flex-wrap:wrap'; box.querySelector('#mc-desk-body').before(rb); }
   const $ = (id) => box.querySelector('#' + id);
+  // the desk runs down to just above the lower-third while it is on air, and shrinks to its header when Hide collapses it
+  const l3 = document.getElementById('mc-l3');
+  const placeDesk = () => {
+    const host = box.offsetParent; if (!host) return;
+    let bottom = 56;
+    if (l3 && !l3.hidden) bottom = Math.max(bottom, Math.round(host.getBoundingClientRect().bottom - l3.getBoundingClientRect().top + 6));
+    box.style.bottom = $('mc-desk-body').hidden ? 'auto' : bottom + 'px';
+  };
+  placeDesk();
+  if (l3) new ResizeObserver(placeDesk).observe(l3);
+  window.addEventListener('resize', placeDesk);
 
   // the production strip: the last five lines on air, newest first. Each shows the numbers it was built on and one chip per agent that acted on it
   const flow = [];
@@ -78,7 +91,7 @@
   const out = (html) => { $('mc-cop-out').innerHTML = html; };
   box.querySelectorAll('[data-cop]').forEach((b) => { b.onclick = () => ask(b.dataset.cop); });
   $('mc-desk-hide').onclick = (e) => {
-    const shut = !$('mc-desk-body').hidden; $('mc-desk-body').hidden = shut; e.currentTarget.textContent = shut ? 'Show' : 'Hide'; e.currentTarget.setAttribute('aria-expanded', String(!shut));
+    const shut = !$('mc-desk-body').hidden; $('mc-desk-body').hidden = shut; e.currentTarget.textContent = shut ? 'Show' : 'Hide'; e.currentTarget.setAttribute('aria-expanded', String(!shut)); placeDesk();
   };
   function ask(intent) {
     const id = 'c' + Date.now().toString(36) + (++n); latest = id; pending.set(id, intent);

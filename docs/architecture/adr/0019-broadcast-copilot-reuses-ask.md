@@ -20,7 +20,7 @@ Option 2, with code ranking.
 
 - `POST /v1/matches/{id}/ask` takes `surface` (default `ask`). With `surface: "broadcast"`, a question with a Broadcast cue is answered by `matchcast_agents.broadcast`. The reply adds `broadcast` (`highlights`, `focus` or `plan`), and each pick cites its event.
 - Highlights are the events scoring at least 40 on the producer's moment scale, best first. Focus is the best player moment in the last three minutes, else a wide shot. An own goal names no player and is never a focus target. Period ends read "Half time" or "Full time" from the clock period. Minutes come from event clocks and names from the roster, so no model call is needed. Picks cite their events with the citation type `event`, which the Ask path does not use.
-- The camera is never moved by the API or by Broadcast. Focus returns a `camera` preset and a player or zone. Watch shows a "Go to it" control, and the camera moves only on click (planned in the front end).
+- The camera is never moved by the API or by Broadcast. Focus returns a `camera` preset and a player or zone. Watch shows a "Go to it" control, and the camera moves only on click. The click calls `window.MCWatch.focus({ player_id })`, which moves the camera for a player on the pitch and returns false otherwise; the button then says "Camera not moved".
 - No new core agent and no LLM call in the live loop. The Verifier's rules still apply to any model text that a later phase adds.
 
 ## Consequences
@@ -30,4 +30,4 @@ Option 2, with code ranking.
 - The audit action stays `ask_answered`, with a `surface` field, so the closed list in 04 §4 does not change.
 - Model-written wording for highlights and plans is a later step. Until then, the reasons are templates over event data.
 - The front end is in the same PR: the split pane, the production strip (the agents' trace per aired line, from the shell's `air` message) and the Copilot panel in Broadcast, and the focus suggestion in Watch. See [11-frontend.md](../11-frontend.md).
-- The camera does not move yet. The 3D engine has no focus call that the view hooks can reach, so Watch's "Go to it" stays disabled and labelled **Planned** until the engine exposes one.
+- The camera move is live for players. Watch's "Go to it" calls `MCWatch.focus` (player mode). Zone focus from the API is not wired to the camera yet; the pill stays disabled for a zone-only pick.

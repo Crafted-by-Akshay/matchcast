@@ -521,7 +521,7 @@ function show(view) {
 function setMatch(setup, fixtureId) {
   M.setup = setup; M.fixture = fixtureId;
   for (const v of ['watch', 'broadcast']) if (FR[v]) FR[v].live = null;
-  ensure(current);
+  for (const v of shownViews(current)) ensure(v);   // a split pane shows both views, and both need the new match
   paint();
 }
 
@@ -748,7 +748,11 @@ window.addEventListener('message', (e) => {
   }
   if (d.type === 'vision-events' && view === 'watch') { LV.visionEvents(d.batch); return; }   // the tracker's derived passes, on the separate .vision stream (DAT-11)
   if (d.type === 'ask' && (view === 'watch' || view === 'broadcast' || view === 'analyst')) { answerAsk(d.id, d.q, view, view === 'broadcast' && d.surface === 'broadcast' ? 'broadcast' : 'ask'); return; }
-  if (d.type === 'persona' && view === 'broadcast') { LV.persona(String(d.persona || 'casual'), LV.language); return; }   // the desk's lens steers the agents' persona; the language stays
+  if (d.type === 'persona' && view === 'broadcast') {   // the desk's lens steers the shared commentary persona; the language stays. Fan and Analyst also move Watch's strip, so the two views agree
+    const p = String(d.persona || 'casual'); LV.persona(p, LV.language);
+    if (p === 'casual' || p === 'analyst') { M.persona = p; paintStory(); post('watch', { src: 'matchcast-shell', type: 'persona-set', mode: p }); CM.setPersona(p); }
+    return;
+  }
   if (d.type === 'focus' && view === 'broadcast') { post('watch', { src: 'matchcast-shell', type: 'focus', player_id: String(d.player_id || ''), reason: String(d.reason || '').slice(0, 200) }); return; }   // the Broadcast copilot suggests a camera focus; Watch decides
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
   if (d.type === 'indices' && view === 'watch') {   // control, chaos and tempo from Watch's events (DAT-4); the Analyst's match page shows them
