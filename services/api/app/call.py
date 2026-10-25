@@ -13,8 +13,9 @@ Server to client:
 A reply is spoken one sentence at a time, so the first sentence plays while the rest is made.
 Only a verified reply with facts is spoken, the same rule Watch shows the reply by. Frames for
 one turn are sent in order, and a cancel stops the turn before its next sentence is sent. A frame
-that is not a JSON object, or a talk whose id is already in flight, is answered with `bad_frame`;
-the call stays open.
+that is not a JSON object, a talk whose id is already in flight, or a talk outside the talk
+route's limits (utterance 1 to 300 characters, a player id, a position code) is answered with
+`bad_frame`; the call stays open.
 """
 
 from __future__ import annotations
@@ -77,7 +78,7 @@ class CallSocket:
             return None
         try:
             payload = json.loads(text)
-        except ValueError:
+        except (ValueError, RecursionError):  # a deeply nested frame is bad JSON too
             return None
         return payload if isinstance(payload, dict) else None
 
