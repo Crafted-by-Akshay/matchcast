@@ -25,13 +25,15 @@ retry() {
 
 # `azd provision` checks for Docker because azure.yaml declares Docker services, so the acr path
 # deploys main.bicep with az and the parameters azd would pass (scripts/azd_params.py).
+# It chains with && and returns the status itself: called through retry, set -e is off inside it.
 provision_acr() {
-  local params
+  local params rc=0
   params=$(mktemp)
-  azd env get-values -e "$ENV_NAME" | python3 scripts/azd_params.py infra/main.parameters.json > "$params"
-  az deployment group create -g rg-matchcast -n "$ENV_NAME-$(date +%s)" \
-    -f infra/main.bicep -p "@$params" --only-show-errors -o none
+  azd env get-values -e "$ENV_NAME" | python3 scripts/azd_params.py infra/main.parameters.json > "$params" &&
+    az deployment group create -g rg-matchcast -n "$ENV_NAME-$(date +%s)" \
+      -f infra/main.bicep -p "@$params" --only-show-errors -o none || rc=$?
   rm -f "$params"
+  return "$rc"
 }
 
 provision() {

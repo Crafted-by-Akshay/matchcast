@@ -99,3 +99,36 @@ def test_cloud_deploy_never_calls_azd_provision():
     code = [ln for ln in script.splitlines() if not ln.lstrip().startswith("#")]
     assert sum("azd provision" in ln for ln in code) == 1
     assert "az deployment group create" in script
+
+
+def test_a_failed_cloud_provision_is_retried_and_fails_the_deploy(tmp_path):
+    """retry runs its command left of &&, where bash ignores set -e inside functions."""
+    script = LOCAL.read_text()
+    funcs = "\n".join(
+        script[script.index(f"{name}() {{") :].split("\n}\n", 1)[0] + "\n}"
+        for name in ("retry", "provision_acr")
+    )
+    for tool, body in (
+        ("azd", "echo 'AZURE_ENV_NAME=\"dev\"'; echo 'FOUNDRY_PROJECT_ENDPOINT=\"https://f\"'"),
+        ("az", f"echo az >> {tmp_path}/calls; exit 3"),
+    ):
+        (tmp_path / tool).write_text(f"#!/bin/sh\n{body}\n")
+        (tmp_path / tool).chmod(0o755)
+    (tmp_path / "sleep").write_text("#!/bin/sh\n")
+    (tmp_path / "sleep").chmod(0o755)
+    run = subprocess.run(
+        ["bash", "-c", f"set -euo pipefail\nENV_NAME=dev\n{funcs}\nretry provision_acr"],
+        cwd=ROOT,
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+    )
+    assert run.returncode != 0
+    assert (tmp_path / "calls").read_text().count("az") == 3
+
+
+def test_an_unset_required_parameter_stops_the_render():
+    import pytest
+
+    with pytest.raises(SystemExit):
+        _params().render((ROOT / "infra/main.parameters.json").read_text(), {})
