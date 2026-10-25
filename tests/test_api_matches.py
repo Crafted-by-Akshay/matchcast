@@ -983,6 +983,25 @@ def test_a_desk_feed_kill_and_resume_are_audited(
     assert verify_chain(audit)["valid"] is True
 
 
+def test_lines_route_withholds_the_text_of_a_safety_refused_line() -> None:
+    from matchcast_agents.messages import LineRecord
+
+    refused = LineRecord(
+        line_id="l1",
+        moment_id="m1",
+        claim_ids=["c1"],
+        persona="casual",
+        text="something unsafe",
+        status="rejected",
+        reason_code="unsafe_content",
+        created_at="2026-10-25T00:00:00Z",
+        snapshot_revision=1,
+    )
+    out = matches._line_json(refused)
+    assert out["text"] != "something unsafe" and "unsafe" not in out["text"].replace("Safety", "")
+    assert out["status"] == "rejected" and out["reason_code"] == "unsafe_content"
+
+
 def test_the_scoreboard_is_three_rules_arms_and_is_labelled_rules(client: TestClient) -> None:
     create(client)
     post_all(client)

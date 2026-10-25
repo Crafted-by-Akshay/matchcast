@@ -45,7 +45,7 @@ from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
 from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
-from matchcast_agents.workflow import WorkflowError, feed_kills_in
+from matchcast_agents.workflow import WorkflowError, feed_kills_in, public_line
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
@@ -584,7 +584,7 @@ def _is_stored(store: Any, sk: str) -> bool:
 
 
 def _line_json(line: LineRecord) -> dict[str, Any]:
-    return line.model_dump()
+    return public_line(line)
 
 
 def _claim_verdict(lines: list[LineRecord], claim_id: str) -> str:
