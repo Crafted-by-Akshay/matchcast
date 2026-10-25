@@ -406,7 +406,11 @@ class MatchWorkflow:
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
-        if isinstance(decision, ProducerTask) and self.extra_personas:
+        if (
+            isinstance(decision, ProducerTask)
+            and self.extra_personas
+            and decision.reason != "colour"
+        ):
             both = dict.fromkeys([*decision.personas, *self.extra_personas])
             decision = decision.model_copy(update={"personas": tuple(both)})
         if isinstance(decision, Skip):
