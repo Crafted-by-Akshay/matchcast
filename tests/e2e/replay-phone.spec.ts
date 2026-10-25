@@ -30,12 +30,24 @@ for (const width of [390, 320]) {
     expect(m.barScroll, 'the bar does not scroll sideways').toBeLessThanOrEqual(m.barW + 1);
     expect(m.groupName, 'the group is still named for screen readers').toBe('Instant replay');
     if (width >= 390) {   // a 320 px phone may wrap the row, never a label
-      expect(new Set(m.rowTops.map((t) => Math.round(t / 8))).size, 'the clip buttons and Slow-mo share one row').toBe(1);
+      expect(Math.max(...m.rowTops) - Math.min(...m.rowTops), 'the clip buttons and Slow-mo share one row').toBeLessThanOrEqual(2);
       expect(m.barH, 'short enough to clear the lower-third in the phone stage').toBeLessThanOrEqual(64);
     }
     for (const h of m.heights) expect(h, 'a 44 px target').toBeGreaterThanOrEqual(43);
     expect(m.lines.every((n) => n === 1), 'no label breaks across lines').toBe(true);
     expect(m.liveShown, 'Back to live stays hidden until a replay plays').toBe(false);
+    if (width >= 390) {   // a replay in progress: Back to live takes the clips' place and the bar stays one row, clear of the lower-third
+      const p = await b.evaluate(() => {
+        const bar = document.getElementById('mc-replay')!, live = document.getElementById('mc-replay-live')!, l3 = document.getElementById('mc-l3')!;
+        bar.classList.add('rp-on'); live.hidden = false; l3.hidden = false; l3.textContent = "23' Goal for Thames Rovers (A One). Thames Rovers 1–0 Coloso Ciudad at 23 minutes.";
+        const r = bar.getBoundingClientRect(), t = l3.getBoundingClientRect();
+        return { barH: r.height, barBottom: r.bottom, l3Top: t.top, clipsShown: [...bar.querySelectorAll('button[data-sec],label')].some((e) => getComputedStyle(e).display !== 'none'), liveShown: getComputedStyle(live).display !== 'none' };
+      });
+      expect(p.liveShown, 'Back to live shows during a replay').toBe(true);
+      expect(p.clipsShown, 'the clips give way to it').toBe(false);
+      expect(p.barH, 'still one row').toBeLessThanOrEqual(64);
+      expect(p.barBottom, 'clear of the lower-third').toBeLessThanOrEqual(p.l3Top);
+    }
     expect(errs).toEqual([]);
   });
 }
