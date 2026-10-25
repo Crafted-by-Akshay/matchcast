@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, stepSim, viewFrame } from './helpers';
 
+declare const AG: any;
 // Audit follow-up: the Watch first screen shows the same moment as an analyst and as a casual fan side by side (personalisation visible without a click), the Verifier's measured record is a small chip that opens the Verify tab, and the header has fewer status pills.
 test('Watch shows one moment in two voices, and the Verifier chip opens the Verify tab', async ({ page }) => {
   test.setTimeout(420_000);
@@ -73,4 +74,19 @@ test('Camera presets, speed and names sit behind Demo controls, one click away',
   await expect(f.locator('#play')).toBeVisible();
   await expect(f.locator('#cpbtn')).toBeVisible();   // Copilot stays on the first screen
   expect(errs).toEqual([]);
+});
+
+test('the first Verifier-checked line comes early: within the first match minute, about 20 s at normal speed', async ({ page }) => {
+  test.setTimeout(300_000);
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  let steps = 0, found: { text: string; minute: number } | null = null;
+  for (let i = 0; i < 100 && !found; i++) {   // 20 steps of 0.05 s = 1 s at normal speed
+    await stepSim(f, 20); steps += 20;
+    found = await page.evaluate(() => { const c = AG.run && AG.run.claims.find((x: any) => x.verdict === 'verified'); return c ? { text: c.text, minute: c.minute } : null; });
+  }
+  expect(found, 'a verified claim within 100 s at normal speed').not.toBeNull();
+  expect(found!.minute).toBeLessThanOrEqual(2);
+  expect(steps * 0.05, 'seconds at 1x until the first verified claim').toBeLessThanOrEqual(45);
 });

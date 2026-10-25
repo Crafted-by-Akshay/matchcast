@@ -12,7 +12,7 @@ const AG = (() => {
   let mode = 'producer', onAir = () => {};   // producer (the default): a person approves each line first; demo: verified lines air at once
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
-    roll: { score: [0, 0], xg: [0, 0], nextXg: 5 },
+    roll: { score: [0, 0], xg: [0, 0], nextXg: 1 },
     stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 } });
   const teamIx = (k) => (!run || k == null) ? -1 : k === run.names.hk ? 0 : k === run.names.ak ? 1 : -1;
   const teamName = (t) => (t === 0 ? run.names.home : run.names.away);
@@ -269,7 +269,7 @@ const AG = (() => {
     const last = rows.length ? rows[rows.length - 1].minute : null;
     if (last != null && last >= run.roll.nextXg) {
       pipeline(claim('xg_total', last, [], { xg: run.roll.xg.slice() }, { basis: 'every shot up to ' + min(last) }));
-      run.roll.nextXg = Math.floor(last / 5) * 5 + 5;
+      run.roll.nextXg = Math.max(5, Math.floor(last / 5) * 5 + 5);   // the first running total comes at minute 1 so the pipeline shows a checked line early, then every five minutes
     }
     changed();
   };
