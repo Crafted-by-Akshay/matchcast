@@ -6,8 +6,8 @@ A live arm is its rules twin with the model in place (ADR-0014). Every model cal
 rules twin answers both, and so it answers any rejected answer or open circuit. Each arm reports
 how many calls it sent, how many failed or were refused, and how many agent calls a fallback
 answered (mode ``mixed``). A live run is recorded once by ``scripts/scoreboard_live.py``; the
-scoreboard route shows its arms as precomputed, labelled with the run id, and never calls a model
-(docs/architecture/16, section 4.1).
+scoreboard route shows its arms beside the rules arms, labelled with the run id, and never calls
+a model (docs/architecture/16, section 4.1).
 """
 
 from __future__ import annotations
@@ -49,6 +49,7 @@ from .rules.analyst import ClaimResult
 from .workflow import AgentSet
 
 RUN_KIND = "crew_live_run"
+RECORD_KEYS = ("fixture", "run_id", "run_date", "events_sha256")
 MAX_CALLS_PER_ARM = 1000  # the recording script's ceiling, enforced here too
 log = logging.getLogger(__name__)
 
@@ -235,17 +236,26 @@ def _live_arm(
     return arm
 
 
+def events_digest(events: list[Mapping[str, Any]]) -> str:
+    """A sha256 of the event log, independent of key order: which events a recording ran on."""
+    text = json.dumps(events, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def live_run(
     match: Mapping[str, Any],
     *,
     client: ModelClient,
     max_calls: int,
+    fixture: str,
     seed: int = DEFAULT_SEED,
     rate: float = SEED_RATE,
     run_date: str | None = None,
 ) -> dict[str, Any]:
     """The three arms on the model, each with its own budget of ``max_calls``. Returns the run
-    record a scoreboard reads as precomputed arms."""
+    record the scoreboard route shows beside the rules arms. ``fixture`` names the fixture the
+    match is (its id in the fixture list, such as N001); it is required so a recording is never
+    labelled with a fixture it did not run on."""
     if not 1 <= max_calls <= MAX_CALLS_PER_ARM:
         raise ValueError(f"a live run needs 1 to {MAX_CALLS_PER_ARM} model calls per arm")
     as_of = run_date or datetime.now(UTC).date().isoformat()
@@ -269,6 +279,7 @@ def live_run(
         json.dumps(
             {
                 "match": match_id,
+                "fixture": fixture,
                 "run_date": as_of,
                 "seed": seed,
                 "rate": rate,
@@ -280,7 +291,10 @@ def live_run(
     return {
         "kind": RUN_KIND,
         "run_id": run_id,
-        "match_id": match_id,
+        "fixture": fixture,
+        "teams": sorted(match["teams"].values()),
+        "events_sha256": events_digest(match["events"]),
+        "match_id": match_id,  # the match it was recorded from; the route does not check it
         "run_date": as_of,
         "seed": seed,
         "seed_rate": rate,
@@ -290,30 +304,40 @@ def live_run(
 
 
 def load_live_run(
-    path: str, *, match_id: str, seed: int = DEFAULT_SEED, rate: float = SEED_RATE
-) -> dict[str, dict[str, Any]] | None:
-    """The recorded arms of a live run for this match, seed and rate, or None when there is no
-    such run. A file that does not parse is logged and treated as no run."""
+    path: str, *, teams: list[str], seed: int = DEFAULT_SEED, rate: float = SEED_RATE
+) -> dict[str, Any] | None:
+    """The recording of this fixture, for these teams, seed and rate, or None when there is none.
+    A match is judged by its teams, not its id: judges' sessions get fresh ids. A file that does
+    not parse, or an arm that is not an object with a run id, is logged and treated as no run."""
     file = Path(path)
-    if not file.is_file():
-        return None
     try:
         record = json.loads(file.read_text())
+    except FileNotFoundError:
+        return None
     except (OSError, ValueError):
-        log.warning("scoreboard live run %s does not parse; showing rules arms", path)
+        log.warning(
+            "scoreboard live run %s does not parse or cannot be read; showing rules arms", path
+        )
         return None
     if not isinstance(record, dict) or record.get("kind") != RUN_KIND:
         return None
-    if record.get("match_id") != match_id or record.get("seed") != seed:
+    if record.get("teams") != sorted(teams) or record.get("seed") != seed:
         return None
     if record.get("seed_rate") != rate:
+        return None
+    if not all(key in record for key in RECORD_KEYS):  # the route reads each of these
+        log.warning("scoreboard live run %s is missing fields; showing rules arms", path)
+        return None
+    if not isinstance(record["run_id"], str) or not record["run_id"]:
+        log.warning("scoreboard live run %s has no run id; showing rules arms", path)
         return None
     arms = record.get("arms")
     if not isinstance(arms, dict) or not arms:
         return None
     if not all(
-        isinstance(arm, dict) and isinstance(arm.get("run_id"), str) for arm in arms.values()
+        isinstance(arm, dict) and isinstance(arm.get("run_id"), str) and arm["run_id"]
+        for arm in arms.values()
     ):
         log.warning("scoreboard live run %s has an arm without a run id; showing rules arms", path)
         return None
-    return arms
+    return record

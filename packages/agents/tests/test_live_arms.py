@@ -2,11 +2,18 @@
 budget, and answered by the rules twin when refused or failed. No test here reaches a model."""
 
 import json
+from pathlib import Path
 
 import pytest
 from conftest import run
 from matchcast_agents.grading import SEED_RATE, _report
-from matchcast_agents.grading_live import BudgetedClient, CallBudget, live_run, load_live_run
+from matchcast_agents.grading_live import (
+    BudgetedClient,
+    CallBudget,
+    events_digest,
+    live_run,
+    load_live_run,
+)
 from matchcast_agents.resilience import ModelError
 
 
@@ -49,7 +56,7 @@ def test_a_failed_call_is_counted_and_raised() -> None:
 
 def test_live_arms_that_always_fail_are_answered_by_the_rules(match) -> None:
     client = CountingClient(error=ModelError("no model in this test"))
-    record = live_run(match, client=client, max_calls=20, run_date="2026-10-25")
+    record = live_run(match, client=client, max_calls=20, fixture="M001", run_date="2026-10-25")
     assert set(record["arms"]) == {"full_crew", "single_agent", "crew_no_verifier"}
     for key, arm in record["arms"].items():
         assert arm["mode"] == "mixed", key  # every model call failed, so rules answered
@@ -61,20 +68,20 @@ def test_live_arms_that_always_fail_are_answered_by_the_rules(match) -> None:
     assert client.calls <= 3 * 20
 
 
-def test_a_recorded_run_loads_only_for_its_own_match(tmp_path, match) -> None:
-    record = {
-        "kind": "crew_live_run",
-        "match_id": match["roster"]["stream"]["match_id"],
-        "seed": 2026,
-        "seed_rate": SEED_RATE,
-        "run_id": "abc123",
-        "arms": {"full_crew": {"run_id": "x", "mode": "live"}},
-    }
+def test_a_live_run_record_names_its_fixture_teams_and_events_and_loads_back(
+    match, tmp_path
+) -> None:
+    client = CountingClient(error=ModelError("no model in this test"))
+    record = live_run(match, client=client, max_calls=5, fixture="M001", run_date="2026-10-25")
+    assert record["fixture"] == "M001"
+    assert record["teams"] == sorted(match["teams"].values())
+    assert record["events_sha256"] == events_digest(match["events"])
     path = tmp_path / "run.json"
     path.write_text(json.dumps(record))
-    assert load_live_run(str(path), match_id=record["match_id"]) == record["arms"]
-    assert load_live_run(str(path), match_id="some-other-match") is None
-    assert load_live_run(str(tmp_path / "missing.json"), match_id=record["match_id"]) is None
+    loaded = load_live_run(str(path), teams=list(match["teams"].values()))
+    assert loaded is not None and loaded["run_id"] == record["run_id"]
+    with pytest.raises(TypeError):  # the fixture is required: no record is labelled by a default
+        live_run(match, client=client, max_calls=5)
 
 
 def test_a_seeded_moment_the_crew_skipped_is_not_a_missed_claim(match) -> None:
@@ -86,26 +93,10 @@ def test_a_seeded_moment_the_crew_skipped_is_not_a_missed_claim(match) -> None:
     assert arm["catch_rate"] == {"caught": 0, "seeded": 1, "produced": 0, "rate": None}
 
 
-def test_a_recorded_run_must_match_its_seed_and_rate(tmp_path, match) -> None:
-    path = tmp_path / "run.json"
-    record = {"kind": "crew_live_run", "match_id": "m", "seed": 2026, "seed_rate": SEED_RATE}
-    record["arms"] = {"full_crew": {"run_id": "x"}}
-    path.write_text(json.dumps(record))
-    assert load_live_run(str(path), match_id="m") == record["arms"]
-    assert load_live_run(str(path), match_id="m", seed=7) is None
-    assert load_live_run(str(path), match_id="m", rate=0.5) is None
-
-
-def test_a_file_that_does_not_parse_is_no_run(tmp_path) -> None:
-    path = tmp_path / "run.json"
-    path.write_text("{not json")
-    assert load_live_run(str(path), match_id="m") is None
-
-
 def test_a_live_run_is_bounded_per_arm(match) -> None:
     for bad in (0, 1001):
         with pytest.raises(ValueError):
-            live_run(match, client=CountingClient(), max_calls=bad)
+            live_run(match, client=CountingClient(), max_calls=bad, fixture="M001")
 
 
 def test_counting_a_fallback_leaves_it_for_the_workflow_audit() -> None:
@@ -156,13 +147,68 @@ def test_the_producer_keeps_taken_fallbacks_in_order() -> None:
     assert producer.take_fallbacks() == ["older", "old"]
 
 
-def test_a_recorded_arm_without_a_run_id_is_no_run(tmp_path) -> None:
-    # a recording whose arm has no run id would make the route fail; it is treated as no run
+TEAMS = ["Argentina", "Brazil"]
+
+
+def write_record(tmp_path, **changes) -> str:
+    record = {
+        "kind": "crew_live_run",
+        "fixture": "N001",
+        "teams": TEAMS,
+        "events_sha256": "abc",
+        "seed": 2026,
+        "seed_rate": SEED_RATE,
+        "run_id": "abc123",
+        "run_date": "2026-10-25",
+        "arms": {"full_crew": {"run_id": "x", "mode": "live"}},
+    }
+    record.update(changes)
     path = tmp_path / "run.json"
-    record = {"kind": "crew_live_run", "match_id": "m", "seed": 2026, "seed_rate": SEED_RATE}
-    record["arms"] = {"full_crew": {"mode": "live"}}
     path.write_text(json.dumps(record))
-    assert load_live_run(str(path), match_id="m") is None
-    record["arms"] = {"full_crew": "not an object"}
-    path.write_text(json.dumps(record))
-    assert load_live_run(str(path), match_id="m") is None
+    return str(path)
+
+
+def test_a_recording_is_read_for_its_teams_seed_and_rate(tmp_path) -> None:
+    path = write_record(tmp_path)
+    assert load_live_run(path, teams=TEAMS)["run_id"] == "abc123"
+    assert load_live_run(path, teams=["Argentina", "Chile"]) is None  # another fixture
+    assert load_live_run(path, teams=TEAMS, seed=7) is None
+    assert load_live_run(path, teams=TEAMS, rate=0.5) is None
+    assert load_live_run(str(tmp_path / "missing.json"), teams=TEAMS) is None
+
+
+def test_a_file_that_does_not_parse_is_no_run(tmp_path) -> None:
+    path = tmp_path / "run.json"
+    path.write_text("{not json")
+    assert load_live_run(str(path), teams=TEAMS) is None
+
+
+def test_a_recorded_arm_without_a_run_id_is_no_run(tmp_path) -> None:
+    # a recording whose arm has no run id, or is not an object, would make the route fail
+    no_id = write_record(tmp_path, arms={"full_crew": {"mode": "live"}})
+    assert load_live_run(no_id, teams=TEAMS) is None
+    empty_id = write_record(tmp_path, arms={"full_crew": {"run_id": "", "mode": "live"}})
+    assert load_live_run(empty_id, teams=TEAMS) is None
+    no_run_id = write_record(tmp_path, run_id="")  # the route labels the run with this id
+    assert load_live_run(no_run_id, teams=TEAMS) is None
+    not_obj = write_record(tmp_path, arms={"full_crew": "not an object"})
+    assert load_live_run(not_obj, teams=TEAMS) is None
+
+
+def test_the_events_digest_is_the_same_for_the_same_events_only() -> None:
+    events = [{"event_id": "e1", "payload": {"type": "shot", "minute": 3}}]
+    reordered_keys = [{"payload": {"minute": 3, "type": "shot"}, "event_id": "e1"}]
+    assert events_digest(events) == events_digest(reordered_keys)
+    changed = [{"event_id": "e1", "payload": {"type": "shot", "minute": 4}}]
+    assert events_digest(events) != events_digest(changed)
+
+
+def test_a_recording_missing_a_field_the_route_reads_is_no_run(tmp_path) -> None:
+    # teams, seed and rate can match while a field the route reads is absent: that must not
+    # reach the route as a KeyError
+    for key in ("fixture", "run_id", "run_date", "events_sha256"):
+        path = write_record(tmp_path)
+        record = json.loads(Path(path).read_text())
+        del record[key]
+        Path(path).write_text(json.dumps(record))
+        assert load_live_run(path, teams=TEAMS) is None, key
