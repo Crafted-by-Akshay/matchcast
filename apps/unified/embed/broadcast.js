@@ -4,7 +4,7 @@ MCS.progress('Loading the stadium and players');
 // called by the desk once the players have loaded (replaces bcNewMatch(seed) at boot)
 function bcEmbedStart(q) {
   MCS.progress('Setting up the match');
-  const go = () => { if (q.get('seed')) { MCS.apply(q); bcNewMatch(q.get('seed')); } else bcNewMatch(); window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); };   // the lens menu lists the players once they load
+  const go = () => { if (q.get('seed')) { MCS.apply(q); MCS.names(); bcNewMatch(q.get('seed')); } else bcNewMatch(); window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); };   // the fixture's clubs are applied before the desk builds the match; the lens menu lists the players once they load
   if (MCS.clubs.ready) go(); else MCS.clubs.load.then(go);
 }
 MCS.ptt($('dk-q'), $('dk-askf'));   // EXP-16: push-to-talk for Ask the producer
@@ -117,7 +117,7 @@ const mcTx = (l) => { if (mcLang === 'en') return l.text; const t = l.tr && l.tr
 function mcPaintTele() { mcTele.hidden = false; mcTele.innerHTML = ''; for (const x of mcAired.slice().reverse()) { const li = document.createElement('li'); li.textContent = mcTx(x); mcTele.append(li); } }
 window.addEventListener('message', (e) => {
   const d = e.data || {};
-  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !['en', 'es', 'hi'].includes(d.lang)) return;
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'lang' || !window.MC_LANGS.includes(d.lang)) return;   // a language without a desk template shows English with its note
   mcLang = d.lang;
   if (typeof BC !== 'undefined' && BC.lang !== d.lang) { BC.lang = d.lang; if (typeof bcPaintScript === 'function') bcPaintScript(); }
   if (mcAired.length) mcPaintTele();
@@ -150,11 +150,11 @@ if (MCS.framed) {
     setTimeout(() => finish(id, null), 9000);   // no answer in time: the desk's own
   };
   // the mic: the desk pane is redrawn often, so it is attached whenever a fresh question box appears
-  const attachMic = () => { const q = $('bcd-q'); if (q && !q.dataset.ptt) MCS.ptt(q, { requestSubmit: () => bcAsk() }, BC.lang === 'es' ? 'es-ES' : BC.lang === 'hi' ? 'hi-IN' : 'en-GB'); };
+  const attachMic = () => { const q = $('bcd-q'); if (q && !q.dataset.ptt) MCS.ptt(q, { requestSubmit: () => bcAsk() }, window.MC_SPEECH_LOCALE[BC.lang] || 'en-GB'); };
   const pane = $('pane-desk'); if (pane) { new MutationObserver(attachMic).observe(pane, { childList: true, subtree: true }); attachMic(); }
 }
 // type floor: 12 px for the desk text that was 10 to 11 px (UX review pass 6, finding 18)
-(() => { const st = document.createElement('style'); st.textContent = '.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}'; document.head.appendChild(st); })();
+(() => { const st = document.createElement('style'); st.textContent = '#mcf-sound,#mc-pt,.mcp-v,.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}#bc-cams button[data-cam][aria-pressed=true]{color:#10151f!important}'; document.head.appendChild(st); })();   // the chosen camera chip is yellow: dark text (it was light on yellow, 1.4:1)
 // Judge re-test: on a phone the 3D renderer sizes its canvas (and the name-tag layer) to the window, but the live view is narrower, so the right edge was cut
 // off. Scale those layers down to the live view's width, from their top-left corner, so the whole pitch shows; nothing is scaled when they already fit.
 (() => {
@@ -167,4 +167,23 @@ if (MCS.framed) {
     }
   };
   fit(); setInterval(fit, 1000); addEventListener('resize', fit);
+})();
+
+// Pass 11: in a pane narrower than 700 px (the split next to Watch, or a phone) the fixed Live commentary card covered the camera chips and the stats strip.
+// There it sits in the page flow, under the live view and its camera chips, so nothing is covered; a wider pane keeps the card over the view's corner.
+(() => {
+  const place = () => {
+    const m = document.getElementById('mcf'), left = document.querySelector('.bc-left'), view = document.getElementById('bc-view'), cams = document.getElementById('bc-cams');
+    if (!m || !left || !view) return;
+    const anchor = cams && cams.parentElement === view.parentElement ? cams : view;   // under the camera chips when there are some: the camera modes stay near the fold, the card follows
+    const narrow = innerWidth < 700, inFlow = m.parentElement !== view;   // anywhere outside the live view counts as in the flow, whichever anchor it was placed after
+    if (narrow && !inFlow) {
+      anchor.after(m);
+      for (const [k, v] of [['position', 'static'], ['width', 'auto'], ['max-height', 'none'], ['margin', '10px 0 0'], ['left', 'auto'], ['right', 'auto'], ['bottom', 'auto']]) m.style.setProperty(k, v, 'important');
+    } else if (!narrow && inFlow) {
+      view.append(m);
+      for (const k of ['position', 'width', 'max-height', 'margin', 'left', 'right', 'bottom']) m.style.removeProperty(k);
+    }
+  };
+  place(); setInterval(place, 1000); addEventListener('resize', place);
 })();

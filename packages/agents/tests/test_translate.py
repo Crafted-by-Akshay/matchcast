@@ -193,3 +193,31 @@ def test_a_rejection_is_audited_once_however_many_viewers_ask():
 
     run(go())
     assert seen == ["numbers_differ"]
+
+
+def test_the_feed_languages_are_the_ten_agreed_ones():
+    from matchcast_agents.translate import LANGUAGES
+
+    assert LANGUAGES == ("en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans")
+
+
+def test_arabic_indic_and_full_width_digits_are_compared_as_numbers():
+    assert numbers("٧ تسديدات و ٢,٥ xG") == numbers("7 تسديدات و 2.5 xG") == ["2.5", "7"]
+    assert numbers("７ shots") == ["7"]
+    assert numbers("٧ و ٢٫٥") == numbers("7 و 2.5") == ["2.5", "7"]
+    assert numbers("２．５ xG") == ["2.5"]
+
+
+def test_a_translation_naming_a_competition_is_rejected():
+    ja = "北方FCは7本のシュートと2.5 xGを記録、FIFAのルール [claim:c-1]"
+    assert recheck(EN, ja, []) == "neutral_wording"
+    assert recheck(EN, "北方FC有7次射门和2.5 xG，ＦＩＦＡ规则 [claim:c-1]", []) == "neutral_wording"
+    assert recheck(EN, "北方FC有7次射门和2.5 xG，FIFA规则 [claim:c-1]", []) == "neutral_wording"
+    assert recheck(EN, "Northgate FC tiene 7 tiros y 2,5 xG, la FIFA lo sabe [claim:c-1].", []) == (
+        "neutral_wording"
+    )
+    assert recheck(EN, "Northgate FC tiene 7 tiros y 2,5 xG [claim:c-1].", []) is None
+
+
+def test_a_faithful_spanish_line_with_la_liga_in_lowercase_is_kept():
+    assert recheck(EN, "Northgate FC tiene 7 tiros y 2,5 xG, en la liga [claim:c-1].", []) is None

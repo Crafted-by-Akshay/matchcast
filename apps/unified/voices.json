@@ -2,5 +2,6 @@
   "playByPlay": "en-GB-RyanNeural",
   "analyst": "en-GB-SoniaNeural",
   "es": "es-ES-ElviraNeural",
-  "hi": "hi-IN-SwaraNeural"
+  "hi": "hi-IN-SwaraNeural",
+  "pt": "pt-BR-FranciscaNeural"
 }

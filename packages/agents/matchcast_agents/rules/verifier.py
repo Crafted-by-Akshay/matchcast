@@ -1,4 +1,5 @@
-"""Verifier rules: checks 1 to 5 decide; check 8 (meaning) is skipped in rules mode."""
+"""Verifier rules: checks 1 to 5 and the adversarial pass (8a) decide; check 8 (meaning) is
+skipped in rules mode."""
 
 from typing import Any
 

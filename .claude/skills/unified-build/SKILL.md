@@ -19,6 +19,6 @@ Docs: `apps/unified/README.md`, `docs/architecture/11-frontend.md`. Owner: Exper
 ## Rules
 - Watch is the only live match source. Broadcast runs in consumer mode (`MC_CONSUMER`); the Analyst shows a live pill. Keep it that way.
 - No new framework in the unified app (ES2022 modules, ESLint). The connection pill states are exactly: Live agents, Rules fallback, Warming up the match engine (with the seconds counted, "· 12 s of up to 45"), Offline (simulated); the pill reads Starting… only until the page has loaded.
-- Honest labels: language picker marks all but English, Spanish and Hindi as Planned; Entra roles and anything not connected say Simulated or Planned.
+- Honest labels: language picker marks as Planned any language the api does not check (ADR-0023); Entra roles and anything not connected say Simulated or Planned.
 - Mode, persona and language names must match the api personas (`casual`, `analyst`, `club:<key>`, `player:<name>`, `metric:<name>`).
 - Every screen behaviour has a Playwright spec under `tests/e2e/` (spec list in `16-testing-and-quality.md`). A UI change without a spec is not done. Check a phone-width layout has no horizontal scroll.

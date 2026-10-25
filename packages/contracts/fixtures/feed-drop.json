@@ -1,0 +1,18 @@
+{
+  "kind": "feed_drop",
+  "schema_version": "1.2.0",
+  "stream": {
+    "tenant_id": "tenant-demo",
+    "session_id": "session-demo",
+    "match_id": "match-demo"
+  },
+  "publication_id": "onair-analyst-goal",
+  "feed": "analyst",
+  "source_event_ids": [
+    "event-goal"
+  ],
+  "reason_code": "number_mismatch",
+  "repair_count": 1,
+  "audit_id": "audit-drop-1",
+  "match_time_ms": 10000
+}

@@ -1,8 +1,11 @@
 import { test, expect } from './fixtures';
-import { collectErrors, openShell } from './helpers';
+import { collectErrors, openShell, viewFrame } from './helpers';
 
 // A national-team fixture (fx.national) has synthetic squads and no recorded result: it is the default pick when present,
 // the match bar says "Synthetic squad" instead of "Recorded", and the Analyst is not routed to a run that does not exist.
+// every season club in apps/unified/shared/clubs.json: a national fixture must not show one of them
+const SEASON_CLUBS = /Harbor City|Ridgeview|Coloso Ciudad|Navigli United|Thames Rovers|Montaña CF|Guanabara FC|Lombardia Nord/;
+
 test('a national fixture is the default, says Synthetic squad, and is not routed to the Analyst', async ({ page }) => {
   const errs = collectErrors(page);
   await page.route('**/shared/fixtures.json', async (rt) => {
@@ -33,4 +36,52 @@ test('the shipped Argentina v Brazil fixture is the default and shows no score',
   await expect(page.locator('#home-club')).toHaveText('Argentina');
   await expect(page.locator('#score-v')).toHaveText('–');
   await expect(page.locator('#score-l')).toHaveText('Synthetic squad');
+});
+
+// The pre-kick-off caption must not name a season club on a national fixture. The wording is set at build time (build.py NEUTRAL), so this guards that text, not names().
+test('the Broadcast caption does not name a season club on a national fixture', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026&fx=N001');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 120_000 }).toMatch(/Kick-off|Players are out/);
+  const caption = await f.locator('#cap1').textContent();
+  expect(caption, 'the caption names no season club').not.toMatch(SEASON_CLUBS);
+});
+
+// Once the national match runs, the Broadcast scoreboard names the fixture's clubs (the shipped N001 is Argentina v Brazil).
+test('the Broadcast scoreboard names the national clubs once the match runs', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026&fx=N001');
+  const f = await viewFrame(page, 'broadcast');
+  // the kick-off caption, not the pre-match "Kick-off to come."
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 120_000 }).toMatch(/^Kick-off at/);
+  await expect(f.locator('#bug .tm').first()).toHaveText('ARG');
+  await expect(f.locator('#bug .tm').nth(1)).toHaveText('BRA');
+});
+
+// The desk names the fixture's clubs from its first render (embed/boot-clubs.js), so no season club shows in its visible text after kick-off.
+test('no visible desk line names a season club on a national fixture', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openShell(page, 'broadcast', '?seed=2026&fx=N001');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('bc-strip')), { timeout: 120_000 }).toBe(true);
+  // the kick-off caption, not the pre-match "Kick-off to come."
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 120_000 }).toMatch(/^Kick-off at/);
+  // positive: the fixture's clubs are on the desk, so the scan below is not checking an empty page
+  await expect(f.locator('#bug .tm').first()).toHaveText('ARG');
+  await page.waitForTimeout(25_000);
+  // every visible line of the desk, not one element: the ticker, the commentary and the Next-goal panel
+  const season = await f.evaluate((src) => {
+    const SEASON = new RegExp(src);
+    const out: string[] = [];
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const t = (n.textContent || '').trim();
+      const el = n.parentElement;
+      if (!el || !SEASON.test(t)) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display !== 'none' && cs.visibility !== 'hidden' && el.getBoundingClientRect().width > 0 && !el.closest('[hidden]')) out.push(t.slice(0, 80));
+    }
+    return out;
+  }, SEASON_CLUBS.source);
+  expect(season, 'no visible line names a season club on a national fixture').toEqual([]);
+  expect(errs).toEqual([]);
 });

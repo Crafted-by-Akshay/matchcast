@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from app import matches
 from app.main import create_app
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 from matchcast_contracts import validate
 from matchcast_contracts.audit import verify_chain
@@ -308,6 +309,31 @@ def test_seed_bad_claim_defaults_to_minute_twelve(client: TestClient) -> None:
     _create_with_header(client)
     post_all(client)
     assert not _rejections(client)
+
+
+def test_failure_drill_cuts_and_restores_a_match_model(client: TestClient) -> None:
+    create(client)
+    url = "/v1/matches/match-short/drill"
+    cut = client.post(url, json={"session_id": "short", "model_cut": True})
+    assert cut.status_code == 200 and cut.json()["model_cut"] is True
+    assert cut.json()["mode"] == "rules"  # the test api has no model deployment
+    restored = client.post(url, json={"session_id": "short", "model_cut": False})
+    assert restored.json()["model_cut"] is False
+    assert client.post(url, json={"session_id": "nobody", "model_cut": True}).status_code == 404
+
+
+def test_a_rebuilt_match_keeps_the_failure_drill_cut() -> None:
+    first = TestClient(create_app())
+    create(first)
+    url = "/v1/matches/match-short/drill"
+    assert first.post(url, json={"session_id": "short", "model_cut": True}).json()["model_cut"]
+    restarted = TestClient(create_app())
+    restarted.app.state.matches.store = first.app.state.matches.store
+    assert restarted.get("/v1/matches/match-short", params=Q).status_code == 200
+    key = ("short", "match-short")
+    assert restarted.app.state.matches.cuts[key].on is True
+    off = restarted.post(url, json={"session_id": "short", "model_cut": False}).json()
+    assert off["model_cut"] is False and restarted.app.state.matches.cuts[key].on is False
 
 
 def test_recap_is_404_until_full_time_then_served_per_persona(client: TestClient) -> None:
@@ -743,6 +769,111 @@ def test_the_registry_store_comes_from_matchcast_store(monkeypatch) -> None:
         create_app()
 
 
+def test_the_call_socket_answers_a_talk_over_one_socket(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json({"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"})
+        reply = ws.receive_json()
+        assert reply["type"] == "reply" and reply["id"] == 1
+        assert reply["verdict"] == "verified" and "audio_url" not in reply
+        frames = []
+        while True:
+            message = ws.receive()
+            if "text" in message and message["text"] is not None:
+                frames.append(json.loads(message["text"]))
+                if frames[-1]["type"] == "audio_end":
+                    break
+        assert frames == [{"type": "audio_end", "id": 1, "cancelled": False}]  # no voice: no audio
+
+
+def test_the_call_socket_refuses_an_unknown_match_or_a_bad_session(client: TestClient) -> None:
+    create(client)
+    for path in (
+        "/v1/matches/ghost/call?session_id=short",
+        "/v1/matches/match-short/call?session_id=-",
+    ):
+        with pytest.raises(WebSocketDisconnect) as refused:
+            with client.websocket_connect(path):
+                pass
+        assert refused.value.code == 1008
+
+
+def test_a_binary_frame_is_refused_and_the_call_still_talks(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_bytes(b"\x00\x01")
+        assert ws.receive_json() == {"type": "error", "id": None, "code": "bad_frame"}
+        ws.send_json({"type": "talk", "id": 2, "target": "home9", "utterance": "How many shots?"})
+        assert ws.receive_json()["type"] == "reply"
+
+
+def test_the_call_refuses_a_talk_the_talk_route_would_refuse(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    long = {"type": "talk", "id": 1, "target": "home9", "utterance": "x" * 301}
+    bad_position = {
+        "type": "talk",
+        "id": 2,
+        "target": "home9",
+        "utterance": "shots?",
+        "position": "st",
+    }
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json(long)
+        assert ws.receive_json() == {"type": "error", "id": 1, "code": "bad_frame"}
+        ws.send_json(bad_position)
+        assert ws.receive_json() == {"type": "error", "id": 2, "code": "bad_frame"}
+
+
+def test_a_call_turn_counts_against_the_address_question_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create(client)
+    post_all(client)
+    monkeypatch.setattr(matches, "ASK_PER_IP_MINUTE", 0)
+    talk = {"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"}
+    with client.websocket_connect("/v1/matches/match-short/call?session_id=short") as ws:
+        ws.send_json(talk)
+        assert ws.receive_json() == {"type": "error", "id": 1, "code": "rate_limited"}
+
+
+def test_the_call_speaks_a_reply_only_while_the_voice_allowance_lasts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create(client)
+    post_all(client)
+    voice = client.app.state.matches.voice
+    monkeypatch.setattr(type(voice), "ready", property(lambda self: True))
+    monkeypatch.setattr(voice, "get", lambda key: None)
+    monkeypatch.setattr(voice, "voice_for", lambda role, player=None: "voice-" + role)
+
+    async def clip(text: str, name: str) -> bytes:
+        return b"mp3"
+
+    monkeypatch.setattr(voice, "clip", clip)
+    talk = {"type": "talk", "id": 1, "target": "home9", "utterance": "How many shots?"}
+    url = "/v1/matches/match-short/call?session_id=short"
+
+    monkeypatch.setattr(voice, "allow", lambda client_ip, now=None: False)  # allowance spent
+    with client.websocket_connect(url) as ws:
+        ws.send_json(talk)
+        assert ws.receive_json()["verdict"] == "verified"
+        assert ws.receive_json() == {"type": "audio_end", "id": 1, "cancelled": False}
+
+    monkeypatch.setattr(voice, "allow", lambda client_ip, now=None: True)
+    with client.websocket_connect(url) as ws:
+        ws.send_json(talk)
+        assert ws.receive_json()["type"] == "reply"
+        header = ws.receive_json()
+        assert header["type"] == "audio" and header["seq"] == 0
+        assert ws.receive_bytes() == b"mp3"
+        while (frame := ws.receive_json())["type"] != "audio_end":
+            ws.receive_bytes()
+        assert frame == {"type": "audio_end", "id": 1, "cancelled": False}
+
+
 @pytest.fixture(autouse=True)
 def _no_live_search(monkeypatch):
     """PR checks make no Azure call: a developer's SEARCH_* settings must not reach the tests."""
@@ -769,3 +900,37 @@ def test_a_match_created_over_the_api_is_given_the_knowledge_base(client: TestCl
     flow = client.app.state.matches.flows[("short", "match-short")]
     assert flow._knowledge is not None
     assert flow._knowledge.squads and flow._knowledge.index is not None
+
+
+def test_a_desk_feed_kill_and_resume_are_audited(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # AB#499: a desk feed kill is a person's act, audited as feed_killed / feed_resumed
+    client.app.state.matches.require_role = True  # type: ignore[attr-defined]
+    create(client)
+    flow = client.app.state.matches.flows[("short", "match-short")]
+    published: list[str] = []
+    monkeypatch.setattr(flow.hub, "publish", lambda kind, event_id, data: published.append(kind))
+    producer = {"X-MatchCast-Role": "Producer"}
+    ids = {"session_id": "short"}
+    denied = client.post("/v1/matches/match-short/feeds/casual/kill", json=ids)
+    assert denied.status_code == 403 and denied.json()["code"] == "forbidden_role"
+    unknown = client.post(
+        "/v1/matches/match-short/feeds/horoscope/kill", json=ids, headers=producer
+    )
+    assert unknown.status_code == 422 and unknown.json()["code"] == "contract_invalid"
+    killed = client.post(
+        "/v1/matches/match-short/feeds/casual/kill",
+        json={**ids, "reason": "desk: off air"},
+        headers=producer,
+    )
+    assert killed.status_code == 200 and killed.json()["state"] == "killed"
+    assert killed.json()["enforced"] is False and killed.json()["audit_id"]
+    resumed = client.post("/v1/matches/match-short/feeds/casual/resume", json=ids, headers=producer)
+    assert resumed.status_code == 200 and resumed.json()["state"] == "live"
+    audit = client.get("/v1/matches/match-short/audit", params=Q).json()["items"]
+    actions = [r["action"] for r in audit if r["subject_id"] == "casual"]
+    assert actions == ["feed_killed", "feed_resumed"]
+    assert all(r["details"]["enforced"] is False for r in audit if r["subject_id"] == "casual")
+    assert published.count("audit") == 2  # each switch reaches the live audit stream
+    assert verify_chain(audit)["valid"] is True

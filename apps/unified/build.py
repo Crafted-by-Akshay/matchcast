@@ -34,11 +34,10 @@ def r(p):
     return open(p, encoding="utf-8").read()
 
 
-# EXP-4: the language picker offers English, Spanish and Hindi.
-# The other prototype languages are labelled Planned.
+# EXP-4, ADR-0023: Watch's picker marks a language as live when the api checks it (langs.js), else Planned.
 LANG_OLD = "+ n + '</button>').join('')"
 LANG_NEW = (
-    """+ n + (['en', 'es', 'hi'].includes(k) ? '' : ' <small class=fm-planned>Planned</small>')"""
+    """+ n + (window.MC_LANGS.includes(k) ? '' : ' <small class=fm-planned>Planned</small>')"""
 )
 LANG_NEW += """ + '</button>').join('')"""
 
@@ -154,12 +153,15 @@ def build_watch():
     return (
         head
         + importmap()
+        + '<script>\n' + r(U + "langs.js") + '\n</script>\n'   # the language list first: Watch's picker reads MC_LANGS
         + '<script type="module">\n'
         + main
         + "\n"
         + r(EMB + "hook.js")
         + "\n"
         + r(EMB + "roles.js")
+        + "\n"
+        + r(EMB + "langpick.js")   # before watch.js: its fanSet wrapper and the load-time wiring then see the replaced language list
         + "\n"
         + r(EMB + "watch.js")
         + "\n"
@@ -173,7 +175,7 @@ def build_watch():
         + "\n"
         + r(EMB + "feed.js")
         + "\n"
-        + r(EMB + "twofans.js") + "\n" + r(EMB + "democtl.js")
+        + r(EMB + "twofans.js") + "\n" + r(EMB + "feedpick.js") + "\n" + r(EMB + "democtl.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
@@ -220,7 +222,10 @@ def build_broadcast():
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "broadcast half chips")
     main = sub(main, LANG_OLD, LANG_NEW, "broadcast language labels")
     main = sub(main, "bcNewMatch(q.get('seed'));", "bcEmbedStart(q);", "broadcast start")
-    # decided languages are English, Spanish and Hindi; the desk's Tamil drafts are dropped (embed/bclang.js writes and re-checks es and hi)
+    # the desk writes rules templates in Spanish and Hindi only (ADR-0023 keeps the other feed languages English on the desk); Tamil drafts are dropped (embed/bclang.js writes and re-checks es and hi)
+    # the fixture's clubs are read before the desk's TEAMS literal is used, so the first render names them (embed/boot-clubs.js)
+    main = sub(main, "const TEAMS = [", r(EMB + "boot-clubs.js") + "\nconst TEAMS = [", "broadcast boot clubs before TEAMS")
+    main = sub(main, "const SKIN = [", "if (MC_BOOT_CLUBS) mcBootNames(MC_BOOT_CLUBS);\nconst SKIN = [", "broadcast boot names before the lineups")
     for a, c, label in [
         ("bcEsc(BC.lang === 'ta' ? last.ta : last.en)", "bcEsc(bcTx(last))", "broadcast strip text"),
         ("const L = lang === 'ta' ? 'ta-IN' : 'en-GB', u =", "const L = ({ es: 'es-ES', hi: 'hi-IN' })[lang] || 'en-GB', u =", "broadcast speech language"),
@@ -257,6 +262,7 @@ def build_broadcast():
             '<button data-l="es" aria-pressed="false">ES</button><button data-l="hi" aria-pressed="false">हिन्दी</button>',
             "broadcast language buttons",
         )
+        + '<script>\n' + r(U + "langs.js") + '\n</script>\n'   # ADR-0023: the language list the desk reads
         + '<script>\n' + r(EMB + "desk-panels.js") + '\n</script>\n'   # the desk panels: a classic script, so they show before the 3D module's imports load
         + importmap()
         + '<script type="module">\n'
@@ -420,6 +426,9 @@ NEUTRAL = [
     ("World Cup level", "top international level"),
     ("at a World Cup", "at a major tournament"),
     ("IFAB Law", "Law"),
+    # before kick-off the fixture's clubs are not applied yet, so the pre-match caption and kick-off line must not name a season club
+    ("Players are out. Harbor City kick off.", "Players are out. Kick-off to come."),
+    ("TEAMS[0].club + ' get us under way.'", "'Both sides get us under way.'"),
 ]
 BANNED = r"\b(FIFA|UEFA|IFAB|CONMEBOL|CONCACAF|World Cup|La Liga|Premier League|Champions League|Bundesliga|Serie A)\b"
 
@@ -500,7 +509,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js"]
+        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)

@@ -87,6 +87,7 @@ class NarratorRules:
         claims: list[dict[str, Any]],
         *,
         attempt: int = 0,
+        feedback: str = "",
     ) -> list[DraftLine]:
         event = ctx.event(task.event_ids[0])
         assert event is not None
@@ -131,6 +132,20 @@ class NarratorRules:
                 "casual": f"Red card! {who} is sent off for {club}, a player short now.",
                 "analyst": f"{who} ({club}) sent off. {club} red cards: {v[f'red_cards:{team}']}.",
                 "broadcast": f"{who} is sent off. {club} are a player short.",
+            }
+        elif (
+            kind == "vision"
+        ):  # the engine feed's one Vision moment: Vision's count beside the engine's
+            vh, va = v[f"vision_passes:{hid}"], v[f"vision_passes:{aid}"]
+            eh, ea = v[f"passes:{hid}"], v[f"passes:{aid}"]
+            qh, qa = v[f"vision_precision:{hid}"], v[f"vision_precision:{aid}"]
+            texts = {
+                "casual": f"Vision has tracked {vh} passes for {home}, and the engine backs "
+                f"{'most' if qh >= 0.5 else 'some'} of them.",
+                "analyst": f"Vision counted {vh} passes for {home} and {va} for {away}; the engine "
+                f"counted {eh} and {ea}. {qh:.2f} and {qa:.2f} of Vision's passes match one.",
+                "broadcast": f"Vision has tracked {vh} passes for {home} and {va} for {away}; "
+                f"the engine has {eh} and {ea}.",
             }
         elif kind == "summary" and f"passes:{hid}" in v:  # a Vision stream: what the tracker saw
             p, q = v[f"passes:{hid}"], v[f"passes:{aid}"]

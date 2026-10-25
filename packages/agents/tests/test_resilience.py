@@ -6,6 +6,7 @@ import pytest
 from conftest import fixed_clock, run
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.messages import DraftLine
+from matchcast_agents.personas import BOOTH
 from matchcast_agents.resilience import (
     CircuitBreaker,
     ModelError,
@@ -35,7 +36,7 @@ class FakeNarrator:
         self.script, self.calls = list(script), 0
         self.rules = NarratorRules()
 
-    async def write(self, ctx, task, claims, *, attempt=0):
+    async def write(self, ctx, task, claims, *, attempt=0, feedback=""):
         self.calls += 1
         step = self.script.pop(0) if self.script else "ok"
         if isinstance(step, Exception):
@@ -134,7 +135,7 @@ def test_breaker_window_forgets_old_failures() -> None:
 
 
 class AlwaysBadNarrator(NarratorRules):
-    async def write(self, ctx, task, claims, *, attempt=0):
+    async def write(self, ctx, task, claims, *, attempt=0, feedback=""):
         lines = await super().write(ctx, task, claims, attempt=attempt)
         return [
             DraftLine(
@@ -159,6 +160,7 @@ def test_an_escalated_line_can_be_killed_but_not_approved_or_edited(match) -> No
         config=WorkflowConfig(),
         clock=fixed_clock(),
     )
+    assert flow.add_personas(BOOTH)  # the booth's lines are queued, nothing else (CREW-4.3)
     run(flow.ingest(match["events"]))
     held = next(ln for ln in flow.store.lines(flow.sk) if ln.escalated)
     for attempt in (flow.approve(held.line_id), flow.edit(held.line_id, "Northgate FC lead.")):
@@ -182,23 +184,30 @@ def test_unrepairable_line_is_escalated_after_exactly_one_repair(match) -> None:
         config=WorkflowConfig(),
         clock=fixed_clock(),
     )
+    assert flow.add_personas(BOOTH)
     run(flow.ingest(match["events"]))
     records = flow.store.audit_records(flow.sk)
     assert flow.store.publications(flow.sk) == []
-    # an unknown name is a checkable fact: the failing lines wait for a person, none are dropped
+    # an unknown name is a checkable fact: the booth's lines wait for a person, and the derived
+    # feed lines that cannot be repaired are dropped from air with an audit record (CREW-4.3)
     escalated = [
         r for r in records if r["action"] == "line_review" and r["details"].get("escalated")
     ]
     assert escalated and flow.stats["escalated"] == len(escalated)
-    assert flow.stats["abstained"] == 0
+    lines = flow.store.lines(flow.sk)
+    # the colour line reacts to a call that never aired, so the Verifier never sees it
+    assert {ln.persona for ln in lines if ln.escalated} == {"booth:pbp"}
+    dropped = [ln for ln in lines if ln.status == "abstained"]
+    assert dropped and flow.stats["abstained"] == len(dropped)
+    assert all(ln.persona not in BOOTH for ln in dropped)
     repairs: dict[str, int] = {}
     for r in records:
         if r["action"] == "line_repair_requested":
             repairs[r["subject_id"]] = repairs.get(r["subject_id"], 0) + 1
     assert repairs and max(repairs.values()) == 1
-    lines = flow.store.lines(flow.sk)
-    assert all(ln.status == "review" and ln.escalated for ln in lines if ln.repair_of)
-    assert all(ln.status in ("rejected", "review") for ln in lines)
+    repaired_derived = [ln for ln in lines if ln.repair_of and ln.persona not in BOOTH]
+    assert repaired_derived and all(ln.status == "abstained" for ln in repaired_derived)
+    assert all(ln.status in ("rejected", "review", "abstained") for ln in lines)
     assert verify_chain(records)["valid"] is True
 
 
