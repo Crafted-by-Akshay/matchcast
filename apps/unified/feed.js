@@ -132,12 +132,12 @@ const CM = (() => {
   setInterval(() => fill(), FILL_TICK_MS);
 
   // a line the agent api wrote (its Verifier checked it): it replaces the rules line for the same minute, or joins the feed
-  const api = (text, minute, kind, key) => {
+  const api = (text, minute, kind, key, speaker) => {
     if (!names || !String(text || '').trim()) return;
     if (key) { if (seenApi.has(key)) return; seenApi.add(key); }   // a reconnect replays the stream's publications: each one joins the feed once
     const at = +minute || 0, prior = [...items].reverse().find((x) => x.source === 'rules' && !SKIP_UPGRADE.includes(x.kind) && Math.abs(x.minute - at) < 0.5);
-    if (prior) { prior.text = trim(String(text), 240); prior.source = 'live'; prior.chain = CHAIN.concat('Live agents'); prior.persona = persona; changed(); return; }
-    push({ minute: at, kind: kind || 'line', text: String(text), source: 'live', chain: CHAIN.concat('Live agents') });
+    if (prior) { prior.text = trim(String(text), 240); prior.source = 'live'; prior.chain = CHAIN.concat('Live agents'); prior.persona = persona; if (speaker) prior.speaker = speaker; changed(); return; }
+    push({ minute: at, kind: kind || 'line', text: String(text), source: 'live', chain: CHAIN.concat('Live agents'), speaker: speaker || '' });
   };
 
   // the pre-match exchange: the play-by-play caller opens, then the colour voice reads the match (rules lines, no claims beyond the fixture)

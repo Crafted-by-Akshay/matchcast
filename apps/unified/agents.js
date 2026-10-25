@@ -332,7 +332,7 @@ const AG = (() => {
       for (const l of ['es', 'hi']) if (typeof d.variants[l] === 'string' && d.variants[l].trim()) c.tr[l] = { ok: true, text: d.variants[l], reason: 'api: translated and re-checked', api: true };
     }
     // the stream repeats a line on every status step and audience: the Live flow and commentary take each distinct line once
-    if (d.text) { c.text = d.text; c.said = c.said || new Set(); if (!c.said.has(d.text)) { c.said.add(d.text); run.stat.lines++; hop(c, 'narrator', 'draft'); say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, d.event_time_ms != null ? +d.event_time_ms / 60000 : last, d.metric, d.publication_id); } }   // the api's checked line also joins the commentary
+    if (d.text) { c.text = d.text; c.said = c.said || new Set(); if (!c.said.has(d.text)) { c.said.add(d.text); run.stat.lines++; hop(c, 'narrator', 'draft'); say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, d.event_time_ms != null ? +d.event_time_ms / 60000 : last, d.metric, d.publication_id, typeof d.persona === 'string' && d.persona.startsWith('booth:') ? d.persona.slice(6) : ''); } }   // the api's checked line also joins the commentary
     if (d.status === 'approved') c.route = 'fan';
     changed();   // the claim's source was set when it arrived: a later status change (say, a rules fallback) does not rewrite how its earlier steps were made
   };
