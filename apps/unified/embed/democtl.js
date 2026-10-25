@@ -1,5 +1,5 @@
 // ---- Watch: the seven camera presets, the player-name modes, the speed buttons and Match data sit behind one "Demo controls" button (audit: a quiet first screen). Runs in the Watch module after twofans.js. ----
-// Nothing is removed: the buttons stay in the page and one click on "Demo controls" shows them. ?demo=1 (the filming URL) starts with them open.
+// Nothing is removed: the buttons stay in the page and one click on "Demo controls" shows the speed, names and match data. The camera presets stay hidden for the sprint (AB#497). ?demo=1 (the filming URL) starts with the controls open.
 (() => {
   const ctrl = document.getElementById('ctrl');
   if (!ctrl || document.getElementById('bc-view') || document.getElementById('mc-demo')) return;

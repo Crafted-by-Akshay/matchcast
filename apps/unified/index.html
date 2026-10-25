@@ -536,7 +536,8 @@ function show(view) {
   }
   $('stage').classList.toggle('split', on.length > 1);
   $('split-bar').hidden = on.length < 2;
-  const tg = $('bc-toggle'); tg.hidden = true;   // the second 3D view is off the first screen for the sprint (AB#497); ?split=1 still opens it tg.setAttribute('aria-pressed', String(bcBeside));
+  const tg = $('bc-toggle'); tg.hidden = true;   // the second 3D view is off the first screen for the sprint (AB#497); ?split=1 still opens it
+  tg.setAttribute('aria-pressed', String(bcBeside));
   for (const v of on) ensure(v);
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   paint();

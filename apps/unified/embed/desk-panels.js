@@ -35,10 +35,11 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     + '<div id="mc-cop" role="group" aria-label="Ask the Broadcast Copilot">'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" data-cop="highlights">Highlights</button><button type="button" data-cop="focus">Where to focus</button><button type="button" data-cop="plan">Production plan</button></div>'
     + '<div id="mc-cop-out" aria-live="polite" style="margin-top:6px"></div>'
+    + '</div>'
     + '<section id="mc-overlay" aria-label="Overlay feed preview, simulated"><div class="mcp-row"><b>Overlay feed preview</b> <span class="mcp-v">simulated</span></div>'
     + '<p class="mcp-v">What a rendering partner would take: the on-air export, matchcast.onair/1. The timed stream endpoint is not built yet.</p>'
     + '<div id="mc-overlay-n" class="mcp-v">Nothing aired yet.</div><pre id="mc-overlay-pre" style="margin:4px 0 0;max-height:120px;overflow:auto;font:11px ui-monospace,monospace;white-space:pre-wrap"></pre></section>'
-    + '</div></div>';
+    + '</div>';
   (document.getElementById('bc-view') || document.body).append(box);
   const $ = (id) => box.querySelector('#' + id);
   // the desk runs down to just above the lower-third while it is on air, and shrinks to its header when Hide collapses it
@@ -92,11 +93,11 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     box.querySelectorAll('[data-lens]').forEach((x) => x.setAttribute('aria-pressed', 'false'));
   };
 
-  // the overlay feed preview: the last lines of the on-air export (onair.js), refreshed after each line airs
+  // the overlay feed preview: the last lines of the on-air export (onair.js, window.MCOnAir.json), refreshed after each line airs
   const overlayN = box.querySelector('#mc-overlay-n'), overlayPre = box.querySelector('#mc-overlay-pre');
   const renderOverlay = () => {
-    if (!window.MCOnair) return;   // the desk module has not run yet
-    const lines = JSON.parse(window.MCOnair.doc()).lines;
+    if (!window.MCOnAir) { overlayN.textContent = 'Export not ready: the on-air log has not loaded.'; return; }
+    const lines = JSON.parse(window.MCOnAir.json()).lines || [];
     overlayN.textContent = lines.length ? lines.length + (lines.length === 1 ? ' line' : ' lines') + ' in the export' : 'Nothing aired yet.';
     overlayPre.textContent = JSON.stringify(lines.slice(-2), null, 2);
   };

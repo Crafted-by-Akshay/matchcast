@@ -62,6 +62,9 @@ test('a phone shows one view at a time, with no divider and no sideways scroll',
 
 test('Watch opens alone; the second 3D view is not offered on the first screen, and ?split=1 still opens it', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#v-watch')).toBeVisible();
+  await expect(page.locator('#v-broadcast'), 'the desk is not shown on the first screen').toBeHidden();
   expect(await page.locator('#v-broadcast iframe').count(), 'no second 3D view is loaded until asked').toBe(0);
   await expect(page.locator('#bc-toggle'), 'the second 3D view is off the first screen for the sprint (AB#497)').toBeHidden();
   await page.goto('/index.html?split=1#watch', { waitUntil: 'domcontentloaded' });
