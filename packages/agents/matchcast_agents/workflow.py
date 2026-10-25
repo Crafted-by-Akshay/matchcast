@@ -32,6 +32,7 @@ from .tools import InProcessTools, ToolCall, ToolError
 
 if TYPE_CHECKING:
     from .live.client import ModelClient
+    from .live.knowledge import TalkKnowledge
 
 STATS_DESK_BUDGET_S = 2.0
 
@@ -176,11 +177,13 @@ class MatchWorkflow:
         clock: Callable[[], datetime] = _utc_now,
         stats_desk: StatsDesk | None = None,
         answer_model: "ModelClient | None" = None,
+        knowledge: "TalkKnowledge | None" = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
         self.stats_desk = stats_desk
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
+        self._knowledge = knowledge  # squads and the knowledge base for talk (EXP-18)
         self._verified_claims: dict[str, dict[str, Any]] = {}
         self._repair_lock = asyncio.Lock()
         self._redrafts: dict[tuple[str, str], tuple[MatchContext, list[dict], list[DraftLine]]] = {}
@@ -560,11 +563,29 @@ class MatchWorkflow:
         from .roles.orders import keyword_order
 
         if self._answers is not None:
-            live = await self._answers.talk(ctx, target, utterance, position)
+            sheet, passages = self._talk_knowledge(ctx, target, utterance)
+            live = await self._answers.talk(
+                ctx, target, utterance, position, sheet=sheet, passages=passages
+            )
             if live is not None and self._talk_numbers_ok(ctx, target, live[0]):
                 return live[0], live[1], "model", live[2]
         reply, facts = player_reply(ctx, target, utterance)
         return reply, facts, "rules", keyword_order(utterance)
+
+    def _talk_knowledge(
+        self, ctx: MatchContext, target: str, utterance: str
+    ) -> tuple[dict[str, list[str]], list[str]]:
+        """Both squads and the knowledge passages about him and the manager's words.
+
+        Empty when the match has no knowledge base.
+        """
+        if self._knowledge is None:
+            return {}, []
+        clubs = (ctx.club_name(ctx.home), ctx.club_name(ctx.away))
+        return (
+            self._knowledge.team_sheet(clubs),
+            self._knowledge.passages(f"{ctx.player_name(target)} {utterance}"),
+        )
 
     @staticmethod
     def _talk_numbers_ok(ctx: MatchContext, target: str, reply: str) -> bool:
