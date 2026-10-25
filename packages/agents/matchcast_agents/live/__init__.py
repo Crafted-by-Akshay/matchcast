@@ -10,7 +10,13 @@ from ..tools import ToolCall
 from ..workflow import AgentSet
 from .analyst import LiveAnalyst
 from .answers import LiveAnswers
-from .client import FoundryModelClient, ModelClient, ScriptedModelClient, model_priority
+from .client import (
+    FoundryModelClient,
+    ModelClient,
+    ModelCut,
+    ScriptedModelClient,
+    model_priority,
+)
 from .narrator import LiveNarrator
 from .producer import LiveProducer
 from .verifier import LiveVerifier
@@ -34,6 +40,7 @@ __all__ = [
     "LiveProducer",
     "LiveVerifier",
     "ModelClient",
+    "ModelCut",
     "ScriptedModelClient",
     "live_agents",
 ]
