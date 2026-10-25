@@ -171,6 +171,8 @@ def build_watch():
         + r(EMB + "indices.js")
         + "\n"
         + r(EMB + "feed.js")
+        + "\n"
+        + r(EMB + "twofans.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
@@ -273,6 +275,7 @@ def build_broadcast():
         + r(EMB + "onair.js")
         + "\n"
         + r(EMB + "copilot.js")
+        + r(EMB + "producer.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 

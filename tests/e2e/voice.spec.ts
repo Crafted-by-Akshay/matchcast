@@ -39,6 +39,7 @@ test('voice: captions match the spoken text; muted still captions; stale lines a
 test('voice: a verified goal line from the agents is captioned', async ({ page }) => {
   await openShell(page, 'agents');
   await page.evaluate(() => {
+    AG.setMode('demo');   // the caption is about the voice: a line waiting for approval is not spoken (producer.spec covers the gate)
     AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
     AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });
