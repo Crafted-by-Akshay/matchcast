@@ -1517,6 +1517,10 @@
             "model",
             "fallback"
           ]
+        },
+        "spawn_reason": {
+          "type": "string",
+          "maxLength": 200
         }
       },
       "required": [
@@ -1528,7 +1532,8 @@
         "called",
         "skipped",
         "why",
-        "routed_by"
+        "routed_by",
+        "spawn_reason"
       ]
     },
     "CrewSpawnPacket": {

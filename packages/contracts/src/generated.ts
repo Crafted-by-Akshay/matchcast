@@ -379,6 +379,7 @@ export interface CrewLedgerPacket {
   skipped: Identifier[];
   why: string;
   routed_by: "rules" | "model" | "fallback";
+  spawn_reason: string;
 }
 export interface CrewSpawnPacket {
   kind: "crew_spawn";

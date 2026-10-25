@@ -303,7 +303,9 @@ existing packet or version changes. They are not replayed on reconnect (only `pu
 `crew_ledger` is one moment the crew took, sent once the moment's run has ended, so `called` and
 `skipped` are final. `called` names the agents that ran, specialists included, in call order.
 `skipped` names the agents the Producer routed away, and `why` and `routed_by` give the reason
-and who decided (`rules`, `model`, or `fallback`).
+and who decided (`rules`, `model`, or `fallback`). `spawn_reason` is set when the
+planner spawned no specialists (for example a budget refusal); no `crew_spawn` frames come for that
+moment then.
 
 `crew_spawn` is one specialist on one moment. It is sent when the specialist starts (`running`)
 and again when it ends (`done`, `no_data`, `failed` or `budget_exhausted`). `budget_exhausted` is

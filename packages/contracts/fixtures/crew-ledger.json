@@ -19,5 +19,6 @@
     "stats_desk"
   ],
   "why": "goal",
-  "routed_by": "rules"
+  "routed_by": "rules",
+  "spawn_reason": ""
 }
