@@ -19,6 +19,9 @@ SPAWNS_PER_MATCH = 60  # a cost guard, not a target: a match has a few dozen pri
 OBJECTIVES = {
     "rhythm": "control, swings and the rhythm of play around this moment, from the raw events",
     "history": "the last meetings and form between the two teams, from the real results file",
+    "replay": "the build-up to this moment: who passed to whom, and in how many seconds",
+    "tactics": "the pressure and the side of the pitch the move came from, counter or build-up",
+    "stats": "the analyst's shots and expected goals so far, through the in-process metrics tool",
 }
 
 

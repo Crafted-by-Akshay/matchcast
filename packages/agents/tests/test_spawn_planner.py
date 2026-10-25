@@ -34,7 +34,7 @@ def test_a_quiet_minute_spawns_at_most_one_specialist(four_built) -> None:
 
 def test_a_name_with_no_built_specialist_is_never_spawned() -> None:
     plan = plan_spawns(
-        priority=1, moment_id="m-9", available=("tactics", "rhythm"), budget=SpawnBudget(50)
+        priority=1, moment_id="m-9", available=("tracker", "rhythm"), budget=SpawnBudget(50)
     )
     assert [r.name for r in plan.requests] == ["rhythm"]
 
