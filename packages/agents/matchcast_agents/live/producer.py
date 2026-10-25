@@ -13,6 +13,7 @@ import json
 from typing import Any
 
 from ..context import MatchContext
+from ..memory import already_said
 from ..messages import ProducerTask, Skip
 from ..resilience import TIMEOUT_S, CircuitBreaker, ModelError, ModelRateLimited, ModelTimeout
 from ..rules import ProducerRules
@@ -162,4 +163,5 @@ class LiveProducer:
             },
             "allowed_personas": list(decision.personas),
             "aired_recently": self._aired,
+            "already_said_about_this_play": already_said(ctx, payload),
         }
