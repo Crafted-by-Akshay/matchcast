@@ -490,4 +490,4 @@ def test_the_redraft_is_told_what_failed_without_the_figures(match) -> None:
     )
     text = repair_feedback(draft, verdict)
     assert "140" not in text and "147" not in text
-    assert "claim values" in text and "shorter" in text and "roster" not in text
+    assert "claim values" in text and "shorten" in text and "roster" not in text
