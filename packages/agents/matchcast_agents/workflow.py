@@ -1372,6 +1372,23 @@ class MatchWorkflow:
             self._audit("person", actor_id, "line_killed", line_id, details)
             return line
 
+    async def set_feed(
+        self,
+        feed: str,
+        killed: bool,
+        reason: str,
+        actor_id: str = "producer",
+        actor_name: str | None = None,
+    ) -> dict[str, Any]:
+        """The desk's per-feed kill or resume (AB#499). enforced stays false until the air gate."""
+        async with self._lock:
+            details = {"feed": feed, "reason": reason[:200], "enforced": False}
+            if actor_name:
+                details["actor_name"] = actor_name[:80]
+            return self._audit(
+                "person", actor_id, "feed_killed" if killed else "feed_resumed", feed, details
+            )
+
     async def edit(
         self,
         line_id: str,

@@ -902,10 +902,15 @@ def test_a_match_created_over_the_api_is_given_the_knowledge_base(client: TestCl
     assert flow._knowledge.squads and flow._knowledge.index is not None
 
 
-def test_a_desk_feed_kill_and_resume_are_audited(client: TestClient) -> None:
+def test_a_desk_feed_kill_and_resume_are_audited(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # AB#499: a desk feed kill is a person's act, audited as feed_killed / feed_resumed
     client.app.state.matches.require_role = True  # type: ignore[attr-defined]
     create(client)
+    flow = client.app.state.matches.flows[("short", "match-short")]
+    published: list[str] = []
+    monkeypatch.setattr(flow.hub, "publish", lambda kind, event_id, data: published.append(kind))
     producer = {"X-MatchCast-Role": "Producer"}
     ids = {"session_id": "short"}
     denied = client.post("/v1/matches/match-short/feeds/casual/kill", json=ids)
@@ -927,4 +932,5 @@ def test_a_desk_feed_kill_and_resume_are_audited(client: TestClient) -> None:
     actions = [r["action"] for r in audit if r["subject_id"] == "casual"]
     assert actions == ["feed_killed", "feed_resumed"]
     assert all(r["details"]["enforced"] is False for r in audit if r["subject_id"] == "casual")
+    assert published.count("audit") == 2  # each switch reaches the live audit stream
     assert verify_chain(audit)["valid"] is True

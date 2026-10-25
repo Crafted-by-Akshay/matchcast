@@ -981,16 +981,8 @@ def build_router(registry: Registry) -> APIRouter:
         if feed not in FEED_KEYS:
             raise Problem(422, "contract_invalid", f"unknown feed {feed}", "/feed")
         flow = await registry.flow_for(body.session_id, match_id)
-        record = flow.store.append_audit(
-            flow.sk, stream=flow.stream, actor_kind="person", actor_id=actor[0],
-            action="feed_killed" if killed else "feed_resumed", subject_id=feed,
-            details={
-                "feed": feed,
-                "reason": body.reason or ("killed on desk" if killed else "resumed"),
-                "enforced": False,  # the air gate does not read the switch yet
-            },
-            time=_now(),
-        )  # fmt: skip
+        reason = body.reason or ("killed on desk" if killed else "resumed")
+        record = await flow.set_feed(feed, killed, reason, actor[0], actor[1])
         return {
             "feed": feed,
             "state": "killed" if killed else "live",
