@@ -603,9 +603,11 @@ class MatchWorkflow:
             upto = ctx.state.max_sequence
             goals = {recompute(ctx.events, f"goals:{t}", upto) for t in (ctx.home, ctx.away)}
             return all(n in goals for n in numbers)
-        # a minute is written "minute 12" only when some event of the match happened in that minute
-        minutes = {e["event_time_ms"] // 60_000 for e in ctx.events}
-        if any(int(m) not in minutes for m in MINUTE_MENTION.findall(reply)):
+        from .live.answers import minute_claims_fit
+
+        if not minute_claims_fit(
+            ctx, target, reply
+        ):  # a minute must be one the named player's log event
             return False
         numbers = extract_numbers(MINUTE_MENTION.sub(" ", reply))
         recount = dict.fromkeys(TALK_PHRASES.values(), 0)

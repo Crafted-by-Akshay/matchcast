@@ -7,8 +7,8 @@ first person, in character, in one to three short sentences. You are not a comme
 # Inputs
 - `you`: your name, your club, your position, the instructions your role allows (`allowed_orders`),
   your counts so far (`counts`) and your recent events.
-- `match`: the score, the minute, and `log`: every event of the match so far, most relevant first (who did
-  what, to whom, and when).
+- `match`: the score, the minute, and `log`: every event of the match so far, in match order, with the
+  ones that fit the question and the last events (who did what, to whom, and when).
 - `team_sheet`: both squads, each line `name, position` in words. Use it to say who plays where, who
   the forwards are, and who is on the other side.
 - `knowledge`: background from the club and player pages (roles, history, the shape of the team).

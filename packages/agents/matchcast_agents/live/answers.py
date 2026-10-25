@@ -29,6 +29,15 @@ RECENT_EVENTS = 15
 MATCH_EVENTS = 8  # the last events of the match a player may talk about
 LOG_RETRIEVED = 40  # the events of the whole match that best match the question
 LOG_LAST = 30  # and the last events, whatever the question
+MINUTE_CLAIM = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)
+EVENT_WORDS = {  # what a sentence may say happened, and the log's event type for it
+    "goal": ("goal",),
+    "card": ("card", "booked", "yellow", "red"),
+    "shot": ("shot",),
+    "pass": ("pass",),
+    "tackle": ("tackle",),
+    "foul": ("foul",),
+}
 MINUTE_IN_TEXT = re.compile(r"\bminute\s+\d{1,3}\b", re.IGNORECASE)  # a minute is not a count
 KEY_EVENT_TYPES = ("goal", "card")  # every goal and card of the match is known to any player
 KEY_EVENTS = ("goal", "card")  # every one of these is in the sheet, however long ago it was
@@ -308,13 +317,46 @@ def _talk_names_fit(reply: str, whole: set[str], words: set[str]) -> bool:
 
 
 def _counts_another_player(ctx: MatchContext, target: str, reply: str) -> bool:
-    """A sentence that names a team-mate or opponent may not carry a count of his own."""
-    others = [_whole(n) for pid, n in ctx.names.items() if pid != target]
-    for sentence in re.split(r"(?<=[.!?])\s+", reply):
-        bare = MINUTE_IN_TEXT.sub("", sentence)
-        if re.search(r"\d", bare) and any(name in _whole(sentence) for name in others):
+    """A reply that names a team-mate or an opponent, by whole name or by any part of it, may not
+    carry a count of its own: his counts are his own, whichever sentence the name is in."""
+    if not re.search(r"\d", MINUTE_IN_TEXT.sub("", reply)):
+        return False
+    own = set(_whole(ctx.player_name(target)).split())
+    text = _whole(reply)
+    for pid, name in ctx.names.items():
+        if pid == target:
+            continue
+        if _whole(name) in text:
             return True
+        for word in set(_whole(name).split()) - own:
+            if re.search(rf"\b{re.escape(word)}\b", text):
+                return True
     return False
+
+
+def minute_claims_fit(ctx: MatchContext, target: str, reply: str) -> bool:
+    """Every "minute N" in the reply must be a minute in which the player the sentence names (or the
+    speaker) did what the sentence says: a goal, a card, a shot, a pass and so on."""
+    for sentence in re.split(r"(?<=[.!?])\s+", reply):
+        minutes = MINUTE_CLAIM.findall(sentence)
+        if not minutes:
+            continue
+        text = _whole(sentence)
+        who = {pid for pid, name in ctx.names.items() if _whole(name) in text} or {target}
+        kinds = {
+            kind
+            for kind, words in EVENT_WORDS.items()
+            if any(re.search(rf"\b{w}", text) for w in words)
+        }
+        for minute in minutes:
+            if not any(
+                e["event_time_ms"] // 60_000 == int(minute)
+                and e["payload"].get("player_id") in who
+                and (not kinds or e["payload"]["type"] in kinds)
+                for e in ctx.events
+            ):
+                return False
+    return True
 
 
 def talk_fits(ctx: MatchContext, target: str, reply: str, match_names: Iterable[str] = ()) -> bool:

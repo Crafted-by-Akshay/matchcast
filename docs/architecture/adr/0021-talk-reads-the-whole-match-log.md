@@ -17,8 +17,8 @@ The player's talk saw his own counts, the last eight events, and every goal and 
 ## Decision
 
 - **The log.** `match.log` holds up to 40 events that best match the question and his name (BM25 over one line per event, built from the stored events), plus the last 30 and every goal and card. Each line names the minute, the event, the player, the recipient and the club, all from the log.
-- **Names.** Any player of the match may be named, by his whole name. A sentence that names another player may not carry a count; his counts are his own.
-- **Minutes.** A minute may be written as `minute 12` only when an event of the match happened in that minute. Any other minute is refused. Otherwise he says "a little while ago".
+- **Names.** Any player of the match may be named, by whole name or by any part of it. A reply that names another player, in any sentence, may not carry a count; his counts are his own.
+- **Minutes.** A minute may be written as `minute 12` only when an event of the match happened in that minute, by the player the sentence names (or by him), of the kind the sentence names (a goal, a card, a shot, a pass). Any other minute is refused. Otherwise he says "a little while ago".
 - **Numbers.** Counts are still recounted from the log and written as digits with their metric (ADR-0016, ADR-0018).
 - **Generic source.** Everything comes from the match context (names, clubs, events), not from a team list, so a change of teams (real national sides) needs no code change.
 
@@ -26,3 +26,4 @@ The player's talk saw his own counts, the last eight events, and every goal and 
 
 - A reply about a minute can be refused when no event happened in that minute, which is the intent: a minute is a log fact.
 - Retrieval runs per talk over the events of the match so far. At the scale of one match this is milliseconds; a much longer log would need a cached index.
+- Ask's event facts use the same line builder, so an Ask answer can now name a pass recipient. The data is the log's own; Ask's docs are unchanged because no Ask rule changed.
