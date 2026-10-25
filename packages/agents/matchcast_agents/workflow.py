@@ -55,7 +55,7 @@ def repair_feedback(draft: DraftLine, verdict: Verdict) -> str:
     (a limit or a number named there would be echoed into the line)."""
     said = {
         "persona": f"the {draft.persona} line was too long or had too many numbers: shorten it",
-        "numbers": "a number was not backed by a claim or a claim value was repeated: use only the claim values, each once",
+        "numbers": "a number lacked a claim or was repeated: use the claim values, each once",
         "names": "a name was not in the roster or not on the team in this moment",
         "sources": "a claim was not usable",
         "specific": "the colour line must name a player or club",
