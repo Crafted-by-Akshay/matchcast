@@ -328,6 +328,9 @@ def load_live_run(
     if not all(key in record for key in RECORD_KEYS):  # the route reads each of these
         log.warning("scoreboard live run %s is missing fields; showing rules arms", path)
         return None
+    if not isinstance(record["run_id"], str) or not record["run_id"]:
+        log.warning("scoreboard live run %s has no run id; showing rules arms", path)
+        return None
     arms = record.get("arms")
     if not isinstance(arms, dict) or not arms:
         return None

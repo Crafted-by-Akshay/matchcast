@@ -2,7 +2,7 @@
 each with its own call budget. The scoreboard route shows the recorded run beside the rules arms.
 
     uv run python scripts/scoreboard_live.py \
-        --match <match.json> --fixture <fixture id, e.g. N001> \
+        --match <match.json> --fixture <fixture id, e.g. M001> \
         --max-calls 300 --out scoreboard-live.json
     MATCHCAST_SCOREBOARD_LIVE_RUN=scoreboard-live.json  (read by the api on each scoreboard request)
 
@@ -28,7 +28,9 @@ from matchcast_agents.live.client import FoundryModelClient
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--match", type=Path, required=True)
-    parser.add_argument("--fixture", required=True, help="the fixture id the match is, e.g. N001")
+    parser.add_argument(
+        "--fixture", required=True, help="the fixture id the match is, e.g. M001 or N001"
+    )
     parser.add_argument("--max-calls", type=int, required=True, help="model calls per arm")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=2026)

@@ -189,6 +189,8 @@ def test_a_recorded_arm_without_a_run_id_is_no_run(tmp_path) -> None:
     assert load_live_run(no_id, teams=TEAMS) is None
     empty_id = write_record(tmp_path, arms={"full_crew": {"run_id": "", "mode": "live"}})
     assert load_live_run(empty_id, teams=TEAMS) is None
+    no_run_id = write_record(tmp_path, run_id="")  # the route labels the run with this id
+    assert load_live_run(no_run_id, teams=TEAMS) is None
     not_obj = write_record(tmp_path, arms={"full_crew": "not an object"})
     assert load_live_run(not_obj, teams=TEAMS) is None
 
