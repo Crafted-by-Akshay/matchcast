@@ -486,10 +486,10 @@ function ensure(view) {
 // the Analyst loads its season only when it is opened, so Watch and Broadcast get the machine first
 function routeAnalyst() {
   if (!M.fixture) return;
-  { const cur = byId(M.fixture); if (cur && cur.national) return; }   // no recorded run for a national-team fixture: the Analyst keeps its last route
+  const cur = byId(M.fixture), nat = !!(cur && cur.national);   // a national-team fixture has no recorded run: the Analyst still loads, on its own default page, and is not routed to #live.<id>
   if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
-    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#live.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
-  if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
+    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + (nat ? '' : '#live.' + M.fixture); $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = nat ? null : M.fixture; return; }
+  if (!nat && FR.analyst.ready && FR.analyst.route !== M.fixture) {
     FR.analyst.route = M.fixture;
     post('analyst', { src: 'matchcast-shell', type: 'route', page: 'live', arg: M.fixture });
   }
@@ -581,7 +581,7 @@ function paint() {
   $('sync').textContent = current === 'agents' ? 'Shared pipeline' : current === 'analyst' ? (fx ? 'Showing ' + fx.id : 'Season fixtures only') : (synced ? 'Same fixture as Analyst' : 'Loads on switch');
   $('sync').className = 'chip ' + (current === 'analyst' || synced ? 'ok' : '');
   $('src').textContent = current === 'analyst'
-    ? (fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
+    ? (fx && fx.national ? 'Analyst: club season data, no run for this match' : fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
     : (live ? 'Match engine running here · ' + (current === 'agents' ? 'watch' : current) : 'Match engine: same setup as Analyst');
   $('src').className = 'chip ' + (live ? 'live' : '');
   pushFeed(); renderAgents(); paintStory();

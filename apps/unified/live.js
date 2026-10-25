@@ -46,23 +46,23 @@ const LV = (() => {
   const url = (path, q) => api() + path + '?' + new URLSearchParams(Object.assign({ session_id: run.key.session_id }, q || {}));
   const post = (path, body, q) => fetch(url(path, q), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-  // a new match from Watch: close the old stream, create the match, open the stream. Cold start is 'warming' until the first claim. The api is given 90 s to take the first batch, then 60 s from that batch to publish a claim; while batches are accepted and the stream is open it never drops to 'fallback' on its own. Neither timer touches an api that already said 'live': it stays live while it waits for events, and a stream that keeps failing drops it (onerror).
+  // a new match from Watch: close the old stream, create the match, open the stream. Cold start is 'warming' until the first claim. The warm-up clock starts at kick-off (the first events) or when the api cannot be reached: 90 s to take the first batch, then 60 s from that batch to publish a claim; while batches are accepted and the stream is open it never drops to 'fallback' on its own. Neither timer touches an api that already said 'live': it stays live while it waits for events, and a stream that keeps failing drops it (onerror).
   const begin = (matchKey, roster) => {
     stop();
     teamIds = roster ? roster.teams.map(slug) : [];
     vstats.passes = 0; vstats.reads = 0; vstats.readsFailed = 0;   // Vision counts belong to one match
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
-    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, sending: false };
+    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, armed: false, sending: false };
     set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the warm-up timer
-    timer = setTimeout(() => { if (run && !run.claimed && st === 'warming') set('fallback'); }, WARM_MS);   // only a silent api falls back: one that already said 'live' stays live while it waits for events (judge re-test: Broadcast read 'Rules fallback' while the api was live)
+    // no warm-up clock yet: it starts at kick-off (the first events) or when the api cannot be reached, so a slow client still loading the pitch never reads 'Rules fallback'
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
       players: roster.players.map((q) => ({ player_id: slug(q.name), team_id: slug(q.team) })) } : null;
     // the names go on create, so Ask knows the clubs and players by the names the fan sees
     run.clubs = roster ? Object.fromEntries(roster.teams.map((t) => [slug(t), t])) : {};
     run.names = roster ? Object.fromEntries(roster.players.map((q) => [slug(q.name), q.name])) : {};
     open();
-    if (!badClaim) create(run).catch(() => { /* the first batch tries again */ });   // eager: the stream's 'live' status reaches the pill without waiting for the engine's first events
+    if (!badClaim) { const r0 = run; create(r0).catch(() => arm(r0)); }   /* an unreachable api starts the warm-up clock; the first batch tries again */   // eager: the stream's 'live' status reaches the pill without waiting for the engine's first events
   };
   // the booth's own stream (persona=booth): only booth:pbp and booth:colour publications, in speaking order. Its persona is the speaker, which feed.js voices. It is not retried: if it drops, the rules booth carries on
   const openBooth = (r) => {
@@ -189,8 +189,10 @@ const LV = (() => {
   };
 
   // Watch's batch, as the shell receives it
+  const arm = (r) => { if (run !== r || r.armed) return; r.armed = true; clearTimeout(timer); timer = setTimeout(() => { if (run === r && !r.claimed && st === 'warming') set('fallback'); }, WARM_MS); };
   const events = (batch) => {
     if (!run) return;
+    if (batch && batch.length) arm(run);
     for (const ev of batch || []) { const p = toPacket(ev, run.key, run.seq + 1, new Date().toISOString()); if (p) { run.seq++; run.queue.push(p); } }
     flush();
   };

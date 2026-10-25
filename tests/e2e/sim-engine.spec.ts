@@ -88,7 +88,7 @@ test.describe('Simulator engine', () => {
   // compared with the runner's fixed 0.02 s loop.
   test('run.cjs --url prints the fixture query the live app needs for the runner\'s match', async () => {
     const out = execFileSync('node', ['services/simulation/run.cjs', '--seeds', '2026', '--url'], { encoding: 'utf8' });
-    expect(out.trim()).toBe('2026\t/watch/index.html?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM');
+    expect(out.trim()).toMatch(/^2026\t\/watch\/index\.html\?seed=2026&half=45&st=1&month=3&h=[A-Z]{3}&a=[A-Z]{3}$/);   // the runner's default match is the fixture the data names (now a national one)
   });
 
   test('time spent on the set-up screen does not shift the match clock', async ({ page }) => {

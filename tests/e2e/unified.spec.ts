@@ -17,7 +17,8 @@ test.afterAll(async () => { await page.close(); });
 
 test('season fixtures load into the picker', async () => {
   await openShell(page, 'watch');
-  expect(await page.locator('#fx option').count()).toBe(28);
+  const ids = await page.$$eval('#fx option', (os) => os.map((o) => (o as HTMLOptionElement).value));
+  expect(ids.filter((v) => !/^N\d+$/.test(v))).toHaveLength(28);   // the season; national-team fixtures (N001...) come on top
   fxTeams = await page.evaluate(async () => { const L = await fetch('shared/fixtures.json').then((r) => r.json()); const x = L.find((q: any) => q.id === (document.getElementById('fx') as HTMLSelectElement).value); return [x.home.club, x.away.club]; });
 });
 
@@ -35,7 +36,9 @@ test('Analyst opens the season and routes to the shared fixture', async () => {
   await ready('analyst', 60_000)(page);
   analyst = await viewFrame(page, 'analyst');
   await expect.poll(() => analyst.evaluate(() => D?.matches.length)).toBe(28);
-  await expect.poll(() => analyst.evaluate(() => location.hash)).toMatch(/^#live\.M/);   // the Analyst opens its live page for the shared fixture
+  // a season fixture routes the Analyst to its live page; the national default has no run, so the Analyst opens on its own page and the chip says so
+  if (await page.locator('#fx').inputValue().then((v) => /^N\d+$/.test(v))) await expect(page.locator('#src')).toContainText('no run for this match');
+  else await expect.poll(() => analyst.evaluate(() => location.hash)).toMatch(/^#live\.M/);
 });
 
 test('Broadcast starts on the shared seed and clubs', async () => {
