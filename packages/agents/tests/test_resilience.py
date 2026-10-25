@@ -13,6 +13,7 @@ from matchcast_agents.resilience import (
     ResilientAgent,
 )
 from matchcast_agents.rules import NarratorRules
+from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts.audit import verify_chain
 
 
@@ -145,6 +146,27 @@ class AlwaysBadNarrator(NarratorRules):
             )
             for ln in lines
         ]
+
+
+def test_an_escalated_line_can_be_killed_but_not_approved_or_edited(match) -> None:
+    base = rules_agents()
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"],
+        roster=match["roster"],
+        names=match["names"],
+        clubs=match["teams"],
+        agents=AgentSet(base.producer, base.analyst, AlwaysBadNarrator(), base.verifier),
+        config=WorkflowConfig(),
+        clock=fixed_clock(),
+    )
+    run(flow.ingest(match["events"]))
+    held = next(ln for ln in flow.store.lines(flow.sk) if ln.escalated)
+    for attempt in (flow.approve(held.line_id), flow.edit(held.line_id, "Northgate FC lead.")):
+        with pytest.raises(WorkflowError) as refused:
+            run(attempt)
+        assert refused.value.code == "not_approvable"
+    assert run(flow.kill(held.line_id, "a person checked it")).status == "killed"
+    assert flow.store.publications(flow.sk) == []
 
 
 def test_unrepairable_line_is_escalated_after_exactly_one_repair(match) -> None:
