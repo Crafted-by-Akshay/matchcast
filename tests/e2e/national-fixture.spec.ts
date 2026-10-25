@@ -40,6 +40,7 @@ test('the Broadcast caption does not name a season club on a national fixture', 
   await page.route('**/shared/fixtures.json', async (rt) => {
     const res = await rt.fetch(); const list = await res.json();
     const arr = Array.isArray(list) ? list : list.fixtures;
+    for (let i = arr.length - 1; i >= 0; i--) if (arr[i].id === 'N001') arr.splice(i, 1);   // the data ships its own N001: keep one
     const n = JSON.parse(JSON.stringify(arr[0])); n.id = 'N001'; n.national = true; n.score = [0, 0]; n.matchday = 99;
     n.home = Object.assign({}, n.home, { club: 'Argentina' }); n.away = Object.assign({}, n.away, { club: 'Brazil' });
     arr.push(n);
@@ -50,4 +51,53 @@ test('the Broadcast caption does not name a season club on a national fixture', 
   await expect.poll(() => f.evaluate(() => !!document.getElementById('cap1')), { timeout: 120_000 }).toBe(true);
   const caption = await f.locator('#cap1').textContent();
   expect(caption, 'the caption names no season club').not.toContain('Harbor City');
+});
+
+// Once the national match runs, the Broadcast scoreboard names the fixture's clubs, even when the club list loads after the match starts.
+test('the Broadcast scoreboard names the national clubs once the match runs', async ({ page }) => {
+  await page.route('**/shared/fixtures.json', async (rt) => {
+    const res = await rt.fetch(); const list = await res.json();
+    const arr = Array.isArray(list) ? list : list.fixtures;
+    const n = JSON.parse(JSON.stringify(arr[0])); n.id = 'N003'; n.national = true; n.score = [0, 0]; n.matchday = 99;
+    n.home = Object.assign({}, n.home, { key: 'ARG', club: 'Argentina' }); n.away = Object.assign({}, n.away, { key: 'BRA', club: 'Brazil' });
+    arr.push(n);
+    await rt.fulfill({ response: res, json: list });
+  });
+  await openShell(page, 'broadcast', '?seed=2026&fx=N003');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 120_000 }).toMatch(/Kick-off/);
+  await expect(f.locator('#bug .tm').first()).toHaveText('ARG');
+  await expect(f.locator('#bug .tm').nth(1)).toHaveText('BRA');
+});
+
+// Known gap, not yet fixed: the desk's panels and commentary are built at boot from the season clubs, before the fixture's clubs
+// are applied, so season club names stay in visible text after kick-off. Needs the clubs known before the desk first renders.
+test.fixme('no visible desk line names a season club on a national fixture', async ({ page }) => {
+  await page.route('**/shared/fixtures.json', async (rt) => {
+    const res = await rt.fetch(); const list = await res.json();
+    const arr = Array.isArray(list) ? list : list.fixtures;
+    const n = JSON.parse(JSON.stringify(arr[0])); n.id = 'N003'; n.national = true; n.score = [0, 0]; n.matchday = 99;
+    n.home = Object.assign({}, n.home, { key: 'ARG', club: 'Argentina' }); n.away = Object.assign({}, n.away, { key: 'BRA', club: 'Brazil' });
+    arr.push(n);
+    await rt.fulfill({ response: res, json: list });
+  });
+  await openShell(page, 'broadcast', '?seed=2026&fx=N003');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('bc-strip')), { timeout: 120_000 }).toBe(true);
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 60_000 }).toMatch(/Kick-off/);
+  await page.waitForTimeout(25_000);
+  // every visible line of the desk, not one element: the ticker, the commentary and the Next-goal panel
+  const season = await f.evaluate(() => {
+    const out: string[] = [];
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const t = (n.textContent || '').trim();
+      const el = n.parentElement;
+      if (!el || !/Harbor City|Ridgeview/.test(t)) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display !== 'none' && cs.visibility !== 'hidden' && el.getBoundingClientRect().width > 0 && !el.closest('[hidden]')) out.push(t.slice(0, 80));
+    }
+    return out;
+  });
+  expect(season, 'no visible line names a season club on a national fixture').toEqual([]);
 });
