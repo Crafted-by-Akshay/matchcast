@@ -95,8 +95,12 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
 
   // the overlay feed preview: the last lines of the on-air export (onair.js, window.MCOnAir.json), refreshed after each line airs
   const overlayN = box.querySelector('#mc-overlay-n'), overlayPre = box.querySelector('#mc-overlay-pre');
+  let overlayWaits = 0;
   const renderOverlay = () => {
-    if (!window.MCOnAir) { overlayN.textContent = 'Export not ready: the on-air log has not loaded.'; return; }
+    if (!window.MCOnAir) {   // onair.js runs in the 3D module, which can finish after the frame's load event: wait a little before saying it is not ready
+      if (overlayWaits++ < 80) setTimeout(renderOverlay, 250); else overlayN.textContent = 'Export not ready: the on-air log has not loaded.';
+      return;
+    }
     const lines = JSON.parse(window.MCOnAir.json()).lines || [];
     overlayN.textContent = lines.length ? lines.length + (lines.length === 1 ? ' line' : ' lines') + ' in the export' : 'Nothing aired yet.';
     overlayPre.textContent = JSON.stringify(lines.slice(-2), null, 2);
