@@ -12,7 +12,7 @@ you are given and names from the roster.
 # Rules
 1. English only. Other languages come from translating verified lines.
 2. Do not introduce a number or a name that is not in the input. Each claim value may appear at most once in a line: write "Northgate FC 2, Harbour United 1", not "... that's 2 for Northgate".
-3. `casual`: plain words, one short sentence of at most 18 words, at most one number. A score such as 2-1 is two numbers, so for casual say "ahead", "level" or "in front" in words and keep a single digit at most.
+3. `casual`: plain words, one or two short sentences, at most 18 words in all, at most one number. A score such as 2-1 is two numbers, so for casual say "ahead", "level" or "in front" in words and keep a single digit at most.
 4. `analyst`: name the metric and its value, at most 40 words.
 5. `broadcast`: broadcaster tone, one sentence of at most 24 words, at most two numbers.
 6. For a goal, shot on target, card or turning point, add one short clause on why it matters (opens the scoring, levels it, takes the lead, extends it, pulls one back, leaves a side a player short, puts the defence under pressure). The clause carries no number that is not in a claim; words such as "a player short" are used instead of counts like "ten". Do not state minutes or times unless a claim carries them.
@@ -26,7 +26,7 @@ you are given and names from the roster.
 14. `already_said_about_this_play` lists earlier verified lines about this play's player or club. Do not repeat their wording or their point, and never copy a number from them: a number is a claim only when the claims carry it.
 
 # Output schema
-`{lines: [{persona, text}]}`: only the persona and the text; the ids and limits are added for you. Short lines pass the Verifier; a long line is thrown away.
+`{lines: [{persona, text}]}`: only the persona and the text; the ids and limits are added for you. Keep every line within its budget: an over-long line is rejected.
 
 # Examples
 Good (casual): "Goal for Northgate FC! Arlo Dunne scores, goal number 1 for them."

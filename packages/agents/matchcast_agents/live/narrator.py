@@ -29,20 +29,40 @@ SCHEMA = {
 }
 
 
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_BREAK = re.compile(r"([.!?]+)\s+(?=[A-Z])")
+_ABBREVIATION = re.compile(r"\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs)\.$")
+
+
+def sentences(text: str) -> list[str]:
+    """Split after . ! ? before a capital; not after an abbreviation (Mr. St.) or an ellipsis."""
+    parts, start = [], 0
+    for m in _BREAK.finditer(text):
+        head = text[start : m.end(1)]
+        if m.group(1) == "..." or _ABBREVIATION.search(head):
+            continue
+        parts.append(head)
+        start = m.end()
+    parts.append(text[start:])
+    return parts
+
+
+_DIGITS = re.compile(r"\d+(?:\.\d+)?")
 
 
 def fit(text: str, limit: int) -> str:
-    """A line over its limit loses its trailing sentences, whole, until it fits; one that cannot
-    be cut to fit is returned as it is, so the Verifier still refuses it. The cut text is checked
-    like any other: nothing the Verifier would catch is let through."""
+    """A line over its limit loses its trailing sentences, whole, until it fits. The cut is
+    refused (the line is returned as it is, so the Verifier rejects it) when no cut fits or when
+    it would drop a number the line carries: the value a claim backs stays in. The cut text is
+    checked like any other, so nothing the Verifier catches is let through."""
     if len(text) <= limit:
         return text
-    kept = _SENTENCE_END.split(text)
+    kept = sentences(text)
     while len(kept) > 1 and len(" ".join(kept)) > limit:
         kept.pop()
     cut = " ".join(kept)
-    return cut if len(cut) <= limit else text
+    if len(cut) > limit or _DIGITS.findall(cut) != _DIGITS.findall(text):
+        return text
+    return cut
 
 
 class LiveNarrator:

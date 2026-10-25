@@ -446,5 +446,18 @@ def test_an_over_long_line_loses_trailing_sentences_but_never_gets_rewritten() -
     assert fit(long, 140) == long
     assert fit(long, 40) == "Goal for Northgate FC!"
     assert fit(long, 60) == "Goal for Northgate FC! Arlo Dunne scores."
+    assert (
+        fit("Late goal from Mr. Dunne for Northgate FC.", 20)
+        == "Late goal from Mr. Dunne for Northgate FC."
+    )
+    assert (
+        fit("Dunne scores for Northgate FC... Or does he? Offside flag is up.", 34)
+        == "Dunne scores for Northgate FC... Or does he? Offside flag is up."
+    )
+    # a cut never drops a number the line carries
+    assert (
+        fit("Goal! Dunne scores. Northgate FC lead 2-1 now.", 22)
+        == "Goal! Dunne scores. Northgate FC lead 2-1 now."
+    )
     one = "A single run-on sentence that cannot be cut anywhere at all without changing it"
     assert fit(one, 20) == one  # the Verifier still refuses it
