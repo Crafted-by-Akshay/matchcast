@@ -1,6 +1,6 @@
 /* Crew accuracy scoreboard (Experience lane, AB#442). Draws only CREW.state.score:
    {method, arms:{key:{accuracy, catch_rate, latency_ms, cost, n, precomputed?, run_id?}}}.
-   Mounts into #crew-score when CREW.enabled (?crew=1). Labelled Simulated while CREW.state.simulated is true.
+   Mounts into #crew-score when CREW.enabled (?crew=1). Labelled Simulated while the score is the fixture; a score fetched from the api (GET /v1/matches/{id}/scoreboard) is real and carries no Simulated badge.
    No colour-only meaning: each arm has a name, a number and its own bar pattern; a table repeats the values. */
 (function () {
   'use strict';
@@ -54,7 +54,8 @@
   function known(sc) { return !!(sc && sc.arms && CREW.ARMS.some(function (a) { return sc.arms[a.key]; })); }
   function draw(S) {
     var sc = S.score;
-    var sig = JSON.stringify([!!S.simulated, sc]);
+    var sim = !!S.simulated && S.scoreSource === 'fixture';   // Simulated labels fixture data only; nothing on screen, or the api's score, is not
+    var sig = JSON.stringify([sim, sc, S.scoreNote, S.scoreSource]);
     if (sig === lastSig) return;
     lastSig = sig;
     var oldDet = root.querySelector('details'), wasOpen = !!(oldDet && oldDet.open);
@@ -65,9 +66,10 @@
     var h = el('h3', null, 'Accuracy scoreboard ');
     h.id = 'cs-h';
     sec.appendChild(h);
-    if (S.simulated) sec.appendChild(el('span', 'cs-badge sim', 'Simulated'));
+    if (sim) sec.appendChild(el('span', 'cs-badge sim', 'Simulated'));
+    else if (S.scoreSource === 'api' && sc) sec.appendChild(el('span', 'cs-badge pre', 'Rules-only'));   // the api's arms are all rules-mode runs on the stored events
     if (!known(sc)) {
-      sec.appendChild(el('p', 'muted', 'Waiting for graded lines. Each arm is graded against simulator truth.'));
+      sec.appendChild(el('p', 'muted', S.scoreNote || 'Waiting for graded lines. Each arm is graded against simulator truth.'));
       root.appendChild(sec);
       return;
     }
@@ -101,7 +103,7 @@
       });
       arm.appendChild(dl);
       grid.appendChild(arm);
-      rows.push([a.label, pct(accV), pct(catchV), secs(d.latency_ms), usd(d.cost), num(d.n) ? String(d.n) : 'n/a', d.precomputed ? 'Precomputed' : (S.simulated ? 'Simulated' : 'Live')]);
+      rows.push([a.label, pct(accV), pct(catchV), secs(d.latency_ms), usd(d.cost), num(d.n) ? String(d.n) : 'n/a', d.precomputed ? 'Precomputed' : sim ? 'Simulated' : d.mode === 'rules' ? 'Rules' : 'Live']);
     });
     sec.appendChild(grid);
     sec.appendChild(el('p', 'muted', 'Method: ' + (sc.method || 'not stated')));
