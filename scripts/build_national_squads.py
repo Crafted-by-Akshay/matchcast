@@ -19,9 +19,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packages/agents"))
 
-from matchcast_agents.history import _before, _elo_ratings, _key, resolve_team  # noqa: E402
+from matchcast_agents.history import (  # noqa: E402
+    _before,
+    _elo_ratings,
+    _key,
+    for_match,
+    resolve_team,
+)
 
 OUT = ROOT / "data/history/national_squads.json"
+# the copy the unified web image builds from (its Docker context is apps/unified only)
+WEB_COPY = ROOT / "apps/unified/national/squads.json"
+HISTORY_OUT = ROOT / "apps/unified/national/history.json"
 AS_OF = date(2026, 10, 25)
 NATIONS = ["Argentina", "Brazil"]
 RECENT = 10
@@ -207,6 +216,17 @@ def build(as_of: date = AS_OF) -> dict:
     return out
 
 
+def fixture_history(as_of: date = AS_OF) -> dict:
+    """The real head-to-head block for the Argentina v Brazil fixture, cut at `as_of`."""
+    return for_match("Argentina", "Brazil", on=as_of)
+
+
 if __name__ == "__main__":
-    OUT.write_text(json.dumps(build(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"wrote {OUT}")
+    text = json.dumps(build(), ensure_ascii=False, indent=1) + "\n"
+    OUT.write_text(text, encoding="utf-8")
+    WEB_COPY.write_text(text, encoding="utf-8")
+    print(f"wrote {OUT} and {WEB_COPY}")
+    HISTORY_OUT.write_text(
+        json.dumps(fixture_history(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+    )
+    print(f"wrote {HISTORY_OUT}")

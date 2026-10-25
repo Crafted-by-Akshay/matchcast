@@ -121,6 +121,7 @@ class MatchCreate(BaseModel):
     names: dict[str, str] = Field(default_factory=dict)
     clubs: dict[str, str] = Field(default_factory=dict)
     approval_mode: Literal["auto", "producer"] = "auto"
+    hold_booth: bool = False  # with approval_mode producer: hold the booth voices too
     seed_bad_claim: bool = False
     seed_bad_claim_at_ms: int = Field(default=720_000, ge=0)
     # descriptive fields from docs/architecture/12-api.md; stored with the match, not used by agents
@@ -393,7 +394,10 @@ class Registry:
             info = await asyncio.to_thread(stored)
             if info is None:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
-            config = WorkflowConfig(approval_mode=info.get("approval_mode", "auto"))
+            config = WorkflowConfig(
+                approval_mode=info.get("approval_mode", "auto"),
+                hold_booth=bool(info.get("hold_booth", False)),
+            )
             live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
             # the seeded wrong claim fires once; a match rebuilt past its cue has already had it
@@ -617,7 +621,7 @@ def build_router(registry: Registry) -> APIRouter:
                 raise Problem(
                     422, "contract_invalid", "roster stream must match this match", "/roster/stream"
                 )
-            config = WorkflowConfig(approval_mode=body.approval_mode)
+            config = WorkflowConfig(approval_mode=body.approval_mode, hold_booth=body.hold_booth)
             players = body.roster.get("players")
             teams = body.roster.get("team_ids")
             try:
@@ -655,6 +659,7 @@ def build_router(registry: Registry) -> APIRouter:
                 {
                     **(registry.store.get_match(flow.sk) or {}),
                     "approval_mode": body.approval_mode,
+                    "hold_booth": body.hold_booth,
                     "live": live,
                     "seed_bad_claim": seed,
                     "seed_bad_claim_at_ms": body.seed_bad_claim_at_ms,
@@ -734,7 +739,10 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
-            return not (item.event == "publication" and keep and item.data["persona"] not in keep)
+            # publications belong to the persona they were written for; line records stay on
+            # every stream because the Broadcast producer queue reads all personas' lines
+            own = item.event == "publication" and keep
+            return not (own and item.data["persona"] not in keep)
 
         async def localised(item: StreamEvent) -> StreamEvent:
             """The publication with a checked `variants[lang]`, or untouched (English)."""
@@ -802,6 +810,20 @@ def build_router(registry: Registry) -> APIRouter:
         page = rows[cursor : cursor + limit]
         more = cursor + limit < len(rows)
         return {"items": page, "next_cursor": cursor + limit if more else None}
+
+    @router.get("/matches/{match_id}/booth")
+    async def booth_status(match_id: str, session_id: str) -> dict[str, Any]:
+        """Register the commentary booth for this match, or say plainly why it is not available,
+        so the client can fall back to the rules booth instead of waiting on a stream that 429s."""
+        flow = await registry.flow_for(session_id, match_id)
+        ready = flow.add_personas(BOOTH)
+        return {
+            "ready": ready,
+            "personas": list(BOOTH),
+            "reason": None if ready else "watch_mode_cap",
+            "mode": flow.agents.mode,  # live (model) or rules (stock reading)
+            "held": flow.config.hold_booth and flow.config.approval_mode == "producer",
+        }
 
     @router.get("/matches/{match_id}/lines")
     async def lines(

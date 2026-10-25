@@ -256,6 +256,11 @@
             ],
             "title": "Engine Version"
           },
+          "hold_booth": {
+            "default": false,
+            "title": "Hold Booth",
+            "type": "boolean"
+          },
           "home_team_id": {
             "anyOf": [
               {
@@ -1539,6 +1544,60 @@
           }
         },
         "summary": "Audit",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/booth": {
+      "get": {
+        "description": "Register the commentary booth for this match, or say plainly why it is not available,\nso the client can fall back to the rules booth instead of waiting on a stream that 429s.",
+        "operationId": "booth_status_v1_matches__match_id__booth_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Booth Status V1 Matches  Match Id  Booth Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Booth Status",
         "tags": [
           "matches"
         ]
