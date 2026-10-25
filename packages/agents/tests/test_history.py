@@ -44,3 +44,11 @@ def test_unknown_pair_has_no_history() -> None:
     p = pre_match("Atlantis FC", "Lemuria", on=date(2026, 10, 25))
     assert p["h2h"]["played"] == 0 and p["h2h"]["last_meeting"] is None
     assert p["recent_form"] == {"home": [], "away": []}
+
+
+def test_for_match_is_none_for_fictional_clubs_and_set_for_national_teams() -> None:
+    from matchcast_agents.history import for_match
+
+    assert for_match("Harbor City", "Ridgeview", on=date(2026, 10, 25)) is None
+    block = for_match("England", "Brazil", on=date(2026, 10, 25))
+    assert block is not None and block["h2h"]["played"] > 0

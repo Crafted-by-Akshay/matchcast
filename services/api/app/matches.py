@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from matchcast_agents import AgentSet, MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.data_scientist import ask as ds_ask_season
+from matchcast_agents.history import for_match
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, live_agents
 from matchcast_agents.messages import LineRecord
@@ -551,6 +552,8 @@ def build_router(registry: Registry) -> APIRouter:
             try:
                 names = {p["player_id"]: pretty(p["player_id"]) for p in players or []} | body.names
                 clubs = {team: pretty(team) for team in teams or []} | body.clubs
+                home_away = [clubs[t] for t in (teams or [])[:2]] if len(teams or []) == 2 else []
+                history = for_match(*home_away) if len(home_away) == 2 else None
                 flow = MatchWorkflow(
                     stream=stream,
                     roster=body.roster,
@@ -566,6 +569,7 @@ def build_router(registry: Registry) -> APIRouter:
                     stats_desk=registry.stats_desk,
                     safety=registry.safety,
                     answer_model=registry.model_client(),
+                    history=history,
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(

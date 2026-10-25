@@ -176,6 +176,7 @@ class MatchWorkflow:
         clock: Callable[[], datetime] = _utc_now,
         stats_desk: StatsDesk | None = None,
         answer_model: "ModelClient | None" = None,
+        history: dict[str, Any] | None = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
@@ -192,6 +193,8 @@ class MatchWorkflow:
         stored = self.store.get_match(self.sk) or {}
         self.names = {**stored.get("names", {}), **(names or {})}
         self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
+        # real pre-match facts for national teams (ADR-0020); None for fictional clubs
+        self.history = history
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)
@@ -234,6 +237,7 @@ class MatchWorkflow:
             state=self.store.get_state(self.sk),
             events=tuple(self.store.events(self.sk)),
             personas=self.config.personas,
+            extra={"history": self.history} if self.history else {},
         )
 
     def _audit(

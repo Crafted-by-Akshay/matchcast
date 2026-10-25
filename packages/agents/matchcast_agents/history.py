@@ -126,3 +126,15 @@ def pre_match(home: str, away: str, on: date | None = None) -> dict[str, Any]:
         },
         "recent_form": {"home": _form(home, matches), "away": _form(away, matches)},
     }
+
+
+def for_match(home_team: str, away_team: str, on: date | None = None) -> dict[str, Any] | None:
+    """The block for two dataset teams, or None when neither name is in the dataset."""
+    block = pre_match(home_team, away_team, on)
+    if (
+        block["h2h"]["played"] == 0
+        and block["elo"]["home"] is None
+        and block["elo"]["away"] is None
+    ):
+        return None
+    return block
