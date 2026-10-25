@@ -1,4 +1,4 @@
-"""Vision -> Agents on the api (ADR-0020): the Vision stream's match, its summary route and
+"""Vision -> Agents on the api (ADR-0022): the Vision stream's match, its summary route and
 the engine truth it is checked against. Rules mode, the ten-minute fixture, no Azure."""
 
 import copy

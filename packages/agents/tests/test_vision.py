@@ -1,4 +1,4 @@
-"""Vision -> Agents (ADR-0020): the ``<session>.vision`` match's agents count Vision's passes
+"""Vision -> Agents (ADR-0022): the ``<session>.vision`` match's agents count Vision's passes
 and check them against the engine's own passes. The engine record is never touched.
 """
 

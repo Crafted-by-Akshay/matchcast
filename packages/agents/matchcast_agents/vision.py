@@ -1,4 +1,4 @@
-"""Vision's passes, kept beside the engine record (Vision -> Agents, ADR-0020).
+"""Vision's passes, kept beside the engine record (Vision -> Agents, ADR-0022).
 
 The browser's pixel tracker posts the passes it sees to the match ``<session>.vision``. That match
 runs the same four agents as an engine match, on pass events only: its Producer summarises the

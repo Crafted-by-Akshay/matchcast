@@ -632,7 +632,7 @@ function renderQueue() {
     : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';
   if ($('aq-list').dataset.html !== qhtml) { $('aq-list').innerHTML = qhtml; $('aq-list').dataset.html = qhtml; }   // redrawing an unchanged list detaches the buttons mid-click
 }
-// Vision -> Agents (ADR-0020): the Vision stream's counts, polled while a match runs. The same summary goes to Watch's "From pixels" chip.
+// Vision -> Agents (ADR-0022): the Vision stream's counts, polled while a match runs. The same summary goes to Watch's "From pixels" chip.
 let VIS = null;
 function renderVision() {
   const el = $('ag-vis'); if (!el) return;

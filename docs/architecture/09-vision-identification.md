@@ -105,7 +105,7 @@ Reading it honestly: recall (95 to 99%) and position error (under 0.5 m) meet th
 
 `embed/vision-events.js` watches the tracker's pass list (`VIS.passes`, possession moving to a team-mate) while Vision is on and sends each completed pass to the shell. `LV.visionEvents` in `live.js` creates a second match on the session id `<session>.vision` (same match id and roster, the roster's `stream` rewritten) and posts contract `pass` events (schema 1.0.0) to `POST /v1/matches/{id}/events?session_id=<session>.vision`. The engine stream never receives them. Start and end positions are the tracker's own track positions from a short history near the pass times, so they are pixel-derived, not engine truth, and are clamped to the pitch. Not built: passes to the other team (counted as `skipped_other_team`, since an interception needs its own rule), carries and speed tags, and any consumer of the vision stream (the Analyst does not read it yet). A queue is capped at 2,000 events if the api never accepts the stream. In live agent mode the api's agents also see this second stream; it is cheap in rules mode and counts against the model budget otherwise, so check that before filming. `mcVisEvents()` reports `sent`, `skipped_*`, `derived` and `tracked`; `mcVisDerive(passes)` feeds the same path in tests, because the software-GL tracker needs minutes to see a real pass.
 
-## Vision -> Agents (ADR-0020)
+## Vision -> Agents (ADR-0022)
 
 The passes on `<session>.vision` are not only stored. The agents of that match read them and work on them:
 

@@ -215,7 +215,7 @@ REASON: dict[str, ReasonCode] = {
 
 
 def check_vision(ctx: MatchContext, claims: list[dict[str, Any]]) -> Check:
-    """Vision's pass counts against the engine's own passes (ADR-0020). It reports the agreement
+    """Vision's pass counts against the engine's own passes (ADR-0022). It reports the agreement
     and does not block the line: the number itself was recounted from Vision's passes by check 3."""
     counts = [c for c in claims if c["metric"].startswith("passes:")]
     if not counts:

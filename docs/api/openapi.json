@@ -2379,7 +2379,7 @@
     },
     "/v1/matches/{match_id}/vision/summary": {
       "get": {
-        "description": "What Vision contributes to the agents on this match (ADR-0020): passes in, the lines the\nVerifier passed on them, the latest such line, and agreement with the engine's passes.",
+        "description": "What Vision contributes to the agents on this match (ADR-0022): passes in, the lines the\nVerifier passed on them, the latest such line, and agreement with the engine's passes.",
         "operationId": "vision_summary_v1_matches__match_id__vision_summary_get",
         "parameters": [
           {

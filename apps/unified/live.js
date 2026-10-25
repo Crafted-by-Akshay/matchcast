@@ -223,7 +223,7 @@ const LV = (() => {
     }
     return null;
   };
-  // Vision -> Agents (ADR-0020): the Vision stream's summary for this match (passes in, lines the Verifier passed, the latest such line, agreement with the engine); null with no match or no api
+  // Vision -> Agents (ADR-0022): the Vision stream's summary for this match (passes in, lines the Verifier passed, the latest such line, agreement with the engine); null with no match or no api
   const visionSummary = async () => {
     const r = run; if (!r || !api()) return null;
     try { const res = await fetch(url('/v1/matches/' + r.id + '/vision/summary'), { cache: 'no-store' }); return res.ok ? await res.json() : null; } catch (e) { return null; }

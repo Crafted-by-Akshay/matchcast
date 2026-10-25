@@ -357,7 +357,7 @@ class Registry:
     def truth_feed_for(
         self, session_id: str, match_id: str
     ) -> Callable[[], list[dict[str, Any]]] | None:
-        """A Vision stream's truth: the engine match's own events, from the store (ADR-0020)."""
+        """A Vision stream's truth: the engine match's own events, from the store (ADR-0022)."""
         if not is_vision_stream({"session_id": session_id}):
             return None
         engine = {
@@ -696,7 +696,7 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/matches/{match_id}/vision/summary")
     async def vision_summary(match_id: str, session_id: str) -> dict[str, Any]:
-        """What Vision contributes to the agents on this match (ADR-0020): passes in, the lines the
+        """What Vision contributes to the agents on this match (ADR-0022): passes in, the lines the
         Verifier passed on them, the latest such line, and agreement with the engine's passes."""
         await registry.flow_for(session_id, match_id)  # the engine match must exist
         try:

@@ -94,7 +94,7 @@
   };
   setInterval(window.mcVisThrottle, 2000);
 })();
-// Vision -> Agents on Watch (ADR-0020): a "From pixels" chip with the latest line the agents wrote from Vision's passes, and how far Vision agrees with the engine. The shell polls the api and sends the summary here; the chip stays hidden until Vision has sent passes.
+// Vision -> Agents on Watch (ADR-0022): a "From pixels" chip with the latest line the agents wrote from Vision's passes, and how far Vision agrees with the engine. The shell polls the api and sends the summary here; the chip stays hidden until Vision has sent passes.
 (() => {
   const chip = document.createElement('div');
   chip.className = 'hud'; chip.id = 'frompx'; chip.hidden = true; chip.setAttribute('role', 'status'); chip.setAttribute('aria-live', 'polite');

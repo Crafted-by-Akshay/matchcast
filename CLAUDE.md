@@ -15,7 +15,9 @@ The Verifier recounts every number from the stored events before a line reaches 
   is the env var `ADO_PAT`; read it from the environment, never print it.
 - Never use or set `ANTHROPIC_API_KEY` or a third-party model base URL in a build session. That moves
   the session off the Claude plan. The app's own agents call Foundry with Entra ID, no API key.
-- Synthetic data only: football-realistic, never real players, clubs or events.
+- Synthetic data only: football-realistic, never real players, clubs or simulated events. National
+  team names and real past international results (martj42, CC0) may be used as reference facts
+  (ADR-0020). No FIFA or UEFA name, no crests or federation logos.
 - Anything not really working is labelled **Simulated** or **Planned** in the UI and docs.
 - Failing test first, then the code. Before you say "done", run the checks for your lane and show the output.
 - One lane, one folder (table in `docs/architecture/19-engineering-practices.md` §1). A change in

@@ -29,7 +29,7 @@ COLOUR_METRICS = {
 }
 
 
-# a Vision stream sees passes only, so its summary counts those (ADR-0020)
+# a Vision stream sees passes only, so its summary counts those (ADR-0022)
 VISION_COUNT_METRICS = {**COUNT_METRICS, "summary": ("passes:{h}", "passes:{a}")}
 
 

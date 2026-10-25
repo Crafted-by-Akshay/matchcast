@@ -1,4 +1,4 @@
-# ADR-0020: The Vision stream's agents count passes and check them against the engine
+# ADR-0022: The Vision stream's agents count passes and check them against the engine
 
 - **Status:** Accepted
 - **Date:** 2026-10-25
