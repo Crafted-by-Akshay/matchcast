@@ -2,6 +2,8 @@
 
 AB#<work item id> — <one line on what this PR delivers>
 
+<!-- The PR title starts with the same AB#<id> so Azure Boards links it. -->
+
 ## What changed and why
 
 <!-- A short paragraph. Link the architecture file you updated. -->
