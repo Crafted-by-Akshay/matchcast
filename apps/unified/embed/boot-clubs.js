@@ -1,15 +1,18 @@
 // The fixture's clubs before the desk draws anything. The shell puts the two keys on the frame URL (h, a), so a national fixture is
 // named from the first render: the desk's lineups, labels and commentary never show a season club. build.py places the fetch before
 // the TEAMS literal and the naming after it.
+// the module waits for this, so the wait is bounded: a slow club list means the season names, as before
 const MC_BOOT_CLUBS = await (async () => {
   const q = new URLSearchParams(location.search), h = q.get('h'), a = q.get('a');
   if (!h || !a) return null;
-  try {
-    const list = (await (await fetch('../shared/clubs.json')).json()).clubs;
-    const C = [h, a].map((k) => list.find((c) => c.key === k));
-    // national fixtures only: a season match keeps the season clubs its lineups and labels were built with
-    return C[0] && C[1] && C.every((c) => c.label === 'synthetic squad') ? C : null;
-  } catch (e) { return null; }
+  const late = new Promise((resolve) => setTimeout(() => resolve(null), 1500));
+  const list = Promise.resolve().then(() => fetch('../shared/clubs.json')).then((r) => r.json()).then((j) => j.clubs).catch(() => null);
+  const clubs = await Promise.race([list, late]);
+  if (!clubs) return null;
+  const C = [h, a].map((k) => clubs.find((c) => c.key === k));
+  // national fixtures only, with full squads: a season match keeps the season clubs its lineups and labels were built with
+  const national = C[0] && C[1] && C.every((c) => c.label === 'synthetic squad' && c.squad && c.squad.length >= 11);
+  return national ? C : null;
 })();
 // the squad slots the desk's eleven take, per side (the same map embed/hook.js uses for the 3D players)
 const MC_SLOT = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [0, 1, 2, 3, 4, 8, 6, 7, 10, 9, 5]];

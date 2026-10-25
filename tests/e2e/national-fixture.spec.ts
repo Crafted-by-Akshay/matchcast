@@ -59,10 +59,14 @@ test('the Broadcast scoreboard names the national clubs once the match runs', as
 
 // The desk names the fixture's clubs from its first render (embed/boot-clubs.js), so no season club shows in its visible text after kick-off.
 test('no visible desk line names a season club on a national fixture', async ({ page }) => {
+  const errs = collectErrors(page);
   await openShell(page, 'broadcast', '?seed=2026&fx=N001');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('bc-strip')), { timeout: 120_000 }).toBe(true);
-  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 60_000 }).toMatch(/Kick-off/);
+  // the kick-off caption, not the pre-match "Kick-off to come."
+  await expect.poll(() => f.evaluate(() => document.getElementById('cap1')?.textContent || ''), { timeout: 120_000 }).toMatch(/^Kick-off at/);
+  // positive: the fixture's clubs are on the desk, so the scan below is not checking an empty page
+  await expect(f.locator('#bug .tm').first()).toHaveText('ARG');
   await page.waitForTimeout(25_000);
   // every visible line of the desk, not one element: the ticker, the commentary and the Next-goal panel
   const season = await f.evaluate((src) => {
@@ -79,4 +83,5 @@ test('no visible desk line names a season club on a national fixture', async ({ 
     return out;
   }, SEASON_CLUBS.source);
   expect(season, 'no visible line names a season club on a national fixture').toEqual([]);
+  expect(errs).toEqual([]);
 });
