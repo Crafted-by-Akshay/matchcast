@@ -267,7 +267,7 @@ def talk_fits(ctx: MatchContext, target: str, reply: str, match_names: Iterable[
     if not reply or len(reply.split()) > TALK_WORD_LIMIT or not _words_fit(reply):
         return False
     sides = (ctx.player_name(target), ctx.club_name(ctx.home), ctx.club_name(ctx.away))
-    names = {w for n in (*sides, *match_names) for w in n.split()}
+    names = {w for n in (*sides, *match_names) for w in _capitalised(n)}
     return _names_fit(reply, names)
 
 
@@ -351,7 +351,7 @@ class LiveAnswers:
         match_names = [
             ctx.player_name(e["payload"]["player_id"]) for e in known if "player_id" in e["payload"]
         ]
-        match_names += squad_names
+        match_names += [*squad_names, *(passages or [])]
         home, away = _score(ctx)
         facts = {
             "you": {

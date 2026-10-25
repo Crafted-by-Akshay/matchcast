@@ -66,7 +66,22 @@ def test_the_kb_has_a_squad_for_every_club_page() -> None:
 def test_the_knowledge_base_passage_about_the_speaker_is_found() -> None:
     passages = TalkKnowledge.from_kb(kb_root()).passages("Z. Morinari who are the forwards")
     assert passages and any("Morinari" in p for p in passages)
-    assert all(not p.startswith("|") and len(p) <= 420 for p in passages)
+    assert all(len(p) <= 420 and not any(ch.isdigit() for ch in p) for p in passages)
+
+
+def test_a_squad_name_with_an_initial_passes_the_verifier(match) -> None:
+    # kb names carry an initial ("Z. Morinari"); the Verifier must accept the reply, not fall back
+    squad = parse_squad(HAR_PAGE)
+    knowledge = TalkKnowledge(
+        squads={match["teams"]["home"]: Squad(club=match["teams"]["home"], players=squad.players)},
+        index=Bm25Index(kb_chunks()),
+    )
+    reply = "Okay, boss. Z. Morinari and me up front, I reckon."
+    model = ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    result = run(flow_with(match, model, knowledge).talk(
+        "home1", "who are the forwards?", position="GK"
+    ))  # fmt: skip
+    assert result["reply"] == reply and result["verdict"] == "verified"
 
 
 def test_the_model_is_given_both_squads_and_the_passages(match) -> None:

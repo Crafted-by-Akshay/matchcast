@@ -315,7 +315,8 @@ window.addEventListener('message', (e) => {
 // resource; otherwise the browser's speech recognition, labelled as Simulated.
 (() => {
   const mic = document.getElementById('tk-mic'), q = document.getElementById('tk-q'), form = document.getElementById('tk-form');
-  if (!mic || !q || !form || !mic.parentNode) return;
+  const CALL_ENABLED = false;   // frozen for this release (scope, Oct 25): set to true to show the Call button
+  if (!CALL_ENABLED || !mic || !q || !form || !mic.parentNode) return;
   const btn = document.createElement('button');
   btn.type = 'button'; btn.id = 'tk-call'; btn.textContent = 'Call'; btn.setAttribute('aria-pressed', 'false');
   btn.title = 'Start a voice call: the player listens, answers in his own voice, and stops when you speak';

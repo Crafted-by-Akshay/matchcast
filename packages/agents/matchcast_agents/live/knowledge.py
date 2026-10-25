@@ -62,9 +62,10 @@ def load_squads(root: Path) -> dict[str, Squad]:
 
 
 def _passage(text: str) -> str:
+    """The passage as words: markup gone, and every token that carries a digit dropped."""
     flat = re.sub(r"[`*_#|]", "", text)
-    flat = re.sub(r"\s+", " ", flat).strip()
-    return flat[:PASSAGE_CHARS]
+    words = [w for w in flat.split() if not re.search(r"\d", w)]
+    return " ".join(words)[:PASSAGE_CHARS]
 
 
 @dataclass(frozen=True)
