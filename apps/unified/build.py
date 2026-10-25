@@ -171,6 +171,8 @@ def build_watch():
         + r(EMB + "indices.js")
         + "\n"
         + r(EMB + "feed.js")
+        + "\n"
+        + r(EMB + "twofans.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 

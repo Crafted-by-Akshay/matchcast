@@ -247,8 +247,6 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
     <span class="pill" id="api-pill" role="status" title="">Starting…</span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
-    <span class="pill proto">Browser prototype</span>
-    <span class="pill warn">Azure parts simulated</span>
     <span class="more" aria-hidden="true">›</span>
   </div>
 </header>
@@ -747,6 +745,7 @@ window.addEventListener('message', (e) => {
     LV.identify(d.track_id, d.team_hint, d.crop).then((result) => reply({ result }), (err) => reply({ error: !err.status ? 'unavailable' : err.status === 429 ? 'rate_limited' : 'failed', retry_after: err.retry_after || 0 }));
     return;
   }
+  if (d.type === 'goto' && view === 'watch' && ['agents', 'analyst', 'broadcast'].includes(d.view)) { show(d.view); return; }   // a view asks the shell to open another tab (the Verifier chip opens the Agents tab)
   if (d.type === 'vision-events' && view === 'watch') { LV.visionEvents(d.batch); return; }   // the tracker's derived passes, on the separate .vision stream (DAT-11)
   if (d.type === 'ask' && (view === 'watch' || view === 'broadcast' || view === 'analyst')) { answerAsk(d.id, d.q, view, view === 'broadcast' && d.surface === 'broadcast' ? 'broadcast' : 'ask'); return; }
   if (d.type === 'persona' && view === 'broadcast') {   // the desk's lens steers the shared commentary persona; the language stays. Fan and Analyst also move Watch's strip, so the two views agree
