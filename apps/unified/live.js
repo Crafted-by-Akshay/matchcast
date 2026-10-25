@@ -53,7 +53,7 @@ const LV = (() => {
     vstats.passes = 0; vstats.reads = 0; vstats.readsFailed = 0;   // Vision counts belong to one match
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
-    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, armed: false, sending: false, sent: new Map(), lats: [] };
+    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, armed: false, sending: false, sent: new Map(), evs: new Map(), lats: [] };
     set('warming', true); onLatency(latency());   // a new match starts with no latency sample   // repaint even if already warming: the shell restarts its seconds counter with the warm-up timer
     // no warm-up clock yet: it starts at kick-off (the first events) or when the api cannot be reached, so a slow client still loading the pitch never reads 'Rules fallback'
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
@@ -194,7 +194,7 @@ const LV = (() => {
   const events = (batch) => {
     if (!run) return;
     if (batch && batch.length) arm(run);
-    for (const ev of batch || []) { const p = toPacket(ev, run.key, run.seq + 1, new Date().toISOString()); if (p) { run.seq++; run.queue.push(p); run.sent.set(run.seq, performance.now()); if (run.sent.size > 600) run.sent.delete(run.sent.keys().next().value); } }   // when each event reached this page, by stream sequence, for the on-air latency
+    for (const ev of batch || []) { const p = toPacket(ev, run.key, run.seq + 1, new Date().toISOString()); if (p) { run.seq++; run.evs.set('e' + run.seq, ev); if (run.evs.size > 2000) run.evs.delete(run.evs.keys().next().value); run.queue.push(p); run.sent.set(run.seq, performance.now()); if (run.sent.size > 600) run.sent.delete(run.sent.keys().next().value); } }   // when each event reached this page, by stream sequence, for the on-air latency
     flush();
   };
   // Vision derived events (DAT-11 task 277): the tracker's passes, on their own stream `<session>.vision` so they never mix with engine truth.
@@ -308,7 +308,7 @@ const LV = (() => {
     };
   };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); onLatency = cbs.latency || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, apiEvent: (id) => (run && run.evs.get(String(id))) || null, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

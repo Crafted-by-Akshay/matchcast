@@ -117,9 +117,10 @@ test('evidence trace: a crew_trace frame fills an api line with its agents, even
   const rows = ev.locator('.tp-rows li');
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText(ev0);
-  await expect(rows.nth(1)).toContainText('not in the event log');
+  await expect(rows.nth(1)).toContainText('an api event id this page did not send');
   await expect(ev.locator('.tp-history')).toContainText('results row 41230');
   await expect(ev.locator('.tp-history')).not.toContainText('Planned');
+  await expect(ev.locator('.tp-verifier')).toContainText('(as the api reports it)');
   await expect(ev.locator('.tp-verifier')).toContainText('verified');
   await expect(ev.locator('.tp-verifier')).toContainText('numbers, names, freshness');
   await expect(ev.locator('.tp-repair')).toContainText('repairs L-16');
@@ -133,7 +134,7 @@ test('evidence trace: a frame that arrives while the panel is open updates it; a
   await page.evaluate(() => TP.open('pub-L-17'));
   const ev = page.locator('#tp .tp-evidence');
   await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
-  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, state: 'dropped', text: undefined, verifier: { verdict: 'rejected', reason_code: 'number_mismatch <i>x</i>', checks: ['numbers'] } }), frame(ev0));
+  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, state: 'dropped', verifier: { verdict: 'rejected', reason_code: 'number_mismatch <i>x</i>', checks: ['numbers'] } }), frame(ev0));
   await expect(ev.locator('.tp-agents')).toContainText('analyst → narrator → verifier');
   await expect(ev.locator('.tp-verifier')).toContainText('rejected');
   await expect(ev.locator('.tp-verifier')).toContainText('number_mismatch <i>x</i>');   // escaped, shown as text
@@ -154,40 +155,89 @@ test('evidence trace: a malformed crew_trace frame is ignored, and the flag off 
   await apiLine(page2);
   await page2.evaluate(() => { (window as any).mcCrewTrace({ line_id: 'L-17', called: ['analyst'] }); TP.open('pub-L-17'); });
   await expect(page2.locator('#tp .tp-evidence')).toHaveCount(0);
+  await page2.close();
+});
+
+test('evidence trace: a line never borrows another line\'s trace, and a claim card takes none', async ({ page }) => {
+  await openEvidence(page, '?evidence=1');
+  const ev0 = await apiLine(page);
+  await page.evaluate(() => AG.ingest({ publication_id: 'pub-L-18', line_id: 'L-18', claim_ids: ['c-9'], text: 'Second line citing the same claim.' }, 'live'));
+  await page.evaluate((f) => { (window as any).mcCrewTrace({ ...f, state: 'dropped', repair_of: null }); TP.open('pub-L-18'); }, frame(ev0));   // the frame is for L-17 only
+  const ev = page.locator('#tp .tp-evidence');
+  await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
+  await expect(ev.locator('.tp-state')).toHaveCount(0);
+  await page.evaluate(() => TP.open('c-9'));   // the claim both lines cite
+  await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
+  await expect(ev.locator('.tp-verifier')).toHaveCount(0);
+});
+
+test('evidence trace: a new match drops the old frames; hostile or odd frames neither crash nor invent rows', async ({ page }) => {
+  await openEvidence(page, '?evidence=1');
+  const ev0 = await apiLine(page);
+  const ok = await page.evaluate((f) => [(window as any).mcCrewTrace({ ...f, claims: [null, 7, { claim_id: 'c-9', source_event_ids: [f.claims[0].source_event_ids[0], 12, {}, null], history_row_ids: [41230] }] }), (window as any).mcCrewTrace({ line_id: { toString: 1 } })], frame(ev0));
+  expect(ok[0]).toBe(true);
+  await page.evaluate(() => TP.open('pub-L-17'));
+  const ev = page.locator('#tp .tp-evidence');
+  await expect(ev.locator('.tp-rows li')).toHaveCount(2);   // the string id and the number 12; null and {} are dropped
+  await expect(ev.locator('.tp-history')).toContainText('41230');
+  // a frame for a line that was never published, then a new match: the old trace is gone
+  await page.evaluate(() => { AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); AG.ingest({ publication_id: 'pub-L-17', line_id: 'L-17', claim_ids: [], text: 'A line in the next match.' }, 'live'); TP.open('pub-L-17'); });
+  await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
+  await expect(ev.locator('.tp-state')).toHaveCount(0);
+  // many event ids: capped, with a count of the rest
+  await page.evaluate(() => (window as any).mcCrewTrace({ line_id: 'L-17', called: ['analyst'], claims: [{ claim_id: 'c', source_event_ids: Array.from({ length: 120 }, (_, i) => 'x' + i) }] }));
+  await expect(ev.locator('.tp-rows li')).toHaveCount(50);
+  await expect(ev).toContainText('+70 more event ids not listed');
+});
+
+test('evidence trace: a frame for another line does not redraw the open panel', async ({ page }) => {
+  await openEvidence(page, '?evidence=1');
+  const ev0 = await apiLine(page);
+  await page.evaluate((f) => { (window as any).mcCrewTrace(f); TP.open('pub-L-17'); document.querySelector('#tp .tp-evidence')!.setAttribute('data-mark', '1'); }, frame(ev0));
+  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, line_id: 'L-99' }), frame(ev0));
+  expect(await page.evaluate(() => document.querySelector('#tp .tp-evidence')!.getAttribute('data-mark')), 'not redrawn').toBe('1');
+  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, called: ['analyst'] }), frame(ev0));   // the line on screen: redrawn
+  await expect(page.locator('#tp .tp-evidence .tp-agents')).not.toContainText('narrator');
 });
 
 // the stream end to end: a crew_trace event from the api reaches the panel through live.js (a mock api, as in connection.spec.ts)
 test('evidence trace: a crew_trace event on the api stream reaches the panel', async ({ page }) => {
   const errs = collectErrors(page);
+  // events the api's numbering skips (no team or player) make the page's ids and the api's ids differ from the second event on: e1 to the api is the goal, e1 to the page is the whistle
+  const frame0 = { match_id: 'm1', at_ms: 720000, line_id: 'L-17', moment_id: 'm-e42', feed: 'analyst', state: 'published', claims: [{ claim_id: 'c-9', source_event_ids: ['e1', 'e77'], history_row_ids: ['results:7'] }], verifier: { verdict: 'verified', reason_code: null, checks: ['numbers'] }, called: ['analyst', 'verifier'], audit_hash: 'sha256:' + 'cd'.repeat(32) };
   const server = createServer((q, r) => {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
     if (q.method === 'OPTIONS') { r.writeHead(204, cors); return r.end(); }
     if (q.method === 'POST') { q.resume(); q.on('end', () => { r.writeHead(/\/events/.test(q.url!) ? 202 : 201, { 'Content-Type': 'application/json', ...cors }); r.end('{}'); }); return; }
     if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end('{}'); }
     r.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...cors });
-    const frame = (ev: string, d: object) => r.write('event: ' + ev + '\ndata: ' + JSON.stringify(d) + '\n\n');
-    frame('status', { status: 'live' });
-    frame('claim', { claim_id: 'c-9', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved' });
-    frame('publication', { publication_id: 'pub-L-17', line_id: 'L-17', claim_ids: ['c-9'], text: 'Goal for Northgate FC.' });
-    frame('crew_trace', frame0);
+    const send = (ev: string, d: object) => r.write('event: ' + ev + '\ndata: ' + JSON.stringify(d) + '\n\n');
+    send('status', { status: 'live' });
+    send('claim', { claim_id: 'c-9', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved' });
+    send('publication', { publication_id: 'pub-L-17', line_id: 'L-17', claim_ids: ['c-9'], text: 'Goal for Northgate FC.' });
+    send('crew_trace', frame0);
   }).listen(0);
-  const frame0 = { match_id: 'm1', at_ms: 720000, line_id: 'L-17', moment_id: 'm-e42', feed: 'analyst', state: 'published', claims: [{ claim_id: 'c-9', source_event_ids: [], history_row_ids: ['results:7'] }], verifier: { verdict: 'verified', reason_code: null, checks: ['numbers'] }, called: ['analyst', 'verifier'], audit_hash: 'sha256:' + 'cd'.repeat(32) };
   const api = 'http://127.0.0.1:' + (server.address() as any).port;
+  try {
   await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api) + ';window.MATCHCAST_WARM_MS=6000;' }));
   await page.goto('/index.html?evidence=1#agents', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => typeof LV !== 'undefined' && typeof TP !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
   await page.evaluate(() => {
     const names = { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }, roster = { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }, { name: 'C One', team: 'cco' }] };
     AG.reset('k1', names); LV.begin('k1', roster);
-    const batch = [{ minute: 12.4, type: 'goal', team: 'thr', player: 'A One', score: '1-0' }];
+    const batch = [{ minute: 3, type: 'whistle' }, { minute: 12.4, type: 'goal', team: 'thr', player: 'A One', score: '1-0' }];
     AG.onWatch('k1', batch, []); LV.events(batch);
   });
   await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.id === 'pub-L-17')), { timeout: 20_000 }).toBe(true);
   await page.evaluate(() => TP.open('pub-L-17'));
   const ev = page.locator('#tp .tp-evidence');
   await expect(ev.locator('.tp-agents')).toContainText('analyst → verifier', { timeout: 10_000 });
+  const rows = ev.locator('.tp-rows li');
+  await expect(rows.first(), 'the api\'s e1 is the goal it was sent, not the page\'s own e1 (the whistle)').toContainText('goal · A One');
+  await expect(rows.first()).not.toContainText('whistle');
+  await expect(rows.nth(1)).toContainText('an api event id this page did not send');
   await expect(ev.locator('.tp-history')).toContainText('results row 7');
   await expect(ev.locator('.tp-crew-audit')).toContainText('sha256:cdcd');
   expect(errs.filter((e) => !/EventSource/.test(e))).toEqual([]);
-  server.close();
+  } finally { server.closeAllConnections(); server.close(); }
 });

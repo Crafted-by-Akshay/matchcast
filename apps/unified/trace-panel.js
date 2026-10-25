@@ -40,30 +40,38 @@ const TP = (() => {
   // yet (claim-level event ids arrive with AB#498), and the panel says that instead of showing a guess.
   const FLAG = /[?&]evidence=1(&|$)/.test(location.search);
   // AB#498: a crew_trace frame for a line (proposal: matchcast-v2/vision/interfaces/crew-frames-proposal.md; field names may still change). fromFrame is the only place that knows them.
-  const CT = new Map();   // line_id -> the line's trace, in the panel's own words
+  const CT = new Map();   // line_id -> the line's trace, in the panel's own words; only for the run on screen, at most CAP lines
+  const CAP = 500, ROWS = 50;
   const fromFrame = (f) => {
-    const cl = Array.isArray(f.claims) ? f.claims : [], v = f.verifier || {};
-    const uniq = (a) => [...new Set(a.filter((x) => typeof x === 'string' && x))];
-    return { line: String(f.line_id), state: f.state || '', feed: f.feed || '', moment: f.moment_id || '',
-      claims: cl.map((k) => ({ id: k.claim_id })), events: uniq(cl.flatMap((k) => k.source_event_ids || [])), history: uniq(cl.flatMap((k) => k.history_row_ids || [])),
-      verdict: v.verdict || '', reason: v.reason_code || '', checks: Array.isArray(v.checks) ? v.checks : [], repairOf: f.repair_of || '', called: Array.isArray(f.called) ? f.called : [], audit: f.audit_hash || '' };
+    const cl = (Array.isArray(f.claims) ? f.claims : []).filter((k) => k && typeof k === 'object'), v = f.verifier && typeof f.verifier === 'object' ? f.verifier : {};
+    const id = (x) => (typeof x === 'string' && x) || (Number.isFinite(x) ? String(x) : '');
+    const uniq = (a) => [...new Set((Array.isArray(a) ? a : []).map(id).filter(Boolean))];
+    return { line: id(f.line_id), state: f.state || '', feed: f.feed || '',
+      claims: cl.map((k) => ({ id: id(k.claim_id) })), events: uniq(cl.flatMap((k) => (Array.isArray(k.source_event_ids) ? k.source_event_ids : []))), history: uniq(cl.flatMap((k) => (Array.isArray(k.history_row_ids) ? k.history_row_ids : []))),
+      verdict: v.verdict || '', reason: v.reason_code || '', checks: Array.isArray(v.checks) ? v.checks : [], repairOf: id(f.repair_of), called: Array.isArray(f.called) ? f.called : [], audit: f.audit_hash || '' };
   };
-  const crewFor = (c) => CT.get(String(c.id).replace(/^pub-/, '')) || [...CT.values()].find((t) => t.claims.some((k) => k.id === c.id || (c.apiClaims || []).includes(k.id))) || null;
+  // a published line's card is `pub-<line id>`: match by line id only. A claim card is cited by several lines, so it takes no line's trace (open the trace from the published line).
+  const crewFor = (c) => { const t = String(c.id).startsWith('pub-') || c.pub ? CT.get(String(c.id).replace(/^pub-/, '')) : null; return t && t.run === AG.run ? t : null; };
   const histRow = (id) => { const m = /^results:(\d+)$/.exec(id); return m ? { label: 'results row ' + m[1], value: '', dataset: 'data/history/results.csv · the row is not loaded in this page' } : { label: id, value: '', dataset: '' }; };
+  // the api's own event ids (live.js numbers only the events it sent) are looked up in live.js's table of what it sent, never matched to the page's own ids, which count every event
+  const apiRow = (id) => {
+    const e = typeof LV !== 'undefined' && LV.apiEvent ? LV.apiEvent(id) : null;
+    return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') } : { id, text: 'an api event id this page did not send' };
+  };
   const evidence = (c) => {
     const r = AG.run, chain = MCC.records();
     const tr = c.trace || [], crew = c.api ? crewFor(c) : null;
-    const rows = (crew ? crew.events : c.evidence || []).map((id) => {
+    const rows = crew ? crew.events.slice(0, ROWS).map(apiRow) : (c.evidence || []).map((id) => {
       const e = r.events.find((x) => x.id === id), m = !e && r.moments.find((x) => x.id === id);
       return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') }
         : m ? { id, text: Math.floor(m.minute) + "' moment · " + (m.title || m.type) } : { id, text: 'not in the event log' };
     });
     const audit = (c.audit || []).map((a) => { const rec = chain[a.seq - 1]; return { seq: a.seq, hash: a.hash, ok: !!rec && typeof a.hash === 'string' && a.hash.length >= 12 && rec.ref === c.id && rec.hash.slice(0, a.hash.length) === a.hash, action: rec ? rec.agent + ' ' + rec.action : '' }; });
-    return { api: !!c.api, crew, agents: crew ? crew.called : [...new Set(tr.map((s) => s.agent))], tools: [...new Set(tr.flatMap((s) => s.tools || []))], rows, history: crew ? crew.history.map(histRow) : c.history || null, audit };
+    return { api: !!c.api, crew, more: crew ? Math.max(0, crew.events.length - ROWS) : 0, agents: crew ? crew.called : [...new Set(tr.map((s) => s.agent))], tools: [...new Set(tr.flatMap((s) => s.tools || []))], rows, history: crew ? crew.history.map(histRow) : c.history || null, audit };
   };
   // what the frame adds: where the line stands, the server Verifier's verdict and reason, the line it repairs, and the api's audit hash (the api's own chain, which this page cannot recompute)
   const crewHtml = (t) => '<p class="tp-state"><b>State</b> ' + esc(t.state || 'unknown') + (t.feed ? ' · feed ' + esc(t.feed) : '') + (t.state === 'dropped' ? ' <span class="m">· the text is in the audit chain, not shown here</span>' : '') + '</p>'
-    + '<p class="tp-verifier"><b>Server Verifier</b> ' + esc(t.verdict || 'no verdict sent') + (t.reason ? ' · reason ' + esc(t.reason) : '') + (t.checks.length ? ' <span class="m">· checks ' + t.checks.map(esc).join(', ') + '</span>' : '') + '</p>'
+    + '<p class="tp-verifier"><b>Server Verifier</b> <span class="m">(as the api reports it)</span> ' + esc(t.verdict || 'no verdict sent') + (t.reason ? ' · reason ' + esc(t.reason) : '') + (t.checks.length ? ' <span class="m">· checks ' + t.checks.map(esc).join(', ') + '</span>' : '') + '</p>'
     + (t.repairOf ? '<p class="tp-repair"><b>Repair</b> repairs ' + esc(t.repairOf) + '</p>' : '')
     + (t.audit ? '<p class="tp-crew-audit"><b>Api audit hash</b> <code>' + esc(t.audit) + '</code> <span class="m">· the api\'s chain, not recomputed in this page</span></p>' : '');
   const evidenceHtml = (c) => {
@@ -73,9 +81,9 @@ const TP = (() => {
       + (x.crew ? crewHtml(x.crew) : '')
       + '<p class="tp-agents"><b>Agents</b> ' + (x.api && !x.crew ? planned : x.agents.length ? x.agents.map(esc).join(' → ') : '<span class="m">none recorded</span>') + '</p>'
       + '<p class="tp-tools"><b>Tool calls</b> ' + (x.api ? (x.crew ? '<span class="m">Planned (AB#498): tool names are in the api\'s audit records, not on the crew_trace frame.</span>' : planned) : x.tools.length ? x.tools.map(esc).join(', ') : '<span class="m">none reported</span>') + '</p>'
-      + '<p><b>Data rows</b></p>' + (x.rows.length ? '<ol class="tp-rows">' + x.rows.map((o) => '<li data-id="' + esc(o.id) + '">' + esc(o.text) + ' <span class="m">' + esc(o.id) + '</span></li>').join('') + '</ol>'
+      + '<p><b>Data rows</b></p>' + (x.rows.length ? '<ol class="tp-rows">' + x.rows.map((o) => '<li data-id="' + esc(o.id) + '">' + esc(o.text) + ' <span class="m">' + esc(o.id) + '</span></li>').join('') + '</ol>' + (x.more ? '<p class="m">+' + x.more + ' more event ids not listed</p>' : '')
         : '<p class="m">' + (x.api ? (x.crew ? 'The api cites no event for this line.' : 'Planned (AB#498): the api does not send claim-level event ids yet.') : 'This line cites no single event (a running total over the shots up to its minute).') + '</p>')
-      + '<p class="tp-history"><b>History rows</b> ' + (x.history && x.history.length ? x.history.map((h) => esc(h.label) + ' ' + esc(h.value) + ' <span class="m">' + esc(h.dataset || '') + '</span>').join(' · ') : '<span class="m">none used. Planned (CREW-2.2): head-to-head and Elo rows are not built yet.</span>') + '</p>'
+      + '<p class="tp-history"><b>History rows</b> ' + (x.history && x.history.length ? x.history.map((h) => esc(h.label) + ' ' + esc(h.value) + ' <span class="m">' + esc(h.dataset || '') + '</span>').join(' · ') : x.crew ? '<span class="m">none cited by this line</span>' : '<span class="m">none used. Planned (CREW-2.2): head-to-head and Elo rows are not built yet.</span>') + '</p>'
       + '<p><b>Audit</b></p>' + (x.audit.length ? '<ol class="tp-audit">' + x.audit.map((a) => '<li class="' + (a.ok ? 'ok' : 'bad') + '">#' + esc(a.seq) + ' <code>' + esc(a.hash) + '</code> ' + esc(a.action) + ' · ' + (a.ok ? 'matches the chain record' : 'no matching chain record') + '</li>').join('') + '</ol>' : '<p class="m">no audit record yet (they are written as each agent acts; reopen to refresh)</p>')
       + '<p class="tp-chain note">Checking the chain…</p></section>';
   };
@@ -91,11 +99,16 @@ const TP = (() => {
     if (!dlg.open) dlg.showModal();
     return true;
   };
-  // the stream hook (live.js calls window.mcCrewTrace for each crew_trace frame): kept whatever the flag says, shown only with ?evidence=1
+  // the stream hook (live.js calls window.mcCrewTrace for each crew_trace frame): kept only with ?evidence=1 and only for the run on screen
   const crewTrace = (f) => {
-    if (!f || typeof f !== 'object' || f.line_id == null || f.line_id === '') return false;
-    CT.set(String(f.line_id), fromFrame(f));
-    if (FLAG && dlg && dlg.open && cur) open(cur);
+    if (!FLAG || !f || typeof f !== 'object') return false;
+    const t = fromFrame(f); if (!t.line || !AG.run) return false;
+    t.run = AG.run;   // a frame belongs to the run on screen; a new match drops the old ones
+    for (const [k, o] of CT) if (o.run !== AG.run) CT.delete(k);
+    CT.delete(t.line); CT.set(t.line, t);
+    if (CT.size > CAP) CT.delete(CT.keys().next().value);
+    const card = cur && dlg && dlg.open && AG.run.claims.find((x) => x.id === cur);
+    if (card && crewFor(card) === t) open(cur);   // only the line on screen is redrawn
     return true;
   };
   window.mcCrewTrace = crewTrace;
