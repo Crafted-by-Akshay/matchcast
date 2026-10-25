@@ -238,12 +238,9 @@ def check_vision(ctx: MatchContext, claims: list[dict[str, Any]]) -> Check:
         cut = claim["source"]["to_event_time_ms"]
         seen = claim["value"]
         ours = [p for p in passes if p["team_id"] == team and p["time_ms"] <= cut]
-        theirs = [
-            e
-            for e in ctx.truth
-            if e["payload"]["type"] == "pass" and e["payload"]["team_id"] == team
-        ]
-        report = agreement(ours, theirs)
+        # the whole engine feed, so the span both streams cover ends at the engine's latest event;
+        # a pass only matches an engine pass of the same team, so the other team cannot back it
+        report = agreement(ours, ctx.truth)
         if report["precision"] is None:
             parts.append(
                 f"Vision counted {seen:g} passes for {team}, none covered by the engine yet"
@@ -251,8 +248,8 @@ def check_vision(ctx: MatchContext, claims: list[dict[str, Any]]) -> Check:
             continue
         share = round(100 * report["precision"])
         parts.append(
-            f"Vision counted {seen:g} passes for {team}, the engine {report['engine']} over the "
-            f"same span ({share}% agree)"
+            f"Vision counted {seen:g} passes for {team}, {report['matched']} of its "
+            f"{report['vision']} covered passes match an engine pass ({share}% agree)"
         )
     return Check(name="vision", passed=True, detail="; ".join(parts))
 
