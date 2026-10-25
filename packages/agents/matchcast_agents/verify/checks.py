@@ -12,17 +12,14 @@ from ..personas import max_numbers
 from ..state import counted
 from ..vision import VISION_METRICS, agreement, pass_facts, vision_value
 from ..xg import team_xg
+from .adversary import REASON_BY_CHECK, adversary_checks
+from .moment import NOT_A_MOMENT, moment_players
+from .text import EPSILON, extract_numbers
 
 FRESH_REVISIONS = 5
 FRESH_MS = 30_000
-EPSILON = 1e-9  # float noise: abs(0.35 - 0.34) is 0.010000000000000009
-_NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w])")
 # two or more capitalised words in a row, e.g. "Arlo Dunne" or "Northgate FC"
 _NAME = re.compile(r"\b[A-Z][\w'’-]+(?:\s+(?:[A-Z][\w'’-]+|FC|United))+")
-
-
-def extract_numbers(text: str) -> list[float]:
-    return [float(m) for m in _NUMBER.findall(text)]
 
 
 _POSSESSIVE = re.compile(r"['’]s?$")  # "Harbour United's", "Joel Ellis'"
@@ -165,12 +162,6 @@ def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any
     )
 
 
-# lines that are not about one moment: the Ask answer and the full-time recap
-NOT_A_MOMENT = ("ask", "line-recap")
-# events whose lines are about one side's player; summaries and period ends are about both
-PLAYER_MOMENTS = ("goal", "card", "shot", "tackle", "foul")
-
-
 def moment_team_problem(
     ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]
 ) -> str | None:
@@ -181,16 +172,9 @@ def moment_team_problem(
     Returns the offending name."""
     if line.line_id.startswith(NOT_A_MOMENT) or not claims:
         return None
-    seq = max(c["max_evidence_sequence"] for c in claims)
-    event = next((e for e in reversed(ctx.events) if e["stream_sequence"] == seq), None)
-    if event is None or event["payload"]["type"] not in PLAYER_MOMENTS:
+    ok = moment_players(ctx, claims)
+    if ok is None:
         return None
-    payload = event["payload"]
-    allowed = {v for v in payload.values() if isinstance(v, str) and v in ctx.names}
-    team = payload.get("team_id")
-    if team and not allowed:  # an event that names no player: any player of its team
-        allowed = {p["player_id"] for p in ctx.roster["players"] if p["team_id"] == team}
-    ok = {ctx.names[pid].casefold() for pid in allowed}
     text = line.text.casefold()
     for name in sorted(ctx.names.values(), key=len, reverse=True):
         folded = name.casefold()
@@ -258,6 +242,7 @@ REASON: dict[str, ReasonCode] = {
     "numbers": "number_mismatch",
     "names": "unknown_player",
     "persona": "length_exceeded",
+    **REASON_BY_CHECK,  # the adversarial attempts (CREW-4.1), each with its own reason
 }
 
 
@@ -306,4 +291,6 @@ def run_checks(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]])
     # only a line that carries a Vision count gets the check
     if any(c["metric"].startswith("passes:") for c in claims):
         checks.append(check_vision(ctx, claims))
+    # the adversarial pass (CREW-4.1) comes last: it tries what the checks above did not refuse
+    checks.extend(adversary_checks(ctx, line, claims))
     return checks

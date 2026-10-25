@@ -5,6 +5,7 @@ import json
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig
 from matchcast_agents.live import ModelCut, ScriptedModelClient, live_agents
+from matchcast_agents.personas import BOOTH
 from matchcast_agents.resilience import ModelError, ModelTimeout
 
 
@@ -80,7 +81,7 @@ def test_a_wrong_number_in_a_model_line_is_rejected_and_repaired(match) -> None:
     assert not any("99" in ln.text for ln in flow.store.lines(flow.sk) if ln.status == "published")
 
 
-def test_the_model_meaning_check_can_reject_or_send_to_review(match) -> None:
+def test_the_model_meaning_check_refuses_derived_lines_and_queues_booth_lines(match) -> None:
     def verifier(facts):
         return {"judgement": "unsupported", "detail": "says more than the claim"}
 
@@ -95,7 +96,16 @@ def test_the_model_meaning_check_can_reject_or_send_to_review(match) -> None:
     )
     flow = build(match, unclear)
     run(flow.ingest(match["events"]))
-    assert any(ln.status == "review" for ln in flow.store.lines(flow.sk))
+    # a derived line the meaning check cannot pass is refused, never queued or aired (CREW-4.3)
+    derived = [ln for ln in flow.store.lines(flow.sk) if ln.persona not in BOOTH]
+    assert derived and not any(ln.status == "review" for ln in derived)
+    assert any(ln.status == "abstained" for ln in derived)
+    # the booth's call is the one line a person judges: unclear, it waits in the queue
+    flow = build(match, unclear)
+    assert flow.add_personas(BOOTH)
+    run(flow.ingest(match["events"]))
+    booth = [ln for ln in flow.store.lines(flow.sk) if ln.persona == "booth:pbp"]
+    assert booth and any(ln.status == "review" and not ln.escalated for ln in booth)
 
 
 def test_a_model_outage_falls_back_to_rules_and_is_audited(match, monkeypatch) -> None:

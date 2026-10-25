@@ -66,13 +66,15 @@ stateDiagram-v2
   [*] --> drafted: Narrator writes a line from the Analyst's claims
   drafted --> verifying
   verifying --> verified: all checks pass
-  verifying --> review: meaning unclear (model check)
+  verifying --> review: meaning unclear (booth line only)
+  verifying --> rejected: meaning unclear (derived line)
   verifying --> rejected: number, name, source or safety fails
   rejected --> repairing: first rejection only
   repairing --> verifying: repaired by Analyst (numbers) or Narrator (wording)
   rejected --> abstained: second rejection
   verified --> approved: demo mode auto-approve, or Producer approves
   review --> approved: Producer approves
+  review --> killed: Producer kills
   review --> killed: Producer kills
   verified --> killed: Producer kills
   approved --> published

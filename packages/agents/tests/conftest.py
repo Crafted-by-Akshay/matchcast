@@ -1,10 +1,12 @@
 import asyncio
+import itertools
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.rules import ProducerRules
 
 FIXTURE = Path(__file__).parent / "fixtures" / "match-short.json"
 
@@ -23,6 +25,12 @@ def fixed_clock():
         return state["now"]
 
     return tick
+
+
+def colour_producer(personas):
+    """A rules Producer whose colour cadence is always due, so the booth's colour line is written
+    (the default rules cadence is off: colour lines cost a model call in live mode)."""
+    return ProducerRules(personas, colour_every_s=1.0, clock=itertools.count(0, 10).__next__)
 
 
 @pytest.fixture

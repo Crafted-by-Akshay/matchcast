@@ -198,8 +198,8 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
 })();
 
 // ---- Six-feed monitor (Broadcast): the six English derived feeds, what each has aired, the lines the Verifier dropped and why, and a kill per feed.
-// Derived lines never enter the producer queue: booth lines keep it. The record shapes are the Feeds lane's proposal for matchcast.onair/1 (AB#498, not merged yet):
-// the shell sends feed-air and feed-drop. ?feeds=fixture feeds the monitor with a fixture until then. A kill changes this desk only; the air path does not read it yet (AB#499).
+// Derived lines never enter the producer queue: booth lines keep it. The record fields are the matchcast.onair/1 1.2.0 onair and feed_drop packets (AB#498, merged; docs/contracts.md).
+// The shell does not send feed-air and feed-drop yet (AB#499): ?feeds=fixture feeds the monitor until it does. A kill changes this desk only; the air path does not read it yet.
 (() => {
   if (!framed) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -265,7 +265,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     setInterval(() => {
       const k = FEEDS[tick % FEEDS.length][0];
       tick++;
-      if (tick % 4 === 0) dropped({ feed: k, publication_id: 'fixture-drop-' + tick, source_event_ids: [], reason_code: 'REPEAT', repair_count: 0, audit_id: 'fixture' });
+      if (tick % 4 === 0) dropped({ feed: k, publication_id: 'fixture-drop-' + tick, source_event_ids: [], reason_code: 'repeat', repair_count: 0, audit_id: 'fixture' });
       else aired({ feed: k, publication_id: 'fixture-' + tick, lang: 'en', text: 'fixture line ' + tick + ' for ' + feeds[k].label + '.', source_event_ids: [], claim_ids: [], match_time_ms: 0, aired_at: new Date().toISOString(), repair_count: 0 });
     }, 12000);
   }

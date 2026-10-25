@@ -49,7 +49,8 @@ TALK_PHRASES = {
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
-# a line that fails its repair on one of these goes to a person: the event log can settle it
+# a booth line that fails its repair on one of these goes to the producer queue: the event log can
+# settle it. The six derived feeds that fail are dropped from air instead (CREW-4.3).
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
 # the rundown ledger keeps this many moments (it is checkpointed with the match)
 RUNDOWN_KEEP = 400
@@ -174,6 +175,11 @@ def _utc_now() -> datetime:
 
 def _stamp(moment: datetime) -> str:
     return moment.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moment.microsecond // 1000:03d}Z"
+
+
+def _repair_link(repair_of: str | None) -> dict[str, str]:
+    """The audit details that name the line a repair replaces; empty for a first attempt."""
+    return {"repair_of": repair_of} if repair_of else {}
 
 
 class MatchWorkflow:
@@ -1116,7 +1122,12 @@ class MatchWorkflow:
         verdict = await self._screen(draft, verdict)
         record.checks = list(verdict.checks)
         record.reason_code = verdict.reason_code
-        if verdict.verdict == "rejected":
+        # a derived feed never waits for a person: a line the Verifier sends to review is refused
+        # and goes through the same one repair as a rejected line (CREW-4.3)
+        refused = verdict.verdict == "rejected" or (
+            verdict.verdict == "review" and draft.persona not in BOOTH
+        )
+        if refused:
             record.status = "rejected"
             self._save_line(record)
             self._agent(
@@ -1124,7 +1135,8 @@ class MatchWorkflow:
                 a.verifier,
                 draft.line_id,
                 reason_code=verdict.reason_code,
-                checks=[c.model_dump() for c in verdict.checks if not c.passed],
+                checks=[c.model_dump() for c in verdict.checks],
+                **_repair_link(repair_of),
             )
             if attempt == 0:
                 with _TRACER.start_as_current_span("handoff verifier to repair") as span:
@@ -1142,6 +1154,7 @@ class MatchWorkflow:
             a.verifier,
             draft.line_id,
             checks=[{"name": c.name, "passed": c.passed} for c in verdict.checks],
+            **_repair_link(repair_of),
         )
         if record.status == "verified":
             self.stats["verified"] += 1
@@ -1239,9 +1252,11 @@ class MatchWorkflow:
         await self._verify_line(ctx, task, claims, replacement, attempt=1, repair_of=draft.line_id)
 
     def _give_up(self, record: LineRecord, verdict: Verdict) -> None:
-        """A line that failed its one repair: a checkable fact goes to a person, the rest drops."""
+        """A line that failed its one repair. A booth line (play-by-play or colour) whose failure
+        is a checkable fact waits in the producer queue flagged escalated. The six derived feeds
+        are dropped from air with an audit record (CREW-4.3): they air once the Verifier passes."""
         a = self.agents
-        if verdict.reason_code in ESCALATED_CODES:
+        if record.persona in BOOTH and verdict.reason_code in ESCALATED_CODES:
             record.status = "review"
             record.escalated = True
             self._save_line(record)
@@ -1258,7 +1273,14 @@ class MatchWorkflow:
         record.status = "abstained"
         self._save_line(record)
         self.stats["abstained"] += 1
-        self._agent("line_abstained", a.producer, record.line_id, reason_code=verdict.reason_code)
+        self._agent(
+            "line_abstained",
+            a.producer,
+            record.line_id,
+            reason_code=verdict.reason_code,
+            persona=record.persona,
+            **_repair_link(record.repair_of),
+        )
 
     # ---- approval and publication ------------------------------------------------------
 
