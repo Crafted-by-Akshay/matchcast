@@ -5,9 +5,10 @@ on the match fixture (no model call), so every test here is offline.
 """
 
 import json
+from datetime import UTC, datetime
 
 import pytest
-from matchcast_agents.grading import grade_line, scoreboard
+from matchcast_agents.grading import _pinned_clock, grade_line, scoreboard
 from matchcast_agents.messages import LineRecord
 
 ALLOWED = ["Northgate FC", "Harbour United", "Arlo Dunne"]
@@ -146,7 +147,7 @@ def test_the_scoreboard_has_three_arms_with_the_metrics_and_the_run_date(board):
         assert set(arm["accuracy"]) == {"wrong_numbers_aired", "numbers_aired", "wrong_rate"}
         assert set(arm["catch_rate"]) == {"caught", "seeded", "rate"}
         assert set(arm["latency_ms"]) == {"p50", "p95", "total", "moments"}
-        assert arm["mode"] == "live"  # rules-mode arms run live on each request
+        assert arm["mode"] == "rules"  # rules-mode arms run live on each request
         assert arm["run_id"]
 
 
@@ -219,3 +220,35 @@ def test_a_precomputed_arm_is_labelled_precomputed_with_its_run_id(match):
 def test_a_precomputed_arm_without_a_run_id_is_refused(match):
     with pytest.raises(ValueError):
         scoreboard(match, precomputed={"model_crew": {"label": "x"}})
+
+
+def test_a_claim_whose_evidence_is_not_in_the_log_is_unverifiable() -> None:
+    grade = grade_line("Northgate FC 2.", [claim("goals:home", 2, 99)], LOG, ALLOWED)
+    assert grade["claims"][0]["verdict"] == "unverifiable"
+    assert grade["verdict"] == "unverifiable"
+
+
+def test_an_unknown_metric_is_unverifiable_not_a_zero_count() -> None:
+    grade = grade_line("Northgate FC 0 widgets.", [claim("widgets:home", 0, 3)], LOG, ALLOWED)
+    assert grade["claims"][0]["verdict"] == "unverifiable"
+    assert grade["verdict"] == "unverifiable"
+
+
+def test_a_vision_metric_is_unverifiable_because_the_log_does_not_count_it() -> None:
+    grade = grade_line("Northgate FC 4 passes.", [claim("vision_passes:home", 4, 3)], LOG, ALLOWED)
+    assert grade["claims"][0]["verdict"] == "unverifiable"
+
+
+def test_a_number_is_judged_against_the_club_it_follows() -> None:
+    claims = [claim("shots:home", 2, 3, cid="c-home"), claim("shots:away", 1, 3, cid="c-away")]
+    clubs = {"home": "Northgate FC", "away": "Harbour United"}
+    # 2 is a true count for Northgate FC, but Harbour United had 1: the 2 after its name is wrong
+    grade = grade_line("Northgate FC 2, Harbour United 2.", claims, LOG, ALLOWED, clubs=clubs)
+    assert grade["wrong_numbers"] == 1
+    assert grade["verdict"] == "incorrect"
+    away = next(n for n in grade["numbers"] if n["matched_claim_id"] is None)
+    assert away["verdict"] == "incorrect"
+
+
+def test_the_run_clock_is_pinned_to_the_run_date() -> None:
+    assert _pinned_clock("2026-10-25")() == datetime(2026, 10, 25, tzinfo=UTC)

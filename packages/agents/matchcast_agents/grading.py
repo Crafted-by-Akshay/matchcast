@@ -26,16 +26,17 @@ import hashlib
 import json
 import math
 import random
+import re
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from . import history_metrics as history
 from .context import MatchContext
 from .messages import DraftLine, LineRecord, ProducerTask, Verdict
-from .metrics_spec import TOLERANCE
+from .metrics_spec import METRIC_UNITS, TOLERANCE
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .state import MatchState, apply
@@ -46,6 +47,8 @@ AIRED = ("verified", "approved", "published")  # the statuses a viewer sees (04-
 MOMENT_TYPES = ("shot", "goal")
 PERSONAS = ("casual", "analyst")
 MODEL_METHODS = frozenset({"decide", "analyse", "write", "check"})
+# metrics the event log does not count (the Vision metrics): a claim on one is unverifiable
+NOT_IN_LOG = frozenset({"vision_passes", "vision_precision"})
 SEED_RATE = 0.25  # the share of aired shot and goal moments that get a seeded wrong claim
 ARMS = ("full_crew", "single_agent", "crew_no_verifier")
 LABELS = {
@@ -61,7 +64,8 @@ METHOD = (
     "Latency is measured wall time per shot or goal on this machine, not a model's. The single "
     "agent skips the workflow's store, audit and validation, so its latency is a floor, not a "
     "like-for-like figure. Cost is the count of agent calls a model served; rules twins make "
-    "none, so no price is applied."
+    "none, so no price is applied. The single agent also skips Content Safety, which the crew "
+    "arms run."
 )
 
 
@@ -72,9 +76,44 @@ def _engine_value(events: Sequence[Mapping[str, Any]], claim: Mapping[str, Any])
     """The engine's own count for the claim's metric up to its evidence, or None when the log
     cannot count it (a history fact)."""
     metric = claim["metric"]
-    if metric.partition(":")[0] in history.HISTORY_METRICS:
-        return None
-    return float(recompute(events, metric, claim["max_evidence_sequence"]))
+    name = metric.partition(":")[0]
+    if name in history.HISTORY_METRICS or name in NOT_IN_LOG or name not in METRIC_UNITS:
+        return None  # not counted from the log: a history fact, a Vision metric, an unknown metric
+    upto = claim["max_evidence_sequence"]
+    if not any(e["stream_sequence"] == upto for e in events):
+        return None  # the log does not hold the claim's evidence: a count up to it is a guess
+    return float(recompute(events, metric, upto))
+
+
+def _attributed_numbers(text: str, clubs: Mapping[str, str]) -> list[tuple[str, float]]:
+    """Each number written straight after a club's name, with that club's side. The Verifier's
+    score attribution uses the same rule, but this grader does not import it, so the two checks
+    stay independent: "Harbour United 2" is a claim about the away side."""
+    found: list[tuple[str, float]] = []
+    for side, club in clubs.items():
+        pattern = rf"(?<!\w){re.escape(club)}\s+(\d+(?:\.\d+)?)(?!\w)(?!\.\d)"
+        found += [(side, float(m.group(1))) for m in re.finditer(pattern, text)]
+    return found
+
+
+def _number_row(
+    value: float, pool: list[tuple[str, float, float, str, str]], used: set[int], side: str | None
+) -> dict[str, Any]:
+    """Match one stated number to a pool entry: the same side when ``side`` is given, else any."""
+    match = next(
+        (
+            i
+            for i, (_, cand, tol, _, claim_side) in enumerate(pool)
+            if i not in used
+            and (side is None or claim_side == side)
+            and abs(value - cand) <= tol + EPSILON
+        ),
+        None,
+    )
+    if match is None:
+        return {"line_value": value, "verdict": "incorrect", "matched_claim_id": None}
+    used.add(match)
+    return {"line_value": value, "verdict": pool[match][0], "matched_claim_id": pool[match][3]}
 
 
 def _unknown_names(text: str, allowed: set[str]) -> list[str]:
@@ -98,9 +137,11 @@ def grade_line(
     allowed_names: Iterable[str],
     *,
     line_id: str | None = None,
+    clubs: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Grade one line against the log. ``claims`` are the claim packets the line was built from,
-    ``allowed_names`` the roster and club names of the match."""
+    ``allowed_names`` the roster and club names of the match; ``clubs`` maps each side to its club
+    so a number after a club's name is judged against that side's claims."""
     text = line.text if isinstance(line, LineRecord) else line
     if isinstance(line, LineRecord):
         line_id = line.line_id
@@ -108,16 +149,17 @@ def grade_line(
 
     claim_rows: list[dict[str, Any]] = []
     # what a stated number may match: engine truth first, then a claim with no truth (unverifiable)
-    pool: list[tuple[str, float, float, str]] = []
+    pool: list[tuple[str, float, float, str, str]] = []
     for c in claims:
         engine = _engine_value(events, c)
         tol = TOLERANCE.get(c["units"], 0.0)
+        side = c["metric"].partition(":")[2]
         if engine is None:
             verdict = "unverifiable"
-            pool.append(("unverifiable", float(c["value"]), tol, c["claim_id"]))
+            pool.append(("unverifiable", float(c["value"]), tol, c["claim_id"], side))
         else:
             verdict = "correct" if abs(engine - c["value"]) <= tol + EPSILON else "incorrect"
-            pool.append(("correct", engine, tol, c["claim_id"]))
+            pool.append(("correct", engine, tol, c["claim_id"], side))
         claim_rows.append(
             {
                 "claim_id": c["claim_id"],
@@ -129,23 +171,14 @@ def grade_line(
         )
     pool.sort(key=lambda p: p[0] != "correct")  # truth before claims with no truth
 
-    number_rows: list[dict[str, Any]] = []
     used: set[int] = set()
-    for value in extract_numbers(text):
-        match = next(
-            (
-                i
-                for i, (_, cand, tol, _) in enumerate(pool)
-                if i not in used and abs(value - cand) <= tol + EPSILON
-            ),
-            None,
-        )
-        if match is None:
-            verdict, claim_id = "incorrect", None
-        else:
-            used.add(match)
-            verdict, claim_id = pool[match][0], pool[match][3]
-        number_rows.append({"line_value": value, "verdict": verdict, "matched_claim_id": claim_id})
+    attributed = _attributed_numbers(text, clubs or {})
+    remaining = extract_numbers(text)
+    for _side, value in attributed:
+        if value in remaining:
+            remaining.remove(value)
+    number_rows = [_number_row(value, pool, used, side) for side, value in attributed]
+    number_rows += [_number_row(value, pool, used, None) for value in remaining]
 
     unknown = _unknown_names(text, allowed)
     wrong_claim = any(c["verdict"] == "incorrect" for c in claim_rows)
@@ -260,8 +293,20 @@ def _moment_id(event: Mapping[str, Any]) -> str:
     return f"m-{event['event_id']}"
 
 
+def _pinned_clock(run_date: str) -> Callable[[], datetime]:
+    """The workflow's clock on one run date. The history facts a run cuts at its date (the
+    national-team results up to it) are then the same however many days later it runs."""
+    pinned = datetime.combine(date.fromisoformat(run_date), datetime.min.time(), tzinfo=UTC)
+    return lambda: pinned
+
+
 async def _crew(
-    match: Mapping[str, Any], seeded: frozenset[str], *, unchecked: bool, ledger: _Ledger
+    match: Mapping[str, Any],
+    seeded: frozenset[str],
+    *,
+    unchecked: bool,
+    ledger: _Ledger,
+    clock: Callable[[], datetime],
 ) -> dict[str, Any]:
     """The workflow over every event, timed per shot or goal. Lines are the aired ones."""
     verifier = UncheckedVerifier() if unchecked else VerifierRules()
@@ -277,6 +322,7 @@ async def _crew(
             verifier=_Counted(verifier, ledger),
         ),
         config=WorkflowConfig(approval_mode="auto", personas=PERSONAS),
+        clock=clock,
     )
     latencies: list[float] = []
     for event in match["events"]:
@@ -364,7 +410,7 @@ def _report(
 ) -> dict[str, Any]:
     events, allowed = match["events"], _allowed(match)
     grades = [
-        grade_line(text, claims, events, allowed, line_id=line_id)
+        grade_line(text, claims, events, allowed, line_id=line_id, clubs=match["teams"])
         for text, line_id, _moment, claims in run["lines"]
     ]
     numbers = sum(g["numbers_stated"] for g in grades)
@@ -399,7 +445,7 @@ def _report(
     latency = run["latency_ms"]
     return {
         "label": LABELS[key],
-        "mode": "live",
+        "mode": "rules",
         "run_id": run_id,
         "lines_aired": lines,
         "wrong_lines_aired": sum(g["verdict"] == "incorrect" for g in grades),
@@ -444,9 +490,11 @@ def scoreboard(
     ``precomputed`` arms from a recorded model run are shown with their run id and never run here.
     """
     shot_goal = {_moment_id(e): e for e in match["events"] if _is_moment(e)}
+    as_of = run_date or datetime.now(UTC).date().isoformat()
+    clock = _pinned_clock(as_of)
     # the seeds go only into shot and goal moments the clean crew aired, so every arm has the
     # same population of seeded claims to catch
-    clean = asyncio.run(_crew(match, frozenset(), unchecked=False, ledger=_Ledger()))
+    clean = asyncio.run(_crew(match, frozenset(), unchecked=False, ledger=_Ledger(), clock=clock))
     aired = sorted({m for _t, _l, m, _c in clean["lines"] if m in shot_goal})
     rng = random.Random(f"{seed}:seeded-claims")
     chosen = frozenset(rng.sample(aired, max(1, round(len(aired) * rate)) if aired else 0))
@@ -460,7 +508,13 @@ def scoreboard(
             run = asyncio.run(_single(match, chosen, ledger=ledger))
         else:
             run = asyncio.run(
-                _crew(match, chosen, unchecked=key == "crew_no_verifier", ledger=ledger)
+                _crew(
+                    match,
+                    chosen,
+                    unchecked=key == "crew_no_verifier",
+                    ledger=ledger,
+                    clock=clock,
+                )
             )
         total = round((time.perf_counter() - start) * 1000, 3)
         arm = _report(key, run, match, seed, seeded_claims)
@@ -489,7 +543,7 @@ def scoreboard(
     return {
         "kind": "crew_ablation_scoreboard",
         "match_id": match["roster"]["stream"]["match_id"],
-        "run_date": run_date or datetime.now(UTC).date().isoformat(),
+        "run_date": as_of,
         "seed": seed,
         "seed_rate": rate,
         "moments": len(shot_goal),
