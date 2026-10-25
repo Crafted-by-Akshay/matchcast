@@ -358,7 +358,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
           <label>Agent <select id="lg-agent"><option value="">all</option><option>analyst</option><option>verifier</option><option>producer</option></select></label>
           <label>Metric <select id="lg-metric"><option value="">all</option><option>score</option><option>shot_xg</option><option>xg_total</option><option>moment</option><option>line</option></select></label>
           <button type="button" id="lg-export">Export CSV</button> <span class="muted" id="lg-hash" aria-live="polite"></span></div>
-        <div class="ag-table"><table><thead><tr><th>Time</th><th>Metric</th><th>Value</th><th>Units</th><th>Agent</th><th>Source</th><th>Verdict</th><th>Reason</th><th>Approval</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
+        <div class="ag-table"><table role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Time</th><th role="columnheader">Metric</th><th role="columnheader">Value</th><th role="columnheader">Units</th><th role="columnheader">Agent</th><th role="columnheader">Source</th><th role="columnheader">Verdict</th><th role="columnheader">Reason</th><th role="columnheader">Approval</th></tr></thead><tbody role="rowgroup" id="ag-claims"></tbody></table></div>
       </section>
       <section class="ag-panel"><h3>Audit chain</h3>
         <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <span id="ag-bad-note" class="muted" role="status"></span> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
@@ -742,8 +742,8 @@ function renderAgents() {
   $('ag-n').textContent = r ? r.claims.filter((c) => !c.pub).length + ' claims' : '';
   const rows = ledgerRows(r ? r.claims : []);
   $('ag-claims').innerHTML = rows.length
-    ? rows.slice(0, 40).map((x) => '<tr data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td>' + esc(x.time) + '</td><td>' + esc(x.metric) + '</td><td>' + esc(x.value) + '</td><td>' + esc(x.units) + '</td><td>' + esc(x.agent) + '</td><td>' + esc(x.source) + '</td><td class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td>' + esc(x.reason) + '</td><td>' + esc(x.approval) + '</td></tr>').join('')
-    : '<tr><td colspan="9" class="empty">No claims yet</td></tr>';
+    ? rows.slice(0, 40).map((x) => '<tr role="row" data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td role="cell">' + esc(x.time) + '</td><td role="cell">' + esc(x.metric) + '</td><td role="cell">' + esc(x.value) + '</td><td role="cell">' + esc(x.units) + '</td><td role="cell">' + esc(x.agent) + '</td><td role="cell">' + esc(x.source) + '</td><td role="cell" class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td role="cell">' + esc(x.reason) + '</td><td role="cell">' + esc(x.approval) + '</td></tr>').join('')
+    : '<tr role="row"><td role="cell" colspan="9" class="empty">No claims yet</td></tr>';
   const c = r && r.claims.find((x) => x.id === sel);
   $('ag-prov').innerHTML = c ? '<dl>' + [
     ['Claim', c.id + ' · ' + c.kind + ' · ' + mins(c.minute)],

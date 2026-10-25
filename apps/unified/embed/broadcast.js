@@ -175,7 +175,7 @@ if (MCS.framed) {
   const place = () => {
     const m = document.getElementById('mcf'), left = document.querySelector('.bc-left'), view = document.getElementById('bc-view');
     if (!m || !left || !view) return;
-    const narrow = innerWidth < 700, inFlow = m.parentElement === left;
+    const narrow = innerWidth < 700, inFlow = m.previousElementSibling === view;
     if (narrow && !inFlow) {
       view.after(m);
       for (const [k, v] of [['position', 'static'], ['width', 'auto'], ['max-height', 'none'], ['margin', '10px 0 0'], ['left', 'auto'], ['right', 'auto'], ['bottom', 'auto']]) m.style.setProperty(k, v, 'important');
