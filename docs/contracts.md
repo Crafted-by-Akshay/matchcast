@@ -302,15 +302,18 @@ existing packet or version changes. They are not replayed on reconnect (only `pu
 
 `crew_ledger` is one moment the crew took, sent once the moment's run has ended, so `called` and
 `skipped` are final. `called` names the agents that ran, specialists included, in call order.
-`skipped` names the agents the Producer routed away, and `why` and `routed_by` give the reason
-and who decided (`rules`, `model`, or `fallback`). `spawn_reason` is set when the
+`skipped` names the agents the Producer routed away. `why` is the moment's reason code (for example
+`colour` or `vision`), never model text, and `routed_by` says who decided (`rules`, `model`, or
+`fallback`). `spawn_reason` is set when the
 planner spawned no specialists (for example a budget refusal); no `crew_spawn` frames come for that
 moment then.
 
 `crew_spawn` is one specialist on one moment. It is sent when the specialist starts (`running`)
-and again when it ends (`done`, `no_data`, `failed` or `budget_exhausted`). `budget_exhausted` is
-a refusal by the planner's budget, so its `started_ms` equals `ended_ms`. `parent_id` is
-`showrunner`. `ended_ms` is `null` while running.
+and again when it ends (`done`, `no_data`, `failed` or `budget_exhausted`). `parent_id` is
+`showrunner`. `ended_ms` is `null` while running. `why` is always empty in 1.3.0: a specialist's
+line is free text the Verifier has not checked, so it stays off the wire. `budget_exhausted` is
+reserved: the planner's budget refusal is recorded once per moment as `spawn_reason` on the ledger,
+and no specialist is spawned to end that way.
 
 The scoreboard is not a frame. It is `GET /v1/matches/{match_id}/scoreboard`, computed from the
 stored match on request, and documented in `docs/architecture/12-api.md`.

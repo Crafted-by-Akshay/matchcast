@@ -675,7 +675,6 @@ class MatchWorkflow:
                 report.name,
                 SPAWN_STATUS[report.status],
                 ended=True,
-                why=report.why or "",
             )
 
     def _record_rundown(self, task: ProducerTask) -> None:
@@ -686,7 +685,7 @@ class MatchWorkflow:
                 "moment_id": task.moment_id,
                 "called": [],  # filled in as each agent actually runs, see _note_called
                 "skipped": [] if desk else ["stats_desk"],
-                "why": task.why or task.reason,
+                "why": task.reason,  # the rules' or Producer's reason code, never model text
                 "routed_by": task.routed_by,
             }
         )
@@ -718,10 +717,12 @@ class MatchWorkflow:
         )
 
     def _publish_spawn(
-        self, moment_id: str, name: str, status: str, *, ended: bool = False, why: str = ""
+        self, moment_id: str, name: str, status: str, *, ended: bool = False
     ) -> None:
         """A crew_spawn frame: a specialist starts (running) or ends (contract 1.3.0). Specialists
-        are deterministic here, so they make no model call and ``tokens`` is 0."""
+        are deterministic here, so they make no model call and ``tokens`` is 0. ``why`` stays empty:
+        a specialist's line is free text with numbers the Verifier has not checked, so it does not
+        go on the wire."""
         self.hub.publish(
             "crew_spawn",
             f"spawn:{moment_id}:{name}:{status}",
@@ -738,7 +739,7 @@ class MatchWorkflow:
                 "started_ms": self._at_ms,
                 "ended_ms": self._at_ms if ended else None,
                 "tokens": 0,
-                "why": why[:200],
+                "why": "",
             },
         )
 

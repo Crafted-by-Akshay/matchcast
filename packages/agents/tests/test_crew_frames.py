@@ -48,3 +48,13 @@ def test_each_specialist_sends_a_start_and_an_end_frame(make_workflow, match) ->
         assert frame["ended_ms"] is None
     for frame in ended:
         assert frame["ended_ms"] == frame["started_ms"]
+
+
+def test_no_free_text_with_numbers_reaches_the_wire(make_workflow, match) -> None:
+    # a specialist's why and the model's route why carry numbers the Verifier has not checked,
+    # so the frames carry a reason code (ledger) and nothing (spawn) instead
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    assert all(f["why"] == "" for f in frames(flow, "crew_spawn"))
+    for frame in frames(flow, "crew_ledger"):
+        assert not any(char.isdigit() for char in frame["why"])
