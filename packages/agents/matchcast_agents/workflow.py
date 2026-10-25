@@ -437,9 +437,12 @@ class MatchWorkflow:
 
     # ---- ask the match (AGT-16) ---------------------------------------------------------
 
-    async def ask(self, question: str, persona: str = "casual", assistant: Any = None) -> Any:
+    async def ask(
+        self, question: str, persona: str = "casual", assistant: Any = None, surface: str = "ask"
+    ) -> Any:
         """Answer one fan question from the match, with citations: the model when it passes its
-        checks, else the rules Assistant over the match tools and the knowledge base."""
+        checks, else the rules Assistant over the match tools and the knowledge base. The Broadcast
+        picks (``surface="broadcast"``) are rules only, so the model is not asked for them."""
         from .ask import default_assistant
 
         shield = await self.safety.shield(question)
@@ -450,20 +453,23 @@ class MatchWorkflow:
         # An answer reads a snapshot and never waits for the ingest lock: a live batch holds that
         # lock while the agents write, and a viewer must not wait behind it (ADR-0018).
         result, rejected = None, ""
-        if assistant is None and self._answers is not None:
+        if assistant is None and self._answers is not None and surface == "ask":
             result, rejected = await self._answers.ask(self._ctx().as_of(), question, persona)
             if result is not None and not (await self.safety.analyze(result.answer)).allowed:
                 self._audit("system", "content-safety", "safety_blocked", "ask",
                             {"source": self.safety.source, "kind": "unsafe_content"})  # fmt: skip
                 result, rejected = None, "unsafe_content"  # the rules answer instead
         if result is None:
-            result = await (assistant or default_assistant()).ask(self, question, persona)
+            result = await (assistant or default_assistant()).ask(
+                self, question, persona, surface=surface
+            )
         self._audit(
             "agent",
             "assistant",
             "ask_answered",
             "ask",
             {
+                "surface": surface,
                 "intent": result.intent,
                 "abstained": result.abstained,
                 "dropped": result.dropped,

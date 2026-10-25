@@ -14,7 +14,7 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   }, true);
   const bar = document.createElement('div');
   bar.id = 'mc-replay'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Instant replay');
-  bar.style.cssText = 'position:absolute;left:10px;top:44px;z-index:8;display:flex;gap:6px;align-items:center;padding:6px 8px;background:rgba(10,20,40,.92);border-radius:6px;font:600 12px system-ui,sans-serif;color:#e8eefc';
+  bar.style.cssText = 'position:absolute;left:10px;top:44px;z-index:8;max-width:60%;flex-wrap:wrap;display:flex;gap:6px;align-items:center;padding:6px 8px;background:rgba(10,20,40,.92);border-radius:6px;font:600 12px system-ui,sans-serif;color:#e8eefc';
   bar.innerHTML = '<span>Instant replay</span>'
     + [10, 20, 30].map((n) => '<button type="button" data-sec="' + n + '" style="padding:4px 8px;border-radius:4px;border:1px solid #3aa0ff;background:#12294a;color:#fff;font:inherit;cursor:pointer">Last ' + n + ' s</button>').join('')
     + '<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mc-replay-slow">Slow-mo</label>'
@@ -24,6 +24,11 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   tag.style.cssText = 'position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:9;padding:6px 14px;border-radius:999px;background:#c62828;color:#fff;font:800 13px system-ui,sans-serif;letter-spacing:.12em';
   // the desk hides every direct child of body except its own roots (bc.css), so the controls sit inside the live view
   (document.getElementById('bc-view') || document.body).append(bar, tag);
+if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and clear of the teleprompter and the lower-third (the group keeps its aria-label)
+  bar.querySelector('span').hidden = true;   // the slow-motion toggle stays on a phone: the phone spec keeps it on one row with the clips
+  bar.querySelectorAll('button[data-sec]').forEach((b) => { b.textContent = b.dataset.sec + ' s'; });   // short labels keep the three buttons on one row
+  bar.querySelectorAll('button').forEach((b) => { b.style.padding = '3px 5px'; b.style.fontSize = '11px'; });
+}
   // narrow views (phones): the four on-air overlays stack instead of covering each other. Inline styles set the wide layout, so these rules need !important.
   const st = document.createElement('style');
   st.textContent = '@media (max-width:560px){'

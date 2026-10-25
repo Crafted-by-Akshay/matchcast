@@ -162,6 +162,8 @@ def build_watch():
         + "\n"
         + r(EMB + "watch.js")
         + "\n"
+        + r(EMB + "focus.js")
+        + "\n"
         + r(EMB + "vision-crops.js")
         + "\n"
         + r(EMB + "vision-events.js")
@@ -269,6 +271,8 @@ def build_broadcast():
         + r(EMB + "feed.js")
         + "\n"
         + r(EMB + "onair.js")
+        + "\n"
+        + r(EMB + "copilot.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 

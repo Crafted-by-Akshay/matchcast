@@ -104,7 +104,8 @@ const AG = (() => {
 
   // wild moments are deterministic triggers; the Producer makes them priority 1 and the line still goes through the Verifier
   const ALERTS = { red_card: 'Red card', turning_point: 'Turning point' };
-  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, alert: c.alert || null, verdict: c.verdict, tr: c.airText ? null : (c.tr || null) });   // an edited line has no checked translation
+  // the steps are the agents' own trace (who did what, and whether by a model or the rules): the Broadcast desk shows them as the orchestration strip
+  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, alert: c.alert || null, verdict: c.verdict, tr: c.airText ? null : (c.tr || null), steps: (c.trace || []).map((s) => ({ agent: s.agent, step: s.step, mode: s.mode })), numbers: Object.entries(c.inputs || {}).filter(([, v]) => typeof v === 'number').slice(0, 4).map(([name, value]) => ({ name, value })) });   // an edited line has no checked translation
   const nums = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
   // a person's action on a queued line; every one lands in the audit chain with the person's name
   const act = (id, who, action, detail, fn) => {
