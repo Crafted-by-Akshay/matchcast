@@ -457,13 +457,9 @@ class MatchWorkflow:
         """Start from the last checkpoint: state and Producer memory before any partial event."""
         row = self.store.get_checkpoint(self.sk)
         if row is None:
-            # a replay from the first event decides every moment again: this workflow's share
-            # of the pools, its ledger and the Producer's memory start at zero: no double count
+            # a fresh workflow replays from the first event: nothing of its own is counted yet
             self._set_spent(0, 0)
             self.rundown = []
-            reset = getattr(self.agents.producer, "reset", None)
-            if reset:
-                reset()
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
@@ -491,6 +487,11 @@ class MatchWorkflow:
         row = self.store.get_checkpoint(self.sk)
         done = row["processed_sequence"] if row else 0
         pending = [e for e in self.store.events(self.sk) if e["stream_sequence"] > done]
+        if pending and row is None and self.stats["events"]:
+            # this workflow already ran the match, so a replay would write its audit records again
+            raise WorkflowError(
+                "conflict", "no checkpoint for a match this workflow has already run"
+            )
         if pending and row is None:
             self.store.put_state(self.sk, MatchState())
         if pending:

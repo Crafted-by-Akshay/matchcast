@@ -1,11 +1,12 @@
 """The rundown: one ledger entry per moment the crew takes, kept through a restart (CREW-1.1)."""
 
+import pytest
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents import workflow as workflow_module
 from matchcast_agents.specialists import SpawnBudget
 from matchcast_agents.store import MemoryStore
-from matchcast_agents.workflow import MatchSpawnBudgets
+from matchcast_agents.workflow import MatchSpawnBudgets, WorkflowError
 
 
 def build(
@@ -183,19 +184,17 @@ def test_a_missing_checkpoint_clears_the_ledger_and_this_workflows_spend(match) 
     assert flow.spawn_budget.used == 0 and flow.quiet_budget.used == 0
 
 
-def test_a_replay_on_a_live_workflow_undoes_its_spend_and_decides_again(match) -> None:
-    """A live workflow has spent budget and written its ledger when its checkpoint is lost. The
-    replay must undo both and decide every moment again, so it ends where one clean run ends."""
-    clean = build(match, MemoryStore())
-    run(clean.ingest(match["events"]))
+def test_a_replay_on_a_live_workflow_is_refused_and_writes_no_audit(match) -> None:
+    """A workflow that already ran the match cannot replay it from the first event: the replay
+    would write the audit records again. It is refused: its budget, ledger and audit stay put."""
     store = MemoryStore()
     flow = build(match, store)
     run(flow.ingest(match["events"]))
-    assert flow.spawn_budget.used > 0 and flow.rundown  # the state the replay has to undo
-    before = list(flow.rundown)
+    spent, ledger = flow.spawn_budget.used, list(flow.rundown)
+    audit = len(store.audit_records(flow.sk, limit=100_000))
+    assert spent > 0 and ledger and audit > 0
     store._checkpoints.pop(flow.sk, None)  # the save never happened
-    run(flow._catch_up())
-    assert not any(new is old for new in flow.rundown for old in before)  # decided again, not kept
-    assert flow.spawn_budget.used == clean.spawn_budget.used > 0
-    assert flow.quiet_budget.used == clean.quiet_budget.used
-    assert flow.rundown == clean.rundown  # no moment twice, none missing
+    with pytest.raises(WorkflowError):
+        run(flow._catch_up())
+    assert flow.spawn_budget.used == spent and flow.rundown == ledger
+    assert len(store.audit_records(flow.sk, limit=100_000)) == audit

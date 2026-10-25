@@ -52,10 +52,6 @@ class ProducerRules:
         # colour lines cost a model call: at most one per colour_every_s of wall time (0 = off)
         self._colour_every_s = colour_every_s
         self._clock = clock
-        self.reset()
-
-    def reset(self) -> None:
-        """Forget this match's memory: a replay from the first event decides every moment again."""
         self._last_colour: float | None = None
         self._last_task_ms: int | None = None
         self._next_summary_ms: int | None = None  # set on the first moment: a Vision stream differs
