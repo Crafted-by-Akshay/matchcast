@@ -10,7 +10,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
 
 from matchcast_contracts import ContractError, validate
@@ -18,6 +18,7 @@ from opentelemetry import trace
 
 from . import recap as recap_mod
 from .context import MatchContext
+from .history import history_for_roster
 from .hub import StreamHub
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
 from .personas import BOOTH, MAX_WATCH_MODES, known
@@ -180,6 +181,7 @@ class MatchWorkflow:
         clock: Callable[[], datetime] = _utc_now,
         stats_desk: StatsDesk | None = None,
         answer_model: "ModelClient | None" = None,
+        history: dict[str, Any] | None = None,
         knowledge: "TalkKnowledge | None" = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
@@ -198,6 +200,16 @@ class MatchWorkflow:
         stored = self.store.get_match(self.sk) or {}
         self.names = {**stored.get("names", {}), **(names or {})}
         self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
+        # real pre-match facts for national teams (ADR-0020); None for fictional clubs
+        # the history cut-off is the day the match was created, so a rebuild keeps the same facts
+        self.history_on = (
+            date.fromisoformat(stored["history_on"]) if stored.get("history_on") else clock().date()
+        )
+        self.history = (
+            history
+            if history is not None
+            else history_for_roster(self.roster.get("team_ids"), self.clubs, self.history_on)
+        )
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)
@@ -214,6 +226,7 @@ class MatchWorkflow:
                 "roster": self.roster,
                 "names": self.names,
                 "clubs": self.clubs,
+                "history_on": self.history_on.isoformat(),
             },
         )
         self._restore()
@@ -241,6 +254,7 @@ class MatchWorkflow:
             state=self.store.get_state(self.sk),
             events=tuple(self.store.events(self.sk)),
             personas=self.config.personas,
+            extra={"history": self.history} if self.history else {},
         )
 
     def _audit(

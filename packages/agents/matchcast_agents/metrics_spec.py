@@ -15,7 +15,7 @@ METRIC_UNITS = {
     "pressures": "count",
     "possession_won": "count",
     "xg": "ratio",
-    "h2h_played": "count",  # pre-match history, see history.py
+    "h2h_played": "count",  # pre-match history, see history_metrics.py
     "h2h_home_wins": "count",
     "h2h_draws": "count",
     "h2h_away_wins": "count",

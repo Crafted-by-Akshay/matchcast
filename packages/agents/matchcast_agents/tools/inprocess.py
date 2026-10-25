@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .. import history
+from .. import history_metrics as history
 from ..context import MatchContext
 from ..metrics_spec import METRIC_UNITS, derivation_version
 from ..xg import team_xg

@@ -322,3 +322,17 @@ def test_a_repeated_value_is_sent_to_the_narrator_not_the_analyst(make_workflow,
     assert asks and {r["details"]["target"] for r in asks} == {"narrator"}
     assert flow.stats["abstained"] == 0
     assert any(ln.repair_of and ln.status == "published" for ln in flow.store.lines(flow.sk))
+
+
+def test_national_teams_get_history_in_the_context_and_fictional_clubs_do_not(match) -> None:
+    home, away = match["roster"]["team_ids"]
+    real = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs={home: "England", away: "Brazil"},
+    )  # fmt: skip
+    assert real._ctx().extra["history"]["h2h"]["played"] > 0
+    fiction = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs={home: "Harbor City", away: "Ridgeview"},
+    )  # fmt: skip
+    assert fiction._ctx().extra == {}

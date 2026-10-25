@@ -2,7 +2,7 @@
 
 import json
 
-from .. import history
+from .. import history_metrics as history
 from ..context import MatchContext
 from ..messages import ProducerTask
 from ..metrics_spec import METRIC_UNITS
