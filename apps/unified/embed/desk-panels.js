@@ -214,7 +214,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const style = document.createElement('style');
   style.textContent = '#mc-feeds{display:flex;flex-direction:column;gap:4px;padding-bottom:6px;border-bottom:1px solid #22395c}'
     + '#mc-feeds ul{margin:0;padding:0;list-style:none}'
-    + '#mc-feed-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px}'   // six feeds in two columns, so the drops show without scrolling the desk; a cell takes the column's width and the line ellipsises
+    + '#mc-feed-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px}'   // six feeds in two columns, so the drops are nearer the top of the desk; a cell takes the column's width, the label wraps and the status line ellipsises
     + '#mc-feeds li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #22395c}'
     + '#mc-feeds li>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     + '#mc-feeds li[data-off="true"]{opacity:.85}'   // a killed feed is the step the viewer must read: its label says so, in full
