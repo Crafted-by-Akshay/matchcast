@@ -1223,6 +1223,8 @@ class MatchWorkflow:
             line = self._line(line_id)
             if line.status not in ("verified", "review"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
+            if line.escalated:
+                raise WorkflowError("not_approvable", "an escalated line can only be killed")
             self._approve(line, "person", actor_id, actor_name)
             return line
 
@@ -1258,6 +1260,10 @@ class MatchWorkflow:
             line = self._line(line_id)
             if line.status in ("published", "killed"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
+            if (
+                line.escalated
+            ):  # an edit that passes the Verifier would approve, so it waits for kill
+                raise WorkflowError("not_approvable", "an escalated line can only be killed")
             shield = await self.safety.shield(text)
             if shield.attack_detected:
                 self._audit("system", "content-safety", "safety_blocked", line_id,
