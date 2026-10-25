@@ -165,6 +165,8 @@ def test_an_escalated_line_can_be_killed_but_not_approved_or_edited(match) -> No
         with pytest.raises(WorkflowError) as refused:
             run(attempt)
         assert refused.value.code == "not_approvable"
+    untouched = flow.store.get_line(flow.sk, held.line_id)
+    assert untouched.status == "review" and untouched.text == held.text
     assert run(flow.kill(held.line_id, "a person checked it")).status == "killed"
     assert flow.store.publications(flow.sk) == []
 
