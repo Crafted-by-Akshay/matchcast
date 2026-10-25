@@ -23,8 +23,37 @@ def extract_numbers(text: str) -> list[float]:
     return [float(m) for m in _NUMBER.findall(text)]
 
 
+_POSSESSIVE = re.compile(r"['’]s?$")  # "Harbour United's", "Joel Ellis'"
+
+
 def extract_names(text: str) -> list[str]:
-    return [m.group(0) for m in _NAME.finditer(text)]
+    """Runs of capitalised words, without a possessive ("Harbour United's" is Harbour United)."""
+    return [_POSSESSIVE.sub("", m.group(0)) for m in _NAME.finditer(text)]
+
+
+# capitalised words a commentary line may open a sentence with before a club name
+OPENERS = frozenset(
+    "strong great good big another second early late sharp quick brilliant dangerous careful "
+    "tight tough busy relentless constant steady fresh rare late first next both still just now "
+    "again here more less all only even".split()
+)
+
+
+def _unknown_name(text: str, allowed: set[str]) -> str | None:
+    """The first name run that is not a roster name. A run that only has a capitalised sentence
+    opener in front of a roster name ("Strong Harbour United pressure") is that roster name."""
+    for match in _NAME.finditer(text):
+        name = _POSSESSIVE.sub("", match.group(0))
+        if name.casefold() in allowed:
+            continue
+        opener, _, rest = name.partition(" ")
+        starts_sentence = match.start() == 0 or text[: match.start()].rstrip().endswith(
+            (".", "!", "?")
+        )
+        if starts_sentence and opener.casefold() in OPENERS and rest.casefold() in allowed:
+            continue
+        return name
+    return None
 
 
 def recompute(
@@ -154,9 +183,9 @@ def moment_team_problem(
 
 
 def check_names(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]) -> Check:
-    for name in extract_names(line.text):
-        if name.casefold() not in ctx.allowed_names:
-            return Check(name="names", passed=False, detail=f"{name} is not in this match's roster")
+    name = _unknown_name(line.text, ctx.allowed_names)
+    if name:
+        return Check(name="names", passed=False, detail=f"{name} is not in this match's roster")
     stray = moment_team_problem(ctx, line, claims)
     if stray:
         return Check(
