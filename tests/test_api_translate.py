@@ -4,7 +4,7 @@ import json
 
 from app.main import create_app
 from fastapi.testclient import TestClient
-from matchcast_agents.translate import TranslationService
+from matchcast_agents.translate import LANGUAGES, TranslationService
 from test_api_matches import Q, ask, create, post_all
 
 
@@ -74,6 +74,21 @@ def test_spanish_viewer_gets_a_variant_and_english_stays_the_base():
     assert en and all("variants" not in p for p in en)
 
 
+def test_every_feed_language_gets_a_checked_variant_and_english_gets_none():
+    client = make(Echo())
+    create(client)
+    post_all(client)
+    for lang in LANGUAGES:
+        shown, _ = pubs(client, lang)
+        assert shown, lang
+        with_variant = [p for p in shown if "variants" in p]
+        if lang == "en":
+            assert not with_variant
+        else:
+            assert with_variant
+            assert all(p["variants"][lang].startswith(f"[{lang}] ") for p in with_variant)
+
+
 def test_a_translation_that_changes_a_number_is_dropped_and_audited():
     client = make(Echo(mangle=True))
     create(client)
@@ -92,6 +107,19 @@ def test_unconfigured_service_serves_english_without_noise():
     shown, _ = pubs(client, "es")
     assert shown and all("variants" not in p for p in shown)
     assert not [r for r in audit(client) if r["action"] == "translation_rejected"]
+
+
+def test_ask_takes_the_same_languages_as_the_stream():
+    from typing import get_args
+
+    from app.matches import AskBody
+
+    assert get_args(AskBody.model_fields["lang"].annotation) == LANGUAGES
+    client = make(Echo())
+    create(client)
+    post_all(client)
+    for lang in LANGUAGES[1:]:
+        assert ask(client, "What is offside?", lang=lang).status_code == 200, lang
 
 
 def test_unsupported_language_is_refused():
