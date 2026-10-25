@@ -96,7 +96,12 @@ def test_quiet_spell_summary_comes_from_memory_only(match) -> None:
         snapshot_revision=0,
     )
     ctx = replace(base, extra={"storylines": storylines(base, [verified])})
-    last_minute = goal["event_time_ms"] // 60_000
+    # the quiet spell is measured from the player's last stored involvement, not from the goal
+    last_minute = max(
+        e["event_time_ms"] // 60_000
+        for e in match["events"]
+        if e["payload"].get("player_id") == player
+    )
     story = PlayerStory(player_id=player)
     summary = quiet_summary(ctx, story, now_ms=(last_minute + 10) * 60_000)
     assert summary is not None
@@ -116,3 +121,44 @@ def test_verifier_recount_accepts_the_stated_total_and_rejects_a_wrong_one(match
     assert total_check(ctx, player, "goals", goal["stream_sequence"], 1).passed
     bad = total_check(ctx, player, "goals", goal["stream_sequence"], 2)
     assert not bad.passed and "recount 1" in bad.detail
+
+
+def test_an_own_goal_counts_for_nobody(match) -> None:
+    goal = goal_event(match)
+    defender = next(p for p in involved(match) if p != goal["payload"]["player_id"])
+    own = {**goal, "payload": {**goal["payload"], "player_id": defender, "own_goal": True}}
+    ctx = context(match, [*match["events"], own])
+    upto = own["stream_sequence"]
+    assert totals(ctx.events, defender, upto)["goals"] == 0
+    assert story_line(ctx, own, PlayerStory(player_id=defender)) is None
+
+
+def test_quiet_summary_airs_once_per_spell(match) -> None:
+    goal = goal_event(match)
+    player = goal["payload"]["player_id"]
+    base = context(match)
+    verified = LineRecord(
+        line_id="l1",
+        moment_id=f"m-{goal['event_id']}",
+        claim_ids=[],
+        persona="casual",
+        text=f"{base.player_name(player)} scores after a slick move.",
+        status="verified",
+        created_at="2026-10-25T14:00:00Z",
+        snapshot_revision=0,
+    )
+    ctx = replace(base, extra={"storylines": storylines(base, [verified])})
+    now = (goal["event_time_ms"] // 60_000 + 60) * 60_000
+    story = PlayerStory(player_id=player)
+    first = quiet_summary(ctx, story, now_ms=now)
+    assert first is not None
+    again = quiet_summary(ctx, story.summarised(_minute_of(ctx, player, now)), now_ms=now)
+    assert again is None
+
+
+def _minute_of(ctx: MatchContext, player: str, now: int) -> int:
+    return max(
+        e["event_time_ms"] // 60_000
+        for e in ctx.events
+        if e["event_time_ms"] <= now and e["payload"].get("player_id") == player
+    )
