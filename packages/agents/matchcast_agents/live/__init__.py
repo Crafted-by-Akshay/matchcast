@@ -5,11 +5,18 @@ import os
 from ..messages import Persona
 from ..resilience import ResilientAgent
 from ..rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
+from ..rules.producer import BOOTH_MOMENTS
 from ..tools import ToolCall
 from ..workflow import AgentSet
 from .analyst import LiveAnalyst
 from .answers import LiveAnswers
-from .client import FoundryModelClient, ModelClient, ScriptedModelClient, model_priority
+from .client import (
+    FoundryModelClient,
+    ModelClient,
+    ModelCut,
+    ScriptedModelClient,
+    model_priority,
+)
 from .narrator import LiveNarrator
 from .producer import LiveProducer
 from .verifier import LiveVerifier
@@ -33,6 +40,7 @@ __all__ = [
     "LiveProducer",
     "LiveVerifier",
     "ModelClient",
+    "ModelCut",
     "ScriptedModelClient",
     "live_agents",
 ]
@@ -58,7 +66,7 @@ def live_agents(
     def quiet(args: tuple, kwargs: dict) -> bool:
         """(ctx, task, ...): a moment below the model's priority goes straight to the rules."""
         task = args[1]
-        return task.priority > model_priority() and task.reason != "colour"
+        return task.priority > model_priority() and task.reason not in ("colour", *BOOTH_MOMENTS)
 
     return AgentSet(
         LiveProducer(client, ProducerRules(personas, colour_every_s=colour_every_s())),

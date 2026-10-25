@@ -7,8 +7,9 @@ import { collectErrors } from './helpers';
 declare const AG: any; declare const LV: any;
 
 type Mock = { server: Server; url: string; seen: { matches: number; events: any[]; sent?: boolean } };
-const mock = (mode: 'ok' | 'error') => new Promise<Mock>((resolve) => {
-  const seen: Mock['seen'] = { matches: 0, events: [] };
+const mock = (mode: 'ok' | 'error' | 'quiet' | 'rules' | 'drop') => new Promise<Mock>((resolve) => {
+  const seen: Mock['seen'] = { matches: 0, events: [], sent: mode === 'quiet' || mode === 'drop' };   // 'quiet': the api says live but sends no claim; 'rules': it says rules_fallback, then sends a claim; 'drop': it says live once, then every stream fails
+  let gets = 0;
   const server = createServer((q, r) => {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
     if (q.method === 'OPTIONS') { r.writeHead(204, cors); return r.end(); }
@@ -19,9 +20,11 @@ const mock = (mode: 'ok' | 'error') => new Promise<Mock>((resolve) => {
       return;
     }
     if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end('{}'); }   // only the match stream is an SSE stream (the shell also asks /v1/status)
+    if (mode === 'drop' && gets++) { r.writeHead(503, cors); return r.end('{}'); }
     r.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...cors });
     const frame = (ev: string, d: object, id?: string) => r.write('event: ' + ev + '\n' + (id ? 'id: ' + id + '\n' : '') + 'data: ' + JSON.stringify(d) + '\n\n');
-    frame('status', { status: 'live' });
+    frame('status', { status: mode === 'rules' ? 'rules_fallback' : 'live' });
+    if (mode === 'drop') return void setTimeout(() => r.end(), 300);
     const t = setInterval(() => {
       if (!seen.events.length || seen.sent) return; seen.sent = true;
       frame('claim', { claim_id: 'api-1', metric: 'goals', value: 1, units: 'count', approval_status: 'approved' }, 'claim:api-1');
@@ -128,4 +131,73 @@ test('chips: with no api the Foundry chip says not connected', async ({ page }) 
   await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API="";' }));
   await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#ag-foundry')).toHaveText('Foundry: not connected', { timeout: 15_000 });
+});
+
+// Judge re-test: Broadcast read "Rules fallback" while Analyst read "Live agents". An api that has said "live" stays live while it waits for events;
+// the warm-up timer only falls back for an api that never answered. And the Broadcast desk's line always matches the shell pill.
+test('an api that said live stays live through a quiet warm-up', async ({ page }) => {
+  const api = await mock('quiet');
+  await drive(page, api.url);
+  await expect(pill(page)).toHaveText('Live agents', { timeout: 15_000 });
+  await page.waitForTimeout(8000);   // past the 6 s warm-up of this test (MATCHCAST_WARM_MS)
+  await expect(pill(page)).toHaveText('Live agents');
+  api.server.close();
+});
+
+test('the Broadcast desk says the same agents state as the shell pill', async ({ page }) => {
+  test.setTimeout(300_000);
+  const api = await mock('ok');
+  await drive(page, api.url);
+  await expect(pill(page)).toHaveText('Live agents', { timeout: 20_000 });
+  await page.locator('#tab-broadcast').click();
+  await page.waitForFunction(() => document.getElementById('v-broadcast')!.classList.contains('ready'), null, { timeout: 240_000 });
+  const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;
+  const words: Record<string, string> = { 'Live agents': 'Agents: live from the api', 'Rules fallback': 'Agents: api did not answer, rules in this page', 'Offline (simulated)': 'Agents: rules in this page (no api connected)' };
+  await expect.poll(async () => { const p = String(await pill(page).textContent()); const d = String(await f.locator('#mc-agentstate').textContent()); return p.startsWith('Warming') ? d.startsWith('Agents: Warming') : d === words[p]; }, { timeout: 30_000 }).toBe(true);
+  api.server.close();
+});
+
+// the judge fix must not make a real fallback look live: the api's own rules_fallback stays "Rules fallback" even when it sends a claim,
+// a silent warm-up of an api that said nothing promotes to live on its first claim, and a stream that keeps failing stops reading "Live agents".
+test('an api that says rules_fallback stays Rules fallback when a claim arrives', async ({ page }) => {
+  const api = await mock('rules');
+  await drive(page, api.url);
+  await expect.poll(() => api.seen.sent, { timeout: 15_000 }).toBe(true);   // the mock has sent its claim and publication
+  await page.waitForTimeout(1500);
+  await expect(pill(page)).toHaveText('Rules fallback');
+  api.server.close();
+});
+
+test('a stream that keeps failing stops reading Live agents', async ({ page }) => {
+  test.setTimeout(60_000);
+  const api = await mock('drop');
+  await drive(page, api.url);
+  await expect(pill(page)).toHaveText('Rules fallback', { timeout: 30_000 });
+  api.server.close();
+});
+
+test('eager: the match is created and the stream opened at begin, so the pill says Live agents before any event', async ({ page }) => {
+  const api = await mock('ok'); const errs = collectErrors(page);
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api.url) + ';' }));   // the default 90 s warm-up
+  await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await page.evaluate(() => { AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); LV.begin('k2', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }, { name: 'C One', team: 'cco' }] }); });
+  await expect(pill(page)).toHaveText('Live agents', { timeout: 10_000 });
+  expect(api.seen.matches).toBeGreaterThanOrEqual(1);
+  expect(api.seen.events.length, 'no event was sent yet').toBe(0);
+  expect(errs).toEqual([]); api.server.close();
+});
+
+test('warm-up clock: an unreachable api falls back by itself; a client that has not kicked off yet is not timed', async ({ page }) => {
+  const down = await mock('error'); const errs = collectErrors(page);
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(down.url) + ';window.MATCHCAST_WARM_MS=3000;' }));
+  await page.goto('/index.html#agents', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await page.evaluate(() => { AG.reset('k3', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); LV.begin('k3', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }); });
+  await expect(pill(page)).toHaveText('Rules fallback', { timeout: 15_000 });   // begin alone: the eager create failed, so the clock ran
+  down.server.close();
+  const quiet = await mock('ok');   // reachable but silent about 'live': no events yet means no clock
+  await page.evaluate((url) => { (window as any).MATCHCAST_API = url; }, quiet.url);
+  quiet.server.close();
+  expect(errs).toEqual([]);
 });

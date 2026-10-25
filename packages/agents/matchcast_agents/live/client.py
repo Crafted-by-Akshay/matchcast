@@ -161,6 +161,38 @@ def _map(error: Exception) -> Exception:
 
 
 @dataclass
+class ModelCut:
+    """The failure drill's switch for one match. While ``on``, every model call fails at once, so
+    the rules twins answer and each refusal is audited as ``fallback_used`` (ADR-0014)."""
+
+    on: bool = False
+
+    def guard(self, client: ModelClient) -> ModelClient:
+        return _CutClient(client, self)
+
+
+@dataclass
+class _CutClient:
+    inner: ModelClient
+    cut: ModelCut
+
+    async def complete(
+        self,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        *,
+        temperature: float = 0.1,
+        max_tokens: int = 400,
+    ) -> dict[str, Any]:
+        if self.cut.on:
+            raise ModelError("model cut for the failure drill")
+        return await self.inner.complete(
+            system, user, schema, temperature=temperature, max_tokens=max_tokens
+        )
+
+
+@dataclass
 class ScriptedModelClient:
     """Replays answers in order (or from a function); each answer may be an Exception to raise."""
 

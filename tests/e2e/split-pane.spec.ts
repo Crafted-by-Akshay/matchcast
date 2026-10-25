@@ -3,9 +3,9 @@ import { test, expect } from './fixtures';
 // ADR-0019 (Phase 1): on a wide window Watch and Broadcast share the stage, and the viewer can drag the divider (or use the arrow keys).
 // The split is remembered per viewer. On a phone one view shows at a time, with no divider and no sideways scroll.
 
-test('the app opens on the live match with the Broadcast desk beside it', async ({ page }) => {
+test('with the Broadcast desk asked for (?split=1) it sits beside the live match', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await page.goto('/index.html?split=1', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#stage')).toHaveClass(/split/);
   await expect(page.locator('#v-watch')).toBeVisible();
   await expect(page.locator('#v-broadcast')).toBeVisible();
@@ -15,7 +15,7 @@ test('the app opens on the live match with the Broadcast desk beside it', async 
 
 test('the divider resizes the panes, stays within bounds, and is kept per viewer', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await page.goto('/index.html?split=1', { waitUntil: 'domcontentloaded' });
   const bar = page.locator('#split-bar');
   await expect(bar).toBeVisible();
   const before = await page.locator('#v-watch').evaluate((el) => el.getBoundingClientRect().width);
@@ -36,7 +36,7 @@ test('the divider resizes the panes, stays within bounds, and is kept per viewer
 
 test('a drag with the pointer resizes the split', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await page.goto('/index.html?split=1', { waitUntil: 'domcontentloaded' });
   const bar = page.locator('#split-bar');
   const box = await bar.boundingBox();
   if (!box) throw new Error('the divider has no box');
@@ -58,4 +58,20 @@ test('a phone shows one view at a time, with no divider and no sideways scroll',
   await expect(page.locator('#split-bar')).toBeHidden();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test('Watch opens alone; the second 3D view is not offered on the first screen, and ?split=1 still opens it', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#v-watch')).toBeVisible();
+  await expect(page.locator('#v-broadcast'), 'the desk is not shown on the first screen').toBeHidden();
+  expect(await page.locator('#v-broadcast iframe').count(), 'no second 3D view is loaded until asked').toBe(0);
+  await expect(page.locator('#bc-toggle'), 'the second 3D view is off the first screen for the sprint (AB#497)').toBeHidden();
+  await page.goto('/index.html?split=1#watch', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await expect(page.locator('#stage')).toHaveClass(/split/);
+  await expect(page.locator('#v-broadcast')).toBeVisible();
+  expect(await page.locator('#v-broadcast iframe').count()).toBe(1);
+  await page.locator('.switch [data-view="broadcast"]').click();   // the Broadcast tab still shows both
+  await expect(page.locator('#stage')).toHaveClass(/split/);
 });

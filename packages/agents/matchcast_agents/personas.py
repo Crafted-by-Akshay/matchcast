@@ -1,4 +1,4 @@
-"""Personas: three base voices plus three parameterised watch modes (AGT-6).
+"""Personas: three base voices, three parameterised watch modes (AGT-6) and the two-voice booth.
 
 ``my-club:<team_id>``, ``player-focus:<player_id>`` and ``one-metric:<metric>`` write with the
 limits of a base voice; the argument decides what the line is about.
@@ -9,15 +9,21 @@ import re
 BASE = ("casual", "analyst", "broadcast")
 PATTERN = (
     r"^(casual|analyst|broadcast|my-club:[A-Za-z0-9._-]{1,64}|"
-    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32})$"
+    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour))$"
 )
 _VALID = re.compile(PATTERN)
 # the base voice whose character limit a persona uses
-VOICE = {"my-club": "casual", "player-focus": "casual", "one-metric": "analyst"}
+VOICE = {
+    "my-club": "casual",
+    "player-focus": "casual",
+    "one-metric": "analyst",
+    "booth": "broadcast",
+}
+BOOTH = ("booth:pbp", "booth:colour")  # the two voices of the commentary booth, in speaking order
 MAX_CHARS = {"casual": 140, "analyst": 280, "broadcast": 180}
 MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 # watch modes keep their own number limits (one-metric may quote both teams)
-NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1}
+NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1, "booth": 2}
 
 
 # the metrics a one-metric watch mode can follow (the Narrator's LABELS has the same keys)
@@ -42,7 +48,7 @@ def known(persona: str, clubs: dict[str, str], names: dict[str, str]) -> bool:
         return arg in names
     if kind == "one-metric":
         return arg in WATCH_METRICS
-    return True
+    return True  # booth:pbp and booth:colour are always real
 
 
 def split(persona: str) -> tuple[str, str]:
@@ -98,3 +104,8 @@ def normalise(raw: str | None, clubs: dict[str, str], names: dict[str, str]) -> 
     elif kind == "metric":
         raw = f"one-metric:{arg.replace('-', '_')}"
     return raw if known(raw, clubs, names) else None
+
+
+def booth(persona: str | None) -> bool:
+    """The viewer asked for the commentary booth: both voices, in the order they speak."""
+    return persona == "booth"

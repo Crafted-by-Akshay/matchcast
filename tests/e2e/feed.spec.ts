@@ -5,6 +5,7 @@ import { collectErrors, openShell, stepSim, viewFrame } from './helpers';
 // Broadcast draws the same feed, Ask counts from the event log, and a talk order always gets a reply in the chat.
 declare const post: (view: string, msg: unknown) => void; // top-level function of the shell
 declare const AG: any;
+declare const VC: any;
 
 async function openWatch(page: Page, query = '?seed=2026&speed=4'): Promise<Frame> {
   await openShell(page, 'watch', query);
@@ -165,7 +166,60 @@ test('a run of passes is counted across calls, within one minute', async ({ page
   expect(text.at(-1)).toBe('Ridgeview keep the ball: 9 passes, last from Cal.');
 });
 
+test('the pre-match build-up is a play-by-play call and a colour line, each on its own voice', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  await page.evaluate(() => { VC.set(true); });
+  const spoken = await page.evaluate(async () => {
+    const calls: [string, string][] = [];
+    const say = VC.say;
+    VC.say = (text: string, o: any) => { calls.push([text, o.role]); return say(text, o); };
+    CM.reset('kick', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    await new Promise((r) => setTimeout(r, 600));
+    VC.say = say;
+    return { calls, lines: CM.view().filter((l: any) => l.kind === 'buildup').map((l: any) => ({ text: l.text, speaker: l.speaker })) };
+  });
+  expect(spoken.lines.map((l) => l.speaker), 'the build-up has a call, then a colour line').toEqual(['pbp', 'colour']);
+  expect(spoken.lines[0].text).toContain('Ridgeview');
+  // the Watch frame may post its own batches meanwhile, so only the two build-up lines are checked
+  const booth = spoken.calls.filter(([text]) => spoken.lines.some((l) => l.text === text));
+  expect(booth, 'each line is spoken once, on the voice its speaker has').toEqual([
+    [spoken.lines[0].text, 'playByPlay'],
+    [spoken.lines[1].text, 'analyst'],
+  ]);
+});
+
+test('a quiet stretch gets a booth exchange drawn from the match state, and not again straight away', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('fill', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 1.5, type: 'pass', team: 'H', player: 'Ben' }, { minute: 2, type: 'pass', team: 'H', player: 'Cal' }], []);
+    CM.fill(Date.now() + 9000);   // nine seconds of real time with no line
+    const first = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text }));
+    CM.fill(Date.now());         // straight after: the booth is still talking, so nothing new
+    return { first, after: CM.view().filter((l: any) => l.kind === 'filler').length };
+  });
+  expect(out.first.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out.first[0].text, 'the play-by-play line counts the passes from the events').toContain('Ridgeview: 3 passes in the last two minutes.');
+  expect(out.after).toBe(2);
+});
+
+test('a live booth line keeps the speaker its persona gives it', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  // one synchronous step: the Watch frame may reset the feed between awaits, so the lines are read straight after they are added
+  const lines = await page.evaluate(() => {
+    CM.reset('live', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.api('Ana wins it back and the crowd rises.', 4, 'line', 'booth-colour-1', 'colour');
+    CM.api('Ben drives at the box.', 4.2, 'line', 'booth-pbp-1', 'pbp');
+    return CM.view().filter((l: any) => l.source === 'live').map((l: any) => ({ text: l.text, speaker: l.speaker }));
+  });
+  expect(lines).toEqual([
+    { text: 'Ana wins it back and the crowd rises.', speaker: 'colour' },
+    { text: 'Ben drives at the box.', speaker: 'pbp' },
+  ]);
+});
+
 test('the booth speaks each new feed line once, play-by-play and colour on different voices', async ({ page }) => {
+  await page.route(/\/(watch|broadcast)\/index\.html/, (rt) => rt.abort());   // no 3D view: its own kick-off would reset the feed (and add a pre-match build-up) under the test
   await openShell(page, 'watch', '?seed=2026');
   await page.evaluate(() => { VC.set(true); });
   const spoken = await page.evaluate(async () => {
@@ -194,6 +248,32 @@ test('Voice on starts the crowd bed, labelled simulated, and Voice off stops it'
   expect(await page.evaluate(() => VC.crowd)).toBe(true);
   await page.click('#voice-btn');
   expect(await page.evaluate(() => VC.crowd)).toBe(false);
+});
+
+test('the commentary card says Sound is off until Voice is on', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
+  // Voice is off by default, so the card must learn that from the shell (the hint is hidden until then)
+  await expect(f.locator('#mcf-sound')).toBeVisible({ timeout: 10_000 });
+  await expect(f.locator('#mcf-sound')).toContainText('Voice: off');
+  await page.click('#voice-btn');
+  await expect(f.locator('#mcf-sound')).toBeHidden();
+  await page.click('#voice-btn');
+  await expect(f.locator('#mcf-sound')).toBeVisible();
+});
+
+test('the commentary card says when the live booth is off, and why, and hides that once it is on', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
+  // GET /booth said no: every watch slot is taken, so the rules booth talks on its own
+  await page.evaluate(() => post('broadcast', { src: 'matchcast-shell', type: 'booth-state', ready: false, reason: 'watch_mode_cap' }));
+  await expect(f.locator('#mcf-booth')).toBeVisible({ timeout: 10_000 });
+  await expect(f.locator('#mcf-booth')).toContainText('every watch mode for this match is taken');
+  await expect(f.locator('#mcf-booth')).toContainText('rules booth');
+  await page.evaluate(() => post('broadcast', { src: 'matchcast-shell', type: 'booth-state', ready: true, reason: '' }));
+  await expect(f.locator('#mcf-booth')).toBeHidden();
 });
 
 test('the booth voices a new match, even though its line ids start again', async ({ page }) => {

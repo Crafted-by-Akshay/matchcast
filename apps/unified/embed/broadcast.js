@@ -4,11 +4,11 @@ MCS.progress('Loading the stadium and players');
 // called by the desk once the players have loaded (replaces bcNewMatch(seed) at boot)
 function bcEmbedStart(q) {
   MCS.progress('Setting up the match');
-  const go = () => { if (q.get('seed')) { MCS.apply(q); bcNewMatch(q.get('seed')); } else bcNewMatch(); MCS.started(); };
+  const go = () => { if (q.get('seed')) { MCS.apply(q); bcNewMatch(q.get('seed')); } else bcNewMatch(); window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); };   // the lens menu lists the players once they load
   if (MCS.clubs.ready) go(); else MCS.clubs.load.then(go);
 }
 MCS.ptt($('dk-q'), $('dk-askf'));   // EXP-16: push-to-talk for Ask the producer
-$('bc-new').addEventListener('click', () => setTimeout(() => MCS.started(), 0));   // after the desk's own handler has set the new seed
+$('bc-new').addEventListener('click', () => setTimeout(() => { window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); }, 0));   // after the desk's own handler has set the new seed
 MCS.loop();
 
 // the shared score: while Watch runs the shared match, the scoreboard shows Watch's score and minute.
@@ -92,6 +92,7 @@ function consumerStep(dt, snap) {
 const mcL3 = document.createElement('div');
 mcL3.id = 'mc-l3'; mcL3.setAttribute('role', 'status'); mcL3.hidden = true;
 mcL3.style.cssText = 'position:absolute;left:12px;bottom:100px;max-width:60%;padding:10px 16px;background:rgba(10,20,40,.92);color:#fff;border-left:4px solid #3aa0ff;font:600 15px system-ui,sans-serif;z-index:10;border-radius:4px';
+if (window.MCDesk) MCDesk.lowerThird(mcL3);   // the desk panels (desk-panels.js) watch its size to sit above it
 const mcTele = document.createElement('ol');
 mcTele.id = 'mc-tele'; mcTele.setAttribute('aria-label', 'Teleprompter: approved lines');
 mcTele.style.cssText = 'position:absolute;right:10px;top:44px;width:min(280px,34%);margin:0;padding:8px 8px 8px 28px;background:rgba(10,20,40,.85);color:#e8eefc;font:13px system-ui,sans-serif;border-radius:4px;max-height:40%;overflow:auto;z-index:10'; mcTele.hidden = true;
@@ -153,4 +154,36 @@ if (MCS.framed) {
   const pane = $('pane-desk'); if (pane) { new MutationObserver(attachMic).observe(pane, { childList: true, subtree: true }); attachMic(); }
 }
 // type floor: 12 px for the desk text that was 10 to 11 px (UX review pass 6, finding 18)
-(() => { const st = document.createElement('style'); st.textContent = '.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}'; document.head.appendChild(st); })();
+(() => { const st = document.createElement('style'); st.textContent = '#mcf-sound,#mc-pt,.mcp-v,.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}#bc-cams button[data-cam][aria-pressed=true]{color:#10151f!important}'; document.head.appendChild(st); })();   // the chosen camera chip is yellow: dark text (it was light on yellow, 1.4:1)
+// Judge re-test: on a phone the 3D renderer sizes its canvas (and the name-tag layer) to the window, but the live view is narrower, so the right edge was cut
+// off. Scale those layers down to the live view's width, from their top-left corner, so the whole pitch shows; nothing is scaled when they already fit.
+(() => {
+  const fit = () => {
+    const st = document.getElementById('stage'); if (!st || !st.clientWidth) return;
+    for (const el of st.children) {
+      const w = el.offsetWidth, s = st.clientWidth / w;
+      if (w > st.clientWidth + 1) { el.style.transformOrigin = '0 0'; el.style.transform = 'scale(' + s.toFixed(4) + ')'; el.dataset.fit = '1'; }
+      else if (el.dataset.fit) { el.style.transform = ''; delete el.dataset.fit; }
+    }
+  };
+  fit(); setInterval(fit, 1000); addEventListener('resize', fit);
+})();
+
+// Pass 11: in a pane narrower than 700 px (the split next to Watch, or a phone) the fixed Live commentary card covered the camera chips and the stats strip.
+// There it sits in the page flow, under the live view and its camera chips, so nothing is covered; a wider pane keeps the card over the view's corner.
+(() => {
+  const place = () => {
+    const m = document.getElementById('mcf'), left = document.querySelector('.bc-left'), view = document.getElementById('bc-view'), cams = document.getElementById('bc-cams');
+    if (!m || !left || !view) return;
+    const anchor = cams && cams.parentElement === view.parentElement ? cams : view;   // under the camera chips when there are some: the camera modes stay near the fold, the card follows
+    const narrow = innerWidth < 700, inFlow = m.parentElement !== view;   // anywhere outside the live view counts as in the flow, whichever anchor it was placed after
+    if (narrow && !inFlow) {
+      anchor.after(m);
+      for (const [k, v] of [['position', 'static'], ['width', 'auto'], ['max-height', 'none'], ['margin', '10px 0 0'], ['left', 'auto'], ['right', 'auto'], ['bottom', 'auto']]) m.style.setProperty(k, v, 'important');
+    } else if (!narrow && inFlow) {
+      view.append(m);
+      for (const k of ['position', 'width', 'max-height', 'margin', 'left', 'right', 'bottom']) m.style.removeProperty(k);
+    }
+  };
+  place(); setInterval(place, 1000); addEventListener('resize', place);
+})();

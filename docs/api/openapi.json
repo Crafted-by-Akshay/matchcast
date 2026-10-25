@@ -52,6 +52,26 @@
         "title": "AskBody",
         "type": "object"
       },
+      "DrillBody": {
+        "additionalProperties": false,
+        "properties": {
+          "model_cut": {
+            "title": "Model Cut",
+            "type": "boolean"
+          },
+          "session_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "model_cut"
+        ],
+        "title": "DrillBody",
+        "type": "object"
+      },
       "DsAsk": {
         "additionalProperties": false,
         "properties": {
@@ -255,6 +275,11 @@
               }
             ],
             "title": "Engine Version"
+          },
+          "hold_booth": {
+            "default": false,
+            "title": "Hold Booth",
+            "type": "boolean"
           },
           "home_team_id": {
             "anyOf": [
@@ -1544,6 +1569,60 @@
         ]
       }
     },
+    "/v1/matches/{match_id}/booth": {
+      "get": {
+        "description": "Register the commentary booth for this match, or say plainly why it is not available,\nso the client can fall back to the rules booth instead of waiting on a stream that 429s.",
+        "operationId": "booth_status_v1_matches__match_id__booth_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Booth Status V1 Matches  Match Id  Booth Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Booth Status",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/matches/{match_id}/claims": {
       "get": {
         "operationId": "claims_v1_matches__match_id__claims_get",
@@ -1668,6 +1747,61 @@
           }
         },
         "summary": "Claims",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/drill": {
+      "post": {
+        "description": "The failure drill: cut or restore one match's model calls. While cut, each model call\nfails at once and the rules twin answers; every refusal is audited as fallback_used.",
+        "operationId": "failure_drill_v1_matches__match_id__drill_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DrillBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Failure Drill V1 Matches  Match Id  Drill Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Failure Drill",
         "tags": [
           "matches"
         ]
@@ -2372,6 +2506,60 @@
           }
         },
         "summary": "Vision Identify",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{match_id}/vision/summary": {
+      "get": {
+        "description": "What Vision contributes to the agents on this match (ADR-0022): passes in, the lines the\nVerifier passed on them, the latest such line, and agreement with the engine's passes.\n``ready`` is false until the match and its Vision stream exist; the page polls this before\na match starts, so that is an answer, not an error.",
+        "operationId": "vision_summary_v1_matches__match_id__vision_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Vision Summary V1 Matches  Match Id  Vision Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Vision Summary",
         "tags": [
           "matches"
         ]

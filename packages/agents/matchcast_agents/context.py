@@ -16,6 +16,8 @@ class MatchContext:
     events: tuple[dict[str, Any], ...]
     personas: tuple[str, ...] = ("casual", "analyst")
     extra: dict[str, Any] = field(default_factory=dict)
+    # a Vision stream's truth: the engine match's own events, which its Verifier compares against
+    truth: tuple[dict[str, Any], ...] = ()
 
     @property
     def home(self) -> str:
@@ -38,7 +40,13 @@ class MatchContext:
         """The same match cut at the state's sequence: events a batch wrote after the state was
         read are left out, so the score, the counts and the events all describe one moment."""
         upto = self.state.max_sequence
-        return replace(self, events=tuple(e for e in self.events if e["stream_sequence"] <= upto))
+        # the storylines are built from lines that may come after the cut, so they are dropped
+        extra = {k: v for k, v in self.extra.items() if k != "storylines"}
+        return replace(
+            self,
+            events=tuple(e for e in self.events if e["stream_sequence"] <= upto),
+            extra=extra,
+        )
 
     @property
     def allowed_names(self) -> set[str]:

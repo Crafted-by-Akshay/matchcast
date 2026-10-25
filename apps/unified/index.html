@@ -94,6 +94,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 @keyframes shimmer{to{background-position:-200% 0}}
 @media (max-width:820px){.view .wait .sk{grid-template-columns:1fr}.view .wait .sk .top,.view .wait .sk .bot{grid-column:1}.view .wait .sk .side{display:none}}
 .view.ready .wait{opacity:0}
+.view.panels .wait{opacity:0}   /* the desk's panels are up (desk-panels.js): the card lifts before the 3D pitch starts */
 .view.gone .wait{display:none}
 /* Broadcast pane: Watch and Broadcast side by side on a wide screen, with a divider the viewer can drag (or move with the arrow keys) */
 .stage.split{display:flex;flex-direction:row}
@@ -106,7 +107,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .stage.dragging iframe{pointer-events:none}
 .foot{flex:none;padding:6px var(--gut);font-size:12px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
 .foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
-.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
+.toast{position:fixed;left:50%;top:var(--toast-dt,150px);transform:translate(-50%,-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
 .recap{max-height:40vh;overflow:auto;position:fixed;left:var(--gut);bottom:44px;z-index:4;max-width:min(420px,calc(100vw - 2*var(--gut)));background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:13px}
 .recap[hidden]{display:none}
@@ -135,6 +136,23 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .ag-feed li.ok{border-color:var(--ok)}
 .ag-feed li.warn{border-color:var(--warn)}
 .ag-feed .m{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px}
+.ag-lanes{list-style:none;margin:0;padding:0;display:grid;gap:8px;font-size:13px}
+.ag-lanes .lane{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.ag-lanes .lane-h{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:6px;overflow-wrap:anywhere}
+.ag-lanes .m{color:var(--muted);font-variant-numeric:tabular-nums}
+.ag-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.ag-steps li{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:6px;padding:3px 7px;font-size:12px;background:var(--bg2)}
+.ag-steps li[data-agent="verifier"]{border-left-color:var(--ok)}
+.ag-steps li[data-agent="producer"]{border-left-color:var(--warn)}
+.ag-steps .tag{font:600 10px ui-monospace,monospace;color:var(--muted);margin:0 4px}
+.ag-steps .m{color:var(--muted);font-variant-numeric:tabular-nums}
+@media (max-width:700px){.ag-grid{grid-template-columns:minmax(0,1fr)}.ag-head .chips{width:100%}.ag-panel table{font-size:12px}}
+@media (max-width:560px){   /* the claims ledger becomes one card per claim: nothing runs past the screen edge (judge re-test, 390 px) */
+  .ag-table table,.ag-table tbody{display:block;width:100%}
+  .ag-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .ag-table tr{display:flex;flex-wrap:wrap;gap:2px 10px;padding:8px 2px;border-bottom:1px solid var(--line);max-width:100%}
+  .ag-table td{display:block;padding:0;border:0;min-width:0;overflow-wrap:anywhere}
+}
 .ag-prov dl{display:grid;grid-template-columns:96px minmax(0,1fr);gap:6px 10px;margin:0;font-size:13px}
 .ag-prov dt{color:var(--muted)}
 .ag-prov dd{margin:0;overflow-wrap:anywhere}
@@ -205,13 +223,14 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .foot{display:none}
 }
 @media (max-width:560px){
-  /* one scrolling row of utilities instead of three or four wrapped rows */
-  .status{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:4px 2px;position:relative}
-  .status .more{display:flex;position:sticky;right:0;align-items:center;padding:0 4px 0 22px;margin-left:-22px;background:linear-gradient(90deg,transparent,var(--bg) 55%);color:var(--text);font-size:22px;line-height:1;pointer-events:none}   /* a visible cue that the row scrolls */
-  .status::-webkit-scrollbar{display:none}
-  .status.end .more{display:none}   /* the cue goes once the row is scrolled to its end */
-  .status>*{flex:none}
-  #api-pill{order:-1}
+  /* judge re-test: nothing runs past the right edge. The utilities wrap instead of scrolling: language and Status share the wordmark's row, the rest sit under the view switcher */
+  .status{display:contents}
+  .status .more{display:none}
+  .top>.brand{order:0}
+  #lang-sel{order:1;margin-left:auto}
+  .switch{order:2}
+  .status>*{flex:none;order:3}
+  #lang-sel,#status-btn{order:1}
   .matchbar .chips{display:none}
   .matchbar .meta:not(.err){display:none}   /* the first screen belongs to the match: fixture, score, then the view; a load error still shows */
   .toast{bottom:auto;top:var(--toast-top,150px);left:0;right:0;transform:none;max-width:none;height:var(--toast-h,48px);display:flex;align-items:center;justify-content:center;border-radius:0;border-width:1px 0;padding:4px 12px;font-size:12px;line-height:1.3;overflow:hidden}   /* it takes the place of the Viewing-as row for its 2.6 s (toast() sets --toast-top and --toast-h): clear of the brand, the scoreboard and the pitch controls */
@@ -219,6 +238,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .fx label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .brand small{display:block}
 }
+@media (max-width:360px){.switch button{padding:7px 6px}#status-btn{order:3}#api-pill::before{content:none}}   /* a 320 px screen: the four view tabs fit without scrolling, Status joins Tour and Voice, and the agents pill drops its "Agents ·" prefix so it shares a row with the Azure label */
 @media (max-width:420px){
   .brand small{display:none}
   .switch button small{display:none}
@@ -276,6 +296,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <div class="chips">
     <span class="chip" id="sync">In sync</span>
     <span class="chip" id="src">Analyst: season run</span>
+    <button type="button" class="chip" id="bc-toggle" aria-pressed="false" hidden title="Show the Broadcast desk beside the match (loads a second 3D view)">Broadcast desk beside</button>
   </div>
 </section>
 
@@ -315,7 +336,14 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
           <span class="chip" id="ag-src">Source: waiting for Watch</span>
         </div>
       </div>
+      <p class="ag-vis" id="ag-vis" role="status"></p>
       <div class="ag-cards" id="ag-cards"></div>
+      <section class="ag-panel ag-orch" id="ag-orch" aria-labelledby="ag-orch-h"><h3 id="ag-orch-h">How the agents work, live <span class="muted" id="ag-orch-n"></span></h3>
+        <p class="muted" id="ag-orch-src" role="status"></p>
+        <p class="muted" id="ag-vision" role="status"></p>
+        <ol class="ag-lanes" id="ag-lanes"><li class="empty">Waiting for the kick-off in Watch. Each claim shows its handoffs here: Analyst, Narrator, Verifier, then Producer.</li></ol>
+      </section>
+      <div id="crew-score"></div>
       <section class="ag-panel" id="aq"><h3>Approval queue <span class="muted" id="aq-n"></span></h3>
         <div class="ag-filters"><label>Mode <select id="aq-mode"><option value="demo">Demo: verified lines air at once</option><option value="producer">Producer: a person approves each line</option></select></label>
           <span class="muted" id="aq-who">Signed in as Sam Producer (simulated account, Planned: Entra ID)</span></div>
@@ -331,13 +359,16 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
           <label>Agent <select id="lg-agent"><option value="">all</option><option>analyst</option><option>verifier</option><option>producer</option></select></label>
           <label>Metric <select id="lg-metric"><option value="">all</option><option>score</option><option>shot_xg</option><option>xg_total</option><option>moment</option><option>line</option></select></label>
           <button type="button" id="lg-export">Export CSV</button> <span class="muted" id="lg-hash" aria-live="polite"></span></div>
-        <div class="ag-table"><table><thead><tr><th>Time</th><th>Metric</th><th>Value</th><th>Units</th><th>Agent</th><th>Source</th><th>Verdict</th><th>Reason</th><th>Approval</th></tr></thead><tbody id="ag-claims"></tbody></table></div>
+        <div class="ag-table"><table role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Time</th><th role="columnheader">Metric</th><th role="columnheader">Value</th><th role="columnheader">Units</th><th role="columnheader">Agent</th><th role="columnheader">Source</th><th role="columnheader">Verdict</th><th role="columnheader">Reason</th><th role="columnheader">Approval</th></tr></thead><tbody role="rowgroup" id="ag-claims"></tbody></table></div>
+      </section>
+      <section class="ag-panel" id="ag-drill-panel"><h3>Failure drill</h3>
+        <div class="ag-audit"><button id="ag-drill" type="button" aria-pressed="false">Cut the model</button> <span id="ag-drill-note" class="muted" role="status">Cuts this match's model calls on the agent api, mid-match. The rules twins keep the lines coming and every refusal is written to the audit chain as fallback_used. Press again to restore the model.</span></div>
       </section>
       <section class="ag-panel"><h3>Audit chain</h3>
         <div class="ag-audit"><label class="muted"><input type="checkbox" id="ag-bad"> Seed a bad claim (demo): the next score claim is wrong, so the Verifier rejects and repairs it</label> <span id="ag-bad-note" class="muted" role="status"></span> <button id="ag-verify" type="button">Verify chain</button><span id="ag-verify-out" class="muted">Not checked yet</span></div>
         <ol class="ag-recs" id="ag-recs"></ol>
       </section>
-      <p class="ag-note">Simulated: the agents run rules in the page; the Azure parts are not connected. Watch is the live source. Its events and moments reach this pipeline each second, and its score goes to Broadcast's scoreboard and the Analyst's live pill. Broadcast's pitch still runs its own engine, and the Analyst keeps its season runs, until the single-engine refactor (see README).</p>
+      <p class="ag-note">Watch is the live source. Its events and moments reach this pipeline each second, and its score goes to Broadcast's scoreboard and the Analyst's live pill. Broadcast's pitch still runs its own engine, and the Analyst keeps its season runs, until the single-engine refactor (see README).</p>
     </div>
   </section>
 </main>
@@ -360,6 +391,8 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="feed.js"></script>
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
+<script src="crew.js"></script>
+<script src="crew-score.js"></script>
 <dialog id="status-dlg" aria-labelledby="status-h"><h2 id="status-h">What is running</h2><div id="status-box"></div><form method="dialog"><button class="pill">Close</button></form></dialog>
 <script src="speech.js"></script>
 <script src="status.js"></script>
@@ -384,7 +417,7 @@ const fixtureOf = (s) => { const f = FX.find((x) => keyOf(setupOf(x)) === keyOf(
 const byId = (id) => FX.find((x) => x.id === id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 { const st = document.querySelector('.status'); if (st) { const edge = () => st.classList.toggle('end', st.scrollLeft + st.clientWidth >= st.scrollWidth - 2); st.addEventListener('scroll', edge, { passive: true }); addEventListener('resize', edge); edge(); } }
-const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-dt', Math.round(r.top + r.height / 2) + 'px');   /* desktop: centred on the stage-steps row, off the views' cards and camera chips (UX pass 10) */ el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 // the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
 let RECAP = { gen: 0, closed: false };
 const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };
@@ -459,16 +492,17 @@ function ensure(view) {
     FR[view] = { el, key: want, ready: false, live: null, sent: null };
   } else if (FR[view].key !== want) {
     FR[view].key = want; FR[view].live = null; FR[view].sent = null; FR[view].el.src = url(view);
-    $('v-' + view).classList.remove('ready'); waitText(view, 'Loading the 3D engine'); restartWait(view);
+    $('v-' + view).classList.remove('ready', 'panels'); waitText(view, 'Loading the 3D engine'); restartWait(view);
   }
 }
 
 // the Analyst loads its season only when it is opened, so Watch and Broadcast get the machine first
 function routeAnalyst() {
   if (!M.fixture) return;
+  const cur = byId(M.fixture), nat = !!(cur && cur.national);   // a national-team fixture has no recorded run: the Analyst still loads, on its own default page, and is not routed to #live.<id>
   if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
-    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#live.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
-  if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
+    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + (nat ? '' : '#live.' + M.fixture); $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = nat ? null : M.fixture; return; }
+  if (!nat && FR.analyst.ready && FR.analyst.route !== M.fixture) {
     FR.analyst.route = M.fixture;
     post('analyst', { src: 'matchcast-shell', type: 'route', page: 'live', arg: M.fixture });
   }
@@ -479,7 +513,10 @@ function post(view, msg) { const f = frameOf(view); if (f && f.contentWindow) f.
 // Watch and Broadcast share the screen on a wide window (the live match beside its desk); a phone shows one at a time.
 const SPLIT_VIEWS = ['watch', 'broadcast'];
 const wide = window.matchMedia('(min-width: 900px)');
-function shownViews(view) { return SPLIT_VIEWS.includes(view) && wide.matches ? SPLIT_VIEWS : [view]; }
+// Watch is alone by default: one 3D render, one story. The Broadcast desk joins it beside the match on request (?split=1 or the button), and the Broadcast tab still shows both.
+let bcBeside = new URLSearchParams(location.search).get('split') === '1';
+function shownViews(view) { return wide.matches && (view === 'broadcast' || (view === 'watch' && bcBeside)) ? SPLIT_VIEWS : [view]; }
+(() => { const t = $('bc-toggle'); t.onclick = () => { bcBeside = !bcBeside; show(current); }; })();
 const SPLIT_KEY = 'mc.split', SPLIT_MIN = 0.25, SPLIT_MAX = 0.8;
 let splitFrac = 0.58;
 function applySplit(frac) {
@@ -512,6 +549,8 @@ function show(view) {
   }
   $('stage').classList.toggle('split', on.length > 1);
   $('split-bar').hidden = on.length < 2;
+  const tg = $('bc-toggle'); tg.hidden = true;   // the second 3D view is off the first screen for the sprint (AB#497); ?split=1 still opens it
+  tg.setAttribute('aria-pressed', String(bcBeside));
   for (const v of on) ensure(v);
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   paint();
@@ -548,6 +587,7 @@ function paint() {
   }
   $('meta').title = $('meta').textContent;
   if (live) { $('score-v').textContent = live.live.score.join('–'); $('score-l').textContent = live.live.over ? 'Full time' : live.live.minute + "'"; }
+  else if (fx && fx.national) { $('score-v').textContent = '–'; $('score-l').textContent = 'Synthetic squad'; }   // a national-team fixture has no recorded result
   else if (fx) { $('score-v').textContent = fx.score.join('–'); $('score-l').textContent = 'Recorded'; }
   else { $('score-v').textContent = '–'; $('score-l').textContent = 'Not in season'; }
 
@@ -556,7 +596,7 @@ function paint() {
   $('sync').textContent = current === 'agents' ? 'Shared pipeline' : current === 'analyst' ? (fx ? 'Showing ' + fx.id : 'Season fixtures only') : (synced ? 'Same fixture as Analyst' : 'Loads on switch');
   $('sync').className = 'chip ' + (current === 'analyst' || synced ? 'ok' : '');
   $('src').textContent = current === 'analyst'
-    ? (fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
+    ? (fx && fx.national ? 'Analyst: club season data, no run for this match' : fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
     : (live ? 'Match engine running here · ' + (current === 'agents' ? 'watch' : current) : 'Match engine: same setup as Analyst');
   $('src').className = 'chip ' + (live ? 'live' : '');
   pushFeed(); renderAgents(); paintStory();
@@ -628,34 +668,100 @@ const PRODUCER = 'Sam Producer (simulated)';
 function renderQueue() {
   const r = AG.run, q = r ? r.claims.filter((c) => c.approval === 'pending').sort((a, b) => !!b.alert - !!a.alert) : [];   // priority 1 alerts first
   $('aq-mode').value = AG.mode; $('aq-n').textContent = q.length ? q.length + ' waiting' : '';
-  const qhtml = q.length ? q.map((c) => '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
+  // an escalated line (the Verifier could not repair it) is marked and says why; only Kill is offered, because nothing airs it
+  const qhtml = q.length ? q.map((c) => c.escalated
+    ? '<li data-id="' + esc(c.id) + '" style="border-left:3px solid #b3261e;padding-left:6px"><span class="m">' + mins(c.minute) + '</span> <b style="color:#b3261e">Escalated</b> <span class="aq-text">' + esc(c.text) + '</span><small style="display:block;color:#b3261e">The Verifier could not repair this line: ' + esc(c.escalation) + '.</small> <button type="button" data-act="kill">Kill</button></li>'
+    : '<li data-id="' + esc(c.id) + '"><span class="m">' + mins(c.minute) + '</span> <span class="aq-text">' + esc(c.text) + '</span> <button type="button" data-act="approve">Approve</button> <button type="button" data-act="edit">Edit</button> <button type="button" data-act="kill">Kill</button></li>').join('')
     : '<li class="empty">' + (AG.mode === 'producer' ? 'No lines waiting.' : 'Demo mode: verified lines go straight to air.') + '</li>';
   if ($('aq-list').dataset.html !== qhtml) { $('aq-list').innerHTML = qhtml; $('aq-list').dataset.html = qhtml; }   // redrawing an unchanged list detaches the buttons mid-click
+}
+// Vision -> Agents (ADR-0022): the Vision stream's counts, polled while a match runs. The same summary goes to Watch's "From pixels" chip.
+let VIS = null;
+function renderVision() {
+  const el = $('ag-vis'); if (!el) return;
+  const s = VIS;
+  el.textContent = !s ? 'Vision -> Agents: waiting for Vision. Watch sends the tracker\'s passes once a match runs.'
+    : 'Vision -> Agents: ' + s.passes_in + ' passes in · ' + s.lines_verified + ' lines verified by the Verifier · engine ' + ((s.agreement && s.agreement.engine) || 0) + ' passes, ' + (s.agreement && s.agreement.precision != null ? Math.round(s.agreement.precision * 100) + '% of Vision\'s passes match one' : 'no passes to match yet') + (s.latest_line ? ' · latest: ' + s.latest_line : '');
+}
+// polls every 3 s while a summary is ready; before there is a match or a Vision stream it backs off, 3 s doubling to 20 s
+let visWait = 3000;
+async function pollVision() {
+  const key = LV.key;
+  try {
+    const s = await LV.visionSummary();
+    if (LV.key !== key) visWait = 3000;   // a new match: its first summary should not wait out the back-off
+    else {
+      const ok = !!s && s.ready === true;   // not ready, or no answer: clear what the last match showed
+      VIS = ok ? s : null; renderVision();
+      post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: ok ? s : null });
+      visWait = ok ? 3000 : Math.min(visWait * 2, 20000);
+    }
+  } finally {
+    setTimeout(pollVision, visWait);   // keep polling even when a render throws, as the old interval did
+  }
+}
+setTimeout(pollVision, visWait);
+renderVision();   // the strip says what it waits for before any match
+// What the agents are doing right now, from the live api's status (live.js): Foundry when the api answers with models,
+// the rules fallback when it does not answer, and rules in the page when no api is configured. Never a fixed label.
+function agentState() {
+  const s = LV.status;
+  if (s === 'live') return { chip: 'Foundry: live', cls: 'ok', tag: 'Foundry · live', note: 'the live api writes these lines with Foundry models', src: 'Live: the agent api runs Producer, Analyst, Narrator and Verifier on Foundry. Each handoff below is what the api reported.' };
+  if (s === 'warming') return { chip: 'Foundry: warming up', cls: 'warn', tag: 'Warming up', note: 'the api is still starting', src: 'Warming up: the api is starting. Rules agents in the page keep the feed moving until it answers.' };
+  if (s === 'fallback') return { chip: 'Rules fallback: no model answer', cls: 'warn', tag: 'Rules fallback', note: 'the api is not answering with models', src: 'Rules fallback: the api is not answering with models, so the rules agents in the page write these lines.' };
+  return { chip: 'Rules · simulated (no api)', cls: '', tag: 'Rules · simulated', note: 'no agent api is configured', src: 'Simulated: no agent api is configured, so the rules agents run in the page.' };
+}
+const STAGE = { analyst: 0, narrator: 1, verifier: 2, producer: 3 };   // the order a line travels in
+// one claim's handoffs in order: the rules trace when the page ran the claim, else the handoffs the api reported
+function stepsOf(c) {
+  if (c.trace && c.trace.length) return c.trace.map((s) => ({ agent: s.agent, step: s.step, mode: s.mode, timing: (s.ms < 1 ? s.ms.toFixed(2) : Math.round(s.ms)) + ' ms' }));
+  return (c.hops || []).map((h) => ({ agent: h.agent, step: h.step, mode: h.mode, timing: h.ms == null ? '' : '+' + (h.ms / 1000).toFixed(1) + ' s after the claim' }))
+    .sort((a, b) => (STAGE[a.agent] ?? 9) - (STAGE[b.agent] ?? 9));
+}
+function renderOrch(r) {
+  const claims = r ? r.claims.filter((c) => !c.pub) : [];
+  const verified = claims.filter((c) => c.verdict === 'verified').length, held = claims.filter((c) => c.verdict === 'abstained').length;
+  $('ag-orch-n').textContent = claims.length ? claims.length + ' claims · ' + verified + ' verified · ' + held + ' held' : '';
+  $('ag-orch-src').textContent = agentState().src;
+  // Vision: the browser tracker reads the match from pixels; the api gets its passes, and Azure Read is asked only about unclear shirt numbers
+  const v = LV.vision, failed = v.readsFailed ? ' (' + v.readsFailed + ' over budget or failed)' : '';
+  $('ag-vision').textContent = !LV.enabled ? 'Vision runs in the browser. No api is configured, so no pass or shirt-number check reaches Azure.'
+    : v.passes || v.reads || v.readsFailed ? 'Vision: the browser tracker sent ' + v.passes + ' passes to the api. Azure Read checked ' + v.reads + ' unclear shirt numbers' + failed + '.'
+    : 'Vision: the browser tracker reads shirt numbers from pixels in Watch and sends its passes here while Vision is on. None sent yet. Azure Read is asked only when a shirt number is unclear.';
+  const lane = (c) => '<li class="lane"><div class="lane-h"><b>' + esc(c.id) + '</b><span>' + esc(c.kind) + '</span><span class="m">' + mins(c.minute) + '</span><span class="v ' + esc(c.verdict || 'pending') + '">' + esc(c.verdict || 'pending') + '</span></div>'
+    + '<ol class="ag-steps">' + stepsOf(c).map((s) => '<li data-agent="' + esc(s.agent) + '" data-step="' + esc(s.step) + '"><b>' + esc(s.agent) + '</b> · ' + esc(s.step) + '<span class="tag">' + (s.mode === 'model' ? 'model' : 'rules') + '</span><span class="m">' + esc(s.timing) + '</span></li>').join('') + '</ol></li>';
+  $('ag-lanes').innerHTML = claims.length ? claims.slice(-6).reverse().map(lane).join('') : '<li class="empty">Waiting for the kick-off in Watch. Each claim shows its handoffs here: Analyst, Narrator, Verifier, then Producer.</li>';
 }
 const FOUNDRY = { word: 'not connected' };   // from /v1/status, painted by paintFoundry
 function renderAgents() {
   renderQueue();
+  const who = agentState();   // the Foundry chip is painted by paintFoundry from /v1/status
   if (current !== 'agents') return;
   const r = AG.run, st = r ? r.stat : { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 };
   const sel = picked || (r && r.claims.length ? r.claims[r.claims.length - 1].id : null);
+  // with an api configured, these counts are the page's own rules run beside it, so they are not tagged as Foundry
+  const cardTag = LV.enabled ? 'In-page rules run' : who.tag;
   const card = (name, role, line, tag) => '<article class="ag-card"><div class="ag-top"><b>' + name + '</b><span class="tag">' + tag + '</span></div><small>' + role + '</small><p>' + line + '</p></article>';
+  renderVision();
+  const drillBtn = $('ag-drill'); if (drillBtn && !drillBtn.disabled) { drillBtn.setAttribute('aria-pressed', String(LV.modelCut)); drillBtn.textContent = LV.modelCut ? 'Restore the model' : 'Cut the model'; }   // a new match starts with its model on
   $('ag-cards').innerHTML = [
-    card('Producer', 'Picks moments and routes lines', st.moments + ' moments seen · ' + st.verified + ' approved · ' + st.abstained + ' held', 'Rules · simulated'),
-    card('Analyst', 'Turns events into claims with evidence', st.claims + ' claims from ' + st.events + ' events', 'Rules · simulated'),
-    card('Narrator', 'Writes each line from the claim inputs', st.lines + ' lines in English', 'Rules · simulated'),
+    card('Producer', 'Picks moments and routes lines', st.moments + ' moments seen · ' + st.verified + ' approved · ' + st.abstained + ' held', cardTag),
+    card('Analyst', 'Turns events into claims with evidence', st.claims + ' claims from ' + st.events + ' events', cardTag),
+    card('Narrator', 'Writes each line from the claim inputs', st.lines + ' lines in English', cardTag),
     card('Verifier', 'Recounts every claim from the event log', st.verified + ' verified · ' + st.repaired + ' repaired · ' + st.abstained + ' abstained', 'Checks all claims'),
     card('Predictor', 'A tool the agents call, not an agent', st.predictions + ' predictions seen in the stream', 'Tool'),
     card('Data Scientist', 'Analyst dashboard only, when asked', 'Not called in this match', 'On demand')
   ].join('');
   $('ag-src').textContent = r ? 'Source: Watch · ' + r.names.home + ' v ' + r.names.away : 'Source: waiting for Watch';
+  renderOrch(r);
   $('ag-feed').innerHTML = r && r.feed.length
     ? r.feed.slice(-40).reverse().map((f) => '<li class="' + f.tone + '"><span class="m">' + mins(f.minute) + '</span><b>' + esc(f.who) + '</b> ' + esc(f.text) + '</li>').join('')
     : '<li class="empty">Waiting for the kick-off in Watch. Events and claims appear here as the match runs.</li>';
   $('ag-n').textContent = r ? r.claims.filter((c) => !c.pub).length + ' claims' : '';
   const rows = ledgerRows(r ? r.claims : []);
   $('ag-claims').innerHTML = rows.length
-    ? rows.slice(0, 40).map((x) => '<tr data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td>' + esc(x.time) + '</td><td>' + esc(x.metric) + '</td><td>' + esc(x.value) + '</td><td>' + esc(x.units) + '</td><td>' + esc(x.agent) + '</td><td>' + esc(x.source) + '</td><td class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td>' + esc(x.reason) + '</td><td>' + esc(x.approval) + '</td></tr>').join('')
-    : '<tr><td colspan="9" class="empty">No claims yet</td></tr>';
+    ? rows.slice(0, 40).map((x) => '<tr role="row" data-id="' + esc(x.id) + '"' + (x.id === sel ? ' class="on"' : '') + ' title="' + esc(x.agent + ' · ' + x.verdict + ' · ' + x.source) + '"><td role="cell">' + esc(x.time) + '</td><td role="cell">' + esc(x.metric) + '</td><td role="cell">' + esc(x.value) + '</td><td role="cell">' + esc(x.units) + '</td><td role="cell">' + esc(x.agent) + '</td><td role="cell">' + esc(x.source) + '</td><td role="cell" class="v ' + esc(x.verdict) + '">' + esc(x.verdict) + (x.repaired ? ' · repaired' : '') + '</td><td role="cell">' + esc(x.reason) + '</td><td role="cell">' + esc(x.approval) + '</td></tr>').join('')
+    : '<tr role="row"><td role="cell" colspan="9" class="empty">No claims yet</td></tr>';
   const c = r && r.claims.find((x) => x.id === sel);
   $('ag-prov').innerHTML = c ? '<dl>' + [
     ['Claim', c.id + ' · ' + c.kind + ' · ' + mins(c.minute)],
@@ -665,7 +771,7 @@ function renderAgents() {
     ['Verifier', esc(c.verdict + ': ' + c.reason)],
     ['Route', esc(c.route || 'held, not aired')],
     ['Contract', esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
-    ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules in the page (Foundry: ' + FOUNDRY.word + ')'],
+    ['Agent', c.source === 'model' ? 'Model · live agent api' : 'Rules · in the page, ' + agentState().note],
     ['Audit', c.audit.map((a) => '#' + a.seq + ' ' + a.hash).join(' · ') || 'pending'],
     ['Trace', '<button type="button" class="ag-how" data-id="' + esc(c.id) + '">How was this made?</button>']
   ].map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>' : '<p class="empty">Pick a claim to see its provenance.</p>';
@@ -713,7 +819,7 @@ function voiceFeed(items) {
     const key = x.id + '@' + x.t;
     if (voiced.has(key)) continue;
     voiced.add(key);
-    if (VC.on) VC.say(x.text, { id: 'feed-' + key, at: x.t, role: x.source === 'live' || x.kind === 'summary' ? 'analyst' : 'playByPlay', tone: x.tone });
+    if (VC.on) VC.say(x.text, { id: 'feed-' + key, at: x.t, role: x.speaker === 'colour' ? 'analyst' : 'playByPlay', tone: x.tone });
   }
 }
 function pushLines() {
@@ -814,11 +920,21 @@ const callEnd = (note) => {
 };
 window.callLeave = () => { if (CALL.on) callEnd('Call ended: you left Watch.'); };   // the mic must not stay open on another view
 
+let boothLast = null;   // the booth's state (GET /booth), sent to both cards and re-sent to a card that loads after it
 window.addEventListener('message', (e) => {
   const d = e.data || {};
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
+  if (d.type === 'feed-ready') {
+    post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on });
+    if (boothLast) post(view, boothLast);
+    if (view === 'broadcast') {   // a desk that joins mid-match gets what it missed: the queue and mode, the feed and where the lines come from (lines already aired are not replayed: Broadcast would speak them again)
+      postQueue(); post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items: CM.view(40) });
+      if (M.agents) post('broadcast', M.agents);
+    }
+    return;
+  }   // the commentary card asks once on load, so it shows the right Voice state at once
   if (d.type === 'vision-crop' && view === 'watch') {   // the tracker's OCR second opinion (DAT-11); only when the agent api is live
     const reply = (extra) => post('watch', Object.assign({ src: 'matchcast-shell', type: 'vision-ocr', id: d.id }, extra));
     if (!(LV.enabled && LV.status === 'live')) { reply({ error: 'unavailable' }); return; }
@@ -879,6 +995,7 @@ window.addEventListener('message', (e) => {
     if (AG.run && AG.run.key === keyOf(d.setup)) { LV.events(d.batch); post('broadcast', { src: 'matchcast-shell', type: 'events', batch: d.batch }); pushFeed(); }
     return;
   }   // Watch's live events and moments
+  if (d.type === 'panels') { if (view === 'broadcast' && hasGL) $('v-' + view).classList.add('panels'); return; }   // the desk's panels render before its 3D module loads (desk-panels.js); without WebGL the card keeps its message
   if (d.type === 'progress') { waitText(view, d.text); return; }
   const f = FR[view];
   if (d.setup) f.live = { setup: d.setup, started: !!d.started, over: !!d.over, score: d.score || [0, 0], minute: d.minute || 0 };
@@ -892,7 +1009,7 @@ window.addEventListener('message', (e) => {
     $('v-' + view).classList.add('ready');
     if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });
     if (M.agents) post(view, M.agents);   // a view that (re)loaded learns the viewer's language
-    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); CM.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
+    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); CM.reset(keyOf(s), Object.assign({}, teamsOf(s), { history: (byId(M.fixture) || {}).history })); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
     prefetchOthers();
     toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
     paint(); routeAnalyst();
@@ -934,12 +1051,12 @@ function init(list) {
   for (const m of Object.keys(md)) {
     const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
     for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
-      o.textContent = fx.home.club + ' v ' + fx.away.club + ' (recorded ' + fx.score.join('–') + ')'; g.appendChild(o); }
+      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = fx.national ? 'Synthetic squads, no recorded result' : 'Recorded result ' + fx.score.join('–') + ' (the Analyst replays it)'; g.appendChild(o); }
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
-  // default: the season's most open fixture, so the first view has goals to watch
-  const best = FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
+  // default: the national-team fixture when the data has one, else the season's most open fixture, so the first view has goals to watch
+  const best = FX.find((f) => f.national) || FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
   M.setup = setupOf(best); M.fixture = best.id;
   // filming URL (?seed=2026&speed=4&seedBadClaim=1): the same match, pace and demo claim on every take
   const Q = new URLSearchParams(location.search);
@@ -990,6 +1107,20 @@ function init(list) {
       : b === 'late' ? 'In-page now. This match was already created, so the server Verifier gets it at the next match start.' : 'Will go to the server Verifier with the match (from minute 12) and happens in-page now.';
   };
   $('ag-bad').onchange = (e) => { AG.seedBad(e.target.checked); LV.seedBad(e.target.checked); badNote(); };
+  // the failure drill: cut this match's model on the api, watch the pill drop to Rules fallback while the lines keep coming, then restore it. No api: the page is on rules already, so there is nothing to cut
+  const drillNote = (t) => { $('ag-drill-note').textContent = t; };
+  $('ag-drill').onclick = async () => {
+    const b = $('ag-drill'), on = b.getAttribute('aria-pressed') !== 'true';
+    if (!LV.enabled) { drillNote('No agent api is connected: the rules agents in this page write every line already (Simulated), so there is no model to cut.'); return; }
+    b.disabled = true; drillNote(on ? 'Cutting the model…' : 'Restoring the model…');
+    try {
+      const j = await LV.drill(on);
+      drillNote(j.model_cut ? 'Model cut on the api. Each model call for this match now fails at once and the rules twin answers: the pill reads Rules fallback at the next moment, the audit chain records fallback_used for each refusal, and Ask and Talk answer from the rules too.'
+        : j.mode === 'rules' ? 'Model restored. This match runs on the rules agents (no model deployment or past the live allowance), so the cut changed nothing.'
+        : 'Model restored. Each agent\'s breaker stays open for up to 30 s and then needs one good call, so allow up to 30 s plus one model moment before the pill reads Live agents again.');
+    } catch (e) { drillNote('The api did not take the drill (' + (e.status || e.message) + '). Nothing changed.'); }
+    b.disabled = false; renderAgents();
+  };
   setInterval(badNote, 2000);
   // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
   M.lang = 'en'; M.persona = M.persona || 'fan'; CM.setPersona(M.persona);
@@ -1007,6 +1138,7 @@ function init(list) {
     vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
     $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') + (VC.crowd ? ' · crowd bed (simulated)' : '') : '';
     vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
+    post('watch', { src: 'matchcast-shell', type: 'voice-state', on: VC.on }); post('broadcast', { src: 'matchcast-shell', type: 'voice-state', on: VC.on });   // the commentary card says "Sound off" while Voice is off
   };
   const vd = $('voice-demo'), vdShow = () => { vd.hidden = !LV.enabled; };
   let demo = null;   // the playing sample; clicking again stops it
@@ -1031,7 +1163,7 @@ function init(list) {
     $('aq-msg').textContent = res.ok ? 'Done.' : res.reason;
   };
   AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); postQueue(); });
-  const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
+  const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'This match has no checked claim from the api (it did not answer, its stream dropped, or it is on rules), so the in-page rules agents are producing the lines. The Foundry chip on the Agents tab reports the api\'s deployment, which can be live while this match is on rules.', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 90 s for the first batch, then up to 60 s for the first claim)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
   const MATCHCAST_API_ON = () => !!(window.MATCHCAST_API || '').replace(/\/$/, '');
   let warmTick = null;   // while warming, count the seconds so a cold start shows progress; the api's own limit is MATCHCAST_WARM_MS (90 s), then the rules agents take over
@@ -1044,7 +1176,7 @@ function init(list) {
     const dep = d && d.dependencies.find((x) => /^(microsoft )?foundry\b/i.test(x.label)), ok = dep && dep.status === 'live';
     FOUNDRY.word = !MATCHCAST_API_ON() ? 'not connected' : dep ? dep.status : 'status unavailable';
     const chip = $('ag-foundry'); chip.textContent = 'Foundry: ' + (MATCHCAST_API_ON() ? (dep ? dep.status : 'status unavailable') : 'not connected');
-    chip.title = dep ? dep.detail : ''; chip.className = 'chip' + (ok ? '' : ' warn'); renderAgents();
+    chip.title = dep ? dep.detail + ' (the api\'s deployment; the pill in the header says what this match is using)' : ''; chip.className = 'chip' + (ok ? '' : ' warn'); renderAgents();
   };
   const paintPill = (s) => {
     paintFoundry();
@@ -1055,12 +1187,15 @@ function init(list) {
       warmTick = setInterval(tick, 1000);
     }
     paintPillNow(s);
+    renderAgents();   // the Agents tab follows the api's status
     if (s === 'warming') $('api-pill').textContent = PILL.warming[0] + ' · 0 s of up to ' + Math.round((window.MATCHCAST_WARM_MS || 90000) / 1000);
   };
   const paintPillNow = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
-  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });
+  const boothState = (j) => { boothLast = { src: 'matchcast-shell', type: 'booth-state', ready: !j || !!j.ready, reason: (j && j.reason) || '' }; post('watch', boothLast); post('broadcast', boothLast); };   // no answer yet (null): the card shows nothing
+  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, booth: boothState });
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
+  renderAgents();
   $('status-btn').onclick = () => { const dlg = $('status-dlg'); STX.draw($('status-box')); if (dlg.showModal) dlg.showModal(); };
   show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'watch');
 }

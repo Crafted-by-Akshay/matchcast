@@ -1,4 +1,4 @@
-// ---- unified console: the agents. One pipeline, shared by Watch, Analyst and Broadcast. Rules-based and simulated: no Foundry call yet.
+// ---- unified console: the agents. One pipeline, shared by Watch, Analyst and Broadcast. The page's rules agents run here; the live api's claims arrive through ingest.
 // Producer picks moments and routes approved lines. Analyst turns events into claims. Narrator writes each line from the claim's inputs.
 // Verifier recounts every claim from the raw event log, repairs it once from that recount, or abstains. Predictor is a tool; the Data Scientist runs on demand.
 const AG = (() => {
@@ -12,7 +12,7 @@ const AG = (() => {
   let mode = 'producer', onAir = () => {};   // producer (the default): a person approves each line first; demo: verified lines air at once
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
-    roll: { score: [0, 0], xg: [0, 0], nextXg: 5 },
+    roll: { score: [0, 0], xg: [0, 0], nextXg: 1 },
     stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 } });
   const teamIx = (k) => (!run || k == null) ? -1 : k === run.names.hk ? 0 : k === run.names.ak ? 1 : -1;
   const teamName = (t) => (t === 0 ? run.names.home : run.names.away);
@@ -118,10 +118,16 @@ const AG = (() => {
     if (c.approval === 'approved') trace(c, 'producer', 'publication', t, { detail: 'line published to the ' + c.route + ' view' });
     return r;
   };
-  const approve = (id, who) => act(id, who, 'line_approved', {}, (c) => { c.approval = 'approved'; c.approvedBy = who; onAir(air(c)); return { ok: true }; });
+  // a line the Verifier could not repair never airs: a person can kill it, but not approve or reword it (its numbers are the ones that failed)
+  const held = (c) => (c.escalated ? { ok: false, reason: 'the Verifier could not check this line: kill it' } : null);
+  const approve = (id, who) => act(id, who, 'line_approved', {}, (c) => {
+    if (held(c)) return held(c);
+    c.approval = 'approved'; c.approvedBy = who; onAir(air(c)); return { ok: true };
+  });
   const kill = (id, who, reason) => act(id, who, 'line_killed', { reason: reason || '' }, (c) => { c.approval = 'killed'; c.approvedBy = who; return { ok: true }; });
   // an edit may reword, but every number in it must already be in the verified line, so it cannot add a fact
   const edit = (id, who, text) => act(id, who, 'line_edited', { text }, (c) => {
+    if (held(c)) return held(c);
     const ok = new Set(nums(c.text).concat(nums(min(c.minute))));
     const bad = nums(text).filter((n) => !ok.has(n));
     if (!text.trim() || bad.length) return { ok: false, reason: 'not aired: ' + (bad.length ? 'number ' + bad[0] + ' is not in the verified line' : 'empty line') };
@@ -263,11 +269,13 @@ const AG = (() => {
     const last = rows.length ? rows[rows.length - 1].minute : null;
     if (last != null && last >= run.roll.nextXg) {
       pipeline(claim('xg_total', last, [], { xg: run.roll.xg.slice() }, { basis: 'every shot up to ' + min(last) }));
-      run.roll.nextXg = Math.floor(last / 5) * 5 + 5;
+      run.roll.nextXg = Math.max(5, Math.floor(last / 5) * 5 + 5);   // the first running total comes at minute 1 so the pipeline shows a checked line early, then every five minutes
     }
     changed();
   };
 
+  // why the Verifier could not repair a line, in words a producer can act on (the keys are the api's escalating reason codes)
+  const ESCALATION = { number_mismatch: 'a number does not match the event log', unknown_player: 'a player is not in the event log', unknown_source: 'it cites a source the event log does not have', stale_state: 'the match moved on before it was checked' };
   // a new match from Watch (its start, or a fixture change) starts a new run, and the audit chain starts again with it
   // a claim or line from the live api (live.js): shown beside the rules claims, tagged with where it came from ('model' when the api says live, else 'rules')
   const ingest = (d, status) => {
@@ -277,21 +285,43 @@ const AG = (() => {
     // `line` events walk one drafted line through drafted, verified, approved, published (or rejected, killed) for every audience;
     // `publication` events are the line a viewer of this stream's audience sees, published after the server Verifier and approval.
     // Only a claim or a publication becomes a card; a line event updates the publication it belongs to.
+    // A line the Verifier could not repair (status 'review', escalated) is the one line event that becomes a card: it waits for a person.
     const isLine = !!d.line_id && !d.publication_id && !d.claim_id;
+    const escalated = isLine && !!d.escalated;   // status review alone is an ordinary line the Verifier did not verify: it makes no card
     const id = d.claim_id || d.publication_id || (isLine ? 'pub-' + d.line_id : null) || (d.claim_ids && d.claim_ids[0]);
     if (!id) return;
     let c = run.claims.find((x) => x.id === id);
-    if (!c && isLine) return;
+    if (isLine) {   // a line names the claims behind it: its verdict and approval land on them, whether or not a publication exists yet
+      for (const cid of d.claim_ids || []) {
+        const e = run.claims.find((x) => x.id === cid && x.api); if (!e) continue;
+        if (d.status === 'verified') { hop(e, 'verifier', 'verified'); }
+        if (d.status === 'approved') { hop(e, 'producer', 'approved'); e.verdict = 'verified'; e.reason = 'api: line approved'; }
+        if (['rejected', 'abstained'].includes(d.status)) { hop(e, 'verifier', 'rejected'); e.verdict = 'abstained'; e.reason = 'api: line ' + d.status; }
+        if (d.status === 'killed') { hop(e, 'producer', 'killed'); e.verdict = 'abstained'; e.reason = 'api: line killed'; }
+      }
+    }
+    if (!c && isLine && !escalated) { changed(); return; }
     if (!c) {
       c = MCC.claim({ id, kind: d.metric || 'line', minute: last, agent: 'analyst', evidence: [], inputs: d.metric ? { metric: d.metric, value: d.value, units: d.units } : {}, source: src, api: true });
-      if (d.publication_id) c.pub = true; else run.stat.claims++;   // a publication is the viewer-facing line, not evidence: it stays out of the claims ledger
+      if (d.publication_id || isLine) c.pub = true; else run.stat.claims++;   // a publication or a line is the viewer-facing text, not evidence: it stays out of the claims ledger
       run.claims.push(c);
+      c.seenAt = clock();
+      if (!c.pub) hop(c, 'analyst', 'claim');
     }
-    if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; }
+    if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; if (c.verdict === 'verified') hop(c, 'verifier', 'verified'); }
     if (d.publication_id) { c.verdict = 'verified'; c.reason = 'api: published after the server Verifier'; c.apiClaims = d.claim_ids || [];
-      for (const cid of c.apiClaims) { const e = run.claims.find((x) => x.id === cid); if (e && e.api) { e.verdict = 'verified'; e.reason = 'api: published in ' + c.id; } } }   // the evidence behind a published line was approved
+      for (const cid of c.apiClaims) { const e = run.claims.find((x) => x.id === cid); if (e && e.api) { e.verdict = 'verified'; e.reason = 'api: published in ' + c.id; hop(e, 'verifier', 'verified'); if (d.text) hop(e, 'narrator', 'draft'); hop(e, 'producer', 'publication'); } } }   // the evidence behind a published line was approved
     if (isLine) {
-      if (['abstained', 'rejected', 'killed'].includes(d.status)) { c.verdict = 'abstained'; c.reason = 'api: line ' + d.status; }
+      if (['abstained', 'rejected', 'killed'].includes(d.status)) { c.verdict = 'abstained'; c.reason = 'api: line ' + d.status; if (c.approval === 'pending') c.approval = 'killed'; }   // the api took it off the queue
+      if (d.status === 'verified') hop(c, 'verifier', 'verified');
+      if (d.status === 'approved') hop(c, 'producer', 'approved');
+      if (escalated) {   // the Verifier could not check it, so it is held: a person may kill it, but nothing airs it (approve and edit refuse it)
+        const wasEscalated = !!c.escalated;
+        c.escalated = true; c.escalation = ESCALATION[d.reason_code] || 'the Verifier could not repair it';
+        c.born = c.born || clock(); c.trace = c.trace || []; c.text = d.text || c.text; c.verdict = 'abstained'; c.reason = 'api: could not repair';
+        if (!c.approval) c.approval = 'pending';
+        if (!wasEscalated) trace(c, 'verifier', 'escalated', clock(), { detail: c.escalation + ': a person decides' });   // a replayed event does not add a second step
+      }
       if (Array.isArray(d.checks) && d.checks.length) c.apiChecks = d.checks;
       changed(); return;
     }
@@ -301,11 +331,18 @@ const AG = (() => {
       c.tr = c.tr || {};
       for (const l of ['es', 'hi']) if (typeof d.variants[l] === 'string' && d.variants[l].trim()) c.tr[l] = { ok: true, text: d.variants[l], reason: 'api: translated and re-checked', api: true };
     }
-    if (d.text) { c.text = d.text; run.stat.lines++; say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, d.event_time_ms != null ? +d.event_time_ms / 60000 : last, d.metric, d.publication_id); }   // the api's checked line also joins the continuous feed (feed.js)
+    // the stream repeats a line on every status step and audience: the Live flow and commentary take each distinct line once
+    if (d.text) { c.text = d.text; c.said = c.said || new Set(); if (!c.said.has(d.text)) { c.said.add(d.text); run.stat.lines++; hop(c, 'narrator', 'draft'); say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, d.event_time_ms != null ? +d.event_time_ms / 60000 : last, d.metric, d.publication_id, typeof d.persona === 'string' && d.persona.startsWith('booth:') ? d.persona.slice(6) : ''); } }   // the api's checked line also joins the commentary
     if (d.status === 'approved') c.route = 'fan';
-    c.source = src; changed();
+    changed();   // the claim's source was set when it arrived: a later status change (say, a rules fallback) does not rewrite how its earlier steps were made
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  const queue = () => (run ? run.claims.filter((c) => c.approval === 'pending').map((c) => Object.assign(air(c), { approval: 'pending', waiting_ms: Math.round(clock() - c.born) })) : []);
-  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending')) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  // the handoffs of a claim that came from the api (its rules trace is `trace`): one entry per agent and step, the first time it happens, with the time since the claim arrived
+  const hop = (c, agent, step) => {
+    c.hops = c.hops || [];
+    if (c.hops.some((h) => h.agent === agent && h.step === step)) return;
+    c.hops.push({ agent, step, mode: c.source === 'model' ? 'model' : 'rules', ms: c.seenAt != null ? +(clock() - c.seenAt).toFixed(0) : null });
+  };
+  const queue = () => (run ? run.claims.filter((c) => c.approval === 'pending').map((c) => Object.assign(air(c), { approval: 'pending', waiting_ms: Math.round(clock() - c.born), escalated: !!c.escalated, escalation: c.escalation || null })) : []);
+  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending' && !x.escalated)) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();

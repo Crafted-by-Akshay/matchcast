@@ -12,4 +12,4 @@ A yellow card is a caution, for example for reckless challenges, time wasting or
 
 ## Advantage
 
-The referee may let play continue if the team that was fouled benefits. If the benefit does not come, the referee can return to the foul. This is our own summary; the official text is in the IFAB Laws of the Game.
+The referee may let play continue if the team that was fouled benefits. If the benefit does not come, the referee can return to the foul. This is our own summary; the official text is in the official Laws of the Game.

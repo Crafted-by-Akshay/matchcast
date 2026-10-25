@@ -94,3 +94,22 @@
   };
   setInterval(window.mcVisThrottle, 2000);
 })();
+// Vision -> Agents on Watch (ADR-0022): a "From pixels" chip with the latest line the agents wrote from Vision's passes, and how far Vision agrees with the engine. The shell polls the api and sends the summary here; the chip stays hidden until Vision has sent passes.
+(() => {
+  const chip = document.createElement('div');
+  chip.className = 'hud'; chip.id = 'frompx'; chip.hidden = true; chip.setAttribute('role', 'status'); chip.setAttribute('aria-live', 'polite');
+  chip.style.cssText = 'left:50%;transform:translateX(-50%);top:10px;max-width:min(620px,calc(100% - 24px));background:var(--panel,#0b1624);border:1px solid var(--line,#23364d);border-radius:999px;padding:4px 12px;font:500 11px system-ui,sans-serif;color:var(--muted,#9fb3c8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  const tag = document.createElement('b'), text = document.createElement('span');
+  tag.textContent = 'From pixels '; chip.append(tag, text);
+  document.body.appendChild(chip);
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'vision-summary') return;
+    if (!d.summary) { chip.hidden = true; return; }   // no match, or no answer from the api
+    const s = d.summary, a = s.agreement || {};
+    chip.hidden = !s.passes_in;
+    const agree = a.precision == null ? 'no passes to match yet' : Math.round(a.precision * 100) + '% of Vision\'s passes match an engine pass';
+    text.textContent = (s.latest_line || (s.passes_in + ' passes tracked')) + ' · engine ' + (a.engine || 0) + ' passes, ' + agree;
+    chip.title = 'Vision ' + s.passes_in + ' passes in, ' + s.lines_verified + ' lines verified by the Verifier';
+  });
+})();

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { openShell, viewFrame } from './helpers';
+import { openShell, ready, viewFrame } from './helpers';
 
 // The Broadcast desk's producer section, driven by a real line: the Verifier rejects a wrong number and repairs it, the line waits for a person, Approve airs it through the shell, and the event-to-air time comes from the shell's own air message.
 declare const AG: any;
@@ -51,4 +51,36 @@ test('the Producer toggle switches the mode, the Agents select follows, and Auto
   await f.locator('#mc-pmode [data-mode="producer"]').click();
   await expect.poll(() => page.evaluate(() => AG.mode)).toBe('producer');
   await expect(page.locator('#aq-mode')).toHaveValue('producer');
+});
+
+test('an escalated line waits with its reason and a marker: nothing airs it, Auto-air skips it, and Kill removes it', async ({ page }) => {
+  test.setTimeout(300_000);
+  await openShell(page, 'broadcast', '?seed=2026');
+  const f = await viewFrame(page, 'broadcast');
+  await expect(f.locator('#mc-producer')).toBeVisible({ timeout: 240_000 });
+  await ready('broadcast')(page);   // the view has taken its first queue message, so the line below is not sent to a view that is still loading
+  // a line waiting for review that the Verifier did not escalate is not a card: only an escalated line reaches the queue
+  await page.evaluate((n) => { AG.reset('k-escalated', n); AG.ingest({ line_id: 'L8', status: 'review', escalated: false, text: "Thames Rovers lead 2-0 at 10'." }, 'live'); }, names);
+  expect(await page.evaluate(() => AG.run.claims.some((c: any) => c.id === 'pub-L8')), 'a review line that was not escalated makes no card').toBe(false);
+  // the api's line event for a line the Verifier could not repair (status review, escalated), as live.js hands it to AG.ingest
+  await page.evaluate((n) => { AG.ingest({ line_id: 'L9', status: 'review', escalated: true, reason_code: 'number_mismatch', text: "Thames Rovers lead 3-0 at 20'." }, 'live'); }, names);
+
+  const item = f.locator('#mc-pq li[data-id="pub-L9"]');
+  await expect(item, 'the escalated line is marked and says why').toContainText('Escalated');
+  await expect(item).toContainText('The Verifier could not repair this line: a number does not match the event log');
+  await expect(item.locator('[data-act="approve"]'), 'nothing airs a line the Verifier could not check').toHaveCount(0);
+  await expect(page.locator('#aq-list li[data-id="pub-L9"]'), 'the Agents queue shows the same marker').toContainText('Escalated');
+  await expect(page.locator('#aq-list li[data-id="pub-L9"] [data-act="approve"]')).toHaveCount(0);
+  expect(await page.evaluate(() => AG.approve('pub-L9', 'Test').ok), 'approve refuses it').toBe(false);
+
+  await f.locator('#mc-pmode [data-mode="demo"]').click();
+  await expect.poll(() => page.evaluate(() => AG.mode)).toBe('demo');
+  expect(await page.evaluate(() => AG.run.claims.find((c: any) => c.id === 'pub-L9').approval), 'Auto-air leaves it waiting').toBe('pending');
+  await expect(item).toHaveCount(1);
+
+  await f.locator('#mc-pmode [data-mode="producer"]').click();
+  await expect.poll(() => page.evaluate(() => AG.mode)).toBe('producer');
+  await item.locator('[data-act="kill"]').click();
+  await expect.poll(() => page.evaluate(() => AG.run.claims.find((c: any) => c.id === 'pub-L9').approval), 'Kill takes it off the queue').toBe('killed');
+  await expect(item).toHaveCount(0);
 });

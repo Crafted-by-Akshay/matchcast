@@ -30,6 +30,7 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
         });
         return;
       }
+      if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end(); }   // a GET that is not the event stream (the status poll) is answered at once: a stream that never ends holds one of the browser's few connections
       r.writeHead(200, { 'Content-Type': 'text/event-stream', ...cors }); r.write('event: status\ndata: {"status":"live"}\n\n');
     }).listen(0, () => resolve(s));
   });
@@ -37,12 +38,13 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
     const api = 'http://127.0.0.1:' + (server.address() as any).port;
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api) + ';' }));
-    await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+    await page.goto('/index.html?split=1', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
     await page.evaluate(() => { LV.persona('club:thr', 'en'); LV.begin('k1', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }); });
 
     const desk = page.frameLocator('#v-broadcast iframe');
     await expect(desk.locator('#mc-desk')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('#v-broadcast'), 'the Copilot answers with picks once the shared match has started').toHaveClass(/ready/, { timeout: 60_000 });
     await expect(page.frameLocator('#v-watch iframe').locator('#mc-focus'), 'no focus pill before Broadcast suggests one').toBeHidden();
     await desk.locator('[data-cop="highlights"]').click();
     await expect(desk.locator('#mc-cop-out')).toContainText('Ivan Ruiz', { timeout: 20_000 });
@@ -113,6 +115,7 @@ test('a plain question on the Watch view keeps the Ask request exactly as it was
         });
         return;
       }
+      if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end(); }   // a GET that is not the event stream (the status poll) is answered at once: a stream that never ends holds one of the browser's few connections
       r.writeHead(200, { 'Content-Type': 'text/event-stream', ...cors }); r.write('event: status\ndata: {"status":"live"}\n\n');
     }).listen(0, () => resolve(s));
   });

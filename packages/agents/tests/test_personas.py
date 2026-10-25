@@ -123,3 +123,96 @@ def test_club_watch_accepts_the_display_name_or_the_slug() -> None:
     assert normalise("club:Northgate FC", clubs, {}) == "my-club:home"
     assert normalise("club:harbour-united", clubs, {}) == "my-club:away"
     assert normalise("club:Nowhere Town", clubs, {}) is None
+
+
+def test_booth_voices_are_personas_with_broadcast_limits() -> None:
+    assert valid("booth:pbp") and valid("booth:colour") and not valid("booth:referee")
+    assert max_chars("booth:pbp") == 180 and max_numbers("booth:colour") == 2
+
+
+def test_goal_moment_gives_the_booth_a_call_and_a_reaction_in_order(match) -> None:
+    flow = flow_with(match, ["casual", "booth:pbp", "booth:colour"])
+    lines = flow.store.lines(flow.sk)
+    by_moment: dict[str, list] = {}
+    for line in lines:
+        by_moment.setdefault(line.moment_id, []).append(line)
+    # the goal, not the booth-only kick-off: it is the moment that also has the casual line
+    goal = next(
+        v for v in by_moment.values() if {ln.persona for ln in v} >= {"casual", "booth:pbp"}
+    )
+    assert {ln.persona for ln in goal} == {"casual", "booth:pbp", "booth:colour"}
+    pbp = next(ln for ln in goal if ln.persona == "booth:pbp")
+    colour = next(ln for ln in goal if ln.persona == "booth:colour")
+    assert pbp.text != colour.text and not extract_numbers(colour.text)
+    assert pbp.status in ("verified", "published", "approved")
+    assert colour.status in ("verified", "published", "approved")
+    # the reaction is checked and aired after the call it reacts to
+    order = [
+        r["subject_id"] for r in flow.store.audit_records(flow.sk) if r["action"] == "line_verified"
+    ]
+    moment = [i for i in order if i in {pbp.line_id, colour.line_id}]
+    assert moment == [pbp.line_id, colour.line_id]
+
+
+def test_buildup_and_filler_moments_have_booth_lines_from_claims_alone(match) -> None:
+    from matchcast_agents.messages import ProducerTask
+    from matchcast_agents.rules import AnalystRules, NarratorRules
+
+    flow = flow_with(match, ["casual"])
+    ctx = flow._ctx()
+    first = ctx.events[0]
+    for kind, metric in (("buildup", "goals"), ("filler", "shots")):
+        task = ProducerTask(
+            moment_id=f"m-{kind}",
+            match_id=ctx.stream["match_id"],
+            event_ids=(first["event_id"],),
+            up_to_sequence=ctx.state.max_sequence,
+            priority=3,
+            personas=("booth:pbp", "booth:colour"),
+            reason=kind,
+        )
+        claims = run(AnalystRules().analyse(ctx, task))
+        packets = [c.packet for c in claims]
+        assert [p["metric"].split(":")[0] for p in packets] == [metric, metric]
+        lines = run(NarratorRules().write(ctx, task, packets))
+        assert [ln.persona for ln in lines] == ["booth:pbp", "booth:colour"]
+
+
+def test_a_booth_is_registered_whole_or_not_at_all(match) -> None:
+    flow = flow_with(match, ["casual"])
+    flow.extra_personas.extend(f"one-metric:{m}" for m in ("shots", "goals", "cards", "fouls"))
+    flow.extra_personas.extend(f"one-metric:{m}" for m in ("xg", "tackles_won", "red_cards"))
+    assert len(flow.extra_personas) == 7
+    before = list(flow.extra_personas)
+    assert not flow.add_personas(("booth:pbp", "booth:colour"))
+    assert flow.extra_personas == before  # not even the first voice stayed
+    flow.extra_personas.pop()
+    assert flow.add_personas(("booth:pbp", "booth:colour"))
+    assert flow.add_personas(("booth:pbp", "booth:colour"))  # again: nothing new, still fine
+    assert len(flow.extra_personas) == 8
+
+
+def test_the_booth_is_not_held_for_approval_unless_the_producer_asks(match) -> None:
+    def statuses(hold: bool) -> dict[str, set[str]]:
+        config = WorkflowConfig(
+            personas=("casual", "booth:pbp", "booth:colour"),
+            approval_mode="producer",
+            hold_booth=hold,
+        )
+        flow = MatchWorkflow(
+            stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+            clubs=match["teams"], agents=rules_agents(config.personas), config=config,
+        )  # fmt: skip
+        run(flow.ingest(match["events"]))
+        out: dict[str, set[str]] = {}
+        for line in flow.store.lines(flow.sk):
+            out.setdefault(line.persona, set()).add(line.status)
+        return out
+
+    free, held = statuses(False), statuses(True)
+    assert free["casual"] == {"verified"}  # producer mode still holds the ordinary lines
+    assert free["booth:pbp"] <= {"approved", "published"} and free["booth:colour"] <= {
+        "approved",
+        "published",
+    }
+    assert held["booth:pbp"] == {"verified"} and held["booth:colour"] == {"verified"}

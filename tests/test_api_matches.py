@@ -311,6 +311,31 @@ def test_seed_bad_claim_defaults_to_minute_twelve(client: TestClient) -> None:
     assert not _rejections(client)
 
 
+def test_failure_drill_cuts_and_restores_a_match_model(client: TestClient) -> None:
+    create(client)
+    url = "/v1/matches/match-short/drill"
+    cut = client.post(url, json={"session_id": "short", "model_cut": True})
+    assert cut.status_code == 200 and cut.json()["model_cut"] is True
+    assert cut.json()["mode"] == "rules"  # the test api has no model deployment
+    restored = client.post(url, json={"session_id": "short", "model_cut": False})
+    assert restored.json()["model_cut"] is False
+    assert client.post(url, json={"session_id": "nobody", "model_cut": True}).status_code == 404
+
+
+def test_a_rebuilt_match_keeps_the_failure_drill_cut() -> None:
+    first = TestClient(create_app())
+    create(first)
+    url = "/v1/matches/match-short/drill"
+    assert first.post(url, json={"session_id": "short", "model_cut": True}).json()["model_cut"]
+    restarted = TestClient(create_app())
+    restarted.app.state.matches.store = first.app.state.matches.store
+    assert restarted.get("/v1/matches/match-short", params=Q).status_code == 200
+    key = ("short", "match-short")
+    assert restarted.app.state.matches.cuts[key].on is True
+    off = restarted.post(url, json={"session_id": "short", "model_cut": False}).json()
+    assert off["model_cut"] is False and restarted.app.state.matches.cuts[key].on is False
+
+
 def test_recap_is_404_until_full_time_then_served_per_persona(client: TestClient) -> None:
     create(client)
     url = "/v1/matches/match-short/recap/casual"
@@ -626,6 +651,53 @@ def test_stream_with_a_watch_mode_gets_that_modes_lines(client: TestClient) -> N
     post_all(client)
     lines = client.get("/v1/matches/match-short/lines", params=Q).json()["items"]
     assert any(ln["persona"] == "one-metric:shots" for ln in lines)
+
+
+def test_stream_with_the_booth_gets_both_voices_and_nothing_else(client: TestClient) -> None:
+    create(client)
+    client.get(
+        "/v1/matches/match-short/stream", params={**Q, "persona": "booth", "follow": "false"}
+    )
+    post_all(client)
+    lines = client.get("/v1/matches/match-short/lines", params=Q).json()["items"]
+    voices = {ln["persona"] for ln in lines}
+    assert {"booth:pbp", "booth:colour"} <= voices
+    assert client.app.state.matches.get("short", "match-short").extra_personas == [
+        "booth:pbp",
+        "booth:colour",
+    ]
+
+
+def test_booth_status_registers_both_voices_or_says_why_not(client: TestClient) -> None:
+    create(client)
+    ok = client.get("/v1/matches/match-short/booth", params=Q).json()
+    assert ok["ready"] is True and ok["personas"] == ["booth:pbp", "booth:colour"]
+    assert ok["reason"] is None and ok["held"] is False
+    flow = client.app.state.matches.get("short", "match-short")
+    flow.extra_personas[:] = [f"one-metric:{m}" for m in ("shots", "goals", "cards", "fouls")] + [
+        f"one-metric:{m}" for m in ("xg", "tackles_won", "red_cards")
+    ]
+    full = client.get("/v1/matches/match-short/booth", params=Q).json()
+    assert full["ready"] is False and full["reason"] == "watch_mode_cap"
+
+
+def test_a_persona_stream_gets_no_publications_of_other_personas(client: TestClient) -> None:
+    create(client)
+    got = client.get(
+        "/v1/matches/match-short/stream", params={**Q, "persona": "analyst", "follow": "false"}
+    )
+    assert got.status_code == 200
+    post_all(client)
+    body = client.get(
+        "/v1/matches/match-short/stream", params={**Q, "persona": "analyst", "follow": "false"}
+    ).text
+    events = [
+        e for e in body.split("\n\n") if '"persona": "casual"' in e or '"persona":"casual"' in e
+    ]
+    assert not [e for e in events if e.startswith("event: publication")], events[
+        :1
+    ]
+    assert "event: line" in body or "event: publication" in body  # producer queue keeps lines
 
 
 def test_stream_refuses_a_persona_that_is_not_real_for_this_match(client: TestClient) -> None:
