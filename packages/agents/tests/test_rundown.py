@@ -2,6 +2,7 @@
 
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents import workflow as workflow_module
 from matchcast_agents.store import MemoryStore
 
 
@@ -42,3 +43,33 @@ def test_the_rundown_survives_a_restart(match) -> None:
     run(first.ingest(match["events"]))
     restarted = build(match, store)
     assert restarted.rundown == first.rundown
+
+
+def test_a_saved_checkpoint_does_not_change_with_later_entries(match) -> None:
+    store = MemoryStore()
+    flow = build(match, store)
+    run(flow.ingest(match["events"][:20]))
+    saved = store.get_checkpoint(flow.sk)["rundown"]
+    flow.rundown.append({"moment_id": "m-later", "called": [], "skipped": [], "why": "x"})
+    assert store.get_checkpoint(flow.sk)["rundown"] == saved
+
+
+def test_a_checkpoint_from_before_the_ledger_restores_an_empty_one(match) -> None:
+    store = MemoryStore()
+    first = build(match, store)
+    run(first.ingest(match["events"]))
+    row = store.get_checkpoint(first.sk)
+    del row["rundown"]  # what a checkpoint written before this change looks like
+    store.put_checkpoint(first.sk, row)
+    assert build(match, store).rundown == []
+
+
+def test_the_ledger_keeps_only_the_latest_moments(match, monkeypatch) -> None:
+    everything = build(match, MemoryStore())
+    run(everything.ingest(match["events"]))
+    assert len(everything.rundown) > 2
+    monkeypatch.setattr(workflow_module, "RUNDOWN_KEEP", 2)
+    capped = build(match, MemoryStore())
+    run(capped.ingest(match["events"]))
+    kept = [r["moment_id"] for r in capped.rundown]
+    assert kept == [r["moment_id"] for r in everything.rundown][-2:]
