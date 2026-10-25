@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { openShell, ready, viewFrame } from './helpers';
 
 // UX review pass 8: the opened Live commentary card used to cover Match Pulse's Key moments text, and the followed-player card sat under the commentary card.
-// The commentary card stays clear of Match Pulse on wide screens, and the followed-player card is never covered by it.
+// The commentary card stays clear of Match Pulse on wide screens (above 1100 px), and the followed-player card is never covered by it.
 const overlap = (a: any, b: any) => !!a && !!b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
 for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 1280, 720], ['laptop', 1024, 768], ['phone', 390, 844]] as const) {
   test(`Watch on ${name}: the commentary card keeps clear of Match Pulse and the followed-player card`, async ({ page }) => {
@@ -19,9 +19,12 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 128
     });
     // open the list: on a wide screen the card moves right of the Pulse column; the list never reaches into it
     await f.evaluate(() => (document.getElementById('mcf-tog') as HTMLElement).click());
-    await expect.poll(async () => { const m = await rects(); return width > 1100 ? !overlap(m.pulse, m.mcf) : true; }, { timeout: 15_000 }).toBe(true);
-    const open = await rects();
-    if (width > 1100) expect(open.mcf!.r, 'inside the view').toBeLessThanOrEqual(open.iw);
+    // wide screens only: below 1100 px the list is shortened instead of moved, and there is not always room to clear Pulse completely
+    if (width > 1100) {
+      await expect.poll(async () => { const m = await rects(); return !overlap(m.pulse, m.mcf); }, { timeout: 15_000 }).toBe(true);
+      const open = await rects();
+      expect(open.mcf!.r, 'inside the view').toBeLessThanOrEqual(open.iw);
+    }
     await f.evaluate(() => (document.getElementById('mcf-tog') as HTMLElement).click());
     // follow a player: his card appears and must not be covered by the commentary card
     await f.evaluate(() => (document.getElementById('cpbtn') as HTMLElement).click());

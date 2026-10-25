@@ -37,7 +37,7 @@ MCS.progress('Loading the stadium and players');
   const dock = () => {
     const m = document.getElementById('mcf'), l = document.getElementById('mcf-list'), pu = document.getElementById('pulse');
     const t = document.getElementById('third'), fc = document.getElementById('fan-pcard');
-    if (!m || !m.getBoundingClientRect().width) return;
+    if (!m || !m.getBoundingClientRect().width) { if (fc) { fc.style.left = ''; fc.style.bottom = ''; } return; }
     const wide = innerWidth > 1100, phone = innerWidth <= 560;
     m.style.left = ''; if (l) l.style.maxHeight = '';
     let shifted = false;
@@ -45,7 +45,7 @@ MCS.progress('Loading the stadium and players');
     if (!phone && pr && pr.width) {
       const mr = m.getBoundingClientRect();
       if (mr.top < pr.bottom + 8 && mr.left < pr.right) {
-        if (wide) { m.style.left = Math.round(pr.right + 12) + 'px'; shifted = true; }
+        if (wide && pr.right + 12 + mr.width <= innerWidth - 14) { m.style.left = Math.round(pr.right + 12) + 'px'; shifted = true; }
         else if (l && !l.hidden) l.style.maxHeight = Math.max(72, Math.floor(innerHeight - 14 - (pr.bottom + 8) - (mr.height - l.getBoundingClientRect().height))) + 'px';
       }
     }
@@ -53,7 +53,7 @@ MCS.progress('Loading the stadium and players');
     const fcOn = !!fc && getComputedStyle(fc).display !== 'none' && fc.getBoundingClientRect().width > 0;
     if (fc) {
       fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = 'calc(100vw - 28px)';
-      if (!shifted && wide) fc.style.left = Math.round(mr.right + 12) + 'px';
+      if (!shifted && wide) { fc.style.left = Math.round(mr.right + 12) + 'px'; fc.style.maxWidth = Math.max(240, innerWidth - mr.right - 26) + 'px'; }
       else if (!shifted) fc.style.bottom = Math.round(innerHeight - mr.top + 8) + 'px';
     }
     if (t && wide) { const fr = fcOn && !shifted && fc.getBoundingClientRect().width; t.style.left = Math.round(fr ? fc.getBoundingClientRect().right + 12 : mr.right + 12) + 'px'; }

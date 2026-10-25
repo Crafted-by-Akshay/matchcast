@@ -45,18 +45,15 @@
   const go = setInterval(() => {
     if (!window.__mc || !window.__mc.vis || !$('load') || !$('load').hidden) return;
     clearInterval(go);
-    // UX review pass 8: the detection boxes were hairlines. The tracker draws them with strokeRect; give them a firm line and a soft glow in the box's own colour.
+    // UX review pass 8: the detection boxes were hairlines. The tracker draws them with strokeRect; give them a firm 2.5 px line (no blur: a canvas shadow is costly on a slow GPU).
     const ov = $('visov'), cx = ov && ov.getContext && ov.getContext('2d');
     if (cx && !cx.mcThick) {
       cx.mcThick = true;
-      for (const k of ['strokeRect', 'stroke']) {
-        const draw = cx[k];
-        cx[k] = function (...a) {
-          const w = this.lineWidth, b = this.shadowBlur, c = this.shadowColor;
-          this.lineWidth = Math.max(w, 2.5); this.shadowColor = this.strokeStyle; this.shadowBlur = 5;
-          try { return draw.apply(this, a); } finally { this.lineWidth = w; this.shadowBlur = b; this.shadowColor = c; }
-        };
-      }
+      const draw = cx.strokeRect;   // only the boxes; other lines on the overlay keep their own weight
+      cx.strokeRect = function (...a) {
+        const w = this.lineWidth; this.lineWidth = Math.max(w, 2.5);
+        try { return draw.apply(this, a); } finally { this.lineWidth = w; }
+      };
     }
     if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
     if (!window.__mc.vis.VIS.on) {
