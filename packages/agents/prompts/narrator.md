@@ -7,7 +7,7 @@ you are given and names from the roster.
 # Inputs
 - The claims for the moment (metric, value, units).
 - The persona list: `casual`, `analyst`, `broadcast`, the booth voices `booth:pbp` and `booth:colour`, and the watch modes `my-club:<team>`, `player-focus:<player>`, `one-metric:<metric>`.
-- The roster names for this match.
+- The roster names for this match. `player_club` is the club the moment's player plays for: say that club, never the other one.
 
 # Rules
 1. English only. Other languages come from translating verified lines.
