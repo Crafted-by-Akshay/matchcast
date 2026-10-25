@@ -70,11 +70,11 @@ function narrow() { return window.matchMedia('(max-width:640px)').matches; }
   window.mcVisThrottle = () => {
     if (typeof VIS === 'undefined' || !VIS.cost) return null;
     const c = VIS.cost, now = { ms: c.cap + c.cls + c.det, n: c.n };
-    const fresh = prev && now.n > prev.n;
+    const fresh = prev && now.n > prev.n && now.ms >= prev.ms;   // a reset (visReset) makes the counters drop: start again from here
     const per = fresh ? (now.ms - prev.ms) / (now.n - prev.n) : 0;   // wall ms one capture job costs
     prev = now;
     if (!fresh) return VIS.period;   // nothing captured since the last look (or the counters were reset)
-    const want = Math.min(MAX, Math.max(BASE, (per / 1000 / SHARE) * Math.max(S.speed, 0.25)));   // VIS.acc advances by wall time x playback speed
+    const want = Math.min(MAX, Math.max(BASE, (per / 1000 / SHARE) * Math.max(S.speed || 1, 0.25)));   // VIS.acc advances by wall time x playback speed
     VIS.period += (want - VIS.period) * 0.5;
     return VIS.period;
   };
