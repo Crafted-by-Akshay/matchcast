@@ -63,7 +63,7 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | Situation | What the viewer sees | What happens |
 | --- | --- | --- |
 | `MATCHCAST_API` empty at build | Status pill "Offline (simulated)" | `agents.js` rules in the page |
-| API cold (first request pending) | "Warming up the match engine" | Retry `/ready` every 2 s up to 45 s (Q13); after that, "Rules fallback" |
+| API cold (first request pending) | "Warming up the match engine" | Warm-up counts up to 90 s for the api to take the first batch, then 60 s from that batch for a first claim (Q13 target stays 45 s); while batches are accepted and the stream is open the pill never drops to "Rules fallback" by itself, only a failed create or no claim in time does. The Agents tab Foundry chip and claim provenance are painted from `/v1/status` |
 | API live | "Live agents" | REST + SSE |
 | SSE drops | "Reconnecting" for up to 10 s | `EventSource` reconnects with `Last-Event-ID`; the server replays from `publications` and `audit` |
 | API down for over 30 s during a match | "Rules fallback" | Switch to in-page rules; switch back when `/ready` returns 200 |
