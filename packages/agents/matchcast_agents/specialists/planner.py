@@ -16,7 +16,8 @@ PRIORITY_ONE_CAP = (
     5  # every specialist in the pool: a goal's historical comparison is the best line
 )
 OTHER_CAP = 1
-SPAWNS_PER_MATCH = 60  # a cost guard, not a target: a match has a few dozen priority-1 moments
+SPAWNS_PER_MATCH = 60  # a cost guard, not a target: at five a moment it covers twelve goals or
+# red cards; the later ones get "budget exhausted" and go without Rhythm and History
 
 # the specialists built so far; a name not listed here is not spawned, whatever the pool says
 OBJECTIVES = {
