@@ -25,7 +25,7 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
   // the desk hides every direct child of body except its own roots (bc.css), so the controls sit inside the live view
   (document.getElementById('bc-view') || document.body).append(bar, tag);
 if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and clear of the teleprompter and the lower-third (the group label stays)
-  bar.querySelector('span').hidden = true; bar.querySelector('label').hidden = true; bar.style.maxWidth = '46%';   // slow-motion is kept on wider panes
+  bar.querySelector('span').hidden = true; bar.querySelector('label').hidden = true;   // slow-motion is kept on wider panes
   bar.querySelectorAll('button[data-sec]').forEach((b) => { b.textContent = b.dataset.sec + ' s'; });   // short labels keep the three buttons on one row
   bar.querySelectorAll('button').forEach((b) => { b.style.padding = '3px 5px'; b.style.fontSize = '11px'; });
 }

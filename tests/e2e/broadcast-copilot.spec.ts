@@ -7,7 +7,7 @@ declare const LV: any;
 
 const PICKS: Record<string, any> = {
   highlights: { highlights: [{ event_id: 'e10', minute: 12, reason: "Goal by Ivan Ruiz for Northgate FC at 12'. A moment worth airing now." }] },
-  focus: { focus: { target: 'player', camera: 'player', player_id: 'h9', event_id: 'e10', reason: "Goal by Ivan Ruiz for Northgate FC at 12'. A moment worth airing now." } },
+  focus: { focus: { target: 'player', camera: 'player', player_id: 'h9', player: 'Ivan Ruiz', event_id: 'e10', reason: "Goal by Ivan Ruiz for Northgate FC at 12'. A moment worth airing now." } },
   plan: { plan: ['Northgate FC lead: watch for them to drop deeper.', 'Camera: Quiet play. Hold a wide shot of the ball and the shape.'] },
 };
 
@@ -57,7 +57,9 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
     const watch = page.frameLocator('#v-watch iframe');
     await expect(watch.locator('#mc-focus')).toBeVisible({ timeout: 60_000 });
     await expect(watch.locator('#mc-focus-t')).toContainText('Ivan Ruiz');
-    await expect(watch.locator('#mc-focus-go')).toBeDisabled();
+    await expect(watch.locator('#mc-focus-go')).toBeEnabled();
+    await watch.locator('#mc-focus-go').click();
+    await expect(watch.locator('#mc-focus-go')).toHaveText(/Camera (on|not moved)/);
   } finally {
     server.close();
   }

@@ -6,7 +6,7 @@
   if (!window.MC_CONSUMER) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const style = document.createElement('style');
-  style.textContent = '#mc-desk{position:absolute;left:10px;top:10px;bottom:56px;width:min(360px,calc(100% - 20px));z-index:40;display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(10,20,40,.92);border-radius:8px;font:500 12px system-ui,sans-serif;color:#e8eefc;overflow:hidden}'
+  style.textContent = '#mc-desk{position:absolute;left:10px;top:10px;bottom:56px;width:min(360px,50%,calc(100% - 20px));z-index:40;display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(10,20,40,.92);border-radius:8px;font:500 12px system-ui,sans-serif;color:#e8eefc;overflow:hidden}'
     + '#mc-desk button{padding:4px 8px;border-radius:4px;border:1px solid #3aa0ff;background:#12294a;color:#fff;font:inherit;cursor:pointer}'
     + '#mc-desk button:disabled{opacity:.55;cursor:default}'
     + '#mc-desk-body{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto}'
@@ -27,6 +27,9 @@
     + '<div id="mc-cop-out" aria-live="polite" style="margin-top:6px"></div>'
     + '</div></div>';
   (document.getElementById('bc-view') || document.body).append(box);
+  // instant replay is a row of the desk, above its body: the desk covered the bar on the left, and a split pane has no free corner for it
+  const rb = document.getElementById('mc-replay');
+  if (rb) { rb.style.cssText += ';position:static;box-sizing:border-box;width:100%;max-width:none;flex-wrap:wrap'; box.querySelector('#mc-desk-body').before(rb); }
   const $ = (id) => box.querySelector('#' + id);
 
   // the production strip: the last five lines on air, newest first. Each shows the numbers it was built on and one chip per agent that acted on it
@@ -98,6 +101,6 @@
     out(b ? render(intent, b) : 'Live picks need the agent api. The strip above still shows what the agents did.');
   });
   $('mc-cop').addEventListener('click', (e) => {
-    if (e.target && e.target.id === 'mc-cop-go' && lastFocus) MCS.send({ type: 'focus', player_id: lastFocus.player_id || '', reason: lastFocus.reason });
+    if (e.target && e.target.id === 'mc-cop-go' && lastFocus) MCS.send({ type: 'focus', player_id: lastFocus.player || '', reason: lastFocus.reason });   // Watch matches the player by name
   });
 })();

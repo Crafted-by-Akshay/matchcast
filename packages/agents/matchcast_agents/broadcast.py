@@ -66,6 +66,7 @@ def _pick(ctx: MatchContext, event: dict[str, Any], score: float, kind: str) -> 
         "label": label,
         "score": round(score),
         "player_id": player_id,
+        "player": ctx.player_name(player_id) if player_id else None,
         "team_id": team_id,
         "reason": f"{label}{who}{club} at {minute}'. A moment worth airing now.",
     }
@@ -107,6 +108,7 @@ def focus(ctx: MatchContext) -> dict[str, Any]:
         "target": "player",
         "camera": "player",
         "player_id": pick["player_id"],
+        "player": pick["player"],
         "event_id": pick["event_id"],
         "reason": pick["reason"],
     }
