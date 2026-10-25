@@ -1,6 +1,6 @@
 """The model client behind the live agents: structured JSON out, Entra ID auth, no API key.
 
-``FoundryModelClient`` talks to the gpt-6-luna deployment through the Azure OpenAI client with a
+``FoundryModelClient`` talks to the gpt-5-mini deployment through the Azure OpenAI client with a
 bearer-token provider. Failures are mapped to the exceptions ``ResilientAgent`` understands, so a
 slow, throttled or malformed answer falls back to the rules twin. ``ScriptedModelClient`` replays
 recorded answers for tests and for running without quota.
@@ -80,7 +80,7 @@ class FoundryModelClient:
         *,
         client: Any = None,
     ) -> None:
-        self.deployment = deployment or os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-6-luna")
+        self.deployment = deployment or os.environ.get("FOUNDRY_MODEL_DEPLOYMENT", "gpt-5-mini")
         self.usage = Usage()
         self._endpoint = endpoint or os.environ.get("FOUNDRY_PROJECT_ENDPOINT", "")
         self._injected = client is not None

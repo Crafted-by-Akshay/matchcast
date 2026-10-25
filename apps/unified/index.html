@@ -31,7 +31,7 @@ button,select{font:inherit;color:inherit}
 
 /* ---- top bar: brand, the dashboard switcher, status ---- */
 .top{display:flex;align-items:center;gap:16px;height:var(--bar);padding:0 var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none}
-.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:none}
 .brand>div{min-width:0}
 .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,var(--accent),#7B5CF0);color:var(--accent-ink);flex:none}
 .brand b{font-size:15px;letter-spacing:.01em}
@@ -55,6 +55,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 #voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0;min-height:0}   /* a live region for voice announcements, not a visible control */
 #api-pill::before{content:"Agents ·";margin-right:.4em;color:var(--muted)}   /* says which part the pill is about, so it does not read as a contradiction of the engine chips */
 @media (max-width:1500px){.brand small{display:none}.proto{display:none}}
+@media (max-width:1400px){.switch button small{display:none}}   /* the four tabs fit beside the wordmark; their titles say what each one is */
 @media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- match bar: the one shared match every view opens on ---- */
