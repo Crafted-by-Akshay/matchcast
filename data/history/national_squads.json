@@ -1,0 +1,344 @@
+{
+ "Argentina": {
+  "elo": 2210.1,
+  "style": {
+   "attack": 3.2,
+   "defence": 0.8
+  },
+  "label": "synthetic squad",
+  "players": [
+   {
+    "name": "Tomás Quintana",
+    "shirt": 1,
+    "position": "GK",
+    "rating": 84.6,
+    "synthetic": true
+   },
+   {
+    "name": "Lisandro Iriarte",
+    "shirt": 2,
+    "position": "GK",
+    "rating": 84.1,
+    "synthetic": true
+   },
+   {
+    "name": "Matías Belmonte",
+    "shirt": 3,
+    "position": "GK",
+    "rating": 91.5,
+    "synthetic": true
+   },
+   {
+    "name": "Facundo Ferrante",
+    "shirt": 4,
+    "position": "DF",
+    "rating": 89.2,
+    "synthetic": true
+   },
+   {
+    "name": "Julián Montenegro",
+    "shirt": 5,
+    "position": "DF",
+    "rating": 84.6,
+    "synthetic": true
+   },
+   {
+    "name": "Joaquín Tapia",
+    "shirt": 6,
+    "position": "DF",
+    "rating": 86.3,
+    "synthetic": true
+   },
+   {
+    "name": "Joaquín Lucero",
+    "shirt": 7,
+    "position": "DF",
+    "rating": 90.0,
+    "synthetic": true
+   },
+   {
+    "name": "Mauro Iriarte",
+    "shirt": 8,
+    "position": "DF",
+    "rating": 86.6,
+    "synthetic": true
+   },
+   {
+    "name": "Ezequiel Quintana",
+    "shirt": 9,
+    "position": "DF",
+    "rating": 84.7,
+    "synthetic": true
+   },
+   {
+    "name": "Benicio Vallejo",
+    "shirt": 10,
+    "position": "DF",
+    "rating": 88.9,
+    "synthetic": true
+   },
+   {
+    "name": "Ramiro Vallejo",
+    "shirt": 11,
+    "position": "DF",
+    "rating": 91.2,
+    "synthetic": true
+   },
+   {
+    "name": "Santino Salvatierra",
+    "shirt": 12,
+    "position": "MF",
+    "rating": 89.3,
+    "synthetic": true
+   },
+   {
+    "name": "Bautista Ferrante",
+    "shirt": 13,
+    "position": "MF",
+    "rating": 91.4,
+    "synthetic": true
+   },
+   {
+    "name": "Facundo Fraga",
+    "shirt": 14,
+    "position": "MF",
+    "rating": 86.7,
+    "synthetic": true
+   },
+   {
+    "name": "Benicio Quiroga",
+    "shirt": 15,
+    "position": "MF",
+    "rating": 89.1,
+    "synthetic": true
+   },
+   {
+    "name": "Ezequiel Ferrante",
+    "shirt": 16,
+    "position": "MF",
+    "rating": 84.3,
+    "synthetic": true
+   },
+   {
+    "name": "Benicio Arrieta",
+    "shirt": 17,
+    "position": "MF",
+    "rating": 84.2,
+    "synthetic": true
+   },
+   {
+    "name": "Joaquín Quintana",
+    "shirt": 18,
+    "position": "MF",
+    "rating": 91.0,
+    "synthetic": true
+   },
+   {
+    "name": "Julián Salvatierra",
+    "shirt": 19,
+    "position": "FW",
+    "rating": 87.0,
+    "synthetic": true
+   },
+   {
+    "name": "Bautista Caruso",
+    "shirt": 20,
+    "position": "FW",
+    "rating": 90.0,
+    "synthetic": true
+   },
+   {
+    "name": "Ignacio Belmonte",
+    "shirt": 21,
+    "position": "FW",
+    "rating": 88.2,
+    "synthetic": true
+   },
+   {
+    "name": "Ezequiel Iriarte",
+    "shirt": 22,
+    "position": "FW",
+    "rating": 89.3,
+    "synthetic": true
+   },
+   {
+    "name": "Julián Vallejo",
+    "shirt": 23,
+    "position": "FW",
+    "rating": 85.1,
+    "synthetic": true
+   }
+  ]
+ },
+ "Brazil": {
+  "elo": 2093.3,
+  "style": {
+   "attack": 2.7,
+   "defence": 1.0
+  },
+  "label": "synthetic squad",
+  "players": [
+   {
+    "name": "Enzo Macedo",
+    "shirt": 1,
+    "position": "GK",
+    "rating": 83.9,
+    "synthetic": true
+   },
+   {
+    "name": "Arthur Queiroz",
+    "shirt": 2,
+    "position": "GK",
+    "rating": 85.8,
+    "synthetic": true
+   },
+   {
+    "name": "Davi Azevedo",
+    "shirt": 3,
+    "position": "GK",
+    "rating": 85.2,
+    "synthetic": true
+   },
+   {
+    "name": "Bernardo Rangel",
+    "shirt": 4,
+    "position": "DF",
+    "rating": 83.2,
+    "synthetic": true
+   },
+   {
+    "name": "Rafael Faria",
+    "shirt": 5,
+    "position": "DF",
+    "rating": 80.5,
+    "synthetic": true
+   },
+   {
+    "name": "Samuel Lacerda",
+    "shirt": 6,
+    "position": "DF",
+    "rating": 80.7,
+    "synthetic": true
+   },
+   {
+    "name": "Bernardo Lacerda",
+    "shirt": 7,
+    "position": "DF",
+    "rating": 85.8,
+    "synthetic": true
+   },
+   {
+    "name": "Raul Viana",
+    "shirt": 8,
+    "position": "DF",
+    "rating": 83.5,
+    "synthetic": true
+   },
+   {
+    "name": "Lucas Azevedo",
+    "shirt": 9,
+    "position": "DF",
+    "rating": 87.5,
+    "synthetic": true
+   },
+   {
+    "name": "Arthur Salgado",
+    "shirt": 10,
+    "position": "DF",
+    "rating": 83.5,
+    "synthetic": true
+   },
+   {
+    "name": "Murilo Pacheco",
+    "shirt": 11,
+    "position": "DF",
+    "rating": 82.9,
+    "synthetic": true
+   },
+   {
+    "name": "Samuel Queiroz",
+    "shirt": 12,
+    "position": "MF",
+    "rating": 83.9,
+    "synthetic": true
+   },
+   {
+    "name": "Otávio Queiroz",
+    "shirt": 13,
+    "position": "MF",
+    "rating": 82.8,
+    "synthetic": true
+   },
+   {
+    "name": "Gabriel Azevedo",
+    "shirt": 14,
+    "position": "MF",
+    "rating": 84.8,
+    "synthetic": true
+   },
+   {
+    "name": "Davi Salgado",
+    "shirt": 15,
+    "position": "MF",
+    "rating": 83.9,
+    "synthetic": true
+   },
+   {
+    "name": "Bernardo Viana",
+    "shirt": 16,
+    "position": "MF",
+    "rating": 85.4,
+    "synthetic": true
+   },
+   {
+    "name": "Raul Faria",
+    "shirt": 17,
+    "position": "MF",
+    "rating": 86.6,
+    "synthetic": true
+   },
+   {
+    "name": "Raul Lacerda",
+    "shirt": 18,
+    "position": "MF",
+    "rating": 79.9,
+    "synthetic": true
+   },
+   {
+    "name": "Bernardo Teixeira",
+    "shirt": 19,
+    "position": "FW",
+    "rating": 87.4,
+    "synthetic": true
+   },
+   {
+    "name": "Otávio Bittencourt",
+    "shirt": 20,
+    "position": "FW",
+    "rating": 80.7,
+    "synthetic": true
+   },
+   {
+    "name": "Otávio Nogueira",
+    "shirt": 21,
+    "position": "FW",
+    "rating": 81.7,
+    "synthetic": true
+   },
+   {
+    "name": "Samuel Viana",
+    "shirt": 22,
+    "position": "FW",
+    "rating": 84.7,
+    "synthetic": true
+   },
+   {
+    "name": "Caio Rangel",
+    "shirt": 23,
+    "position": "FW",
+    "rating": 80.6,
+    "synthetic": true
+   }
+  ]
+ }
+}
