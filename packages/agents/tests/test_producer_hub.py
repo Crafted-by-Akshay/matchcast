@@ -91,3 +91,13 @@ def test_a_rate_limited_colour_moment_does_not_spend_the_budget(match) -> None:
     assert run(producer.decide(ctx(match), foul)).reason == "rate_limited"
     later = dict(foul, event_id="f2", event_time_ms=goal["event_time_ms"] + 20_000)
     assert run(producer.decide(ctx(match), later)).reason == "colour"
+
+
+def test_colour_needs_the_analyst_persona_and_a_won_tackle(match) -> None:
+    lost = dict(event(match, "tackle"), event_id="t1")
+    lost["payload"] = dict(lost["payload"], outcome="lost")
+    producer = ProducerRules(colour_every_s=45, clock=lambda: 0.0)
+    assert isinstance(run(producer.decide(ctx(match), lost)), Skip)
+    foul = dict(event(match, "foul"), event_id="f9")
+    no_analyst = ProducerRules(("casual",), colour_every_s=45, clock=lambda: 0.0)
+    assert isinstance(run(no_analyst.decide(ctx(match), foul)), Skip)

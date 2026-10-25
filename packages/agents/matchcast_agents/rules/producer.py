@@ -81,7 +81,12 @@ class ProducerRules:
             score, priority, kind = 60, 3, "summary"
             self._next_summary_ms = event["event_time_ms"] // SUMMARY_EVERY_MS * SUMMARY_EVERY_MS
             self._next_summary_ms += SUMMARY_EVERY_MS
-        colour = kind in COLOUR_KINDS and self._colour_due()
+        colour = (
+            kind in COLOUR_KINDS
+            and "analyst" in self.personas  # the colour line is the analyst's
+            and not (kind == "tackle" and event["payload"].get("outcome") != "won")
+            and self._colour_due()
+        )
         if colour:
             score, kind = THRESHOLD, "colour"  # still subject to the rate rule below
         if priority != 1 and score < THRESHOLD:
@@ -102,6 +107,6 @@ class ProducerRules:
             event_ids=(event["event_id"],),
             up_to_sequence=event["stream_sequence"],
             priority=priority,
-            personas=("analyst",) if colour and "analyst" in self.personas else self.personas,
+            personas=("analyst",) if colour else self.personas,
             reason=kind,
         )

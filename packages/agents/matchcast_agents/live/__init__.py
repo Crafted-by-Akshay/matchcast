@@ -1,5 +1,7 @@
 """Live agents on the Foundry model, each wrapped with its rules twin (ADR-0014)."""
 
+import os
+
 from ..messages import Persona
 from ..resilience import ResilientAgent
 from ..rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
@@ -12,6 +14,15 @@ from .narrator import LiveNarrator
 from .verifier import LiveVerifier
 
 COLOUR_EVERY_S = 45.0  # at most one colour line (one model pass) per match in this much wall time
+
+
+def colour_every_s() -> float:
+    """MATCHCAST_COLOUR_EVERY_S, seconds between colour lines; 0 turns them off."""
+    try:
+        return max(0.0, float(os.environ.get("MATCHCAST_COLOUR_EVERY_S", COLOUR_EVERY_S)))
+    except ValueError:
+        return COLOUR_EVERY_S
+
 
 __all__ = [
     "FoundryModelClient",
@@ -48,7 +59,7 @@ def live_agents(
         return task.priority > model_priority() and task.reason != "colour"
 
     return AgentSet(
-        ProducerRules(personas, colour_every_s=COLOUR_EVERY_S),
+        ProducerRules(personas, colour_every_s=colour_every_s()),
         ResilientAgent(LiveAnalyst(client, analyst_rules), analyst_rules, skip=quiet),
         ResilientAgent(LiveNarrator(client), NarratorRules(), skip=quiet),
         ResilientAgent(LiveVerifier(client), VerifierRules()),
