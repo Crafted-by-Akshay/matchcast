@@ -60,15 +60,26 @@ def engine_count(events: Iterable[dict[str, Any]], team: str, upto_ms: int) -> i
 def agreement(
     passes: list[dict[str, Any]], engine_events: Iterable[dict[str, Any]]
 ) -> dict[str, Any]:
-    """How many of Vision's passes an engine pass backs. One engine pass backs one Vision pass."""
+    """How many of Vision's passes an engine pass backs. One engine pass backs one Vision pass.
+
+    Only the span both streams have covered is compared: from just before Vision's first pass to
+    the engine's latest event. Vision passes after that are ``pending`` (the engine has not got
+    there yet), and engine passes before Vision started are not counted against it.
+    """
+    events = list(engine_events)
+    covered_to = max((e["event_time_ms"] for e in events), default=-1)
+    start = min((p["time_ms"] for p in passes), default=0) - MATCH_WINDOW_MS
     index: dict[tuple[str, str, str], list[int]] = {}
     engine_total = 0
-    for fact in pass_facts(engine_events):
+    for fact in pass_facts(events):
+        if not start <= fact["time_ms"] <= covered_to:
+            continue
         engine_total += 1
         key = (fact["team_id"], fact["from_player_id"], fact["to_player_id"])
         index.setdefault(key, []).append(fact["time_ms"])
+    seen = [p for p in passes if p["time_ms"] <= covered_to]
     matched = 0
-    for fact in sorted(passes, key=lambda p: p["time_ms"]):
+    for fact in sorted(seen, key=lambda p: p["time_ms"]):
         times = index.get((fact["team_id"], fact["from_player_id"], fact["to_player_id"]), [])
         if not times:
             continue
@@ -77,9 +88,10 @@ def agreement(
             times.pop(best)
             matched += 1
     return {
-        "vision": len(passes),
+        "vision": len(seen),
+        "pending": len(passes) - len(seen),
         "engine": engine_total,
         "matched": matched,
-        "precision": matched / len(passes) if passes else None,
+        "precision": matched / len(seen) if seen else None,
         "recall": matched / engine_total if engine_total else None,
     }

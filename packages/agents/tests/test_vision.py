@@ -3,6 +3,7 @@ and check them against the engine's own passes. The engine record is never touch
 """
 
 import copy
+import re
 
 import pytest
 from conftest import fixed_clock, run
@@ -13,6 +14,7 @@ from matchcast_agents.vision import (
     VISION_SUMMARY_MS,
     agreement,
     engine_count,
+    pass_facts,
     vision_count,
 )
 from test_live_agents import answer
@@ -30,6 +32,10 @@ def vision_stream(match):
         **match["roster"]["stream"],
         "session_id": match["roster"]["stream"]["session_id"] + ".vision",
     }
+
+
+def mirrored_passes(match):
+    return pass_facts(vision_events(match))
 
 
 def vision_events(match, lag_ms=1_000):
@@ -105,10 +111,30 @@ def test_agreement_matches_vision_passes_to_engine_passes_in_the_window(match) -
         "time_ms": 10**9,
     }
     report = agreement([*passes, stray], match["events"])
-    assert report["vision"] == len(passes) + 1
-    assert report["matched"] == len(passes)
-    assert report["precision"] == pytest.approx(len(passes) / (len(passes) + 1))
-    assert report["recall"] == pytest.approx(len(passes) / report["engine"])
+    # passes the engine has not reached yet (the stray one, and any in the last seconds) are pending
+    assert report["pending"] >= 1
+    assert report["vision"] + report["pending"] == len(passes) + 1
+    assert report["matched"] == report["vision"]
+    assert report["precision"] == pytest.approx(1.0)
+    assert report["recall"] == pytest.approx(report["matched"] / report["engine"])
+
+
+def test_engine_passes_before_vision_started_are_not_counted_against_it(match) -> None:
+    later = [p for p in mirrored_passes(match) if p["time_ms"] > 60_000]  # the tracker starts late
+    report = agreement(later, match["events"])
+    assert report["vision"] + report["pending"] == len(later)
+    assert report["matched"] == report["vision"]
+    assert report["engine"] < sum(1 for e in match["events"] if e["payload"]["type"] == "pass")
+
+
+def test_a_check_reports_disagreement_as_a_lower_share(match) -> None:
+    keep_every_other = vision_events(match)[::2]  # Vision misses half the passes
+    flow = build_vision(match)
+    run(flow.ingest(keep_every_other))
+    shares = [
+        int(m) for c in checks(flow, "vision") for m in re.findall(r"\((\d+)% agree\)", c.detail)
+    ]
+    assert shares and min(shares) < 100
 
 
 def test_a_pass_outside_the_window_is_not_matched(match) -> None:
@@ -174,7 +200,7 @@ def test_the_engine_record_is_not_written_by_vision(match) -> None:
 
 
 def test_a_wrong_count_in_a_vision_line_is_rejected_then_repaired(match, monkeypatch) -> None:
-    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "2")
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")  # the Vision summary goes to the model
     drafts = {"n": 0}
 
     def narrator(facts):
@@ -196,5 +222,5 @@ def test_vision_summaries_come_every_minute_not_every_five(match) -> None:
     run(flow.ingest(vision_events(match)))
     times = sorted({c["packet"]["snapshot"]["event_time_ms"] for c in flow.store.claims(flow.sk)
                     if c["packet"]["metric"].startswith("passes:")})  # fmt: skip
-    assert len(times) >= 2
+    assert len(times) >= 5  # a ten-minute match at one summary a minute, not one every five
     assert all(later - earlier >= VISION_SUMMARY_MS for earlier, later in zip(times, times[1:]))

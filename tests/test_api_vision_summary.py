@@ -75,7 +75,7 @@ def test_vision_passes_are_counted_and_checked_against_the_engine() -> None:
     assert body["lines_verified"] >= 1
     assert body["latest_line"] and "Vision" in body["latest_line"]
     agreement = body["agreement"]
-    assert agreement["vision"] == len(sent)
+    assert agreement["vision"] + agreement["pending"] == len(sent)
     assert agreement["engine"] == sum(
         1 for e in FIXTURE["events"] if e["payload"]["type"] == "pass"
     )

@@ -642,9 +642,9 @@ function renderVision() {
 }
 async function pollVision() {
   const s = await LV.visionSummary();
-  if (!s || typeof s.passes_in !== 'number') return;
-  VIS = s; renderVision();
-  post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: s });
+  const ok = !!s && typeof s.passes_in === 'number';   // no match, or no answer: clear what the last match showed
+  VIS = ok ? s : null; renderVision();
+  post('watch', { src: 'matchcast-shell', type: 'vision-summary', summary: ok ? s : null });
 }
 setInterval(pollVision, 3000);
 renderVision();   // the strip says what it waits for before any match

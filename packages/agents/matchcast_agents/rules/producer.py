@@ -88,8 +88,8 @@ class ProducerRules:
         if self._next_summary_ms is None:
             self._next_summary_ms = every
         if event["event_time_ms"] >= self._next_summary_ms and kind == "pass":
-            # a Vision summary counts passes, so it is cheap and goes to the model (priority 2)
-            score, priority, kind = 60, 2 if vision else 3, "summary"
+            # a Vision summary counts passes; the rules twin writes it, so it costs no model call
+            score, priority, kind = 60, 3, "summary"
             now = event["event_time_ms"]
             # Vision's cadence runs from its last summary; the engine's stays on the grid
             self._next_summary_ms = now + every if vision else now // every * every + every

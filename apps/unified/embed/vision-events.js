@@ -104,7 +104,8 @@
   document.body.appendChild(chip);
   window.addEventListener('message', (e) => {
     const d = e.data || {};
-    if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'vision-summary' || !d.summary) return;
+    if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'vision-summary') return;
+    if (!d.summary) { chip.hidden = true; return; }   // no match, or no answer from the api
     const s = d.summary, a = s.agreement || {};
     chip.hidden = !s.passes_in;
     const agree = a.precision == null ? 'no passes to match yet' : Math.round(a.precision * 100) + '% of Vision\'s passes match an engine pass';

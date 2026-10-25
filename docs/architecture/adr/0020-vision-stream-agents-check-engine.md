@@ -21,7 +21,7 @@ The browser's pixel tracker sends its passes to the match `<session>.vision` (do
 
 Option 3.
 
-- The summary on a Vision stream counts `passes:<team>` (`VISION_COUNT_METRICS`), every `VISION_SUMMARY_MS` (60 s) of match time, at priority 2.
+- The summary on a Vision stream counts `passes:<team>` (`VISION_COUNT_METRICS`), every `VISION_SUMMARY_MS` (60 s) of match time, at priority 3: the rules twin writes it, so the summaries cost no model call (a live model call every minute would be five times the engine's rate).
 - `MatchContext.truth` carries the engine match's events into the Vision stream (`truth_feed_for`, read from the store). The Verifier's `vision` check compares each count with the engine's count at the same match time and reports the agreement. It does not block a line.
 - `GET /v1/matches/{id}/vision/summary` reads the Vision stream's state and the agreement over the match.
 - The engine record and the engine's lines are unchanged. Vision never writes to the engine stream.
@@ -29,7 +29,7 @@ Option 3.
 ## Consequences
 
 - The Vision stream's lines say "Vision has tracked ..." and carry the agreement with the engine as a Verifier check, so a judge sees the measured accuracy beside the count.
-- Vision's agreement is the share of Vision's passes an engine pass backs within 8 s. It is precision, not identity accuracy; identity stays in the Tracking lab (docs/architecture/09).
+- Vision's agreement is the share of Vision's passes an engine pass backs within 8 s, over the span both streams have covered. It is precision, not identity accuracy; identity stays in the Tracking lab (docs/architecture/09).
 - The engine's agents do not yet cite Vision in engine lines. That is a later change that needs its own ADR.
 - Vision state and the `_vision_lines` counter are in memory. A restart rebuilds the passes from the store and the counter starts again at zero.
 - Not checked live: gpt-5-mini on the Vision summary and the agreement numbers on a real match. The rules twin covers the pass count and its Verifier check.

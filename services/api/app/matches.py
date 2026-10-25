@@ -379,6 +379,9 @@ class Registry:
         # no time under the lock (every stream retry for an id that is not there lands here)
         if await asyncio.to_thread(self.store.get_match, sk) is None:
             raise Problem(404, "not_found", f"unknown match {match_id}")
+        if is_vision_stream({"session_id": session_id}):
+            # its Verifier reads the engine's events from the store, so the engine match comes first
+            await self.flow_for(engine_stream_of(session_id), match_id)
         async with self.create_lock:
             if (flow := self.flows.get(key)) is not None:
                 return flow
