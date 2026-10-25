@@ -13,6 +13,8 @@ from collections.abc import Iterable
 from typing import Any
 
 from ..ask.assistant import WORD_LIMIT, AskResult
+from ..ask.chunking import Chunk
+from ..ask.retrieval import Bm25Index
 from ..context import MatchContext
 from ..resilience import ModelError, ModelRateLimited, ModelTimeout
 from ..roles.orders import NONE, ORDER_KEYS, allowed_orders
@@ -25,6 +27,9 @@ ANSWER_BUDGET_S = 15.0  # a viewer waits this long at most; the rules answer aft
 TALK_WORD_LIMIT = 60
 RECENT_EVENTS = 15
 MATCH_EVENTS = 8  # the last events of the match a player may talk about
+LOG_RETRIEVED = 40  # the events of the whole match that best match the question
+LOG_LAST = 30  # and the last events, whatever the question
+MINUTE_IN_TEXT = re.compile(r"\bminute\s+\d{1,3}\b", re.IGNORECASE)  # a minute is not a count
 KEY_EVENT_TYPES = ("goal", "card")  # every goal and card of the match is known to any player
 KEY_EVENTS = ("goal", "card")  # every one of these is in the sheet, however long ago it was
 TEAM_METRICS = ("goals", "shots", "shots_on_target", "passes", "tackles_won", "fouls", "cards")
@@ -152,13 +157,32 @@ def _event_line(ctx: MatchContext, event: dict[str, Any]) -> str | None:
     if payload["type"] in ("correction", "retraction", "period_boundary"):
         return None
     who = ctx.player_name(payload["player_id"]) if "player_id" in payload else None
+    to = (
+        ctx.player_name(payload["recipient_player_id"])
+        if "recipient_player_id" in payload
+        else None
+    )
     club = ctx.club_name(payload["team_id"]) if "team_id" in payload else None
     parts = [f"minute {_minute(event['event_time_ms'])}", payload["type"].replace("_", " ")]
     if who:
         parts.append(f"by {who}")
+    if to:
+        parts.append(f"to {to}")
     if club:
         parts.append(f"({club})")
     return " ".join(p for p in parts if p)
+
+
+def match_log(ctx: MatchContext, query: str) -> list[str]:
+    """Every event of the match so far, as the lines he may talk from: the ones that best match the
+    question and the speaker (BM25 over one line per event), plus the last events. Each line is
+    built from the stored events, so a player, a minute or a club in it is the log's own."""
+    lines = [(i, line) for i, e in enumerate(ctx.events) if (line := _event_line(ctx, e))]
+    chunks = [Chunk(str(i), "match", "log", "", "", line) for i, line in lines]
+    picked = {int(hit.chunk.id) for hit in Bm25Index(chunks).search(query, k=LOG_RETRIEVED)}
+    picked |= {i for i, _ in lines[-LOG_LAST:]}
+    picked |= {i for i, e in enumerate(ctx.events) if e["payload"]["type"] in KEY_EVENT_TYPES}
+    return [line for i, line in lines if i in picked]
 
 
 def _label(phrase: str) -> str:
@@ -283,11 +307,23 @@ def _talk_names_fit(reply: str, whole: set[str], words: set[str]) -> bool:
     return True
 
 
+def _counts_another_player(ctx: MatchContext, target: str, reply: str) -> bool:
+    """A sentence that names a team-mate or opponent may not carry a count of his own."""
+    others = [_whole(n) for pid, n in ctx.names.items() if pid != target]
+    for sentence in re.split(r"(?<=[.!?])\s+", reply):
+        bare = MINUTE_IN_TEXT.sub("", sentence)
+        if re.search(r"\d", bare) and any(name in _whole(sentence) for name in others):
+            return True
+    return False
+
+
 def talk_fits(ctx: MatchContext, target: str, reply: str, match_names: Iterable[str] = ()) -> bool:
     """The reply as the Verifier sees it: short, digits only, and names only whole names of the
     speaker, the two clubs and the squads and players the model was given (the knowledge passages
     are words, not names)."""
     if not reply or len(reply.split()) > TALK_WORD_LIMIT or not _words_fit(reply):
+        return False
+    if _counts_another_player(ctx, target, reply):
         return False
     sides = (ctx.player_name(target), ctx.club_name(ctx.home), ctx.club_name(ctx.away))
     known = (*sides, *match_names)
@@ -376,7 +412,10 @@ class LiveAnswers:
         match_names = [
             ctx.player_name(e["payload"]["player_id"]) for e in known if "player_id" in e["payload"]
         ]
-        match_names += squad_names
+        match_names += [
+            *squad_names,
+            *ctx.names.values(),
+        ]  # every player of the match, by whole name
         home, away = _score(ctx)
         facts = {
             "you": {
@@ -390,6 +429,9 @@ class LiveAnswers:
             "match": {
                 "score": f"{ctx.club_name(ctx.home)} {home}, {ctx.club_name(ctx.away)} {away}",
                 "minute": _minute(ctx.state.event_time_ms),
+                "log": match_log(
+                    ctx, f"{utterance} {ctx.player_name(target)}"
+                ),  # every event, by relevance
                 "recent_events": match_events,  # what you saw happen, with the players' names
                 "key_events": key_events,  # every goal and card of the match
                 "team_totals": _team_totals(ctx),  # the log's counts for each club

@@ -148,3 +148,35 @@ def test_a_name_only_in_the_knowledge_base_is_not_said(match) -> None:
         "home1", "who picks the team?", position="GK"
     ))  # fmt: skip
     assert result["reply"] != reply
+
+
+def test_the_match_log_has_every_goal_when_the_fan_asks_about_goals(match) -> None:
+    model = ScriptedModelClient(answers=lambda s, u: {"reply": "Right, boss.", "order": "none"})
+    run(flow_with(match, model, knowledge_for(match)).talk(
+        "home1", "who scored?", position="GK"
+    ))  # fmt: skip
+    facts = json.loads(model.calls[-1]["user"])
+    goals = [line for line in facts["match"]["log"] if "goal" in line]
+    assert len(goals) == sum(1 for e in match["events"] if e["payload"]["type"] == "goal")
+
+
+def test_a_minute_from_the_log_is_accepted_and_an_invented_one_is_not(match) -> None:
+    minute = match["events"][10]["event_time_ms"] // 60_000
+    good = f"Okay, boss. {match['names']['home1']} made that pass in minute {minute}, I saw it."
+    bad = good.replace(f"minute {minute}", "minute 99")
+    for reply, verdict in ((good, "verified"), (bad, "rejected")):
+        model = ScriptedModelClient(answers=lambda s, u, r=reply: {"reply": r, "order": "none"})
+        result = run(flow_with(match, model, knowledge_for(match)).talk(
+            "home1", "what happened earlier?", position="GK"
+        ))  # fmt: skip
+        assert (result["reply"] == reply) == (verdict == "verified"), reply
+
+
+def test_a_player_from_the_log_can_be_named_even_when_he_is_on_no_squad_sheet(match) -> None:
+    name = match["names"]["away10"]
+    reply = f"Okay, boss. {name} had the ball in the middle, I reckon."
+    model = ScriptedModelClient(answers=lambda s, u: {"reply": reply, "order": "none"})
+    result = run(flow_with(match, model, knowledge_for(match)).talk(
+        "home1", "who has the ball?", position="GK"
+    ))  # fmt: skip
+    assert result["reply"] == reply and result["verdict"] == "verified"
