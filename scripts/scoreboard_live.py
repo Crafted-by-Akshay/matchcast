@@ -45,6 +45,21 @@ def fetch_input(api: str, session_id: str, match_id: str) -> dict:
     return match
 
 
+MATCH_KEYS = ("events", "teams", "roster", "names")  # what live_run and the grader read
+
+
+def match_problem(match: object) -> str | None:
+    """Why this is not a match the recording can run on, or None when it is."""
+    if not isinstance(match, dict):
+        return "not a match object"
+    missing = [key for key in MATCH_KEYS if key not in match]
+    if missing:
+        return f"missing {', '.join(missing)}"
+    if not isinstance(match["roster"], dict) or "stream" not in match["roster"]:
+        return "the roster has no stream"
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--match", type=Path, help="the export file, if already saved")
@@ -73,9 +88,6 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as error:
             print(f"could not read {args.match}: {error}", file=sys.stderr)
             return 1
-        if not isinstance(match, dict):
-            print(f"{args.match} is not a match object", file=sys.stderr)
-            return 1
     elif from_api:
         try:
             match = fetch_input(args.api, args.session_id, args.match_id)
@@ -84,6 +96,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
     else:
         print("give --match, or all of --api, --session-id and --match-id", file=sys.stderr)
+        return 2
+    if problem := match_problem(match):
+        print(f"{args.match or args.api}: {problem}", file=sys.stderr)
+        return 1
+    if args.out.is_dir() or not args.out.parent.is_dir():
+        print(f"--out {args.out} must be a file in a folder that exists", file=sys.stderr)
         return 2
     print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)
     record = live_run(

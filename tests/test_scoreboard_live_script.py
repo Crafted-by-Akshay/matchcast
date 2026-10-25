@@ -202,7 +202,7 @@ def test_a_saved_export_that_does_not_parse_is_a_message(capsys, tmp_path) -> No
         ]
     )
     assert code == 1
-    assert "is not a match object" in capsys.readouterr().err
+    assert "not a match object" in capsys.readouterr().err
 
 
 def test_a_dot_segment_is_not_a_match_id(monkeypatch) -> None:
@@ -213,10 +213,13 @@ def test_a_dot_segment_is_not_a_match_id(monkeypatch) -> None:
             script.fetch_input("https://api.example", "s1", match_id)
 
 
+SAVED = {"events": [], "teams": {"a": "Argentina"}, "names": {}, "roster": {"stream": {}}}
+
+
 def test_a_saved_export_is_recorded_with_the_given_fixture(monkeypatch, tmp_path) -> None:
     script = load_script()
     match_file = tmp_path / "match.json"
-    match_file.write_text(json.dumps({"events": [], "teams": {"a": "Argentina"}}))
+    match_file.write_text(json.dumps(SAVED))
     seen = {}
 
     def fake_live_run(match, **kwargs):
@@ -231,6 +234,53 @@ def test_a_saved_export_is_recorded_with_the_given_fixture(monkeypatch, tmp_path
         ["--match", str(match_file), "--fixture", "M001", "--max-calls", "5", "--out", str(out)]
     )
     assert code == 0
-    assert seen["match"] == {"events": [], "teams": {"a": "Argentina"}}
+    assert seen["match"] == SAVED
     assert seen["fixture"] == "M001" and seen["max_calls"] == 5
     assert json.loads(out.read_text())["run_id"] == "r1"
+
+
+def test_a_match_without_what_the_run_reads_is_refused(capsys, tmp_path) -> None:
+    script = load_script()
+    partial = tmp_path / "match.json"
+    partial.write_text(json.dumps({"events": [], "teams": {}}))
+    code = script.main(
+        [
+            "--match",
+            str(partial),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "o.json"),
+        ]
+    )
+    assert code == 1
+    assert "missing roster, names" in capsys.readouterr().err
+
+
+def test_an_output_that_cannot_be_written_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+
+    def no_model():
+        raise AssertionError("the model must not be built before the output is checked")
+
+    monkeypatch.setattr(script, "FoundryModelClient", no_model)
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "missing-folder" / "out.json"),
+        ]
+    )
+    assert code == 2
+    assert "must be a file in a folder that exists" in capsys.readouterr().err
