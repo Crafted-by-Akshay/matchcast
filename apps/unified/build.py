@@ -295,16 +295,13 @@ def build_analyst():
     return r(AS + "head.html") + '<script>\n"use strict";\n' + js + "</script>\n"
 
 
+# same stadium order as the 3D engine's STADIUMS
+MSI_STADIUM = {"london": 0, "madrid": 1, "rio": 2, "milan": 3, "mexico": 4}
+
+
 def fixtures():
     L = json.load(open(AD + "league.json"))
     clubs = {c["key"]: c for c in L["clubs"]}
-    MSI = {
-        "london": 0,
-        "madrid": 1,
-        "rio": 2,
-        "milan": 3,
-        "mexico": 4,
-    }  # same stadium order as the 3D engine's STADIUMS
     out = []
     for k in range(len(L["fixtures"])):
         mid = "M%03d" % (k + 1)
@@ -323,7 +320,7 @@ def fixtures():
                 },
                 "away": {"key": a["key"], "club": a["club"], "color": a["color"]},
                 "score": m["score"],
-                "stIndex": MSI[h["stadium"]],
+                "stIndex": MSI_STADIUM[h["stadium"]],
                 "setup": {
                     "stadium": m["setup"]["stadium"],
                     "city": m["setup"]["city"],
@@ -338,6 +335,75 @@ def fixtures():
             }
         )
     return out
+
+
+# Real national teams with synthetic squads (ADR-0020). The squads and the head-to-head block come from
+# national/ (copies made by scripts/build_national_squads.py from the CC0 results). The web image builds
+# from apps/unified alone, so the files must live here. Every player is fictional; the clubs and the
+# fixture say so with the "synthetic squad" label.
+NATIONAL_SQUADS = U + "national/squads.json"
+NATIONAL_HISTORY = U + "national/history.json"
+NATIONAL = [
+    # key, nation (the results-file name), kit colour, stadium (one of the 3D engine's stadiums)
+    ("ARG", "Argentina", "#75AADB", "mexico"),
+    ("BRA", "Brazil", "#F2C400", "mexico"),
+]
+NATIONAL_SEED = 2026
+
+
+def national_clubs():
+    squads = json.load(open(NATIONAL_SQUADS, encoding="utf-8"))
+    out = []
+    for key, nation, color, stadium in NATIONAL:
+        s = squads[nation]
+        out.append(
+            {
+                "key": key,
+                "club": nation,
+                "color": color,
+                "stadium": stadium,
+                "label": s["label"],
+                "squad": [
+                    {
+                        "name": p["name"],
+                        "num": p["shirt"],
+                        "pos": p["position"],
+                        "rating": p["rating"],
+                        "synthetic": True,
+                    }
+                    for p in s["players"]
+                ],
+            }
+        )
+    return out
+
+
+def national_fixtures(season):
+    """One Argentina v Brazil fixture. No recorded match exists: the score is [0, 0] only because the
+    shell needs an array, so it is not a result, and the fixture is flagged. The venue name, city and
+    tactics come from a season fixture at the same stadium index, so the labels match the 3D stadium."""
+    home, away = national_clubs()
+    venue = next(fx for fx in season if fx["stIndex"] == MSI_STADIUM[home["stadium"]])
+    setup = dict(venue["setup"], seed=NATIONAL_SEED)
+    history = json.load(open(NATIONAL_HISTORY, encoding="utf-8"))
+    return [
+        {
+            "id": "N001",
+            "matchday": "National",
+            "date": "",
+            "national": True,
+            "label": home["label"],
+            "home": {k: home[k] for k in ("key", "club", "color", "stadium")},
+            "away": {k: away[k] for k in ("key", "club", "color", "stadium")},
+            "score": [0, 0],
+            "stIndex": MSI_STADIUM[home["stadium"]],
+            "setup": setup,
+            "history": history,
+            "formations": venue["formations"],
+            "styles": venue["styles"],
+            "result": None,
+        }
+    ]
 
 
 def write(path, text):
@@ -367,17 +433,17 @@ def build(out_root):
     # optional Data platform assets (EXP-13): fabric-dashboard.mp4/.png, model-card.json
     for f in sorted(glob.glob(U + "platform-assets/*")):
         shutil.copy(f, out_root + "shared/" + os.path.basename(f))
+    season = fixtures()
     write(
         out_root + "shared/fixtures.json",
-        json.dumps(fixtures(), ensure_ascii=False, separators=(",", ":")),
+        json.dumps(season + national_fixtures(season), ensure_ascii=False, separators=(",", ":")),
     )
+    clubs = json.load(open(AD + "league.json"))["clubs"] + national_clubs()
+    keys = [c["key"] for c in clubs]
+    assert len(keys) == len(set(keys)), "a national key clashes with a season club"
     write(
         out_root + "shared/clubs.json",
-        json.dumps(
-            {"clubs": json.load(open(AD + "league.json"))["clubs"]},
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ),
+        json.dumps({"clubs": clubs}, ensure_ascii=False, separators=(",", ":")),
     )
 
 

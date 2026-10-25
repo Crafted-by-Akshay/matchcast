@@ -287,6 +287,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <div class="chips">
     <span class="chip" id="sync">In sync</span>
     <span class="chip" id="src">Analyst: season run</span>
+    <button type="button" class="chip" id="bc-toggle" aria-pressed="false" hidden title="Show the Broadcast desk beside the match (loads a second 3D view)">Broadcast desk beside</button>
   </div>
 </section>
 
@@ -482,6 +483,7 @@ function ensure(view) {
 // the Analyst loads its season only when it is opened, so Watch and Broadcast get the machine first
 function routeAnalyst() {
   if (!M.fixture) return;
+  { const cur = byId(M.fixture); if (cur && cur.national) return; }   // no recorded run for a national-team fixture: the Analyst keeps its last route
   if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
     el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#live.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
   if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
@@ -495,7 +497,10 @@ function post(view, msg) { const f = frameOf(view); if (f && f.contentWindow) f.
 // Watch and Broadcast share the screen on a wide window (the live match beside its desk); a phone shows one at a time.
 const SPLIT_VIEWS = ['watch', 'broadcast'];
 const wide = window.matchMedia('(min-width: 900px)');
-function shownViews(view) { return SPLIT_VIEWS.includes(view) && wide.matches ? SPLIT_VIEWS : [view]; }
+// Watch is alone by default: one 3D render, one story. The Broadcast desk joins it beside the match on request (?split=1 or the button), and the Broadcast tab still shows both.
+let bcBeside = new URLSearchParams(location.search).get('split') === '1';
+function shownViews(view) { return wide.matches && (view === 'broadcast' || (view === 'watch' && bcBeside)) ? SPLIT_VIEWS : [view]; }
+(() => { const t = $('bc-toggle'); t.onclick = () => { bcBeside = !bcBeside; show(current); }; })();
 const SPLIT_KEY = 'mc.split', SPLIT_MIN = 0.25, SPLIT_MAX = 0.8;
 let splitFrac = 0.58;
 function applySplit(frac) {
@@ -527,6 +532,7 @@ function show(view) {
   }
   $('stage').classList.toggle('split', on.length > 1);
   $('split-bar').hidden = on.length < 2;
+  const tg = $('bc-toggle'); tg.hidden = !(view === 'watch' && wide.matches); tg.setAttribute('aria-pressed', String(bcBeside));
   for (const v of on) ensure(v);
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   paint();
@@ -563,6 +569,7 @@ function paint() {
   }
   $('meta').title = $('meta').textContent;
   if (live) { $('score-v').textContent = live.live.score.join('–'); $('score-l').textContent = live.live.over ? 'Full time' : live.live.minute + "'"; }
+  else if (fx && fx.national) { $('score-v').textContent = '–'; $('score-l').textContent = 'Synthetic squad'; }   // a national-team fixture has no recorded result
   else if (fx) { $('score-v').textContent = fx.score.join('–'); $('score-l').textContent = 'Recorded'; }
   else { $('score-v').textContent = '–'; $('score-l').textContent = 'Not in season'; }
 
@@ -795,7 +802,14 @@ window.addEventListener('message', (e) => {
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
-  if (d.type === 'feed-ready') { post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on }); return; }   // the commentary card asks once on load, so it shows the right Voice state at once
+  if (d.type === 'feed-ready') {
+    post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on });
+    if (view === 'broadcast') {   // a desk that joins mid-match gets what it missed: the queue and mode, the feed and where the lines come from (lines already aired are not replayed: Broadcast would speak them again)
+      postQueue(); post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items: CM.view(40) });
+      if (M.agents) post('broadcast', M.agents);
+    }
+    return;
+  }   // the commentary card asks once on load, so it shows the right Voice state at once
   if (d.type === 'vision-crop' && view === 'watch') {   // the tracker's OCR second opinion (DAT-11); only when the agent api is live
     const reply = (extra) => post('watch', Object.assign({ src: 'matchcast-shell', type: 'vision-ocr', id: d.id }, extra));
     if (!(LV.enabled && LV.status === 'live')) { reply({ error: 'unavailable' }); return; }
@@ -909,12 +923,12 @@ function init(list) {
   for (const m of Object.keys(md)) {
     const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
     for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
-      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = 'Recorded result ' + fx.score.join('–') + ' (the Analyst replays it)'; g.appendChild(o); }
+      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = fx.national ? 'Synthetic squads, no recorded result' : 'Recorded result ' + fx.score.join('–') + ' (the Analyst replays it)'; g.appendChild(o); }
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
-  // default: the season's most open fixture, so the first view has goals to watch
-  const best = FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
+  // default: the national-team fixture when the data has one, else the season's most open fixture, so the first view has goals to watch
+  const best = FX.find((f) => f.national) || FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
   M.setup = setupOf(best); M.fixture = best.id;
   // filming URL (?seed=2026&speed=4&seedBadClaim=1): the same match, pace and demo claim on every take
   const Q = new URLSearchParams(location.search);
