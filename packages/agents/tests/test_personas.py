@@ -192,7 +192,7 @@ def test_a_booth_is_registered_whole_or_not_at_all(match) -> None:
     assert len(flow.extra_personas) == 8
 
 
-def test_the_booth_is_not_held_for_approval_unless_the_producer_asks(match) -> None:
+def test_the_booth_waits_for_the_producer_unless_the_match_turns_hold_off(match) -> None:
     def statuses(hold: bool) -> dict[str, set[str]]:
         config = WorkflowConfig(
             personas=("casual", "booth:pbp", "booth:colour"),
@@ -210,7 +210,11 @@ def test_the_booth_is_not_held_for_approval_unless_the_producer_asks(match) -> N
         return out
 
     free, held = statuses(False), statuses(True)
-    assert free["casual"] == {"verified"}  # producer mode still holds the ordinary lines
+    # derived feeds air as soon as the Verifier passes them, in either mode (CREW-4.3)
+    assert free["casual"] <= {"approved", "published"} and held["casual"] <= {
+        "approved",
+        "published",
+    }
     assert free["booth:pbp"] <= {"approved", "published"} and free["booth:colour"] <= {
         "approved",
         "published",

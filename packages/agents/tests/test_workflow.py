@@ -5,6 +5,7 @@ import copy
 import pytest
 from conftest import run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.personas import BOOTH
 from matchcast_agents.verify.adversary import ATTEMPTS as adversary_attempts
 from matchcast_agents.workflow import WorkflowError
 from matchcast_contracts import ContractError, validate, validate_publication_context
@@ -93,7 +94,7 @@ def test_seeded_bad_claim_is_rejected_repaired_and_published(make_workflow, matc
 
 
 def test_producer_mode_holds_lines_until_approved(make_workflow, match) -> None:
-    flow = make_workflow(approval_mode="producer")
+    flow = make_workflow(approval_mode="producer", personas=BOOTH)
     run(flow.ingest(match["events"][:60]))
     held = flow.store.lines(flow.sk)
     assert held and {line.status for line in held} == {"verified"}
@@ -113,10 +114,10 @@ def test_producer_mode_holds_lines_until_approved(make_workflow, match) -> None:
 
 
 def test_edit_is_reverified_before_it_can_air(make_workflow, match) -> None:
-    flow = make_workflow(approval_mode="producer")
+    flow = make_workflow(approval_mode="producer", personas=BOOTH)
     run(flow.ingest(match["events"][:60]))
     # the newest line is fresh; older queued lines fail the freshness check when edited
-    analyst_line = [line for line in flow.store.lines(flow.sk) if line.persona == "analyst"][-1]
+    analyst_line = [line for line in flow.store.lines(flow.sk) if line.persona == "booth:pbp"][-1]
 
     line, verdict = run(flow.edit(analyst_line.line_id, "Northgate FC have scored 99 goals."))
     assert verdict.verdict == "rejected" and verdict.reason_code == "number_mismatch"

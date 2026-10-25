@@ -19,6 +19,7 @@ from opentelemetry import trace
 
 from . import recap as recap_mod
 from .context import MatchContext
+from .feeds import drops_on_failed_repair, feed_for, waits_for_producer
 from .history import history_for_roster
 from .hub import StreamHub
 from .memory import storylines
@@ -154,7 +155,7 @@ def rules_agents(
 @dataclass
 class WorkflowConfig:
     approval_mode: str = "auto"  # auto | producer
-    hold_booth: bool = False  # producer mode also holds the booth voices (dead air if it does)
+    hold_booth: bool = True  # producer mode holds the booth voices for a person (25 Oct decision)
     publication_ttl_s: int = 30
     personas: tuple[Persona, ...] = ("casual", "analyst")
     # the engine clock at which the one Vision moment is due (ADR-0022); 0 turns it off
@@ -279,6 +280,8 @@ class MatchWorkflow:
         self.rundown: list[dict[str, Any]] = []  # the Showrunner ledger, see _record_rundown
         self._routing: dict[str, Any] | None = None  # the entry of the moment being run
         self._restore()
+        self.killed_feeds: set[str] = set()  # the desk's per-feed kills, from the audit chain
+        self._restore_feed_state()
         self.stats = {
             "events": 0,
             "moments": 0,
@@ -1165,7 +1168,7 @@ class MatchWorkflow:
                     span.set_attribute("matchcast.line_id", draft.line_id)
                     await self._repair(ctx, task, claims, draft, verdict)
             else:
-                self._give_up(record, verdict)
+                self._give_up(record, verdict, task.event_ids)
             return
         record.status = "verified" if verdict.verdict == "verified" else "review"
         self._save_line(record)
@@ -1186,10 +1189,20 @@ class MatchWorkflow:
             for claim in claims:
                 if claim["claim_id"] in record.claim_ids:
                     self._verified_claims[claim["claim_id"]] = claim
-            # the booth is live talk: verified is enough unless the producer asked to hold it too
-            booth = record.persona in BOOTH and not self.config.hold_booth
-            if self.config.approval_mode == "auto" or booth:
-                self._approve(record, "agent", a.producer.agent_id)
+            # derived feeds air as soon as the Verifier passes them (CREW-4.3); the booth and
+            # any other queued line wait for the producer in producer mode
+            feed = feed_for(record.persona)
+            if feed is not None and feed.key in self.killed_feeds:
+                record.status = "killed"  # the desk killed this feed: nothing from it airs
+                self._save_line(record)
+                self._agent(
+                    "line_killed", a.producer, draft.line_id, feed=feed.key, persona=record.persona
+                )
+                return
+            if not waits_for_producer(
+                record.persona, self.config.approval_mode, self.config.hold_booth
+            ):
+                self._approve(record, "agent", a.producer.agent_id, source_events=task.event_ids)
 
     async def _screen(self, draft: DraftLine, verdict: Verdict) -> Verdict:
         """Check 7: Content Safety on every line that survived checks 1 to 6."""
@@ -1269,11 +1282,13 @@ class MatchWorkflow:
         if replacement is None:  # no repaired line for this persona: the original is final
             original = self.store.get_line(self.sk, draft.line_id)
             assert original is not None
-            self._give_up(original, verdict)
+            self._give_up(original, verdict, task.event_ids)
             return
         await self._verify_line(ctx, task, claims, replacement, attempt=1, repair_of=draft.line_id)
 
-    def _give_up(self, record: LineRecord, verdict: Verdict) -> None:
+    def _give_up(
+        self, record: LineRecord, verdict: Verdict, event_ids: tuple[str, ...] = ()
+    ) -> None:
         """A line that failed its one repair. A booth line (play-by-play or colour) whose failure
         is a checkable fact waits in the producer queue flagged escalated. The six derived feeds
         are dropped from air with an audit record (CREW-4.3): they air once the Verifier passes."""
@@ -1295,19 +1310,46 @@ class MatchWorkflow:
         record.status = "abstained"
         self._save_line(record)
         self.stats["abstained"] += 1
-        self._agent(
+        audit = self._audit(
+            "agent",
+            a.producer.agent_id,
             "line_abstained",
-            a.producer,
             record.line_id,
-            reason_code=verdict.reason_code,
-            persona=record.persona,
-            **_repair_link(record.repair_of),
+            {
+                "mode": getattr(a.producer, "mode", "live"),
+                "reason_code": verdict.reason_code,
+                "persona": record.persona,
+                **_repair_link(record.repair_of),
+            },
         )
+        feed = feed_for(record.persona)
+        if feed is not None and drops_on_failed_repair(record.persona) and event_ids:
+            drop = {
+                "kind": "feed_drop",
+                "schema_version": "1.2.0",
+                "stream": self.stream,
+                "publication_id": f"pub-{record.line_id}",
+                "feed": feed.key,
+                "source_event_ids": list(event_ids),
+                # a line the Verifier could not confirm has no code; it is dropped as unsupported
+                "reason_code": verdict.reason_code or "unsupported_statement",
+                "repair_count": 1,
+                "audit_id": audit["audit_id"],
+                "match_time_ms": self.store.get_state(self.sk).event_time_ms,
+            }
+            validate(drop)
+            self.hub.publish("feed_drop", f"drop:{record.line_id}", drop)
 
     # ---- approval and publication ------------------------------------------------------
 
     def _approve(
-        self, line: LineRecord, actor_kind: str, actor_id: str, actor_name: str | None = None
+        self,
+        line: LineRecord,
+        actor_kind: str,
+        actor_id: str,
+        actor_name: str | None = None,
+        *,
+        source_events: tuple[str, ...] = (),
     ) -> None:
         line.status = "approved"
         line.decided_by = actor_id
@@ -1348,6 +1390,24 @@ class MatchWorkflow:
         self._save_line(line)
         self.stats["published"] += 1
         self.hub.publish("publication", f"pub:{publication['publication_id']}", publication)
+        feed = feed_for(line.persona)
+        if feed is not None and source_events:
+            onair = {
+                "kind": "onair",
+                "schema_version": "1.2.0",
+                "stream": self.stream,
+                "publication_id": publication["publication_id"],
+                "feed": feed.key,
+                "lang": "en",
+                "text": line.text,
+                "source_event_ids": list(source_events),
+                "claim_ids": list(line.claim_ids),
+                "match_time_ms": publication["event_time_ms"],
+                "aired_at": publication["published_at"],
+                "repair_count": 1 if line.repair_of else 0,
+            }
+            validate(onair)
+            self.hub.publish("onair", f"onair:{publication['publication_id']}", onair)
         self._audit(
             "system",
             "publisher",
@@ -1404,12 +1464,30 @@ class MatchWorkflow:
     ) -> dict[str, Any]:
         """The desk's per-feed kill or resume (AB#499). enforced stays false until the air gate."""
         async with self._lock:
-            details = {"feed": feed, "reason": reason[:200], "enforced": False}
+            if killed:
+                self.killed_feeds.add(feed)
+            else:
+                self.killed_feeds.discard(feed)
+            details = {"feed": feed, "reason": reason[:200], "enforced": True}
             if actor_name:
                 details["actor_name"] = actor_name[:80]
             return self._audit(
                 "person", actor_id, "feed_killed" if killed else "feed_resumed", feed, details
             )
+
+    def _restore_feed_state(self) -> None:
+        """Rebuild the kill state from the audit chain, so a restart keeps a kill in force."""
+        sequence = 1
+        while True:
+            rows = self.store.audit_records(self.sk, from_sequence=sequence, limit=500)
+            if not rows:
+                return
+            for row in rows:
+                if row["action"] == "feed_killed":
+                    self.killed_feeds.add(row["subject_id"])
+                elif row["action"] == "feed_resumed":
+                    self.killed_feeds.discard(row["subject_id"])
+            sequence = rows[-1]["sequence"] + 1
 
     async def edit(
         self,

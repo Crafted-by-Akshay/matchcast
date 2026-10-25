@@ -124,7 +124,7 @@ class MatchCreate(BaseModel):
     names: dict[str, str] = Field(default_factory=dict)
     clubs: dict[str, str] = Field(default_factory=dict)
     approval_mode: Literal["auto", "producer"] = "auto"
-    hold_booth: bool = False  # with approval_mode producer: hold the booth voices too
+    hold_booth: bool = True  # with approval_mode producer: hold the booth voices for the producer
     seed_bad_claim: bool = False
     seed_bad_claim_at_ms: int = Field(default=720_000, ge=0)
     # descriptive fields from docs/architecture/12-api.md; stored with the match, not used by agents
@@ -443,7 +443,7 @@ class Registry:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
             config = WorkflowConfig(
                 approval_mode=info.get("approval_mode", "auto"),
-                hold_booth=bool(info.get("hold_booth", False)),
+                hold_booth=bool(info.get("hold_booth", True)),
             )
             live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
@@ -816,9 +816,16 @@ def build_router(registry: Registry) -> APIRouter:
 
         def wanted(item: StreamEvent) -> bool:
             # publications belong to the persona they were written for; line records stay on
-            # every stream because the Broadcast producer queue reads all personas' lines
-            own = item.event == "publication" and keep
-            return not (own and item.data["persona"] not in keep)
+            # every stream because the Broadcast producer queue reads all personas' lines.
+            # Derived feed records (onair, feed_drop) belong to their feed, and casual and
+            # analyst are the feeds whose keys match a persona.
+            if not keep:
+                return True
+            if item.event == "publication":
+                return item.data["persona"] in keep
+            if item.event in ("onair", "feed_drop"):
+                return item.data["feed"] in keep
+            return True
 
         async def localised(item: StreamEvent) -> StreamEvent:
             """The publication with a checked `variants[lang]`, or untouched (English)."""
@@ -987,7 +994,7 @@ def build_router(registry: Registry) -> APIRouter:
             "feed": feed,
             "state": "killed" if killed else "live",
             "audit_id": record["audit_id"],
-            "enforced": False,
+            "enforced": True,
         }
 
     @router.post("/matches/{match_id}/feeds/{feed}/kill")
