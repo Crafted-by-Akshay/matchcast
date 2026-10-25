@@ -114,10 +114,10 @@ def build(ctx: MatchContext) -> HalfTime | None:
     ordered = sorted(ctx.events, key=lambda e: e["stream_sequence"])
     retracted = _targets(ordered, "retraction")  # controls after the cut still apply
     corrected = _targets(ordered, "correction")
+    ended = half_time_event(tuple(ordered))
+    if ended is None or ended["event_id"] in retracted:
+        return None  # no half-time end on the ledger, or the end itself was retracted
     live = tuple(e for e in ordered if e["event_id"] not in retracted)
-    ended = half_time_event(live)
-    if ended is None:
-        return None
     cut = ended["stream_sequence"]
     first = tuple(
         e

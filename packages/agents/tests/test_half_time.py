@@ -185,6 +185,18 @@ def test_a_retracted_half_time_boundary_gives_no_piece() -> None:
     assert half_time.build(ctx([*first_half(), retraction(96, "e90")])) is None
 
 
+def test_a_retracted_half_time_boundary_gives_no_piece_even_with_a_later_end() -> None:
+    later = boundary(120, 47 * 60_000, period=1)
+    assert half_time.build(ctx([*first_half(), retraction(96, "e90"), later])) is None
+
+
+def test_a_correction_to_a_second_half_event_does_not_hold_the_piece() -> None:
+    alone = half_time.build(ctx([*first_half(), *second_half()]))
+    corrected = half_time.build(ctx([*first_half(), *second_half(), correction(96, "e91")]))
+    assert corrected is not None
+    assert corrected.text == alone.text
+
+
 def test_a_started_boundary_is_not_the_half_time_cut() -> None:
     started = ev(90, 45 * 60_000, {"type": "period_boundary", "boundary": "started"}, period=1)
     assert half_time.build(ctx([goal(1, 12 * 60_000, HOME, "h9"), started])) is None
@@ -197,8 +209,9 @@ def test_the_earliest_ended_boundary_is_the_cut() -> None:
 
 
 def test_a_period_two_event_with_an_early_sequence_stays_out() -> None:
-    late_goal = goal(2, 10 * 60_000, AWAY, "a1", period=2)
+    late_goal = goal(2, 55 * 60_000, AWAY, "a1", period=2)
     piece = half_time.build(ctx([goal(1, 12 * 60_000, HOME, "h9"), late_goal, HALF_END]))
+    assert "At half-time, Northgate 1, Southfield 0." in piece.text
     assert "Tom Hale" in piece.text
     assert "a1" not in piece.text
     assert "e2" not in piece.source_event_ids
