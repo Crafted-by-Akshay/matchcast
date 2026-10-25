@@ -63,9 +63,20 @@ const LV = (() => {
     run.names = roster ? Object.fromEntries(roster.players.map((q) => [slug(q.name), q.name])) : {};
     open();
   };
+  // the booth's own stream (persona=booth): only booth:pbp and booth:colour publications, in speaking order. Its persona is the speaker, which feed.js voices. It is not retried: if it drops, the rules booth carries on
+  const openBooth = (r) => {
+    if (r.booth) r.booth.close();
+    try {
+      const es = new EventSource(url('/v1/matches/' + r.id + '/stream', { persona: 'booth', lang }));
+      r.booth = es;
+      es.addEventListener('publication', (e) => { try { onLine(JSON.parse(e.data), st); } catch (err) { /* a bad frame is skipped */ } });
+      es.onerror = () => es.close();
+    } catch (e) { /* the rules booth carries on */ }
+  };
   const open = () => {
     const r = run; if (!r || !r.created) return;
     if (r.es) r.es.close();   // one stream at a time: a pending retry must not add a second
+    openBooth(r);
     // the api only knows the match once it is created; flush opens the stream right after
     try {
       const es = new EventSource(url('/v1/matches/' + r.id + '/stream', { persona, lang }));
@@ -231,7 +242,7 @@ const LV = (() => {
     const r = run; if (!r || !api()) return null;
     try { const res = await fetch(url('/v1/matches/' + r.id + '/vision/summary'), { cache: 'no-store' }); return res.ok ? await res.json() : null; } catch (e) { return null; }
   };
-  const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
+  const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); if (run && run.booth) run.booth.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
     begin, events, visionEvents, visionSummary, stop, talk, recap, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it

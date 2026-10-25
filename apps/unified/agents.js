@@ -12,7 +12,7 @@ const AG = (() => {
   let mode = 'producer', onAir = () => {};   // producer (the default): a person approves each line first; demo: verified lines air at once
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
-    roll: { score: [0, 0], xg: [0, 0], nextXg: 5 },
+    roll: { score: [0, 0], xg: [0, 0], nextXg: 1 },
     stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 } });
   const teamIx = (k) => (!run || k == null) ? -1 : k === run.names.hk ? 0 : k === run.names.ak ? 1 : -1;
   const teamName = (t) => (t === 0 ? run.names.home : run.names.away);
@@ -269,7 +269,7 @@ const AG = (() => {
     const last = rows.length ? rows[rows.length - 1].minute : null;
     if (last != null && last >= run.roll.nextXg) {
       pipeline(claim('xg_total', last, [], { xg: run.roll.xg.slice() }, { basis: 'every shot up to ' + min(last) }));
-      run.roll.nextXg = Math.floor(last / 5) * 5 + 5;
+      run.roll.nextXg = Math.max(5, Math.floor(last / 5) * 5 + 5);   // the first running total comes at minute 1 so the pipeline shows a checked line early, then every five minutes
     }
     changed();
   };
@@ -332,7 +332,7 @@ const AG = (() => {
       for (const l of ['es', 'hi']) if (typeof d.variants[l] === 'string' && d.variants[l].trim()) c.tr[l] = { ok: true, text: d.variants[l], reason: 'api: translated and re-checked', api: true };
     }
     // the stream repeats a line on every status step and audience: the Live flow and commentary take each distinct line once
-    if (d.text) { c.text = d.text; c.said = c.said || new Set(); if (!c.said.has(d.text)) { c.said.add(d.text); run.stat.lines++; hop(c, 'narrator', 'draft'); say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, d.event_time_ms != null ? +d.event_time_ms / 60000 : last, d.metric, d.publication_id); } }   // the api's checked line also joins the commentary
+    if (d.text) { c.text = d.text; c.said = c.said || new Set(); if (!c.said.has(d.text)) { c.said.add(d.text); run.stat.lines++; hop(c, 'narrator', 'draft'); say('Narrator', c.minute, c.id + ' · ' + d.text, ''); CM.api(d.text, d.event_time_ms != null ? +d.event_time_ms / 60000 : last, d.metric, d.publication_id, typeof d.persona === 'string' && d.persona.startsWith('booth:') ? d.persona.slice(6) : ''); } }   // the api's checked line also joins the commentary
     if (d.status === 'approved') c.route = 'fan';
     changed();   // the claim's source was set when it arrived: a later status change (say, a rules fallback) does not rewrite how its earlier steps were made
   };

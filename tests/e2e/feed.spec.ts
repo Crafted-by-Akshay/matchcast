@@ -203,6 +203,21 @@ test('a quiet stretch gets a booth exchange drawn from the match state, and not 
   expect(out.after).toBe(2);
 });
 
+test('a live booth line keeps the speaker its persona gives it', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  // one synchronous step: the Watch frame may reset the feed between awaits, so the lines are read straight after they are added
+  const lines = await page.evaluate(() => {
+    CM.reset('live', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.api('Ana wins it back and the crowd rises.', 4, 'line', 'booth-colour-1', 'colour');
+    CM.api('Ben drives at the box.', 4.2, 'line', 'booth-pbp-1', 'pbp');
+    return CM.view().filter((l: any) => l.source === 'live').map((l: any) => ({ text: l.text, speaker: l.speaker }));
+  });
+  expect(lines).toEqual([
+    { text: 'Ana wins it back and the crowd rises.', speaker: 'colour' },
+    { text: 'Ben drives at the box.', speaker: 'pbp' },
+  ]);
+});
+
 test('the booth speaks each new feed line once, play-by-play and colour on different voices', async ({ page }) => {
   await openShell(page, 'watch', '?seed=2026');
   await page.evaluate(() => { VC.set(true); });
