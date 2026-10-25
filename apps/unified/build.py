@@ -500,7 +500,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst.js"]
+        shell = ["index.html", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst.js", "crew-score.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)
