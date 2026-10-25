@@ -16,7 +16,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 128
       return { iw: innerWidth, mcf: r('#mcf'), cams: r('#bc-cams'), mini: r('#bc-mini'), view: r('#bc-view') };
     });
     // the card is moved into the flow on a one-second tick, so give it a moment
-    await expect.poll(async () => { const x = await measure(); return !!x.mcf && !!x.cams && x.mcf.t >= x.cams.b - 1; }, { timeout: 15_000, message: 'the card sits under the camera chips' }).toBe(true);
+    await expect.poll(async () => { const x = await measure(); return !!x.mcf && !!x.cams && x.mcf.t >= Math.max(x.cams.b, x.view.b) - 1; }, { timeout: 15_000, message: 'the card sits under the camera chips' }).toBe(true);
     const m = await measure();
     expect(m.iw, 'a pane narrower than 700 px').toBeLessThan(700);
     const hit = (a: any, b: any) => !!a && !!b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;

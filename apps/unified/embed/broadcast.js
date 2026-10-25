@@ -176,7 +176,7 @@ if (MCS.framed) {
     const m = document.getElementById('mcf'), left = document.querySelector('.bc-left'), view = document.getElementById('bc-view'), cams = document.getElementById('bc-cams');
     if (!m || !left || !view) return;
     const anchor = cams && cams.parentElement === view.parentElement ? cams : view;   // under the camera chips when there are some: the camera modes stay near the fold, the card follows
-    const narrow = innerWidth < 700, inFlow = m.previousElementSibling === anchor;
+    const narrow = innerWidth < 700, inFlow = m.parentElement !== view;   // anywhere outside the live view counts as in the flow, whichever anchor it was placed after
     if (narrow && !inFlow) {
       anchor.after(m);
       for (const [k, v] of [['position', 'static'], ['width', 'auto'], ['max-height', 'none'], ['margin', '10px 0 0'], ['left', 'auto'], ['right', 'auto'], ['bottom', 'auto']]) m.style.setProperty(k, v, 'important');
