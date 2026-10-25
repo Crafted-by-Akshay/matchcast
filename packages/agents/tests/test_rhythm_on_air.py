@@ -119,3 +119,11 @@ def test_long_club_names_keep_the_goal_line_within_its_limit_with_a_swing(match)
     line = _analyst_line(flow, goal)
     assert len(line.text) <= 280
     assert line.checks and all(check.passed for check in line.checks)
+
+
+def test_a_clause_that_would_overflow_the_limit_is_dropped_and_the_line_kept() -> None:
+    from matchcast_agents.rules.narrator import _with_clause
+
+    line = "x" * 270
+    assert _with_clause(line, " They have met 12 times on record.", "analyst") == line
+    assert _with_clause("short.", " A clause.", "analyst") == "short. A clause."

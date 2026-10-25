@@ -120,7 +120,7 @@ class NarratorRules:
                 side = ctx.club_name(swing["metric"].split(":", 1)[1].rsplit("-", 1)[0])
                 clause = (
                     f" The rhythm had swung to {side}, with {swing['value']}% of the on-ball "
-                    "actions over the five minutes before the swing."
+                    "actions in the run-up to the swing."
                 )
                 analyst = _with_clause(analyst, clause, "analyst")
             texts = {

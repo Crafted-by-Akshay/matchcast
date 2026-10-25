@@ -225,13 +225,13 @@ class RhythmSpecialist:
         why, why_evidence = None, ()
         if found and end_ms - found[-1].end_ms <= WINDOW_MS:
             swing = found[-1]
-            # the share describes the five minutes that end at the swing, the window it cites
+            # the share covers the window up to the swing (at most five minutes), as cited
             at_swing = reading(events, home, away, swing.end_ms)
             on_ball = at_swing.counts["on_ball"]
             share = _percent(on_ball[swing.to_team], sum(on_ball.values()))
             why = (
                 f"The rhythm swung to {ctx.club_name(swing.to_team)} in minute {swing.minute}, "
-                f"with {share}% of the on-ball actions over the five minutes to that minute"
+                f"with {share}% of the on-ball actions in the run-up to that minute"
             )
             why_evidence = tuple(e["event_id"] for e in window(events, swing.end_ms))
             # the Analyst's claim cites this swing: the side it went to, and the window's end
