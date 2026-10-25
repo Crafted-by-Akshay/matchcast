@@ -36,7 +36,7 @@ const VC = (() => {
     if (typeof SPX === 'undefined') { browser(); return; }
     if (it.lang !== 'en' && !voices[it.lang]) { done(); return; }   // no voice for this language: captioned, never read in another voice
     const voice = it.lang !== 'en' ? voices[it.lang] : it.role === 'analyst' ? voices.analyst : voices.playByPlay;
-    SPX.speak(it.text, voice, lang, it.tone === 'big').then((ok) => { if (my !== gen || !on) return; if (ok) { source = 'azure'; onChange(); done(); } else if (Date.now() - it.at > EXPIRY_MS) done(); else browser(); });   // not spoken late by the browser after a slow Azure try
+    SPX.speak(it.text, voice, lang, it.tone).then((ok) => { if (my !== gen || !on) return; if (ok) { source = 'azure'; onChange(); done(); } else if (Date.now() - it.at > EXPIRY_MS) done(); else browser(); });   // not spoken late by the browser after a slow Azure try
   };
   // a line to show and (if voice is on) speak. at: when it was written, in ms; lang: a language in VOICED; audio: an api audio url
   // a language with no voice is shown as text only: the English voice must not read another language's words
@@ -47,28 +47,34 @@ const VC = (() => {
     caption(text);
     source = o.audio ? 'azure' : 'browser'; onChange();
     if (on && speaks(o.lang) && !(o.id && spoken.has(o.id))) {
-      if (o.tone === 'big') swell();
-      if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' }); next(); }
+      if (o.tone === 'big') swell(0.8); else if (o.tone === 'hot') swell(0.45);   // a goal erupts; a shot or a build-up lifts the crowd
+      if (o.id) spoken.add(o.id);
+      const item = { text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' };
+      // a big line goes to the front, so a goal is not spoken behind play lines; the expiry still drops a line that waited too long
+      if (item.tone === 'big') queue.unshift(item); else queue.push(item);
+      next(); }
   };
-  // the crowd bed (simulated): low noise under the commentary while Voice is on. It is synthesised here, not a recording, and it swells for a big moment.
+  // the crowd bed (simulated): a murmur under the commentary while Voice is on. It is synthesised here, not a recording. It sits at BED, lifts on an attack
+  // (swell 0.45) and erupts on a goal (0.8), then settles back to BED.
   let crowd = null, swellT = 0;
+  const BED = 0.3;   // gain under the voices: the first version was 0.04, about -40 dBFS, which the commentary covered entirely
   const crowdStart = () => {
     if (crowd || !('AudioContext' in window)) return;
     try {
       const ctx = new AudioContext(), len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
       let last = 0; for (let i = 0; i < len; i++) { last = (last + (Math.random() * 2 - 1) * 0.02) / 1.02; d[i] = last * 3.5; }   // brown noise: a murmur, not hiss
       const src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
-      src.buffer = buf; src.loop = true; lp.type = 'lowpass'; lp.frequency.value = 900; g.gain.value = 0.04;
+      src.buffer = buf; src.loop = true; lp.type = 'lowpass'; lp.frequency.value = 1400; g.gain.value = BED;
       src.connect(lp); lp.connect(g); g.connect(ctx.destination); src.start(); if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       crowd = { ctx, src, g };
     } catch (e) { crowd = null; }   // no audio here: the commentary still plays
   };
   const crowdStop = () => { clearTimeout(swellT); if (crowd) { try { crowd.src.stop(); crowd.ctx.close(); } catch (e) { /* already stopped */ } crowd = null; } };
-  const swell = () => {
+  const swell = (peak) => {
     if (!crowd) return; const t = crowd.ctx.currentTime, g = crowd.g.gain;
-    g.cancelScheduledValues(t); g.setTargetAtTime(0.22, t, 0.3);
-    clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(0.04, crowd.ctx.currentTime, 1.5); }, 3000);
+    g.cancelScheduledValues(t); g.setTargetAtTime(Math.max(peak, g.value), t, 0.3);   // a lift never pulls an eruption back down
+    clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(BED, crowd.ctx.currentTime, 1.5); }, 3000);
   };
   const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
-  return { load, say, set, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
+  return { load, say, set, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get level() { return crowd ? crowd.g.gain.value : 0; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();

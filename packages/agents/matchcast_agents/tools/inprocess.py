@@ -5,6 +5,7 @@ from typing import Any
 from .. import history_metrics as history
 from ..context import MatchContext
 from ..metrics_spec import METRIC_UNITS, derivation_version
+from ..vision import VISION_METRICS, vision_value
 from ..xg import team_xg
 
 MAX_EVENTS = 200
@@ -83,6 +84,16 @@ class InProcessTools:
         ][:MAX_EVENTS]
         return self._call("get_events", {"from_seq": from_seq, "to_seq": to_seq}, {"events": rows})
 
+    def _vision(self, name: str, metric: str, team: str) -> float:
+        """Vision's count or share, from the Vision passes the match was given (ADR-0022)."""
+        feed = self._ctx.extra.get("vision_passes")
+        if feed is None:
+            raise ToolError("get_metrics", f"no Vision feed for {name}")
+        value = vision_value(metric, team, feed(), self._ctx.events, self._ctx.state.event_time_ms)
+        if value is None:
+            raise ToolError("get_metrics", f"no Vision pass is covered by the engine yet: {name}")
+        return value
+
     def get_metrics(self, names: list[str]) -> tuple[str, dict[str, Any]]:
         self._check("get_metrics")
         values = {}
@@ -97,6 +108,8 @@ class InProcessTools:
                     raise ToolError("get_metrics", f"no pre-match history for {name}") from error
             elif metric == "xg":
                 value = team_xg(self._ctx.events, team, self._up_to)
+            elif metric in VISION_METRICS:
+                value = self._vision(name, metric, team)
             else:
                 value = self._ctx.state.count(metric, team)
             values[name] = {

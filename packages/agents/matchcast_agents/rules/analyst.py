@@ -31,9 +31,17 @@ COLOUR_METRICS = {
 
 # a Vision stream sees passes only, so its summary counts those (ADR-0022)
 VISION_COUNT_METRICS = {**COUNT_METRICS, "summary": ("passes:{h}", "passes:{a}")}
+# the one Vision moment on the engine feed: Vision's count beside the engine's, per team
+VISION_MOMENT_METRICS = (
+    "vision_passes:{h}", "passes:{h}", "vision_precision:{h}",
+    "vision_passes:{a}", "passes:{a}", "vision_precision:{a}",
+)  # fmt: skip
+MAX_CLAIMS = 6  # three for a usual moment; the Vision moment states both teams
 
 
 def metrics_for(ctx: MatchContext, task: ProducerTask, event: dict[str, Any]) -> list[str]:
+    if task.reason == "vision":
+        return [m.format(h=ctx.home, a=ctx.away) for m in VISION_MOMENT_METRICS]
     payload = event["payload"]
     team = payload.get("team_id", ctx.home)
     counts = VISION_COUNT_METRICS if is_vision_stream(ctx.stream) else COUNT_METRICS
@@ -91,12 +99,14 @@ class AnalystRules:
             if "get_metrics" in self._failing:
                 raise ToolError("get_metrics", "unavailable")
             mcp = McpMetrics(self._tool_call, ctx, task.up_to_sequence)
-            call_id, result = await mcp.get_metrics(metrics[:3])
+            call_id, result = await mcp.get_metrics(metrics[:MAX_CLAIMS])
         else:
             tools = InProcessTools(ctx, task.up_to_sequence, fail=self._failing)
-            call_id, result = tools.get_metrics(metrics[:3])  # ToolError: no claim, never a guess
+            call_id, result = tools.get_metrics(
+                metrics[:MAX_CLAIMS]
+            )  # ToolError: no claim, never a guess
         claims = []
-        for index, metric in enumerate(metrics[:3], start=1):
+        for index, metric in enumerate(metrics[:MAX_CLAIMS], start=1):
             value = result["values"][metric]["value"]
             if (
                 self._corrupt

@@ -1,0 +1,178 @@
+{
+  "agents": "live",
+  "match": "match-short",
+  "fallbacks": 3,
+  "producer": {
+    "must_cover_events": 4,
+    "must_cover_recall": 1.0,
+    "moments_picked": 10,
+    "key_moment_precision": 0.7,
+    "quiet_events": 111,
+    "quiet_events_skipped_share": 0.973
+  },
+  "analyst": {
+    "claims": 28,
+    "recounted": 24,
+    "claim_accuracy": 1.0,
+    "not_recounted_here": 4,
+    "xg_in_range": 1.0,
+    "wrong": []
+  },
+  "narrator": {
+    "first_drafts": 18,
+    "first_draft_faithful_rate": 0.833,
+    "first_draft_within_length_rate": 0.944,
+    "persona_pairs": 4,
+    "personas_differ_rate": 1.0
+  },
+  "verifier": {
+    "pairs_replayed": 14,
+    "honest_lines_checked": 26,
+    "false_reject_rate_on_clean": 0.462,
+    "content_mutations_tried": 58,
+    "catch_rate": 1.0,
+    "by_mutation": {
+      "claim_stale": {
+        "tried": 14,
+        "caught": 14,
+        "rate": 1.0,
+        "by_construction": true
+      },
+      "claim_value_off_by_one": {
+        "tried": 14,
+        "caught": 14,
+        "rate": 1.0,
+        "by_construction": false
+      },
+      "invented_player": {
+        "tried": 14,
+        "caught": 14,
+        "rate": 1.0,
+        "by_construction": false
+      },
+      "line_too_long": {
+        "tried": 14,
+        "caught": 14,
+        "rate": 1.0,
+        "by_construction": true
+      },
+      "number_in_text_changed": {
+        "tried": 9,
+        "caught": 9,
+        "rate": 1.0,
+        "by_construction": false
+      },
+      "player_from_other_club": {
+        "tried": 7,
+        "caught": 7,
+        "rate": 1.0,
+        "by_construction": false
+      },
+      "source_forged": {
+        "tried": 14,
+        "caught": 14,
+        "rate": 1.0,
+        "by_construction": false
+      },
+      "wrong_unit": {
+        "tried": 14,
+        "caught": 14,
+        "rate": 1.0,
+        "by_construction": true
+      }
+    },
+    "known_gap_wrong_teammate": {
+      "tried": 7,
+      "caught": 7,
+      "rate": 1.0
+    }
+  },
+  "seeded_bad_claim": {
+    "trials": 7,
+    "injected": 7,
+    "caught_rate": 1.0,
+    "wrong_claims_shown_total": 0,
+    "repair_or_abstain_rate": 1.0,
+    "fallbacks": 1,
+    "detail": [
+      {
+        "inject_at_ms": 0,
+        "injected": true,
+        "caught": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 60000,
+        "injected": true,
+        "caught": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 150000,
+        "injected": true,
+        "caught": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 240000,
+        "injected": true,
+        "caught": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 330000,
+        "injected": true,
+        "caught": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 420000,
+        "injected": true,
+        "caught": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      },
+      {
+        "inject_at_ms": 510000,
+        "injected": true,
+        "caught": true,
+        "repaired_or_abstained": true,
+        "wrong_claims_shown": 0
+      }
+    ]
+  },
+  "ask": {
+    "golden_questions": 40,
+    "by_kind": {
+      "both": {
+        "asked": 5,
+        "right": 5,
+        "rate": 1.0
+      },
+      "knowledge": {
+        "asked": 15,
+        "right": 15,
+        "rate": 1.0
+      },
+      "live": {
+        "asked": 15,
+        "right": 15,
+        "rate": 1.0
+      },
+      "unanswerable": {
+        "asked": 5,
+        "right": 5,
+        "rate": 1.0
+      }
+    },
+    "unanswerable_refusal_rate": 1.0,
+    "redteam_prompts": 20,
+    "redteam_stopped_rate": 1.0,
+    "redteam_missed": []
+  }
+}

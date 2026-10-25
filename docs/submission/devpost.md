@@ -21,6 +21,8 @@ Spanish and Hindi lines are on the Broadcast desk today, and the api adds Spanis
 
 What the Verifier catches, measured: in the offline evaluation (`docs/eval/agents-eval.md`, rules agents on one frozen match) it caught 99.3% of 151 planted errors, each rejected for the right reason, with 0 false rejects on 34 honest lines; the seeded bad claim was caught 7 times out of 7 and no wrong claim reached a screen. That is the floor every model-written line is checked against, not a claim about model quality.
 
+Live on Foundry (25 Oct, gpt-5-mini, `docs/eval/agents-eval-live.md`, a smaller replay of 14 verified lines): seeded bad claim caught 7 of 7 with 0 wrong claims shown, and 100% of 58 planted errors caught for the right reason. Ask, which has no model, answered 40 of 40 and stopped all 20 red-team prompts, as offline. Weak spots in the same run: 46.2% of 26 honest lines were rejected (the Verifier errs towards holding a line), so only 4 of 22 moments got a live line end to end (14 of 22 on rules), with no wrong line aired; 83.3% of 18 Narrator first drafts stayed inside their claims and the roster; 3 model calls fell back to the rules. A re-run on 26 Oct, after the crew deploy, will replace these numbers.
+
 Evidence: we have not yet run this with a rights holder. The team above is a design target, not a named customer or pilot. We will say so in the video and the README rather than claim one.
 
 ## What is real today (22 Oct) and what is not

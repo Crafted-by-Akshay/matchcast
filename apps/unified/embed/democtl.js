@@ -13,6 +13,9 @@
   b.onclick = () => { ctrl.classList.toggle('mc-folded'); paint(); };
   let outer = ''; try { outer = parent.location.search; } catch (e) { /* cross-origin parent */ }
   if (!/[?&]demo=1\b/.test(location.search + outer)) ctrl.classList.add('mc-folded');
+  // CREW (?crew=1, CREW-7.8): a judge sees no weather chip and no camera presets unless ?demo=1, so the Demo controls button goes too (Pause, Vision and Copilot stay)
+  let crew = /[?&]crew=1\b/.test(location.search + outer); try { if (localStorage.getItem('mc-crew') === '1') crew = true; } catch (e) { /* storage blocked */ }
+  if (crew && !/[?&]demo=1\b/.test(location.search + outer)) { const hide = document.createElement('style'); hide.textContent = '#mc-demo,#wxchip,#cams{display:none!important}'; document.head.appendChild(hide); b.hidden = true; }
   grp.appendChild(b);
   // Pause stays one tap away: it presses the real button in the folded speed group
   const pz = document.createElement('button'); pz.id = 'mc-pause'; pz.type = 'button'; pz.textContent = '⏯'; pz.title = 'Pause or resume the match'; pz.setAttribute('aria-label', 'Pause or resume the match');
