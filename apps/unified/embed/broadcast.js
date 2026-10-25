@@ -4,7 +4,7 @@ MCS.progress('Loading the stadium and players');
 // called by the desk once the players have loaded (replaces bcNewMatch(seed) at boot)
 function bcEmbedStart(q) {
   MCS.progress('Setting up the match');
-  const go = () => { if (q.get('seed')) { MCS.apply(q); bcNewMatch(q.get('seed')); } else bcNewMatch(); window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); };   // the lens menu lists the players once they load
+  const go = () => { if (q.get('seed')) { MCS.apply(q); MCS.names(); bcNewMatch(q.get('seed')); } else bcNewMatch(); window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); };   // the fixture's clubs are applied before the desk builds the match; the lens menu lists the players once they load
   if (MCS.clubs.ready) go(); else MCS.clubs.load.then(go);
 }
 MCS.ptt($('dk-q'), $('dk-askf'));   // EXP-16: push-to-talk for Ask the producer

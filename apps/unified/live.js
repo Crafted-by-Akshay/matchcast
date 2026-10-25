@@ -277,8 +277,37 @@ const LV = (() => {
     return { n: l.length, median_ms: l.length ? l[Math.floor(l.length / 2)] : null, last_ms: r && r.lats.length ? r.lats[r.lats.length - 1] : null };
   };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); if (run && run.booth) run.booth.close(); run = null; };
+  // The voice call's socket (EXP-18, docs/architecture/12-api.md): one WebSocket per call. talk() sends a turn; its reply comes as text,
+  // then one MP3 per sentence; cancel() drops a turn's audio. Null when there is no match on the api; close fires if the socket drops.
+  const openCall = (h) => {
+    const r = run;
+    if (!r || !r.created || !api()) return null;
+    const ws = new WebSocket(url('/v1/matches/' + r.id + '/call', {}).replace(/^http/, 'ws'));
+    ws.binaryType = 'arraybuffer';
+    let header = null;   // the audio header that the next binary frame belongs to (the server sends them in order)
+    ws.onmessage = (e) => {
+      if (typeof e.data !== 'string') { if (header) { h.audio(header.id, new Blob([e.data], { type: 'audio/mpeg' })); header = null; } return; }
+      let d; try { d = JSON.parse(e.data); } catch (err) { return; }
+      if (d.type === 'reply') h.reply(d.id, { text: d.reply, verdict: d.verdict, facts: d.facts || {}, order: d.order || null, api: true, audioUrl: null });
+      else if (d.type === 'audio') header = d;
+      else if (d.type === 'audio_end') h.end(d.id);
+      else if (d.type === 'error') h.error(d.id, d.code);
+    };
+    let opened = false;
+    ws.onopen = () => { opened = true; };
+    ws.onclose = () => h.close(opened);   // a socket that never opened was refused at the handshake (no match, or a bad session)
+    return {
+      talk: (id, target, position, utterance) => {
+        if (ws.readyState !== 1) return false;
+        ws.send(JSON.stringify({ type: 'talk', id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}) }));
+        return true;
+      },
+      cancel: (id) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'cancel', id })); },
+      close: () => ws.close(),
+    };
+  };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); onLatency = cbs.latency || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, visionSummary, stop, talk, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

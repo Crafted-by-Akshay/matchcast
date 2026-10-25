@@ -161,6 +161,8 @@ def build_watch():
         + "\n"
         + r(EMB + "roles.js")
         + "\n"
+        + r(EMB + "langpick.js")   # before watch.js: its fanSet wrapper and the load-time wiring then see the replaced language list
+        + "\n"
         + r(EMB + "watch.js")
         + "\n"
         + r(EMB + "focus.js")
@@ -173,7 +175,7 @@ def build_watch():
         + "\n"
         + r(EMB + "feed.js")
         + "\n"
-        + r(EMB + "twofans.js") + "\n" + r(EMB + "democtl.js")
+        + r(EMB + "twofans.js") + "\n" + r(EMB + "feedpick.js") + "\n" + r(EMB + "democtl.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
@@ -504,7 +506,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst.js", "crew-score.js"]
+        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)
