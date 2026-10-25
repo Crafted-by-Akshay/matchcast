@@ -7,7 +7,14 @@ import pytest
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.safety import AzureContentSafety, LocalSafetyScreen
-from matchcast_agents.workflow import WorkflowError
+from matchcast_agents.workflow import (
+    NOT_SHOWN,
+    PASSED,
+    UNCHECKED,
+    WITHHELD,
+    WorkflowError,
+    public_line,
+)
 from matchcast_contracts.audit import verify_chain
 
 
@@ -241,8 +248,6 @@ def test_half_the_recent_screens_on_the_local_word_list_is_degraded_and_recovers
 
 
 def test_a_refused_lines_text_never_leaves_the_workflow(match) -> None:
-    from matchcast_agents.workflow import UNCHECKED, WITHHELD, public_line
-
     flow = build(match, safety=UnsafeScreen())
     run(flow.ingest(match["events"]))
     unsafe = [ln for ln in flow.store.lines(flow.sk) if ln.reason_code == "unsafe_content"]
@@ -262,3 +267,20 @@ def test_a_refused_lines_text_never_leaves_the_workflow(match) -> None:
         d for d in seen if "scores" in d["text"] and d["line_id"] in {u.line_id for u in unsafe}
     ]
     assert all(d["text"] == UNCHECKED for d in seen if d["status"] in ("drafted", "verifying"))
+
+
+def test_the_open_stream_carries_a_lines_text_only_after_it_passed_its_checks(match) -> None:
+    flow = build(match, safety=UnsafeScreen())
+    run(flow.ingest(match["events"]))
+    seen = [e.data for e in flow.hub.history() if e.event == "line"]
+    assert seen
+    for d in seen:
+        if d["status"] in PASSED:
+            assert d["text"] not in (UNCHECKED, NOT_SHOWN, WITHHELD)
+        else:
+            assert d["text"] in (UNCHECKED, NOT_SHOWN, WITHHELD), d["status"]
+    rejected = next(ln for ln in flow.store.lines(flow.sk) if ln.status == "rejected")
+    assert (
+        public_line(rejected)["text"] == rejected.text or rejected.reason_code == "unsafe_content"
+    )
+    assert public_line(rejected, stream=True)["text"] in (NOT_SHOWN, WITHHELD)

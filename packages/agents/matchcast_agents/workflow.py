@@ -53,17 +53,23 @@ AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 
 WITHHELD = "[withheld: refused by Content Safety]"
 UNCHECKED = "[awaiting checks]"
+NOT_SHOWN = "[not shown: did not pass its checks]"
+PASSED = ("verified", "approved", "published")  # Verifier and Content Safety have both passed
 
 
-def public_line(line: LineRecord) -> dict[str, Any]:
-    """The line as a viewer or the producer desk may read it. Its text is withheld while it has
-    not passed its checks (drafted, verifying: Content Safety has not run yet) and for good once
-    Content Safety refused it; status and reason stay. The store keeps the text for the audit."""
+def public_line(line: LineRecord, *, stream: bool = False) -> dict[str, Any]:
+    """The line as it may be read. The text of a line Content Safety refused is always withheld.
+    On the open stream (`stream=True`) text goes out only once the line passed the Verifier and
+    Content Safety; the role-gated producer routes also show a rejected or escalated line so a
+    person can decide, but never one still awaiting its checks. The store keeps every text for
+    the audit chain; status, reason and ids always stay."""
     out = line.model_dump()
     if line.reason_code == "unsafe_content":
         out["text"] = WITHHELD
     elif line.status in ("drafted", "verifying"):
         out["text"] = UNCHECKED
+    elif stream and line.status not in PASSED:
+        out["text"] = NOT_SHOWN
     return out
 
 
@@ -448,7 +454,9 @@ class MatchWorkflow:
 
     def _save_line(self, line: LineRecord) -> None:
         self.store.put_line(self.sk, line)
-        self.hub.publish("line", f"line:{line.line_id}:{line.status}", public_line(line))
+        self.hub.publish(
+            "line", f"line:{line.line_id}:{line.status}", public_line(line, stream=True)
+        )
 
     # ---- ingest ------------------------------------------------------------------------
 
