@@ -44,6 +44,7 @@ test('Broadcast and the Analyst follow Watch (same score, minute, events; pause 
   await w.evaluate(() => { (window as any).__mc.S.paused = false; });
   await stepSim(w, 400);
   await tab(page, 'broadcast');
-  await expect.poll(async () => { const x = await state(b), y = await state(w); return !x.paused && x.mclock >= ws.mclock && Math.abs(x.mclock - y.mclock) < 5 && JSON.stringify(x.score) === JSON.stringify(y.score); }, { timeout: 60_000 }).toBe(true);
+  // Broadcast's clock moves in its own frame loop (consumerStep from stepSim); software GL starves that loop, so step it the way Watch is stepped above
+  await expect.poll(async () => { await stepSim(b, 40); const x = await state(b), y = await state(w); return !x.paused && x.mclock >= ws.mclock && Math.abs(x.mclock - y.mclock) < 5 && JSON.stringify(x.score) === JSON.stringify(y.score); }, { timeout: 60_000 }).toBe(true);
   expect(errs).toEqual([]);
 });

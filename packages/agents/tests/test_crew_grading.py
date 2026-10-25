@@ -145,7 +145,7 @@ def test_the_scoreboard_has_three_arms_with_the_metrics_and_the_run_date(board):
             "wrong_claim_ids_stated",
         }
         assert set(arm["accuracy"]) == {"wrong_numbers_aired", "numbers_aired", "wrong_rate"}
-        assert set(arm["catch_rate"]) == {"caught", "seeded", "rate"}
+        assert set(arm["catch_rate"]) == {"caught", "seeded", "produced", "rate"}
         assert set(arm["latency_ms"]) == {"p50", "p95", "total", "moments"}
         assert arm["mode"] == "rules"  # rules-mode arms run live on each request
         assert arm["run_id"]

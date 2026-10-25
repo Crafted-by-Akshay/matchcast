@@ -105,11 +105,28 @@ class NarratorRules:
             n = v[f"goals:{team}"]
             other = aid if team == hid else hid
             why = GOAL_CONTEXT[goal_context(n, v[f"goals:{other}"])]
+            analyst = (
+                f"Goal: {who} ({club}). Score: {home} {v[f'goals:{hid}']}, "
+                f"{away} {v[f'goals:{aid}']}. " + why["analyst"].format(club=club)
+            )
+            # the History specialist's meetings, when it found a record for these two sides
+            meetings = v.get(f"h2h_played:{hid}")
+            if meetings is not None:
+                record = f"They have met {_meetings(meetings)} on record."
+                analyst = _with_clause(analyst, f" {record}", "analyst")
+            # the Rhythm specialist's swing, as a share of the on-ball actions
+            swing = next((c for c in claims if c["metric"].startswith("rhythm_share:")), None)
+            if swing is not None:
+                side = ctx.club_name(swing["metric"].split(":", 1)[1].rsplit("-", 1)[0])
+                clause = (
+                    f" The rhythm had swung to {side}, with {swing['value']}% of the on-ball "
+                    "actions in the run-up to the swing."
+                )
+                analyst = _with_clause(analyst, clause, "analyst")
             texts = {
                 "casual": f"Goal for {club}! {who} scores, goal number {n} for them. "
                 + why["casual"].format(club=club),
-                "analyst": f"Goal: {who} ({club}). Score: {home} {v[f'goals:{hid}']}, "
-                f"{away} {v[f'goals:{aid}']}. " + why["analyst"].format(club=club),
+                "analyst": analyst,
                 "broadcast": f"{club} score through {who}. {home} {v[f'goals:{hid}']}, "
                 f"{away} {v[f'goals:{aid}']}. " + why["broadcast"].format(club=club),
             }
@@ -261,6 +278,15 @@ class NarratorRules:
             ]
             return f"{LABELS.get(arg, arg)}: {', '.join(parts)}."
         return None
+
+
+def _meetings(count: int) -> str:
+    return "once" if count == 1 else f"{count} times"
+
+
+def _with_clause(line: str, clause: str, persona: str) -> str:
+    """The line with the clause added when it still fits the persona's limit, else the line."""
+    return line + clause if len(line + clause) <= max_chars(persona) else line
 
 
 # (against, for) the chosen club; {club} is the event team, {mine} the chosen club

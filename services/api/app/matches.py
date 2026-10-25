@@ -33,6 +33,7 @@ from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.feeds import FEED_KEYS
 from matchcast_agents.grading import scoreboard
+from matchcast_agents.grading_live import load_live_run
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
@@ -45,7 +46,7 @@ from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
 from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
-from matchcast_agents.workflow import WorkflowError, feed_kills_in
+from matchcast_agents.workflow import WorkflowError, feed_kills_in, public_line
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
@@ -584,7 +585,7 @@ def _is_stored(store: Any, sk: str) -> bool:
 
 
 def _line_json(line: LineRecord) -> dict[str, Any]:
-    return line.model_dump()
+    return public_line(line)
 
 
 def _claim_verdict(lines: list[LineRecord], claim_id: str) -> str:
@@ -1086,13 +1087,20 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/matches/{match_id}/scoreboard")
     async def crew_scoreboard(match_id: str, session_id: str) -> dict[str, Any]:
-        """The three-arm crew scoreboard for this match (CREW-5.2). The arms are rules-mode and run
-        on the stored events, so the result is cached per match, event count and run date. A new
-        event or a new day runs them again. Labelled rules-only (docs/architecture/16, 4.1)."""
+        """The three-arm crew scoreboard for this match (CREW-5.2). The arms run on the stored
+        events with rules, so the result is cached per match, event count and run date. A new
+        event or a new day runs them again. When a recorded live run is set
+        (MATCHCAST_SCOREBOARD_LIVE_RUN), its arms replace the rules arms as precomputed, labelled
+        with the run id. The route never calls a model (docs/architecture/16, 4.1)."""
         flow = await registry.flow_for(session_id, match_id)
         events = flow.store.events(flow.sk)
         run_date = datetime.now(UTC).date().isoformat()
-        key = (flow.sk, len(events), run_date)
+        live_path = os.environ.get("MATCHCAST_SCOREBOARD_LIVE_RUN", "")
+        try:
+            live_stamp = os.path.getmtime(live_path) if live_path else 0
+        except OSError:  # no file, or removed since it was set: the rules arms show
+            live_stamp = 0
+        key = (flow.sk, len(events), run_date, live_path, live_stamp)
         board = _SCOREBOARDS.get(key)
         if board is None:
             match = {
@@ -1101,7 +1109,10 @@ def build_router(registry: Registry) -> APIRouter:
                 "names": flow.names,
                 "teams": flow.clubs,
             }
-            board = await asyncio.to_thread(scoreboard, match, run_date=run_date)
+            recorded = load_live_run(live_path, match_id=match_id) if live_path else None
+            board = await asyncio.to_thread(
+                scoreboard, match, run_date=run_date, precomputed=recorded
+            )
             if len(_SCOREBOARDS) >= SCOREBOARD_CACHE_SIZE:
                 _SCOREBOARDS.pop(next(iter(_SCOREBOARDS)))  # the oldest one out
             _SCOREBOARDS[key] = board

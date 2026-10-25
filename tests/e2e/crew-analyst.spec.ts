@@ -202,14 +202,14 @@ test('flag off: Watch still has Demo controls and the weather chip, camera prese
   await expect(f.locator('#cams')).toBeHidden();
 });
 
-test('real crew lines in the Analyst feed are not labelled Simulated, and a verified one is ticked (AB#498 proposal frames)', async ({ page }) => {
+test('real crew lines in the Analyst feed are not labelled Simulated, and a verified one is ticked (AB#498 onair)', async ({ page }) => {
   await block3d(page);
   await openShell(page, 'analyst', '?crew=1');
   const feed = page.locator('#al [data-panel="feed"]');
   await expect(feed).toBeVisible();
   await page.evaluate(() => {
-    CREW.ingest({ kind: 'crew_trace', match_id: 'm1', at_ms: 23 * 60000, line_id: 'L-1', moment_id: 'x', feed: 'analyst', state: 'published', text: 'A recounted crew line.',
-      claims: [{ claim_id: 'c1', source_event_ids: ['e1'], history_row_ids: [] }], verifier: { verdict: 'verified', reason_code: null, checks: [] }, repair_of: null, audit_hash: 'h' });
+    CREW.ingest({ kind: 'onair', publication_id: 'L-1', feed: 'analyst', lang: 'en', text: 'A recounted crew line.', source_event_ids: ['e1'], claim_ids: ['c1'],
+      match_time_ms: 23 * 60000, aired_at: '2026-10-25T10:00:00Z', repair_count: 0 });
   });
   const row = feed.locator('[data-group="crew"] li', { hasText: 'A recounted crew line.' });
   await expect(row).toContainText('verified');

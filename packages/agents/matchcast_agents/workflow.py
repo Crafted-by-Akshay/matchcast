@@ -52,6 +52,32 @@ TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|card
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 
 
+WITHHELD = "[withheld: refused by Content Safety]"
+UNCHECKED = "[awaiting checks]"
+NOT_SHOWN = "[not shown: did not pass its checks]"
+PASSED = ("verified", "approved", "published")  # Verifier and Content Safety have both passed
+
+
+def public_line(line: LineRecord, *, stream: bool = False) -> dict[str, Any]:
+    """The line as it may be read. The text of a line Content Safety refused is always withheld.
+    On the open stream (`stream=True`) text goes out only once the line passed the Verifier and
+    Content Safety; the role-gated producer routes also show a rejected or escalated line so a
+    person can decide, but never one still awaiting its checks. The store keeps every text for
+    the audit chain; status, reason and ids always stay."""
+    out = line.model_dump()
+    if line.reason_code == "unsafe_content":
+        out["text"] = WITHHELD
+    elif line.status in ("drafted", "verifying"):
+        out["text"] = UNCHECKED
+    elif stream and line.status not in PASSED:
+        out["text"] = NOT_SHOWN
+    if out["text"] in (WITHHELD, UNCHECKED, NOT_SHOWN):
+        for check in out["checks"]:  # a model-written reason can quote the line it judged
+            if check["name"] == "meaning" or check["name"].startswith("adversary"):
+                check["detail"] = ""
+    return out
+
+
 def repair_feedback(draft: DraftLine, verdict: Verdict) -> str:
     """What to tell the Narrator on its one redraft, in words: no figure from the failed check
     (a limit or a number named there would be echoed into the line)."""
@@ -87,10 +113,8 @@ SPAWN_STATUS = {
 }
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
-# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1).
-# History is built but not in the pool: a goal's four slots go to the four above, so it has no slot
-# until the planner's cap is decided (see 04-agents.md §2.1).
-SPAWN_POOL = ("replay", "tactics", "stats", "rhythm")
+# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1)
+SPAWN_POOL = ("replay", "tactics", "stats", "rhythm", "history")
 QUIET_SPAWNS_PER_MATCH = 40  # the quiet moments' own allowance, apart from the priority-1 pool
 
 
@@ -372,7 +396,11 @@ class MatchWorkflow:
             personas=self.config.personas,
             truth=tuple(self._truth_feed()) if self._truth_feed else (),
             extra={
-                **({"history": self.history} if self.history else {}),
+                **(
+                    {"history": self.history, "history_on": self.history_on.isoformat()}
+                    if self.history
+                    else {}
+                ),
                 **({"vision_passes": self._vision_feed} if self._vision_feed else {}),
             },
         )
@@ -464,7 +492,9 @@ class MatchWorkflow:
 
     def _save_line(self, line: LineRecord) -> None:
         self.store.put_line(self.sk, line)
-        self.hub.publish("line", f"line:{line.line_id}:{line.status}", line.model_dump())
+        self.hub.publish(
+            "line", f"line:{line.line_id}:{line.status}", public_line(line, stream=True)
+        )
 
     # ---- ingest ------------------------------------------------------------------------
 
@@ -701,7 +731,10 @@ class MatchWorkflow:
         entry["spawns"] = []
         for request in plan.requests:
             self._publish_spawn(request.moment_id, request.name, "running")
-        for report in await run_all(ctx, plan.requests, self._specialists):
+        reports = await run_all(ctx, plan.requests, self._specialists)
+        # this moment's Analyst reads the reports from here; the Narrator reads their claims
+        ctx.extra["specialists"] = {report.name: report for report in reports}
+        for report in reports:
             entry["spawns"].append(
                 {"name": report.name, "status": report.status, "findings": len(report.findings)}
             )
@@ -1436,6 +1469,10 @@ class MatchWorkflow:
                 fresh_ctx, fresh_claims = ctx, claims
                 if target == "analyst":
                     fresh_ctx = self._ctx()
+                    # the same specialist reports the first analysis read, not a new fan-out
+                    for key in ("specialists", "rhythm"):
+                        if key in ctx.extra:
+                            fresh_ctx.extra[key] = ctx.extra[key]
                     fresh_claims = await self._analyse(fresh_ctx, task, repair=True)
                 written = (
                     await self._call(
