@@ -10,7 +10,7 @@ import json
 import math
 from typing import Any
 
-from . import SCHEMA_VERSION, ContractError, validate
+from . import AUDIT_SCHEMA_VERSION, ContractError, validate
 
 GENESIS_HASH = "0" * 64
 MAX_DETAILS_BYTES = 2048
@@ -90,7 +90,7 @@ def append_audit(
         sequence, prev_hash = 1, GENESIS_HASH
     record = {
         "kind": "audit_record",
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": AUDIT_SCHEMA_VERSION,
         "stream": stream,
         "audit_id": audit_id or f"audit-{sequence}",
         "sequence": sequence,

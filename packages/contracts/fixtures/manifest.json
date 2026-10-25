@@ -25,7 +25,9 @@
     "carry.json",
     "possession-change.json",
     "pressure.json",
-    "audit-record.json"
+    "audit-record.json",
+    "onair.json",
+    "feed-drop.json"
   ],
   "invalid": [
     {
@@ -513,6 +515,16 @@
       "code": "invalid_chain",
       "with_roster": false,
       "path": "/prev_hash"
+    },
+    {
+      "file": "invalid/onair-unknown-feed.json",
+      "code": "invalid_schema",
+      "with_roster": false
+    },
+    {
+      "file": "invalid/onair-old-version.json",
+      "code": "invalid_schema",
+      "with_roster": false
     }
   ]
 }
