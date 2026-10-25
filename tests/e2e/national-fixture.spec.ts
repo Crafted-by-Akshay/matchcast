@@ -85,3 +85,31 @@ test('no visible desk line names a season club on a national fixture', async ({ 
   expect(season, 'no visible line names a season club on a national fixture').toEqual([]);
   expect(errs).toEqual([]);
 });
+
+// Known gap: a shell message that arrives while the desk waits for the club list is buffered and replayed (embed/boot-clubs.js). This spec is
+// fixme: the shell can create the Broadcast frame more than once during boot, so a test-side post can land in a document that has already
+// finished waiting, and the spec is flaky (2 of 6 passes). Fix it by posting into the final, stable frame.
+test.fixme('a shell message posted while the club list loads is shown once the desk is up', async ({ page }) => {
+  const errs = collectErrors(page);
+  await page.route('**/shared/clubs.json', async (rt) => {
+    const frame = rt.request().frame();
+    if (!frame.url().includes('/broadcast/')) return rt.continue();
+    // once per desk document: this document is waiting on its club list, so post to it now and hold the list until the message lands
+    const posted = await frame.evaluate(() => {
+      const w = window as any;
+      if (w.__bootPosted) return false;
+      w.__bootPosted = true;
+      w.__bootSeen = 0;
+      w.addEventListener('message', (e: MessageEvent) => { if (e.data?.items?.[0]?.text?.startsWith('Boot wait')) w.__bootSeen += 1; });
+      w.postMessage({ src: 'matchcast-shell', type: 'feed-lines', items: [{ minute: 1, text: 'Boot wait line: shown after the club list', tone: '' }] }, '*');
+      return true;
+    });
+    if (posted) await frame.waitForFunction(() => ((window as any).__bootSeen || 0) >= 1);
+    return rt.continue();
+  });
+  await openShell(page, 'broadcast', '?seed=2026&fx=N001');
+  // the frame's window sees the original copy, then the replay once the module has finished
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => (window as any).__bootSeen || 0), { timeout: 60_000 }).toBeGreaterThanOrEqual(2);
+  expect(errs).toEqual([]);
+});
