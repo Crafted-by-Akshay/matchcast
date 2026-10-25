@@ -68,7 +68,14 @@ def main(argv: list[str] | None = None) -> int:
         print("give --match alone, or --api with --session-id and --match-id", file=sys.stderr)
         return 2
     if args.match is not None:
-        match = json.loads(args.match.read_text())
+        try:
+            match = json.loads(args.match.read_text())
+        except (OSError, ValueError) as error:
+            print(f"could not read {args.match}: {error}", file=sys.stderr)
+            return 1
+        if not isinstance(match, dict):
+            print(f"{args.match} is not a match object", file=sys.stderr)
+            return 1
     elif from_api:
         try:
             match = fetch_input(args.api, args.session_id, args.match_id)

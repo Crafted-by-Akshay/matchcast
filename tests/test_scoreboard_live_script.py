@@ -162,6 +162,49 @@ def test_a_read_that_is_cut_off_is_a_message_too(monkeypatch, capsys, tmp_path) 
         assert "could not export the match" in capsys.readouterr().err
 
 
+def test_an_export_that_is_not_a_match_object_is_refused(monkeypatch) -> None:
+    script = load_script()
+    for body in (b"[]", b"null", b'"x"', b"3"):
+        monkeypatch.setattr(script.urllib.request, "urlopen", lambda url, timeout, b=body: Reply(b))
+        with pytest.raises(ValueError):
+            script.fetch_input("https://api.example", "s1", "m1")
+
+
+def test_a_saved_export_that_does_not_parse_is_a_message(capsys, tmp_path) -> None:
+    script = load_script()
+    bad = tmp_path / "match.json"
+    bad.write_text("{not json")
+    code = script.main(
+        [
+            "--match",
+            str(bad),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "o.json"),
+        ]
+    )
+    assert code == 1
+    assert "could not read" in capsys.readouterr().err
+    bad.write_text("[]")
+    code = script.main(
+        [
+            "--match",
+            str(bad),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "o.json"),
+        ]
+    )
+    assert code == 1
+    assert "is not a match object" in capsys.readouterr().err
+
+
 def test_a_dot_segment_is_not_a_match_id(monkeypatch) -> None:
     script = load_script()
     monkeypatch.setattr(script.urllib.request, "urlopen", lambda url, timeout: Reply(b"{}"))
