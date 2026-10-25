@@ -235,6 +235,12 @@ def _live_arm(
     return arm
 
 
+def events_digest(events: list[Mapping[str, Any]]) -> str:
+    """A sha256 of the event log, independent of key order: which events a recording ran on."""
+    text = json.dumps(events, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def live_run(
     match: Mapping[str, Any],
     *,
@@ -243,6 +249,7 @@ def live_run(
     seed: int = DEFAULT_SEED,
     rate: float = SEED_RATE,
     run_date: str | None = None,
+    fixture: str = "N001",
 ) -> dict[str, Any]:
     """The three arms on the model, each with its own budget of ``max_calls``. Returns the run
     record a scoreboard reads as precomputed arms."""
@@ -269,6 +276,7 @@ def live_run(
         json.dumps(
             {
                 "match": match_id,
+                "fixture": fixture,
                 "run_date": as_of,
                 "seed": seed,
                 "rate": rate,
@@ -280,7 +288,10 @@ def live_run(
     return {
         "kind": RUN_KIND,
         "run_id": run_id,
-        "match_id": match_id,
+        "fixture": fixture,
+        "teams": sorted(match["teams"].values()),
+        "events_sha256": events_digest(match["events"]),
+        "match_id": match_id,  # the match it was recorded from; the route does not check it
         "run_date": as_of,
         "seed": seed,
         "seed_rate": rate,
@@ -290,10 +301,11 @@ def live_run(
 
 
 def load_live_run(
-    path: str, *, match_id: str, seed: int = DEFAULT_SEED, rate: float = SEED_RATE
-) -> dict[str, dict[str, Any]] | None:
-    """The recorded arms of a live run for this match, seed and rate, or None when there is no
-    such run. A file that does not parse is logged and treated as no run."""
+    path: str, *, teams: list[str], seed: int = DEFAULT_SEED, rate: float = SEED_RATE
+) -> dict[str, Any] | None:
+    """The recording of this fixture, for these teams, seed and rate, or None when there is none.
+    A match is judged by its teams, not its id: judges' sessions get fresh ids. A file that does
+    not parse, or an arm that is not an object with a run id, is logged and treated as no run."""
     file = Path(path)
     if not file.is_file():
         return None
@@ -304,7 +316,7 @@ def load_live_run(
         return None
     if not isinstance(record, dict) or record.get("kind") != RUN_KIND:
         return None
-    if record.get("match_id") != match_id or record.get("seed") != seed:
+    if record.get("teams") != sorted(teams) or record.get("seed") != seed:
         return None
     if record.get("seed_rate") != rate:
         return None
@@ -316,4 +328,4 @@ def load_live_run(
     ):
         log.warning("scoreboard live run %s has an arm without a run id; showing rules arms", path)
         return None
-    return arms
+    return record

@@ -984,43 +984,66 @@ def test_a_desk_feed_kill_and_resume_are_audited(
     assert verify_chain(audit)["valid"] is True
 
 
-def test_a_recorded_live_run_replaces_the_rules_arms_with_its_run_id(
-    client: TestClient, tmp_path, monkeypatch
-) -> None:
-    # the route never calls a model: a recorded live run (scripts/scoreboard_live.py) is read from
-    # a file, its arms are shown as precomputed with their run id, and nothing else changes
-    create(client)
-    post_all(client)
+def recording(tmp_path, teams, events_sha256="abc") -> str:
+    arms = {
+        key: {
+            "label": key,
+            "mode": "live",
+            "run_id": f"{key}-live",
+            "lines_aired": 1,
+            "wrong_lines_aired": 0,
+            "accuracy": {"wrong_numbers_aired": 0, "numbers_aired": 1, "wrong_rate": 0.0},
+            "catch_rate": {"caught": 0, "seeded": 0, "produced": 0, "rate": None},
+            "latency_ms": {"p50": None, "p95": None, "total": None, "moments": 0},
+            "cost": {"model_calls": 1, "model_errors": 0, "budget_refused": 0},
+            "wrong_claim_ids": [],
+            "wrong_claim_ids_stated": [],
+        }
+        for key in ("full_crew", "single_agent", "crew_no_verifier")
+    }
     record = {
         "kind": "crew_live_run",
         "run_id": "live0001",
+        "fixture": "N001",
+        "run_date": "2026-10-25",
+        "teams": sorted(teams),
+        "events_sha256": events_sha256,
         "match_id": "match-short",
         "seed": 2026,
         "seed_rate": SEED_RATE,
-        "arms": {
-            key: {
-                "label": key,
-                "mode": "live",
-                "run_id": f"{key}-live",
-                "lines_aired": 1,
-                "wrong_lines_aired": 0,
-                "accuracy": {"wrong_numbers_aired": 0, "numbers_aired": 1, "wrong_rate": 0.0},
-                "catch_rate": {"caught": 0, "seeded": 0, "rate": None},
-                "latency_ms": {"p50": None, "p95": None, "total": None, "moments": 0},
-                "cost": {"model_calls": 1, "model_errors": 0, "budget_refused": 0},
-                "wrong_claim_ids": [],
-                "wrong_claim_ids_stated": [],
-            }
-            for key in ("full_crew", "single_agent", "crew_no_verifier")
-        },
+        "arms": arms,
     }
     path = tmp_path / "live.json"
     path.write_text(json.dumps(record))
-    monkeypatch.setenv("MATCHCAST_SCOREBOARD_LIVE_RUN", str(path))
+    return str(path)
+
+
+def test_a_recorded_benchmark_sits_beside_the_rules_arms(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    # the route never calls a model: the recording of the fixture is shown beside the rules arms,
+    # labelled as a benchmark, not this match, because its events are not these events
+    create(client)
+    post_all(client)
+    teams = FIXTURE["teams"].values()
+    monkeypatch.setenv("MATCHCAST_SCOREBOARD_LIVE_RUN", recording(tmp_path, teams))
     board = client.get("/v1/matches/match-short/scoreboard", params=Q).json()
-    assert board["arms"]["full_crew"]["mode"] == "precomputed"
-    assert board["arms"]["full_crew"]["run_id"] == "full_crew-live"
-    assert "run full_crew-live" in board["arms"]["full_crew"]["label"]
+    assert all(arm["mode"] == "rules" for arm in board["arms"].values())
+    recorded = board["recorded"]
+    assert recorded["same_events"] is False
+    assert recorded["label"].startswith("Recorded live benchmark: N001, seed 2026")
+    assert recorded["label"].endswith("not this match")
+    assert recorded["arms"]["full_crew"]["run_id"] == "full_crew-live"
+
+
+def test_a_recording_of_another_fixture_is_not_shown(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    create(client)
+    post_all(client)
+    monkeypatch.setenv("MATCHCAST_SCOREBOARD_LIVE_RUN", recording(tmp_path, ["Chile", "Peru"]))
+    board = client.get("/v1/matches/match-short/scoreboard", params=Q).json()
+    assert "recorded" not in board
 
 
 def test_lines_route_withholds_the_text_of_a_safety_refused_line() -> None:
