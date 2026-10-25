@@ -6,7 +6,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
-REPLAYED = ("publication", "audit")
+# onair and feed_drop are records, not speech, so a reconnecting desk can rebuild its feed monitor
+REPLAYED = ("publication", "audit", "onair", "feed_drop")
 REPLAY_LIMIT = 500
 
 

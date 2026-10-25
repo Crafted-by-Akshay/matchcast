@@ -59,6 +59,17 @@ def test_hub_replays_only_publications_and_audit_after_last_id() -> None:
     assert hub.history()[0].encode() == 'event: state\nid: state:1\ndata: {"r":1}\n\n'
 
 
+def test_hub_replays_feed_records_so_a_reconnect_rebuilds_the_monitor() -> None:
+    # AB#499: a desk that opens mid-match counts the feeds from the replay, not only live records
+    hub = StreamHub()
+    hub.publish("state", "state:1", {"r": 1})
+    hub.publish("onair", "onair:pub-a", {"feed": "casual"})
+    hub.publish("feed_drop", "drop:line-b", {"feed": "analyst"})
+    hub.publish("crew_ledger", "ledger:m1", {"called": True})
+    assert [e.id for e in hub.replay_after(None)] == ["onair:pub-a", "drop:line-b"]
+    assert [e.id for e in hub.replay_after("onair:pub-a")] == ["drop:line-b"]
+
+
 def test_colour_moment_is_capped_by_wall_time_and_off_by_default(match) -> None:
     now = [100.0]
     producer = ProducerRules(colour_every_s=45, clock=lambda: now[0])
