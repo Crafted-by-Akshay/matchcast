@@ -905,7 +905,7 @@ def build_router(registry: Registry) -> APIRouter:
         async def body() -> AsyncIterator[str]:
             yield StreamEvent("status", None, {"status": flow.status}).encode()
             yield StreamEvent("state", None, _state_json(flow)).encode()
-            replay = [e for e in flow.hub.replay_after(last_event_id) if wanted(e)]
+            replay = flow.hub.replay_after(last_event_id, wanted=wanted)
             if not follow:
                 for item in replay:
                     yield (await localised(item)).encode()
@@ -1031,7 +1031,8 @@ def build_router(registry: Registry) -> APIRouter:
         actor: tuple[str, str | None],
         killed: bool,
     ) -> dict[str, Any]:
-        """The desk's per-feed kill or resume (AB#499). Audited now; the air gate reads it later."""
+        """The desk's per-feed kill or resume (AB#499). Audited, and enforced by the air gate: a
+        killed feed airs nothing, on the engine match and on its Vision session."""
         need_producer(role)
         if feed not in FEED_KEYS:
             raise Problem(422, "contract_invalid", f"unknown feed {feed}", "/feed")
@@ -1083,6 +1084,18 @@ def build_router(registry: Registry) -> APIRouter:
     ) -> dict[str, Any]:
         flow = await registry.flow_for(session_id, match_id)
         return {"items": flow.store.audit_records(flow.sk, from_seq, limit)}
+
+    @router.get("/matches/{match_id}/scoreboard/input")
+    async def scoreboard_input(match_id: str, session_id: str) -> dict[str, Any]:
+        """The stored events, roster, names and teams of one match: the input of a live scoreboard
+        recording (scripts/scoreboard_live.py). Read-only, with the scoreboard's session check."""
+        flow = await registry.flow_for(session_id, match_id)
+        return {
+            "events": flow.store.events(flow.sk),
+            "roster": flow.roster,
+            "names": flow.names,
+            "teams": flow.clubs,
+        }
 
     @router.get("/matches/{match_id}/scoreboard")
     async def crew_scoreboard(match_id: str, session_id: str) -> dict[str, Any]:

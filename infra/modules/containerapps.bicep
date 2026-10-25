@@ -190,6 +190,8 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'VISION_ENDPOINT', value: visionEndpoint }
             { name: 'SEARCH_ENDPOINT', value: searchEndpoint }
             { name: 'SEARCH_INDEX', value: 'kb-matchcast-v1' }
+            // A recorded live scoreboard run ships in the image; until it is committed the route shows the rules arms
+            { name: 'MATCHCAST_SCOREBOARD_LIVE_RUN', value: '/app/data/models/scoreboard-live.json' }
             // Stats Desk partner agent over A2A on the mcp app's internal ingress (AGT-11)
             { name: 'STATS_DESK_URL', value: 'https://${mcp.properties.configuration.ingress.fqdn}/a2a' }
             // The browser calls the api from the web origin (apps/unified is built with API_URL), so it needs CORS.
