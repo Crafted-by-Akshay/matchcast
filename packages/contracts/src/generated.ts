@@ -12,8 +12,10 @@ export type MatchCastContract =
   | PublicationPacket
   | AuditRecord
   | OnAirPacket
-  | FeedDropPacket;
-export type SchemaVersion = "1.0.0" | "1.1.0" | "1.2.0";
+  | FeedDropPacket
+  | CrewLedgerPacket
+  | CrewSpawnPacket;
+export type SchemaVersion = "1.0.0" | "1.1.0" | "1.2.0" | "1.3.0";
 export type Identifier = string;
 export type Sequence = number;
 export type Counter = number;
@@ -366,4 +368,30 @@ export interface FeedDropPacket {
   repair_count: number;
   audit_id: Identifier;
   match_time_ms: Counter;
+}
+export interface CrewLedgerPacket {
+  kind: "crew_ledger";
+  schema_version: "1.3.0";
+  stream: StreamIdentity;
+  moment_id: Identifier;
+  at_ms: Counter;
+  called: Identifier[];
+  skipped: Identifier[];
+  why: string;
+  routed_by: "rules" | "model" | "fallback";
+}
+export interface CrewSpawnPacket {
+  kind: "crew_spawn";
+  schema_version: "1.3.0";
+  stream: StreamIdentity;
+  moment_id: Identifier;
+  spawn_id: Identifier;
+  agent_id: Identifier;
+  role: string;
+  parent_id: Identifier;
+  status: "running" | "done" | "no_data" | "failed" | "budget_exhausted";
+  started_ms: Counter;
+  ended_ms: Counter | null;
+  tokens: Counter;
+  why: string;
 }

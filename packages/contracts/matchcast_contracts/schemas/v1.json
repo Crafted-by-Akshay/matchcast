@@ -30,6 +30,12 @@
     },
     {
       "$ref": "#/definitions/FeedDropPacket"
+    },
+    {
+      "$ref": "#/definitions/CrewLedgerPacket"
+    },
+    {
+      "$ref": "#/definitions/CrewSpawnPacket"
     }
   ],
   "definitions": {
@@ -51,7 +57,8 @@
       "enum": [
         "1.0.0",
         "1.1.0",
-        "1.2.0"
+        "1.2.0",
+        "1.3.0"
       ],
       "type": "string"
     },
@@ -1462,6 +1469,144 @@
         "repair_count",
         "audit_id",
         "match_time_ms"
+      ]
+    },
+    "CrewLedgerPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "crew_ledger",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.3.0",
+          "type": "string"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "moment_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "at_ms": {
+          "$ref": "#/definitions/Counter"
+        },
+        "called": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Identifier"
+          },
+          "uniqueItems": true
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Identifier"
+          },
+          "uniqueItems": true
+        },
+        "why": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "routed_by": {
+          "type": "string",
+          "enum": [
+            "rules",
+            "model",
+            "fallback"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "moment_id",
+        "at_ms",
+        "called",
+        "skipped",
+        "why",
+        "routed_by"
+      ]
+    },
+    "CrewSpawnPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "crew_spawn",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.3.0",
+          "type": "string"
+        },
+        "stream": {
+          "$ref": "#/definitions/StreamIdentity"
+        },
+        "moment_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "spawn_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "agent_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "parent_id": {
+          "$ref": "#/definitions/Identifier"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "done",
+            "no_data",
+            "failed",
+            "budget_exhausted"
+          ]
+        },
+        "started_ms": {
+          "$ref": "#/definitions/Counter"
+        },
+        "ended_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Counter"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokens": {
+          "$ref": "#/definitions/Counter"
+        },
+        "why": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "stream",
+        "moment_id",
+        "spawn_id",
+        "agent_id",
+        "role",
+        "parent_id",
+        "status",
+        "started_ms",
+        "ended_ms",
+        "tokens",
+        "why"
       ]
     }
   }
