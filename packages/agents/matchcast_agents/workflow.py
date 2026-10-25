@@ -302,6 +302,7 @@ class MatchWorkflow:
         self.spawn_budget = pools.priority_one  # priority-1 moments
         self.quiet_budget = pools.quiet  # every other moment
         self._spent = {"priority_one": 0, "quiet": 0}  # what this workflow took from each pool
+        self._saved_once = False  # this workflow has written a checkpoint of its own
         self._specialists = default_registry()
         self._restore()
         self.stats = {
@@ -469,6 +470,7 @@ class MatchWorkflow:
             restore(row["producer"])
 
     def _checkpoint(self, sequence: int) -> None:
+        self._saved_once = True
         snapshot = getattr(self.agents.producer, "snapshot", None)
         self.store.put_checkpoint(
             self.sk,
@@ -487,7 +489,7 @@ class MatchWorkflow:
         row = self.store.get_checkpoint(self.sk)
         done = row["processed_sequence"] if row else 0
         pending = [e for e in self.store.events(self.sk) if e["stream_sequence"] > done]
-        if pending and row is None and self.stats["events"]:
+        if pending and row is None and self._saved_once:
             # this workflow already ran the match, so a replay would write its audit records again
             raise WorkflowError(
                 "conflict", "no checkpoint for a match this workflow has already run"

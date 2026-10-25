@@ -198,3 +198,26 @@ def test_a_replay_on_a_live_workflow_is_refused_and_writes_no_audit(match) -> No
         run(flow._catch_up())
     assert flow.spawn_budget.used == spent and flow.rundown == ledger
     assert len(store.audit_records(flow.sk, limit=100_000)) == audit
+
+
+def test_a_first_event_that_fails_once_is_replayed_on_retry_not_refused(match, monkeypatch) -> None:
+    """A fault partway through the first event leaves no checkpoint. The retry must replay that
+    event; it must not be refused as a match this workflow already ran."""
+    flow = build(match, MemoryStore())
+    real_ctx = flow._ctx
+    tripped: list[bool] = []
+
+    def flaky_ctx():
+        if not tripped:
+            tripped.append(True)
+            raise RuntimeError("a fault partway through the first event")
+        return real_ctx()
+
+    monkeypatch.setattr(flow, "_ctx", flaky_ctx)
+    with pytest.raises(RuntimeError):
+        run(flow.ingest(match["events"]))
+    run(flow.ingest(match["events"]))  # the retry
+    clean = build(match, MemoryStore())
+    run(clean.ingest(match["events"]))
+    assert flow.rundown == clean.rundown
+    assert flow.spawn_budget.used == clean.spawn_budget.used
