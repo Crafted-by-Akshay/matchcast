@@ -79,6 +79,7 @@ class LiveNarrator:
         claims: list[dict[str, Any]],
         *,
         attempt: int = 0,
+        feedback: str = "",
     ) -> list[DraftLine]:
         event = ctx.event(task.event_ids[0]) or {"payload": {}}
         payload = event["payload"]
@@ -97,6 +98,7 @@ class LiveNarrator:
             facts["note"] = (
                 "A previous draft failed verification; stay closer to the claims "
                 "and use each claim value at most once."
+                + (f" Fix this: {feedback}" if feedback else "")
             )
         answer = await self._client.complete(
             prompt("narrator"),
