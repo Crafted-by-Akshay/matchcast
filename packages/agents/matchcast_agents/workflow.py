@@ -6,6 +6,7 @@ a hash-chained audit record (ADR-0013: lines carry verdicts and approvals).
 """
 
 import asyncio
+import copy
 import os
 import re
 from collections.abc import Callable
@@ -50,6 +51,10 @@ AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 # a line that fails its repair on one of these goes to a person: the event log can settle it
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
+# the rundown ledger keeps this many moments (it is checkpointed with the match)
+RUNDOWN_KEEP = 400
+# the agents a moment's rundown entry records as called (the producer decides, it is not routed)
+ROUTED_AGENTS = ("analyst", "narrator", "verifier")
 
 
 class WorkflowError(Exception):
@@ -244,6 +249,8 @@ class MatchWorkflow:
                 "history_on": self.history_on.isoformat(),
             },
         )
+        self.rundown: list[dict[str, Any]] = []  # the Showrunner ledger, see _record_rundown
+        self._routing: dict[str, Any] | None = None  # the entry of the moment being run
         self._restore()
         self.stats = {
             "events": 0,
@@ -335,6 +342,8 @@ class MatchWorkflow:
             finally:
                 self._sync_status(agent, subject)
             _annotate(span, method, result)
+            if agent.agent_id in ROUTED_AGENTS:
+                self._note_called(agent.agent_id)
             return result
 
     def _sync_status(self, agent: Any, subject: str) -> None:
@@ -398,6 +407,7 @@ class MatchWorkflow:
         if row is None:
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
+        self.rundown = copy.deepcopy(row.get("rundown", []))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
             restore(row["producer"])
@@ -410,6 +420,7 @@ class MatchWorkflow:
                 "processed_sequence": sequence,
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
+                "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
             },
         )
 
@@ -426,7 +437,10 @@ class MatchWorkflow:
             await self._process(event)
 
     async def _process(self, event: dict[str, Any]) -> None:
-        await self._process_event(event)
+        try:
+            await self._process_event(event)
+        finally:
+            self._routing = None  # calls after the event (an edit, a talk) are not this moment's
         self._checkpoint(event["stream_sequence"])
 
     def add_persona(self, persona: str) -> bool:
@@ -537,7 +551,28 @@ class MatchWorkflow:
                 )
             return None
         self.stats["moments"] += 1
+        self._record_rundown(decision)
         return decision
+
+    def _record_rundown(self, task: ProducerTask) -> None:
+        """One rundown entry per moment the crew takes: the agents it calls, skips and why."""
+        desk = self._wants_desk(task)
+        self.rundown.append(
+            {
+                "moment_id": task.moment_id,
+                "called": [],  # filled in as each agent actually runs, see _note_called
+                "skipped": [] if desk else ["stats_desk"],
+                "why": task.why or task.reason,
+                "routed_by": task.routed_by,
+            }
+        )
+        del self.rundown[:-RUNDOWN_KEEP]
+        self._routing = self.rundown[-1]
+
+    def _note_called(self, agent_id: str) -> None:
+        """An agent of the current moment actually ran: it goes into that moment's entry."""
+        if self._routing is not None and agent_id not in self._routing["called"]:
+            self._routing["called"].append(agent_id)
 
     def _state_json(self, state: MatchState) -> dict[str, Any]:
         return {
@@ -944,6 +979,7 @@ class MatchWorkflow:
     async def _desk_after_verify(self, task: ProducerTask) -> None:
         if not self._wants_desk(task):
             return
+        self._note_called("stats_desk")
         # After verification: only a claim that backs a verified line is ever sent to the desk.
         checked = list(self._verified_claims.values())
         try:
