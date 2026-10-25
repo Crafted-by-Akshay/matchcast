@@ -923,7 +923,7 @@ function init(list) {
 
 // first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
 const TOUR = [
-  ['Watch', 'watch', 'A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Press Talk to a player to ask a player a question or give an order (the reply is checked against the match record), or try the Copilot Ask tab: it answers only what the match data can prove.'],
+  ['Watch', 'watch', 'A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Press Talk to a player to ask a player a question or give an order (typed questions are checked against the match record when the agent api is connected; otherwise a labelled rules fallback answers), or try the Copilot Ask tab: it answers only what the match data can prove.'],
   ['Agents', 'agents', 'Four agents write lines about the match and a Verifier recounts every number from the event log before anything is shown. Switch the approval mode to Producer to approve, edit or kill a line yourself. Provenance on any row shows its source events and audit records.'],
   ['Broadcast', 'broadcast', 'The broadcaster desk: lower-thirds and a teleprompter fed only by approved lines, instant replay, odds with the reasons on screen, and Ask the producer.'],
   ['Analyst', 'analyst', 'The enterprise workspace for the same match: pre-match, live and post-match pages, players, reports and a data-science section.'],

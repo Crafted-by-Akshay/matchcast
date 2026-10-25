@@ -39,13 +39,17 @@ MCS.progress('Loading the stadium and players');
   { const tb = document.createElement('button'); tb.id = 'mcx-talk'; tb.type = 'button';
     tb.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false" style="margin-right:6px;flex:none"><path d="M8 1.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V4A2.5 2.5 0 0 0 8 1.5zM3.5 7.5v.5a4.5 4.5 0 0 0 9 0v-.5h-1.2v.5a3.3 3.3 0 0 1-6.6 0v-.5H3.5zM7.4 12.4h1.2V15H7.4z" fill="currentColor"/></svg>Talk to a player';
     tb.style.cssText = 'position:fixed;z-index:6;display:none;align-items:center;white-space:nowrap;padding:0 14px;border-radius:999px;border:1px solid rgba(140,194,255,.55);background:rgb(9,13,19);color:#fff;font:600 13px var(--f-body,system-ui,sans-serif);cursor:pointer';
-    tb.title = 'Pick a player, ask a question or give an order. The reply is checked against the match record.';
-    document.body.appendChild(tb);
-    const place = () => {   // next to the Copilot button wherever the layout puts it; hidden while the Copilot drawer is open
+    const fs = document.createElement('style'); fs.textContent = '#mcx-talk:focus-visible{outline:2px solid #8CC2FF;outline-offset:2px}'; document.head.appendChild(fs);
+    const cp0 = document.getElementById('cpbtn'); if (cp0 && cp0.parentNode) cp0.parentNode.insertBefore(tb, cp0); else document.body.appendChild(tb);   // next to the Copilot button in the tab order too
+    const place = () => {   // next to the Copilot button wherever the layout puts it; hidden while the Copilot drawer is open or the button is not shown
       const cp = document.getElementById('cpbtn'), dr = document.getElementById('copilot');
       const r = cp ? cp.getBoundingClientRect() : null;
-      if (!r || !r.width || (dr && !dr.hidden)) { tb.style.display = 'none'; return; }
-      tb.style.display = 'inline-flex'; tb.style.height = r.height + 'px'; tb.style.top = r.top + 'px'; tb.style.left = Math.max(8, Math.round(r.left - tb.offsetWidth - 8)) + 'px';
+      if (!r || !r.width || getComputedStyle(cp).visibility === 'hidden' || (dr && !dr.hidden) || typeof window.openTalk !== 'function') { tb.style.display = 'none'; return; }
+      tb.style.display = 'inline-flex'; tb.style.height = r.height + 'px';
+      const left = Math.round(r.left - tb.offsetWidth - 8);
+      if (innerWidth > 560 && innerWidth <= 1200) { tb.style.left = Math.max(8, Math.round(r.right - tb.offsetWidth)) + 'px'; tb.style.top = Math.round(r.bottom + 8) + 'px'; }   // laptop widths: the camera chips already crowd the Copilot button's left, so stack under it
+      else if (left >= 8) { tb.style.left = left + 'px'; tb.style.top = r.top + 'px'; }
+      else { tb.style.left = Math.max(8, Math.round(r.right - tb.offsetWidth)) + 'px'; tb.style.top = Math.round(r.top - r.height - 8) + 'px'; }   // no room beside it (a very narrow phone, big text): stack above it, never on top of it
     };
     tb.addEventListener('click', () => { if (window.openTalk) window.openTalk(); place(); });
     document.addEventListener('click', () => setTimeout(place, 0), true);   // the drawer opens and closes on clicks; do not wait for the timer on a slow machine
