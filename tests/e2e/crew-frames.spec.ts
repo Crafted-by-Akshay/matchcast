@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell } from './helpers';
+import { readFileSync } from 'node:fs';
 
 // AB#498 (crew_ledger / crew_spawn: contract 1.3.0 from PR #379): CREW.ingest maps crew_ledger / crew_spawn (PROPOSAL) and the final onair / feed_drop (contract 1.2.0) into CREW.state.
 // Names may change before AB#498 ships; the adapter lives in crew.js only. AG/CM/LV/CREW are lexical globals: bare names in evaluate.
@@ -19,7 +20,7 @@ const spawn = (o: any = {}) => ({ kind: 'crew_spawn', schema_version: '1.3.0', s
 const onair = (o: any = {}) => ({ kind: 'onair', publication_id: 'L-17', feed: 'analyst', lang: 'en', text: 'Goal for Northgate FC.', source_event_ids: ['e42'], claim_ids: ['c-9'],
   match_time_ms: 720000, aired_at: '2026-10-25T10:00:00Z', repair_count: 0, ...o });
 const drop = (o: any = {}) => ({ kind: 'feed_drop', publication_id: 'L-1', feed: 'casual', source_event_ids: ['e1'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'aud-7', match_time_ms: 720000, ...o });
-const ledger = (o: any = {}) => ({ kind: 'crew_ledger', schema_version: '1.3.0', stream: stream(), at_ms: 720000, moment_id: 'm-e42', called: ['analyst', 'narrator', 'verifier'], skipped: ['stats_desk'], why: 'goal', routed_by: 'rules', ...o });
+const ledger = (o: any = {}) => ({ kind: 'crew_ledger', schema_version: '1.3.0', stream: stream(), at_ms: 720000, moment_id: 'm-e42', called: ['analyst', 'narrator', 'verifier'], skipped: ['stats_desk'], why: 'goal', routed_by: 'rules', spawn_reason: '', ...o });
 
 test('frames: crew_ledger makes a moment with minute, why, routed_by, called and skipped; first real frame clears simulated', async ({ page }) => {
   const errs = collectErrors(page);
@@ -312,4 +313,15 @@ test('frames: a ledger keeps its spawn_reason', async ({ page }) => {
   await expect(page.locator('#ct-spawn-why')).toBeHidden();   // the latest moment (m-2) has no reason
   await ingest(page, [ledger({ moment_id: 'm-3', spawn_reason: 'budget exhausted' })]);
   await expect(page.locator('#ct-spawn-why')).toHaveText('No specialists spawned: budget exhausted');
+});
+
+test('frames: the contract fixture crew-ledger.json (1.3.0) is accepted as it is', async ({ page }) => {
+  const fx = JSON.parse(readFileSync('packages/contracts/fixtures/crew-ledger.json', 'utf8'));
+  await open(page);
+  await ingest(page, [fx]);
+  const s = await state(page);
+  expect(s.simulated).toBe(false);
+  expect(s.moments).toHaveLength(1);
+  expect(s.moments[0]).toMatchObject({ id: fx.moment_id, match_id: fx.stream.match_id, why: 'goal', routed_by: 'rules', called: fx.called, skipped: fx.skipped, status: 'done' });
+  expect(s.moments[0].spawn_reason).toBeUndefined();   // an empty reason (the planner did spawn) shows nothing
 });

@@ -23,9 +23,8 @@ type Opts = {
   streamFrames?: (session: string) => string;   // extra SSE text written after the status
   endFirstStream?: boolean;             // the first stream connection ends (a drop); later ones stay open
 };
-async function withApi(o: Opts, body: (api: string, hits: string[], info: { inflightMax: number; streams: number }) => Promise<void>) {
-  const hits: string[] = [], info = { inflightMax: 0, streams: 0 };
-  let inflight = 0;
+async function withApi(o: Opts, body: (api: string, hits: string[], info: { inflightMax: number; streams: number; inflight: number }) => Promise<void>) {
+  const hits: string[] = [], info = { inflightMax: 0, streams: 0, inflight: 0 };
   const sockets = new Set<any>();
   const server = await new Promise<ReturnType<typeof createServer>>((resolve) => {
     const s = createServer((q, r) => {
@@ -37,10 +36,10 @@ async function withApi(o: Opts, body: (api: string, hits: string[], info: { infl
         return;
       }
       if (/\/scoreboard/.test(q.url!)) {
-        hits.push(q.url!); inflight++; info.inflightMax = Math.max(info.inflightMax, inflight);
+        hits.push(q.url!); info.inflight++; info.inflightMax = Math.max(info.inflightMax, info.inflight);
         const b = (o.board || (() => ({ status: 404 })))();
         const wait = typeof o.delay === 'function' ? o.delay(q.url!) : o.delay || 0;
-        setTimeout(() => { inflight--; r.writeHead(b.status, { 'Content-Type': 'application/json', ...cors }); r.end(JSON.stringify(b.body || {})); }, wait);
+        setTimeout(() => { info.inflight--; r.writeHead(b.status, { 'Content-Type': 'application/json', ...cors }); r.end(JSON.stringify(b.body || {})); }, wait);
         return;
       }
       if (/\/stream/.test(q.url!)) {
@@ -63,14 +62,19 @@ async function withApi(o: Opts, body: (api: string, hits: string[], info: { infl
   finally { sockets.forEach((x) => x.destroy()); await new Promise<void>((res) => server.close(() => res())); }
 }
 
-async function openLive(page: any, api: string, query = '?crew=1', begin = true) {
-  await page.addInitScript(() => { (window as any).MATCHCAST_SCORE_MS = 400; });
+async function openLive(page: any, api: string, query = '?crew=1', begin = true, scoreMs = 400) {
+  await page.addInitScript((ms: number) => { (window as any).MATCHCAST_SCORE_MS = ms; (window as any).__tk = 0; setInterval(() => { (window as any).__tk++; }, 250); }, scoreMs);
   await page.route('**/config.js', (rt: any) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api) + ';' }));
   await page.route(/\/(watch|broadcast)\/index\.html/, (r: any) => r.abort());
   await page.goto('/index.html' + query + '#agents', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => typeof LV !== 'undefined' && document.getElementById('crew-score') !== null, null, { timeout: 30_000 });
   if (begin) await page.evaluate(() => LV.begin('k1', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }));
 }
+// a negative check needs a window to look over: n page ticks (250 ms each), counted in the page and polled, not slept
+const after = async (page: any, n: number) => {
+  const t0 = await page.evaluate(() => (window as any).__tk);
+  await expect.poll(() => page.evaluate(() => (window as any).__tk), { timeout: 30_000 }).toBeGreaterThanOrEqual(t0 + n);
+};
 const sid = (u: string) => new URL(u, 'http://x').searchParams.get('session_id');
 
 test('stream: onair, crew_ledger and crew_spawn events reach CREW.state', async ({ page }) => {
@@ -78,7 +82,7 @@ test('stream: onair, crew_ledger and crew_spawn events reach CREW.state', async 
     const stream = { tenant_id: 'demo', session_id: session, match_id: 'm-k1' };
     const ev = (n: string, d: any) => 'event: ' + n + '\ndata: ' + JSON.stringify(d) + '\n\n';
     return ev('crew_spawn', { schema_version: '1.3.0', stream, moment_id: 'm-e1', spawn_id: 'm-e1:replay', agent_id: 'replay', role: 'replay', parent_id: 'showrunner', status: 'running', started_ms: 600000, ended_ms: null, tokens: 0, why: 'replay' })
-      + ev('crew_ledger', { schema_version: '1.3.0', stream, moment_id: 'm-e1', at_ms: 600000, called: ['analyst', 'replay'], skipped: [], why: 'goal', routed_by: 'rules' })
+      + ev('crew_ledger', { schema_version: '1.3.0', stream, moment_id: 'm-e1', at_ms: 600000, called: ['analyst', 'replay'], skipped: [], why: 'goal', routed_by: 'rules', spawn_reason: '' })
       + ev('onair', { publication_id: 'P1', feed: 'casual', lang: 'en', text: 'Northgate FC score.', source_event_ids: ['E12'], claim_ids: [], match_time_ms: 600000, aired_at: '2026-10-25T14:00:00Z', repair_count: 0 })
       + ev('feed_drop', { publication_id: 'P2', feed: 'ticker', source_event_ids: ['E13'], reason_code: 'repeat', repair_count: 1, audit_id: 'a-1', match_time_ms: 610000 });
   };
@@ -100,7 +104,7 @@ test('stream: without ?crew=1 the stream events leave CREW inert', async ({ page
   await withApi({ streamFrames: frames, board: () => ({ status: 200, body: BOARD }) }, async (api, hits, info) => {
     await openLive(page, api, '');
     await expect.poll(() => info.streams, { timeout: 30_000 }).toBeGreaterThan(0);
-    await page.waitForTimeout(2500);
+    await after(page, 10);
     expect(await page.evaluate(() => JSON.stringify([CREW.state.lines, CREW.state.feeds.casual, CREW.state.score]))).toBe('[[],[],null]');
     expect(hits).toEqual([]);   // no scoreboard request without the flag
   });
@@ -154,6 +158,18 @@ test('scoreboard: a 404 says not available yet, then the scoreboard appears; a l
   });
 });
 
+test('scoreboard: the not-available note stays across polls at a near-default gap and only clears for another match', async ({ page }) => {
+  await withApi({ board: () => ({ status: 404 }) }, async (api, hits) => {
+    await openLive(page, api, '?crew=1', true, 20_000);   // the first poll is immediate, the next is 20 s away
+    await expect(page.locator('#crew-score')).toContainText('not available yet', { timeout: 30_000 });
+    await after(page, 12);   // three one-second poller ticks and more
+    await expect(page.locator('#crew-score')).toContainText('not available yet');
+    expect(hits).toHaveLength(1);
+    await page.evaluate(() => LV.begin('k2', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }));
+    await expect.poll(() => hits.some((u) => u.includes('/m-k2/')), { timeout: 15_000 }).toBe(true);   // a new match polls at once, not 20 s later
+  });
+});
+
 test('scoreboard: errors and junk bodies stay silent and the page keeps working', async ({ page }) => {
   const errs: string[] = [];
   page.on('pageerror', (e: any) => errs.push(String(e)));
@@ -170,14 +186,14 @@ test('scoreboard: errors and junk bodies stay silent and the page keeps working'
 });
 
 test('scoreboard: while the Simulated fixture is loaded no scoreboard is requested and its score stays Simulated', async ({ page }) => {
-  await withApi({ board: () => ({ status: 200, body: BOARD }) }, async (api, hits) => {
+  await withApi({ board: () => ({ status: 200, body: BOARD }) }, async (api, hits, info) => {
     await openLive(page, api);
     await expect(page.locator('#crew-score .cs-arm')).toHaveCount(3, { timeout: 30_000 });
     await page.evaluate(() => CREW.play());
-    await page.waitForTimeout(700);   // let a request that was already in flight finish
+    await expect.poll(() => info.inflight, { timeout: 10_000 }).toBe(0);   // a request that was already in flight finishes
     const base = hits.length;
     await expect(page.locator('#ct-tree')).toHaveAttribute('data-done', 'true', { timeout: 15_000 });
-    await page.waitForTimeout(1500);
+    await after(page, 6);
     expect(hits.length).toBe(base);   // 400 ms poll interval, ~7 s of fixture: not one request
     await expect(page.locator('#crew-score .cs-badge.sim')).toHaveText('Simulated');
     expect(await page.evaluate(() => CREW.state.scoreSource)).toBe('fixture');
@@ -194,7 +210,7 @@ test('scoreboard: no polling unless the api match is live', async ({ page }) => 
     await openLive(page, api);
     await expect.poll(() => info.streams, { timeout: 30_000 }).toBeGreaterThan(0);
     expect(await page.evaluate(() => LV.status)).toBe('warming');
-    await page.waitForTimeout(2500);
+    await after(page, 10);
     expect(hits).toEqual([]);
   });
 });
@@ -221,14 +237,14 @@ test('scoreboard: a slow response never overlaps the next poll, and a reply for 
   let board: any = { status: 200, body: BOARD };
   await withApi({ delay: (u) => (u.includes('/m-k1/') ? 1500 : 0), board: () => board }, async (api, hits, info) => {
     await openLive(page, api);
-    await expect.poll(() => hits.length, { timeout: 30_000 }).toBeGreaterThan(0);
-    await page.waitForTimeout(3500);
+    await expect.poll(() => hits.length, { timeout: 30_000 }).toBeGreaterThan(2);   // 400 ms polls against a 1.5 s reply
     expect(info.inflightMax).toBe(1);
     // switch the match while a reply is in flight: the old reply must not become the new match's score
     board = { status: 404 };
     await page.evaluate(() => CREW.reset());
     await page.evaluate(() => LV.begin('k3', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }));
-    await page.waitForTimeout(2500);   // the old reply has come back by now and was dropped; m-k3 itself has no scoreboard
+    await expect.poll(() => hits.some((u) => u.includes('/m-k3/')), { timeout: 15_000 }).toBe(true);
+    await expect.poll(() => info.inflight, { timeout: 15_000 }).toBe(0);   // the old reply has come back and was dropped; m-k3 itself has no scoreboard
     expect(await page.evaluate(() => CREW.state.score)).toBeNull();
   });
 });
@@ -254,11 +270,11 @@ test('crew tree: attached to a match that already existed, it says the crew star
     // pressing Play never flashes the mid-match text
     await page.evaluate(() => { (window as any).__seen = []; new MutationObserver(() => (window as any).__seen.push(document.getElementById('ct-empty')!.getAttribute('data-state'))).observe(document.getElementById('ct-empty')!, { attributes: true, childList: true, characterData: true, subtree: true }); });
     await page.getByRole('button', { name: 'Play Simulated goal' }).click();
-    await page.waitForTimeout(1200);
+    await expect(page.locator('#ct-tree')).toBeVisible();   // the fixture's first node has landed
     expect(await page.evaluate(() => (window as any).__seen)).not.toContain('next-moment');
     await expect(page.locator('#ct-sim')).toBeVisible();   // the fixture is loaded now
     // a real moment takes the place after a Reset
-    await page.evaluate(() => { CREW.reset(); CREW.ingest({ kind: 'crew_ledger', schema_version: '1.3.0', stream: LV.key, moment_id: 'm-1', at_ms: 600000, called: ['analyst'], skipped: [], why: 'goal', routed_by: 'rules' }); });
+    await page.evaluate(() => { CREW.reset(); CREW.ingest({ kind: 'crew_ledger', schema_version: '1.3.0', stream: LV.key, moment_id: 'm-1', at_ms: 600000, called: ['analyst'], skipped: [], why: 'goal', routed_by: 'rules', spawn_reason: '' }); });
     await expect(empty).toBeHidden();
     await expect(page.locator('#ct-tree')).toBeVisible();
   });
@@ -276,7 +292,7 @@ test('crew tree: the viewer who started the match is not told they joined late',
   await withApi({}, async (api) => {
     await openLive(page, api);
     await expect.poll(() => page.evaluate(() => LV.status), { timeout: 30_000 }).toBe('live');
-    await page.waitForTimeout(2200);
+    await after(page, 9);
     await expect(page.locator('#ct-empty')).toHaveAttribute('data-state', 'idle');
     await expect(page.locator('#ct-empty')).toContainText('No moment yet');
   });

@@ -244,7 +244,7 @@
     if (obj(j.difference) && typeof j.difference.note === 'string') method += '. ' + j.difference.note;
     return { method: method, arms: arms };
   }
-  var scoreBusy = false, scoreFor = '', gen = 0, NOTE_404 = 'The scoreboard is not available yet. It appears once the api has graded lines for this match.';
+  var scoreBusy = false, scoreFor = '', noteFor = '', gen = 0, NOTE_404 = 'The scoreboard is not available yet. It appears once the api has graded lines for this match.';
   function keyOf(lv) { var k = lv && lv.key; return k && k.match_id ? [k.session_id || '', k.match_id].join('/') : ''; }
   function dropApiScore() {   // the api score belongs to one match and session
     if (S.scoreSource === 'api') { S.score = null; S.scoreSource = null; S.scoreNote = ''; scoreFor = ''; emit(); }
@@ -257,11 +257,12 @@
     var stale = function () { return g !== gen || asked !== keyOf(typeof LV !== 'undefined' ? LV : null) || fixtureLoaded; };   // a reset, another match or the fixture took over while it was in flight
     try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) opts.signal = AbortSignal.timeout(8000); } catch (e) { /* no timeout support */ }
     scoreBusy = true;
-    return fetch(base + '/v1/matches/' + encodeURIComponent(key.match_id) + '/scoreboard?' + new URLSearchParams({ session_id: key.session_id }), opts)
+    var req;
+    try { req = fetch(base + '/v1/matches/' + encodeURIComponent(key.match_id) + '/scoreboard?' + new URLSearchParams({ session_id: key.session_id }), opts)
       .then(function (res) {
         if (stale()) return false;
         if (res.status === 404) {   // keep the last good score; the note only matters while there is none, and only a changed note emits
-          if (!S.score && S.scoreNote !== NOTE_404) { S.scoreNote = NOTE_404; emit(); }
+          if (!S.score) { noteFor = asked; if (S.scoreNote !== NOTE_404) { S.scoreNote = NOTE_404; emit(); } }
           return false;
         }
         if (!res.ok) return false;
@@ -271,13 +272,16 @@
           S.score = sc; S.scoreSource = 'api'; S.scoreNote = ''; scoreFor = asked; emit();
           return true;
         });
-      }).catch(function () { return false; }).then(function (ok) { scoreBusy = false; return ok; });
+      }); } catch (e) { scoreBusy = false; return Promise.resolve(false); }
+    return req.catch(function () { return false; }).then(function (ok) { scoreBusy = false; return ok; });
   }
-  var lastPoll = 0;
+  var lastPoll = 0, lastKey = '';
   function pollScore() {   // gently: at most one GET per interval, only while the api match is live
     var lv = typeof LV !== 'undefined' ? LV : null;
     if (S.scoreSource === 'api' && keyOf(lv) !== scoreFor) dropApiScore();   // a new match or session
-    if (S.scoreNote && keyOf(lv) !== scoreFor && !S.score) { S.scoreNote = ''; emit(); }
+    var k = keyOf(lv);
+    if (S.scoreNote && !S.score && k !== noteFor) { S.scoreNote = ''; noteFor = ''; emit(); }   // the note belongs to the match that was asked
+    if (k !== lastKey) { lastKey = k; lastPoll = 0; }   // a new match polls at once
     if (!lv || !lv.key || lv.status !== 'live') { lastPoll = 0; return; }
     var gap = +window.MATCHCAST_SCORE_MS || 15000, now = Date.now();
     if (lastPoll && now - lastPoll < gap) return;
@@ -294,7 +298,7 @@
     fixtureGoal(minute || 23).forEach(function (s) { timers.push(setTimeout(function () { ingest(s[1], { simulated: true }); }, s[0])); });
   }
   function stop() { timers.forEach(clearTimeout); timers = []; }
-  function resetData() { S.moments = []; S.lines = []; FEEDS.forEach(function (f) { S.feeds[f.key] = []; }); S.score = null; S.scoreSource = null; S.scoreNote = ''; scoreFor = ''; gen++; pending = Object.create(null); fixtureLoaded = false; }
+  function resetData() { S.moments = []; S.lines = []; FEEDS.forEach(function (f) { S.feeds[f.key] = []; }); S.score = null; S.scoreSource = null; S.scoreNote = ''; scoreFor = ''; noteFor = ''; gen++; pending = Object.create(null); fixtureLoaded = false; }
   function reset() { stop(); resetData(); emit(); }
 
   window.CREW = {

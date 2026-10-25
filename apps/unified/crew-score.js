@@ -54,7 +54,7 @@
   function known(sc) { return !!(sc && sc.arms && CREW.ARMS.some(function (a) { return sc.arms[a.key]; })); }
   function draw(S) {
     var sc = S.score;
-    var sim = !!S.simulated && S.scoreSource !== 'api';   // the fetched score is real even while the page still shows fixture moments
+    var sim = !!S.simulated && S.scoreSource === 'fixture';   // Simulated labels fixture data only; nothing on screen, or the api's score, is not
     var sig = JSON.stringify([sim, sc, S.scoreNote, S.scoreSource]);
     if (sig === lastSig) return;
     lastSig = sig;
