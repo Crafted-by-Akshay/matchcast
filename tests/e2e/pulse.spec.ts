@@ -61,6 +61,6 @@ test('Match Pulse cards and watch modes', async ({ page }) => {
   f = await openWatch(page);
   await expect(f.locator('#fan-chip')).toContainText(/My club/);
   if (await f.evaluate(() => (document.getElementById('fan-pop') as HTMLElement).hidden)) await f.click('#fan-chip');
-  expect(await f.evaluate(() => [...document.querySelectorAll<HTMLElement>('.fm-l')].every((l) => ['en', 'es', 'hi'].includes(l.dataset.l!) !== !!l.querySelector('.fm-planned'))), 'languages beyond English, Spanish and Hindi are labelled Planned').toBe(true);
+  expect(await f.evaluate(() => [...document.querySelectorAll<HTMLElement>('.fm-l')].every((l) => (window as any).MC_LANGS.includes(l.dataset.l!) !== !!l.querySelector('.fm-planned'))), 'languages the api does not check are labelled Planned').toBe(true);
   expect(errs).toEqual([]);
 });

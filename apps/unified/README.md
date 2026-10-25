@@ -54,7 +54,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - The shell posts one card per agent line to Watch (`type: 'pulse'`). Watch shows it for 12 s, keeps the last 10 in a scrollable log, and marks each with the Verifier's tick (green) or an amber dot, plus a 'Rules fallback' chip when the in-page rules wrote it. 'Why?' lists the cited events; the 3D replay with highlights is Planned.
 - Casual shows the plain line and no chips; the other modes show the full line with chips. Player focus leads the line with the player's name; My club accents the club's cards.
 - The watch mode is saved in localStorage (`mcx-mode`) and restored on reload. It is sent to the shell as the persona (`casual`, `analyst`, `club:<key>`, `player:<name>`, `metric:<name>`), and `live.js` reopens the api stream for it.
-- The language picker labels everything except English, Spanish and Hindi as Planned.
+- The language picker labels as Planned any language the api does not check. The ten feed languages are checked (ADR-0023); Watch's own list may still show Planned entries.
 
 ## Trace panel (EXP-6)
 - `trace-panel.js` (`TP`): 'How was this made?' on any line (a Match Pulse card or the Agents tab's Provenance) opens a timeline: Producer task, Analyst claim with its tool names, Narrator draft, Verifier verdict and repair, Producer approval and publication, each with its time and 'rules' or 'model'. Rules steps carry no tokens. Data is the claim's own trace (`agents.js`) and its audit records.
@@ -76,7 +76,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - The views are separate engines inside frames. Their own headers stay under the shell bar, and the Analyst keeps its own design. A single merged code base would be a larger job.
 - Each view runs its own simulation. Watch is the only live source for the score, the events and the agents. Broadcast shows Watch's score, but its pitch and goals come from its own engine, and the Analyst's season runs are headless recordings. The live full-time handoff is the way to get the played match into the Analyst. Making Broadcast and the Analyst consume Watch's events directly is the next refactor (option A in the orchestration design).
 - The agents and the Verifier are rules, not models. They are labelled as simulated, and the Azure parts are not connected.
-- The shell is in English only. Broadcast has its own EN, ES and HI desk script (Tamil is out until a native speaker reviews it).
+- The shell is in English only. Broadcast has its own EN, ES and HI desk script; the other feed languages show English on the desk with a note (ADR-0023).
 - Azure parts, Entra roles and the Foundry agents are simulated and labelled as such in each view.
 - Tested in local headless Chromium. Not yet tested inside the claude.ai artifact host.
 
@@ -170,8 +170,8 @@ When the api sends `variants: {es|hi: text}` on a publication (only after its ow
 
 ### Preload hints (Platform, EXP-15 overflow)
 The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which Watch and Broadcast both import, so it downloads while the shell paints. The views are separate documents, so the win is the shared HTTP cache only; the addon files (GLTFLoader and others) still load with each view, and are not preloaded because they import the bare specifier `three`, which the shell has no importmap for. Keep the version equal to `CDN` in `build.py`. Not measured on a real GPU or the live URL; the software-GL timings above do not show network wins. Lazy iframes were already in place, and self-hosting Three.js is a separate decision because the CSP in doc 11 allows the CDN.
-## Viewer language: EN, ES, HI (EXP-17)
-- One selector in the top bar (`#lang-sel`, remembered in `mc-lang`; `setLang` in index.html) sets the language for the whole console. Watch follows (its own picker still has Tamil, French and Arabic, which only Watch uses), Broadcast shows on-air graphics and the teleprompter in that language and moves the desk script, and the voice speaks the Verifier-checked translation (`lang` es or hi, voices from `voices.json`). A line without a checked translation stays English and the graphics say "English: no checked ES translation". Changing Watch's language or the desk's own EN/ES/HI buttons updates the selector; the api stream is re-opened with the new `lang`.
+## Viewer language: ten feed languages (EXP-17, ADR-0023)
+- One selector in the top bar (`#lang-sel`, remembered in `mc-lang`; `setLang` in index.html) sets the language for the whole console. Watch follows for the languages its own list has, and shows English for the rest, Broadcast shows on-air graphics and the teleprompter in that language and moves the desk script, and the voice speaks the Verifier-checked translation in en, es, pt or hi (voices from `voices.json`); other languages are captions only. A line without a checked translation stays English and the graphics say "English: no checked ES translation". Changing Watch's language or the desk's own EN/ES/HI buttons updates the selector; the api stream is re-opened with the new `lang`.
 - Rejections: when the desk's re-check refuses a Spanish or Hindi line it posts an `audit` message and the shell writes `translation_rejected` to the audit chain, like the shell's own lines. The Analyst view stays English.
 - Watch's talk-to-player mic uses Azure Speech through `window.parent.SPX` when the api has issued a token, otherwise the browser mic. Tests: `tests/e2e/language-selector.spec.ts`, `tests/e2e/speech.spec.ts`.
 

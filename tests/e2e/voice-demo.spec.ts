@@ -41,12 +41,12 @@ for (const [name, opts] of [['live api', { live: true, clip: 500 }], ['api confi
 test('phone header: language, Voice and Status are visible and 44 px', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await openShell(page, 'agents');
-  for (const sel of ['#lang-sel button[data-lang="es"]', '#voice-btn', '#status-btn']) {
+  for (const sel of ['#lang-pick', '#voice-btn', '#status-btn']) {
     const el = page.locator(sel);
     await expect(el, sel).toBeVisible();
     expect((await el.boundingBox())!.height, sel + ' tap target').toBeGreaterThanOrEqual(44);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no sideways scroll').toBe(true);
-  await page.locator('#lang-sel button[data-lang="es"]').click();
-  await expect(page.locator('#lang-sel button[data-lang="es"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#lang-pick').selectOption('es');
+  await expect(page.locator('#lang-pick')).toHaveValue('es');
 });

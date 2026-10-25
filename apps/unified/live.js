@@ -128,13 +128,13 @@ const LV = (() => {
   const ask = async (question, surface = 'ask') => {
     if (!run) throw new Error('no match yet');
     if (!String(question).trim()) throw new Error('empty question');   // the api needs at least one character
-    const body = { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' };
+    const body = { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: window.MC_LANGS.includes(lang) ? lang : 'en' };
     if (surface === 'broadcast') body.surface = surface;   // the Copilot's picks; a plain question sends exactly what it always did
     const res = await post('/v1/matches/' + run.id + '/ask', body);
     if (!res.ok) throw Object.assign(new Error('ask ' + res.status), { status: res.status });
     const j = await res.json();
     const t = j.variants && j.variants[lang];
-    return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j), broadcast: j.broadcast || null };
+    return { text: typeof t === 'string' && t ? t : j.answer, lang: typeof t === 'string' && t ? lang : 'en', verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j), broadcast: j.broadcast || null };
   };
 
   // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply; position is the sim's code (GK, ST...) so the role guard can bound an order
