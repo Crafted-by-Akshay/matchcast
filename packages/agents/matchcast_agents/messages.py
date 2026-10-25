@@ -102,4 +102,5 @@ class LineRecord(BaseModel):
     created_at: str
     decided_by: str | None = None
     origin: Literal["template", "model"] = "template"
+    escalated: bool = False  # a repair failed on a checkable fact and a person must decide
     snapshot_revision: int
