@@ -3,7 +3,7 @@
 // With an api, the rules agents keep running beside it, so if the api never answers the viewer still gets lines: status 'fallback'.
 const LV = (() => {
   const WARM_MS = window.MATCHCAST_WARM_MS || 90000, CLAIM_MS = window.MATCHCAST_WARM_MS || 60000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
-  let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, onBooth = () => {}, onLatency = () => {}, timer = null;
+  let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, onDrop = () => {}, onBooth = () => {}, onLatency = () => {}, timer = null;
   const vstats = { passes: 0, reads: 0, readsFailed: 0 };   // what Vision has reached the api with: passes accepted, shirt-number reads answered or refused
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
@@ -91,7 +91,7 @@ const LV = (() => {
       on('line', (d) => onLine(d, st));
       // contract 1.2.0 records for derived feeds (docs/contracts.md): the stream's event names are assumed to be the record kinds until the overlay stream (AB#499) fixes them
       on('onair', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'onair' }, d)); });
-      on('feed_drop', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'feed_drop' }, d)); });
+      on('feed_drop', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'feed_drop' }, d)); onDrop(d, st); });
       on('publication', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); measure(r, d); onLine(d, st); });
       es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; if (r.tries >= 2 && st === 'live') set('fallback');   /* a stream that keeps failing is not live agents; the next status, claim or line brings it back */ const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
     } catch (e) { set('fallback'); }
@@ -309,7 +309,7 @@ const LV = (() => {
       close: () => ws.close(),
     };
   };
-  return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); onLatency = cbs.latency || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
+  return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onDrop = cbs.drop || (() => {}); onBooth = cbs.booth || (() => {}); onLatency = cbs.latency || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
     begin, events, apiEvent: (id) => (run && run.evs.get(String(id))) || null, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };

@@ -13,7 +13,7 @@ const AG = (() => {
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
     roll: { score: [0, 0], xg: [0, 0], nextXg: 1 },
-    stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0 } });
+    stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0, dropped: 0 } });
   const teamIx = (k) => (!run || k == null) ? -1 : k === run.names.hk ? 0 : k === run.names.ak ? 1 : -1;
   const teamName = (t) => (t === 0 ? run.names.home : run.names.away);
   const min = (m) => Math.floor(m) + "'";
@@ -274,6 +274,28 @@ const AG = (() => {
     changed();
   };
 
+  // A line the server Verifier dropped (contract 1.2.0 `feed_drop`, docs/contracts.md): a card in the Agents tab with the Verifier's closed reason_code and the api's audit_id.
+  // Its text is not on the stream (it stays in the audit chain), so the card has none. A line that aired is never turned into a drop: a dropped translation is a note on it (trace-panel.js).
+  const sstr = (x, n) => (typeof x === 'string' ? x : Number.isFinite(x) ? String(x) : '').slice(0, n || 120);
+  const ingestDrop = (d, status) => {
+    if (!run || !d || typeof d !== 'object') return false;
+    const id = sstr(d.publication_id, 200); if (!id) return false;
+    let c = run.claims.find((x) => x.id === id);
+    if (c && !c.dropped) return false;
+    const code = sstr(d.reason_code, 60), feed = sstr(d.feed, 40), ms = Number(d.match_time_ms);
+    const fresh1 = !c;
+    if (!c) {
+      c = MCC.claim({ id, kind: 'dropped line', minute: Number.isFinite(ms) && ms >= 0 ? ms / 60000 : (run.events.length ? run.events[run.events.length - 1].minute : 0), agent: 'verifier', evidence: [], inputs: {}, source: status === 'live' ? 'model' : 'rules', api: true });
+      c.dropped = true; c.pub = false; c.text = ''; c.approval = 'dropped'; c.route = 'dropped, not aired'; c.verdict = 'dropped'; c.seenAt = clock();
+      run.claims.push(c); run.stat.dropped = (run.stat.dropped || 0) + 1;
+      hop(c, 'verifier', 'dropped');
+    }
+    c.feed = feed; c.reasonCode = code; c.auditId = sstr(d.audit_id, 200); c.repairs = Number.isFinite(d.repair_count) ? d.repair_count : null;
+    c.reason = 'Verifier dropped' + (code ? ' · ' + code : '') + (c.repairs ? ' after ' + c.repairs + ' repair' : '');
+    if (fresh1) say('Verifier', c.minute, 'dropped a ' + (feed || 'feed') + ' line' + (code ? ': ' + code : '') + '. The text stays in the audit chain.', 'warn');
+    changed(); return true;
+  };
+
   // why the Verifier could not repair a line, in words a producer can act on (the keys are the api's escalating reason codes)
   const ESCALATION = { number_mismatch: 'a number does not match the event log', unknown_player: 'a player is not in the event log', unknown_source: 'it cites a source the event log does not have', stale_state: 'the match moved on before it was checked' };
   // a new match from Watch (its start, or a fixture change) starts a new run, and the audit chain starts again with it
@@ -348,5 +370,5 @@ const AG = (() => {
     c.hops.push({ agent, step, mode: c.source === 'model' ? 'model' : 'rules', ms: c.seenAt != null ? +(clock() - c.seenAt).toFixed(0) : null });
   };
   const queue = () => (run ? run.claims.filter((c) => c.approval === 'pending').map((c) => Object.assign(air(c), { approval: 'pending', waiting_ms: Math.round(clock() - c.born), escalated: !!c.escalated, escalation: c.escalation || null })) : []);
-  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending' && !x.escalated)) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending' && !x.escalated)) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, ingestDrop, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();
