@@ -30,7 +30,10 @@ test('watch labels: commentary is checked in the page (simulated), xG is the eng
   await expect(w.locator('#mcx-idx')).toBeVisible({ timeout: 10_000 });
   const boxes = await w.evaluate(() => ['pulse', 'mcx-idx', 'third'].map((id) => { const r = document.getElementById(id)!.getBoundingClientRect(); return { id, l: r.left, r: r.right, t: r.top, b: r.bottom }; }));
   const hit = (x: any, y: any) => x.l < y.r && y.l < x.r && x.t < y.b && y.t < x.b;
-  expect(hit(boxes[0], boxes[1]), 'sparkline panel does not cover Match Pulse').toBe(false);
+  // a frame of 1100 px or more docks the sparkline panel beside Pulse; the Watch pane in the split stage is narrower, where the panel is part of Pulse's own column and must sit inside it
+  const iw = await w.evaluate(() => innerWidth);
+  if (iw >= 1100) expect(hit(boxes[0], boxes[1]), 'sparkline panel does not cover Match Pulse').toBe(false);
+  else expect(boxes[1].l >= boxes[0].l && boxes[1].r <= boxes[0].r && boxes[1].t >= boxes[0].t && boxes[1].b <= boxes[0].b + 1, 'in a narrow pane the sparkline panel sits inside the Match Pulse column').toBe(true);
   expect(hit(boxes[0], boxes[2]), 'Match Pulse does not cover the On-the-ball card').toBe(false);
   expect(hit(boxes[1], boxes[2]), 'sparkline panel does not cover the On-the-ball card').toBe(false);
 });

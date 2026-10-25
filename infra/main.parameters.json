@@ -14,7 +14,7 @@
     "pipelineMode": { "value": "${PIPELINE_MODE=direct}" },
     "keepWarm": { "value": "${KEEP_WARM=false}" },
     "agentMode": { "value": "${AGENT_MODE=rules}" },
-    "foundryModelDeployment": { "value": "${FOUNDRY_MODEL_DEPLOYMENT=gpt-6-luna}" },
+    "foundryModelDeployment": { "value": "${FOUNDRY_MODEL_DEPLOYMENT=gpt-5-mini}" },
     "mcpImage": { "value": "${MCP_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}" }
   }
 }

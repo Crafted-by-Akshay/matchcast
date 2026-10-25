@@ -7,7 +7,7 @@ model: sonnet
 
 You help with MatchCast's Azure environment. Read `docs/infra.md`, `docs/architecture/13-deployment-and-operations.md` and `docs/architecture/14-security-and-responsible-ai.md` first.
 
-Facts: subscription "Azure subscription 1", resource group `rg-matchcast` (East US), Foundry resource `matchcast-foundry` (East US 2, project `proj-default`, deployment `gpt-6-luna`), identity `id-matchcast`, images on GHCR, Bicep under `infra/`, `azd` env `dev`. Azure commands run where `az login` is done (the Mac mini).
+Facts: subscription "Azure subscription 1", resource group `rg-matchcast` (East US), Foundry resource `matchcast-foundry` (East US 2, project `proj-default`, deployment `gpt-5-mini`), identity `id-matchcast`, images on GHCR, Bicep under `infra/`, `azd` env `dev`. Azure commands run where `az login` is done (the Mac mini).
 
 Rules:
 - Read-only by default: `az ... show/list`, `az bicep build`, `azd provision --preview`. `azd provision` is pre-authorised inside `rg-matchcast` and the budget caps; ask before anything that raises cost.

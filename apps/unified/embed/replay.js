@@ -27,7 +27,7 @@ const BUF = [], BUF_SEC = 60, RP = { on: false };
 if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and clear of the teleprompter and the lower-third (the group keeps its aria-label)
   bar.querySelector('span').hidden = true;   // the slow-motion toggle stays on a phone: the phone spec keeps it on one row with the clips
   bar.querySelectorAll('button[data-sec]').forEach((b) => { b.textContent = b.dataset.sec + ' s'; });   // short labels keep the three buttons on one row
-  bar.querySelectorAll('button').forEach((b) => { b.style.padding = '3px 5px'; b.style.fontSize = '11px'; });
+  bar.querySelectorAll('button').forEach((b) => { b.style.padding = '3px 5px'; b.style.fontSize = '12px'; });
 }
   // narrow views (phones): the four on-air overlays stack instead of covering each other. Inline styles set the wide layout, so these rules need !important.
   const st = document.createElement('style');
