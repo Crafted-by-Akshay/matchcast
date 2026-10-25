@@ -284,3 +284,18 @@ def test_the_open_stream_carries_a_lines_text_only_after_it_passed_its_checks(ma
         public_line(rejected)["text"] == rejected.text or rejected.reason_code == "unsafe_content"
     )
     assert public_line(rejected, stream=True)["text"] in (NOT_SHOWN, WITHHELD)
+
+
+def test_model_written_check_reasons_are_blanked_with_the_text(match) -> None:
+    from matchcast_agents.messages import Check
+
+    flow = build(match)
+    run(flow.ingest(match["events"][:40]))
+    line = flow.store.lines(flow.sk)[0].model_copy(
+        update={
+            "status": "rejected",
+            "checks": [Check(name="meaning", passed=False, detail="unsupported: quotes the line")],
+        }
+    )
+    assert public_line(line, stream=True)["checks"][0]["detail"] == ""
+    assert public_line(line)["checks"][0]["detail"] == "unsupported: quotes the line"

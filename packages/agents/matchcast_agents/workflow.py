@@ -70,6 +70,10 @@ def public_line(line: LineRecord, *, stream: bool = False) -> dict[str, Any]:
         out["text"] = UNCHECKED
     elif stream and line.status not in PASSED:
         out["text"] = NOT_SHOWN
+    if out["text"] in (WITHHELD, UNCHECKED, NOT_SHOWN):
+        for check in out["checks"]:  # a model-written reason can quote the line it judged
+            if check["name"] == "meaning" or check["name"].startswith("adversary"):
+                check["detail"] = ""
     return out
 
 
