@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from .live.knowledge import TalkKnowledge
 
 STATS_DESK_BUDGET_S = 2.0
+MINUTE_MENTION = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)  # "minute 12": a log minute
 
 TALK_PHRASES = {
     "shots on target": "shots_on_target", "shots": "shots", "goals": "goals",
@@ -43,6 +44,8 @@ TALK_PHRASES = {
 TALK_RE = re.compile(r"(\d+) (shots on target|shots|goals|tackles won|fouls|cards)\b")
 AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
+# a line that fails its repair on one of these goes to a person: the event log can settle it
+ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
 
 
 class WorkflowError(Exception):
@@ -223,6 +226,7 @@ class MatchWorkflow:
             "verified": 0,
             "repaired": 0,
             "abstained": 0,
+            "escalated": 0,
             "published": 0,
         }
 
@@ -605,11 +609,18 @@ class MatchWorkflow:
         from .verify import extract_numbers
         from .verify.checks import recompute
 
-        numbers = extract_numbers(reply)
         if target == "producer":
+            numbers = extract_numbers(reply)
             upto = ctx.state.max_sequence
             goals = {recompute(ctx.events, f"goals:{t}", upto) for t in (ctx.home, ctx.away)}
             return all(n in goals for n in numbers)
+        from .live.answers import minute_claims_fit
+
+        if not minute_claims_fit(
+            ctx, target, reply
+        ):  # a minute must be one the named player's log event
+            return False
+        numbers = extract_numbers(MINUTE_MENTION.sub(" ", reply))
         recount = dict.fromkeys(TALK_PHRASES.values(), 0)
         for event in ctx.events:
             p = event["payload"]
@@ -985,14 +996,12 @@ class MatchWorkflow:
                 checks=[c.model_dump() for c in verdict.checks if not c.passed],
             )
             if attempt == 0:
-                await self._repair(ctx, task, claims, draft, verdict)
+                with _TRACER.start_as_current_span("handoff verifier to repair") as span:
+                    span.set_attribute("matchcast.reason_code", verdict.reason_code or "")
+                    span.set_attribute("matchcast.line_id", draft.line_id)
+                    await self._repair(ctx, task, claims, draft, verdict)
             else:
-                record.status = "abstained"
-                self._save_line(record)
-                self.stats["abstained"] += 1
-                self._agent(
-                    "line_abstained", a.producer, draft.line_id, reason_code=verdict.reason_code
-                )
+                self._give_up(record, verdict)
             return
         record.status = "verified" if verdict.verdict == "verified" else "review"
         self._save_line(record)
@@ -1085,9 +1094,34 @@ class MatchWorkflow:
                 self._redrafts[key] = (fresh_ctx, fresh_claims, written)  # an empty one too
             ctx, claims, redrafts = self._redrafts[key]
         replacement = next((d for d in redrafts if d.persona == draft.persona), None)
-        if replacement is None:
+        if replacement is None:  # no repaired line for this persona: the original is final
+            original = self.store.get_line(self.sk, draft.line_id)
+            assert original is not None
+            self._give_up(original, verdict)
             return
         await self._verify_line(ctx, task, claims, replacement, attempt=1, repair_of=draft.line_id)
+
+    def _give_up(self, record: LineRecord, verdict: Verdict) -> None:
+        """A line that failed its one repair: a checkable fact goes to a person, the rest drops."""
+        a = self.agents
+        if verdict.reason_code in ESCALATED_CODES:
+            record.status = "review"
+            record.escalated = True
+            self._save_line(record)
+            self.stats["escalated"] += 1
+            self._agent(
+                "line_review",
+                a.verifier,
+                record.line_id,
+                reason_code=verdict.reason_code,
+                escalated=True,
+                repair_of=record.repair_of,
+            )
+            return
+        record.status = "abstained"
+        self._save_line(record)
+        self.stats["abstained"] += 1
+        self._agent("line_abstained", a.producer, record.line_id, reason_code=verdict.reason_code)
 
     # ---- approval and publication ------------------------------------------------------
 
