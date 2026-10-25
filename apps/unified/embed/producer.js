@@ -29,10 +29,10 @@
     return 'Verifier: ' + (x.verdict || 'not checked') + (x.reason ? ' · ' + x.reason : '');
   };
   const item = (x) => '<li class="mcp-item' + (x.escalated ? ' mcp-esc' : '') + '" data-id="' + esc(x.id) + '"><div>' + (x.escalated ? '<b class="mcp-tag">Escalated</b> ' : '') + '<b>' + esc(x.minute) + "'</b> " + esc(x.text) + '</div>'
-    + (x.escalated ? '<div class="mcp-v bad">The Verifier could not repair this line: ' + esc(x.reason || 'no reason given') + '</div>' : '')
-    + '<div class="mcp-v' + (x.repaired ? ' bad' : '') + '">' + esc(verdict(x)) + '</div>'
+    + (x.escalated ? '<div class="mcp-v bad">The Verifier could not repair this line: ' + esc(x.escalation || 'no reason given') + '. Kill is the only action: nothing airs it.</div>' : '')
+    + (x.escalated ? '' : '<div class="mcp-v' + (x.repaired ? ' bad' : '') + '">' + esc(verdict(x)) + '</div>')
     + (x.repaired && x.was ? '<div class="mcp-v">First wording: ' + esc(x.was) + '</div>' : '')
-    + '<div><button type="button" data-act="approve">Approve</button> <button type="button" data-act="kill">Kill</button> <span class="mcp-v">waiting ' + Math.round((x.waiting_ms || 0) / 1000) + ' s</span></div></li>';
+    + '<div>' + (x.escalated ? '' : '<button type="button" data-act="approve">Approve</button> ') + '<button type="button" data-act="kill">Kill</button> <span class="mcp-v">waiting ' + Math.round((x.waiting_ms || 0) / 1000) + ' s</span></div></li>';
   let last = null;
   const render = (d) => {
     for (const b of box.querySelectorAll('#mc-pmode [data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === (d.mode === 'demo' ? 'demo' : 'producer')));
