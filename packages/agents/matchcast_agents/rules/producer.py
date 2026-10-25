@@ -6,6 +6,7 @@ from typing import Any
 
 from ..context import MatchContext
 from ..messages import ProducerTask, Skip
+from ..vision import VISION_SUMMARY_MS, is_vision_stream
 
 THRESHOLD = 60
 RATE_WINDOW_MS = 8_000
@@ -49,7 +50,7 @@ class ProducerRules:
         self._clock = clock
         self._last_colour: float | None = None
         self._last_task_ms: int | None = None
-        self._next_summary_ms = SUMMARY_EVERY_MS
+        self._next_summary_ms: int | None = None  # set on the first moment: a Vision stream differs
         self._seen: set[str] = set()
         self._spent: tuple[int | None, float | None] = (None, None)  # before the last task
 
@@ -82,10 +83,16 @@ class ProducerRules:
             return Skip(moment_id=moment_id, reason="duplicate_moment")
         self._seen.add(moment_id)
         score, priority, kind = moment_score(event["payload"])
+        vision = is_vision_stream(ctx.stream)
+        every = VISION_SUMMARY_MS if vision else SUMMARY_EVERY_MS
+        if self._next_summary_ms is None:
+            self._next_summary_ms = every
         if event["event_time_ms"] >= self._next_summary_ms and kind == "pass":
+            # a Vision summary counts passes; the rules twin writes it, so it costs no model call
             score, priority, kind = 60, 3, "summary"
-            self._next_summary_ms = event["event_time_ms"] // SUMMARY_EVERY_MS * SUMMARY_EVERY_MS
-            self._next_summary_ms += SUMMARY_EVERY_MS
+            now = event["event_time_ms"]
+            # Vision's cadence runs from its last summary; the engine's stays on the grid
+            self._next_summary_ms = now + every if vision else now // every * every + every
         colour = (
             kind in COLOUR_KINDS
             and "analyst" in self.personas  # the colour line is the analyst's

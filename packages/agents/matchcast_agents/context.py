@@ -16,6 +16,8 @@ class MatchContext:
     events: tuple[dict[str, Any], ...]
     personas: tuple[str, ...] = ("casual", "analyst")
     extra: dict[str, Any] = field(default_factory=dict)
+    # a Vision stream's truth: the engine match's own events, which its Verifier compares against
+    truth: tuple[dict[str, Any], ...] = ()
 
     @property
     def home(self) -> str:

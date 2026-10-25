@@ -10,6 +10,7 @@ from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
 from ..personas import max_numbers
 from ..state import counted
+from ..vision import agreement, pass_facts
 from ..xg import team_xg
 
 FRESH_REVISIONS = 5
@@ -222,11 +223,46 @@ REASON: dict[str, ReasonCode] = {
 }
 
 
+def check_vision(ctx: MatchContext, claims: list[dict[str, Any]]) -> Check:
+    """Vision's pass counts against the engine's own passes (ADR-0022). It reports the agreement
+    and does not block the line: the number itself was recounted from Vision's passes by check 3."""
+    counts = [c for c in claims if c["metric"].startswith("passes:")]
+    if not counts:
+        return Check(name="vision", passed=True, detail="no Vision count in this line")
+    if not ctx.truth:
+        return Check(name="vision", passed=True, detail="no engine truth on this stream")
+    parts = []
+    passes = pass_facts(ctx.events)
+    for claim in counts:
+        team = claim["metric"].split(":", 1)[1]
+        cut = claim["source"]["to_event_time_ms"]
+        seen = claim["value"]
+        ours = [p for p in passes if p["team_id"] == team and p["time_ms"] <= cut]
+        # the whole engine feed, so the span both streams cover ends at the engine's latest event;
+        # a pass only matches an engine pass of the same team, so the other team cannot back it
+        report = agreement(ours, ctx.truth)
+        if report["precision"] is None:
+            parts.append(
+                f"Vision counted {seen:g} passes for {team}, none covered by the engine yet"
+            )
+            continue
+        share = round(100 * report["precision"])
+        parts.append(
+            f"Vision counted {seen:g} passes for {team}, {report['matched']} of its "
+            f"{report['vision']} covered passes match an engine pass ({share}% agree)"
+        )
+    return Check(name="vision", passed=True, detail="; ".join(parts))
+
+
 def run_checks(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any]]) -> list[Check]:
-    return [
+    checks = [
         check_sources(ctx, claims),
         check_freshness(ctx, claims),
         check_numbers(ctx, line, claims),
         check_names(ctx, line, claims),
         check_persona(line),
     ]
+    # only a line that carries a Vision count gets the check
+    if any(c["metric"].startswith("passes:") for c in claims):
+        checks.append(check_vision(ctx, claims))
+    return checks

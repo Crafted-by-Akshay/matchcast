@@ -132,6 +132,18 @@ class NarratorRules:
                 "analyst": f"{who} ({club}) sent off. {club} red cards: {v[f'red_cards:{team}']}.",
                 "broadcast": f"{who} is sent off. {club} are a player short.",
             }
+        elif kind == "summary" and f"passes:{hid}" in v:  # a Vision stream: what the tracker saw
+            p, q = v[f"passes:{hid}"], v[f"passes:{aid}"]
+            lead = home if p > q else away if q > p else None
+            texts = {
+                "casual": (
+                    f"Vision has {lead} with more of the passing."
+                    if lead
+                    else "Vision has the passing level."
+                ),
+                "analyst": f"Vision has tracked {home} {p} passes and {away} {q}.",
+                "broadcast": f"Vision has tracked {home} {p} passes and {away} {q}.",
+            }
         elif kind == "summary":
             h, a = v[f"shots:{hid}"], v[f"shots:{aid}"]
             lead = home if h > a else away if a > h else None
