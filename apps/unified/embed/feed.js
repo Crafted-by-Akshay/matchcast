@@ -17,7 +17,7 @@
   document.head.appendChild(st);
   const box = document.createElement('section');
   box.id = 'mcf'; box.setAttribute('aria-label', 'Live commentary');
-  box.innerHTML = '<div id="mcf-head"><span>Live commentary</span><button type="button" id="mcf-tog" aria-expanded="false" aria-controls="mcf-list">All lines</button></div><div id="mcf-sound">Sound is off. Click Voice: off in the top bar to hear the booth.</div><div id="mcf-top" aria-live="polite"></div><ol id="mcf-list" hidden></ol>';
+  box.innerHTML = '<div id="mcf-head"><span>Live commentary</span><button type="button" id="mcf-tog" aria-expanded="false" aria-controls="mcf-list">All lines</button></div><div id="mcf-sound" hidden>Sound is off. Click Voice: off in the top bar to hear the booth.</div><div id="mcf-top" aria-live="polite"></div><ol id="mcf-list" hidden></ol>';
   (document.getElementById('bc-view') || document.body).append(box);
   const top = box.querySelector('#mcf-top'), list = box.querySelector('#mcf-list'), tog = box.querySelector('#mcf-tog'), sound = box.querySelector('#mcf-sound');
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -41,6 +41,6 @@
     if (d.type !== 'feed-lines') return;
     draw(Array.isArray(d.items) ? d.items : []);
   });
-  window.parent.postMessage({ src: 'matchcast', type: 'feed-ready' }, '*');   // asks the shell for the Voice state once on load
+  if (window.parent !== window) window.parent.postMessage({ src: 'matchcast', type: 'feed-ready' }, '*');   // asks the shell for the Voice state once on load
   window.MCFeed = { get shown() { return list.children.length; }, get top() { return top.textContent; } };
 })();

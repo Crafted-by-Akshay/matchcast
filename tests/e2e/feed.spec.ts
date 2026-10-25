@@ -55,13 +55,17 @@ test('Broadcast draws the same feed', async ({ page }) => {
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
-  await page.evaluate(() => post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items: [
+  const lines = [
     { id: 'l1', minute: 3, text: 'Shot for Thames Rovers. xG 0.12.', kind: 'shot', tone: '', source: 'rules', label: 'Rules · recounted', chain: ['Producer', 'Analyst', 'Narrator', 'Verifier'] },
     { id: 'l2', minute: 4, text: 'GOAL! A header from the corner.', kind: 'goal', tone: 'big', source: 'live', label: 'Live agents · verified', chain: ['Producer', 'Analyst', 'Narrator', 'Verifier', 'Live agents'] },
-  ] }));
+  ];
+  // the shell's own feed can replace the card's lines after a post (the Watch view resets its feed when it loads), so post again until the card holds both
+  await expect.poll(async () => {
+    await page.evaluate((items) => post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items }), lines);
+    return f.locator('#mcf-list li').count();
+  }, { timeout: 15_000 }).toBe(2);
   await expect(f.locator('#mcf-top')).toContainText('GOAL! A header from the corner.');
   await f.click('#mcf-tog');
-  await expect(f.locator('#mcf-list li')).toHaveCount(2);
   await expect(f.locator('#mcf-list li.big')).toContainText('Live agents');
 });
 
@@ -180,8 +184,8 @@ test('the commentary card says Sound is off until Voice is on', async ({ page })
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
-  await page.evaluate(() => VC.set(false));
-  await expect(f.locator('#mcf-sound')).toBeVisible();
+  // Voice is off by default, so the card must learn that from the shell (the hint is hidden until then)
+  await expect(f.locator('#mcf-sound')).toBeVisible({ timeout: 10_000 });
   await expect(f.locator('#mcf-sound')).toContainText('Voice: off');
   await page.click('#voice-btn');
   await expect(f.locator('#mcf-sound')).toBeHidden();
