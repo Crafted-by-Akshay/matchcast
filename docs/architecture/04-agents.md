@@ -42,6 +42,8 @@ The Showrunner (CREW-1.1) spawns specialists for one moment through `plan_spawns
 
 `plan_spawns` (CREW-2.1, AB#385) sizes the call: a priority-1 moment gets up to four specialists in parallel, any other moment at most one, and the per-match `SpawnBudget` (60 spawns, a cost guard) is shared by every moment. When the budget is spent, or no specialist is available, it spawns nothing and gives the reason, which the ledger records and the rules twin covers.
 
+Pass quality (CREW-2.4, AB#491, `matchcast_agents/passes.py`) is a deterministic record per pass that has both positions: straight-line distance in metres and a difficulty from 1 to 5 (under 10 m 1, under 20 m 2, under 30 m 3, under 45 m 4, longer 5). The engine does not record pass completion, so no record claims it. Shot speed and player speed tags are not built: the event stream carries no ball velocity and no continuous player track, and carry speeds derived from carry durations reach 28 m/s in the fixture, which is not a usable threshold.
+
 Rhythm weights on-ball actions (passes and carries) and pass tempo at 0.6 of the index, and territory, pressure, shots and turnovers won at 0.4. The engine emits no possession time, so possession is the share of on-ball actions. The sides swap at half time, the usual convention; the fixture has only one period, so the swap is not checked against engine data.
 
 ## 3. Workflow graph (Microsoft Agent Framework)
@@ -179,6 +181,6 @@ packages/agents/
 | --- | --- |
 | Distinct roles | Trace panel shows four agents with their own tools and outputs (EXP-6) |
 | Shared state and handoffs | Claims ledger: one claim, its Analyst evidence, Narrator lines, Verifier verdict (EXP-10) |
-| Failure recovery | Seeded bad claim repaired on cue (`?seedBadClaim=1`); rules fallback chip; kill-and-resume clip (QUA-5) |
+| Failure recovery | Seeded bad claim repaired on cue (`?seedBadClaim=1`); failure drill: "Cut the model" on the Agents tab cuts the match's model calls mid-match and the rules twins take over with no gap (`POST …/drill`, 12-api.md); rules fallback chip; kill-and-resume clip (QUA-5) |
 | Better than one agent | QUA-4: same 30 moments, one agent vs four, verified-claim rate and hallucinations per 100 lines, real numbers in the README |
 | Interoperability | MCP for tools and Copilot; A2A Stats Desk with an Agent Card |

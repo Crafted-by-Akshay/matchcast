@@ -33,25 +33,26 @@ const SPX = (() => {
     const S = await sdk(), c = S.SpeechConfig.fromAuthorizationToken(t.token, t.region);   // token as issued, no prefix
     c.speechRecognitionLanguage = lang; if (voice) c.speechSynthesisVoiceName = voice; return { S, c };
   };
-  // SSML for one line (EXP-8 voice): a cheerful style where the voice has one, a measured rate, and a higher pitch and more
-  // expression on a big moment (a goal, a red card, a score claim). Azure ignores a style the voice does not have.
-  const ssml = (text, voice, lang, big) => {
+  // SSML for one line (EXP-8 voice). The tone sets the energy: calm (a pass, a summary), hot (a shot or a build-up: faster, higher, more
+  // expression) and big (a goal, a red card, a score claim: the fastest, highest, with emphasis). Azure ignores a style the voice does not have.
+  const ssml = (text, voice, lang, tone) => {
     const esc = String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]);
-    const degree = big ? 2 : 1, rate = big ? '-2%' : '-8%', pitch = big ? '+8%' : '+2%';
+    const big = tone === 'big', hot = tone === 'hot';
+    const degree = big ? 2 : hot ? 1.5 : 1, rate = big ? '+3%' : hot ? '0%' : '-4%', pitch = big ? '+8%' : hot ? '+5%' : '+2%';
     return "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='" + lang + "'>"
       + "<voice name='" + (voice || 'en-GB-RyanNeural') + "'><mstts:express-as style='cheerful' styledegree='" + degree + "'>"
       + "<prosody rate='" + rate + "' pitch='" + pitch + "'>" + (big ? '<emphasis level="strong">' + esc + '</emphasis>' : esc) + '</prosody>'
       + '</mstts:express-as></voice></speak>';
   };
   // speak text with a named voice; resolves true when Azure finished playing it, false when the caller should use the browser voice
-  const speak = async (text, voice, lang, big) => {
+  const speak = async (text, voice, lang, tone) => {
     try {
       const k = await config(lang || 'en-GB', voice); if (!k) return false;
       const d = new k.S.SpeakerAudioDestination(), syn = new k.S.SpeechSynthesizer(k.c, k.S.AudioConfig.fromSpeakerOutput(d));
       dest = d;
       return await new Promise((res) => {
         d.onAudioEnd = () => { syn.close(); if (dest === d) dest = null; res(true); };   // playback ended, not just synthesis
-        syn.speakSsmlAsync(ssml(text, voice, lang || 'en-GB', !!big), (r) => { if (r.reason !== k.S.ResultReason.SynthesizingAudioCompleted) { syn.close(); if (dest === d) dest = null; if (r.reason === k.S.ResultReason.Canceled) tok = null; res(false); } },
+        syn.speakSsmlAsync(ssml(text, voice, lang || 'en-GB', tone), (r) => { if (r.reason !== k.S.ResultReason.SynthesizingAudioCompleted) { syn.close(); if (dest === d) dest = null; if (r.reason === k.S.ResultReason.Canceled) tok = null; res(false); } },
           () => { syn.close(); if (dest === d) dest = null; tok = null; res(false); });
       });
     } catch (e) { return false; }
