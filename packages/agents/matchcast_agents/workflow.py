@@ -1047,7 +1047,7 @@ class MatchWorkflow:
         await self._verify_line(ctx, task, claims, replacement, attempt=1, repair_of=draft.line_id)
 
     def _give_up(self, record: LineRecord, verdict: Verdict) -> None:
-        """A line that failed its one repair: a checkable fact goes to a person, the rest is dropped."""
+        """A line that failed its one repair: a checkable fact goes to a person, the rest drops."""
         a = self.agents
         if verdict.reason_code in ESCALATED_CODES:
             record.status = "review"
