@@ -1,6 +1,6 @@
 """What every executor may read about the match; never the future (see 04-agents.md §6)."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from .state import MatchState
@@ -33,6 +33,12 @@ class MatchContext:
 
     def event(self, event_id: str) -> dict[str, Any] | None:
         return next((e for e in self.events if e["event_id"] == event_id), None)
+
+    def as_of(self) -> "MatchContext":
+        """The same match cut at the state's sequence: events a batch wrote after the state was
+        read are left out, so the score, the counts and the events all describe one moment."""
+        upto = self.state.max_sequence
+        return replace(self, events=tuple(e for e in self.events if e["stream_sequence"] <= upto))
 
     @property
     def allowed_names(self) -> set[str]:

@@ -89,7 +89,9 @@ Rules:
 3. Answer length: casual ≤ 80 words, broadcast ≤ 60 words, analyst ≤ 200 words.
 4. Every sentence ends with at least one citation. A number in the answer must come from a claim (live) or from a chunk (knowledge). Live numbers taken from chunks are rejected with reason `stale_state`.
 5. Conversation memory: the last 3 turns (question and verified answer) from Table `conversations`; at most 10 turns per browser session (**Planned**; each question is answered on its own today).
-6. Rate limit: 5 questions a minute per match `session_id` (a per-browser key is **Planned**), shared with `/talk`; 429 with `Retry-After: 60`.
+6. Rate limit: 20 questions a minute per match `session_id` (a per-browser key is **Planned**). `/talk` has its own 20 a minute; 429 with `Retry-After: 60` for either. The shell says "Ask again in a minute" on a 429.
+8. Rules goal answers: "who scored?" (and "what goals did X score") lists each goal from the stored events, each sentence citing its event as `[event:<id>]`; the citation's numbers are that goal's own line. "why was the first (or last) goal important?" states the score change at that goal. A club named in the question limits the list to that club. With no goal yet, both answer from the live score; a named club with no goal says "<club> haven't scored yet", cited to its goals claim. "who or which team/club has, had or have the most or more shots (or shots on target), and nothing else in the question, compares the two clubs' counts, both cited as claims. A who, or which player/team/club, ranking by a count (has, have or had the most or more of shots, goals or another count) abstains, goals included, with or without a club, player, zone or period named. Rankings that name no count, such as "who is the best chef", and definitions are not changed by this rule. A paraphrase this pattern does not match, such as "tell me who has the most goals", still follows the rules above: a known gap, listed on the PR. A worked example in the knowledge base that states a score is never shown as this match's score.
+7. Live answers (ADR-0018): when the Foundry model is live, the Ask answer is written by the model from a fact sheet of this match (score, match state, team and player counts, every goal and card, the last 15 events), recounted with the Verifier's code. It cites fact ids; every number, scoreline, name and match-state word must be in a cited fact. A failed check, a 15 s timeout or a model error answers from the rules above instead. Ask never waits for the ingest lock.
 
 ## 6. Access and keys
 
@@ -100,6 +102,8 @@ AI Search Free does not support managed identity (Microsoft Learn, "Try Azure AI
 - Both are listed as exceptions in `docs/infra.md` (PLT-4).
 
 ## 7. Fallbacks
+
+Ranking note: question filler (mean, explain, tell, define...) is a stop word, and a chunk whose section defines the term (Definition, "in plain words") is lifted x1.3, x1.3 more when its title is exactly the asked term, plus 1.0 for a title word. So "what is offside?" cites the rule before its exceptions. With AI Search on, the index ranks, except that the definition of the very term asked is moved first. The 2.2 gate is unchanged; generic words such as "won" still pass it (known, tracked in 17-risks-and-debt).
 
 | Failure | Behaviour | UI label |
 | --- | --- | --- |

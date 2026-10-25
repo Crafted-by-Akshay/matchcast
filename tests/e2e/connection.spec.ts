@@ -63,6 +63,24 @@ test('fallback: Rules fallback after the warm-up, rules lines keep coming', asyn
   expect(errs).toEqual([]); api.server.close();
 });
 
+test('warming: never reads Offline, shows seconds of the warm-up, then Rules fallback', async ({ page }) => {
+  const api = await mock('error'); const errs = collectErrors(page);
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api.url) + ';window.MATCHCAST_WARM_MS=6000;' }));
+  await page.addInitScript(() => {
+    (window as any).__pills = [];
+    document.addEventListener('DOMContentLoaded', () => { const p = document.getElementById('api-pill')!; const rec = () => (window as any).__pills.push(p.textContent); rec(); new MutationObserver(rec).observe(p, { childList: true, characterData: true, subtree: true }); });
+  });
+  await page.goto('/index.html#analyst', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await page.waitForTimeout(2500);   // idle on the intro first: the counter must restart when the match begins
+  await page.evaluate(() => { AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); LV.begin('k1', { teams: ['thr', 'cco'], players: [] }); });
+  await expect(pill(page)).toHaveText(/Warming up the match engine · [01] s of up to 6/, { timeout: 5_000 });
+  await expect(pill(page)).toHaveText('Rules fallback', { timeout: 20_000 });
+  const seen: string[] = await page.evaluate(() => (window as any).__pills);
+  expect(seen.filter((t) => /Offline/.test(t || ''))).toEqual([]);
+  expect(errs).toEqual([]); api.server.close();
+});
+
 test('offline: Offline (simulated) and no api call', async ({ page }) => {
   const errs = collectErrors(page);
   await drive(page, '');

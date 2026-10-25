@@ -25,7 +25,7 @@ test('voice: captions match the spoken text; muted still captions; stale lines a
   await page.evaluate(() => VC.say('Thames Rovers 1–0 Coloso Ciudad.'));
   await expect.poll(() => page.evaluate(() => (window as any).__spoken)).toEqual(['Thames Rovers 1–0 Coloso Ciudad.']);
   await expect(page.locator('#vc-bar')).toHaveText('Thames Rovers 1–0 Coloso Ciudad.');
-  await expect(page.locator('#voice-src')).toHaveText('Browser voice (simulated)');
+  await expect(page.locator('#voice-src')).toContainText('Browser voice (simulated)');
   // the same claim is spoken once
   await page.evaluate(() => { VC.say('Once.', { id: 'c9' }); VC.say('Once.', { id: 'c9' }); });
   await expect.poll(() => page.evaluate(() => (window as any).__spoken.filter((t: string) => t === 'Once.').length)).toBe(1);

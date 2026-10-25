@@ -2,6 +2,14 @@
   "commentary": "en-GB-RyanNeural",
   "producer": "en-GB-SoniaNeural",
   "players": {
-    "default": "en-US-GuyNeural"
+    "default": "en-US-GuyNeural",
+    "pool": [
+      "en-US-GuyNeural",
+      "en-US-DavisNeural",
+      "en-US-JasonNeural",
+      "en-GB-RyanNeural",
+      "en-GB-ThomasNeural",
+      "en-AU-WilliamNeural"
+    ]
   }
 }

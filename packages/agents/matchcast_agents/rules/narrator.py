@@ -128,6 +128,8 @@ class NarratorRules:
                 "analyst": f"Shots so far: {home} {h}, {away} {a}.",
                 "broadcast": casual,
             }
+        elif kind == "colour":
+            texts = {"analyst": self._colour(payload["type"], club, v, team)}
         elif kind == "period_end":
             texts = {
                 p: f"The half ends: {home} {v[f'goals:{hid}']}, {away} {v[f'goals:{aid}']}."
@@ -152,6 +154,17 @@ class NarratorRules:
                     )
                 )
         return lines
+
+    @staticmethod
+    def _colour(play: str, club: str, v: dict[str, Any], team: str) -> str:
+        if play == "shot":
+            return (
+                f"{club} shots: {v[f'shots:{team}']}, xG: {v[f'xg:{team}']:.2f}. "
+                "They keep testing the defence."
+            )
+        if play == "tackle":
+            return f"{club} tackles won: {v[f'tackles_won:{team}']}. The midfield battle goes on."
+        return f"{club} fouls: {v[f'fouls:{team}']}. The referee is keeping a close eye."
 
     @staticmethod
     def _mode_text(

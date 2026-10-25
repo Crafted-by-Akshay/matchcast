@@ -46,6 +46,7 @@ class LiveNarrator:
         payload = event["payload"]
         facts = {
             "moment": task.reason,
+            "play": payload.get("type"),
             "claims": [
                 {"metric": c["metric"], "value": c["value"], "units": c["units"]} for c in claims
             ],

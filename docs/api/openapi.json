@@ -34,6 +34,15 @@
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
             "title": "Session Id",
             "type": "string"
+          },
+          "surface": {
+            "default": "ask",
+            "enum": [
+              "ask",
+              "broadcast"
+            ],
+            "title": "Surface",
+            "type": "string"
           }
         },
         "required": [
@@ -421,6 +430,18 @@
       "TalkBody": {
         "additionalProperties": false,
         "properties": {
+          "position": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{1,3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
           "session_id": {
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
             "title": "Session Id",

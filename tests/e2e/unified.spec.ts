@@ -35,7 +35,7 @@ test('Analyst opens the season and routes to the shared fixture', async () => {
   await ready('analyst', 60_000)(page);
   analyst = await viewFrame(page, 'analyst');
   await expect.poll(() => analyst.evaluate(() => D?.matches.length)).toBe(28);
-  await expect.poll(() => analyst.evaluate(() => location.hash)).toMatch(/^#match\.M/);
+  await expect.poll(() => analyst.evaluate(() => location.hash)).toMatch(/^#live\.M/);   // the Analyst opens its live page for the shared fixture
 });
 
 test('Broadcast starts on the shared seed and clubs', async () => {

@@ -40,3 +40,57 @@
     if (batch.length) { stats.sent += batch.length; MCS.send({ type: 'vision-events', batch }); }
   }, 500);
 })();
+// Vision is on by default in Watch: the pixel tracker runs from kick-off, and its passes reach the agents' .vision stream. The Vision button only shows or hides its panel (pass 7).
+(() => {
+  const go = setInterval(() => {
+    if (!window.__mc || !window.__mc.vis || !$('load') || !$('load').hidden) return;
+    clearInterval(go);
+    // UX review pass 8: the detection boxes were hairlines. The tracker draws them with strokeRect; give them a firm 2.5 px line (no blur: a canvas shadow is costly on a slow GPU).
+    const ov = $('visov'), cx = ov && ov.getContext && ov.getContext('2d');
+    if (cx && !cx.mcThick) {
+      cx.mcThick = true;
+      const draw = cx.strokeRect;   // only the boxes; other lines on the overlay keep their own weight
+      cx.strokeRect = function (...a) {
+        const w = this.lineWidth; this.lineWidth = Math.max(w, 2.5);
+        try { return draw.apply(this, a); } finally { this.lineWidth = w; }
+      };
+    }
+    if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
+    if (!window.__mc.vis.VIS.on) {
+      window.__mc.vis.toggle(true);
+      // the tracker runs, but the panel (debug-style accuracy numbers) stays closed until asked for (UX review pass 7). On a wide screen the detection boxes are drawn from the start, so
+      // the tracker is visible (pass 8); below 1100 px they sit on top of the 3D name tags and stay off until asked for.
+      // Only when this start switched Vision on, so a viewer who already pressed the button is not overruled.
+      const bx = $('visp-box'); if (bx && window.__mc.vis.VIS.boxes && innerWidth <= 1100) bx.click();
+      $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false');
+    }
+  }, 300);
+})();
+// The Vision button and the panel's close button only show or hide the panel; the tracker keeps running for the agents at every width.
+(() => {
+  const panelOnly = (e) => {
+    const v = window.__mc && window.__mc.vis, vp = $('visp');
+    if (!v || !v.VIS.on || !vp) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    vp.hidden = !vp.hidden;
+    const b = $('visb'); if (b) b.setAttribute('aria-pressed', vp.hidden ? 'false' : 'true');
+  };
+  for (const id of ['visb', 'visp-x']) { const el = $(id); if (el) el.addEventListener('click', panelOnly, true); }
+})();
+// Vision throttle: a capture reads the GPU back, which on a slow machine stalls the frame loop. The tracker's period (VIS.period, in match seconds) is stretched so that captures use about a tenth of the wall time, up to 3 s, and eases back to 0.2 s when they are cheap. The panel's "Hz" shows the period actually in use.
+(() => {
+  const BASE = 0.2, MAX = 3, SHARE = 0.1;
+  let prev = null;
+  window.mcVisThrottle = () => {
+    if (typeof VIS === 'undefined' || !VIS.cost) return null;
+    const c = VIS.cost, now = { ms: c.cap + c.cls + c.det, n: c.n };
+    const fresh = prev && now.n > prev.n && now.ms >= prev.ms;   // a reset (visReset) makes the counters drop: start again from here
+    const per = fresh ? (now.ms - prev.ms) / (now.n - prev.n) : 0;   // wall ms one capture job costs
+    prev = now;
+    if (!fresh) return VIS.period;   // nothing captured since the last look (or the counters were reset)
+    const want = Math.min(MAX, Math.max(BASE, (per / 1000 / SHARE) * Math.max(S.speed || 1, 0.25)));   // VIS.acc advances by wall time x playback speed
+    VIS.period += (want - VIS.period) * 0.5;
+    return VIS.period;
+  };
+  setInterval(window.mcVisThrottle, 2000);
+})();

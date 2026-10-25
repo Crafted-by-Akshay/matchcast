@@ -25,17 +25,17 @@ test('ask: the player with the most shots, a verified tick, from the event log; 
   expect(errs).toEqual([]);
 });
 
-test('ask: five questions a minute, then a polite refusal', async ({ page }) => {
+test('ask: twenty questions a minute, then a polite refusal', async ({ page }) => {
   await openShell(page, 'agents');
   await seed(page);
   const answers = await page.evaluate(async () => {
     const got: any[] = [];
     (window as any).post = (_v: string, m: any) => got.push(m.answer);
-    for (let i = 1; i <= 6; i++) await answerAsk(i, 'who has the most shots?');
+    for (let i = 1; i <= 21; i++) await answerAsk(i, 'who has the most shots?');
     return got;
   });
-  expect(answers.slice(0, 5).every((x: any) => x.verdict === 'verified')).toBe(true);
-  expect(answers[5].note).toBe('rate limit');
+  expect(answers.slice(0, 20).every((x: any) => x.verdict === 'verified')).toBe(true);
+  expect(answers[20].note).toBe('rate limit');
 });
 
 test('ask: Watch sends the typed question to the shell and shows the checked answer', async ({ page }) => {

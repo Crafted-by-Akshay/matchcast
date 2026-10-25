@@ -1,0 +1,6 @@
+// ---- role bounds for player orders (generated into Watch and Broadcast by unified/build.py, ahead of the engine's talk code) ----
+// Mirrors packages/agents/matchcast_agents/roles/orders.py (GROUP_OF, GROUP_ORDERS). build.py makes the engine's setOrder ignore a key outside the role, so no caller can give an order the table forbids; the engine reads of p.orders then never see one.
+const MC_GROUP = { GK: 'keeper', CB: 'centre_back', LB: 'fullback', RB: 'fullback', LWB: 'fullback', RWB: 'fullback', DM: 'midfield', CM: 'midfield', LM: 'midfield', RM: 'midfield', AM: 'midfield', LW: 'forward', RW: 'forward', ST: 'forward' };
+const MC_ORDERS = { keeper: ['deep', 'simple', 'rest'], centre_back: ['push', 'deep', 'mark', 'simple', 'rest'], fullback: ['push', 'deep', 'wide', 'runs', 'mark', 'simple', 'rest'], midfield: ['push', 'deep', 'wide', 'inside', 'press', 'mark', 'shoot', 'simple', 'runs', 'rest'], forward: ['push', 'deep', 'wide', 'inside', 'press', 'shoot', 'runs', 'simple', 'rest'], unknown: ['deep', 'simple', 'rest'] };
+const MC_REFUSAL = 'Not from my role, boss. Ask me for something else.';
+const mcAllowed = (pos, k) => k === 'clear' || k === 'none' || (MC_ORDERS[MC_GROUP[pos] || 'unknown'] || MC_ORDERS.unknown).includes(k);

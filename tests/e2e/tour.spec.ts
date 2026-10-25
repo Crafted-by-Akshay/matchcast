@@ -9,6 +9,7 @@ test('tour: the button opens a five-step guide that switches views, and Escape c
   const d = page.locator('#tour');
   await expect(d).toBeVisible();
   await expect(d).toContainText('Step 1 of 5');
+  await expect(d).toContainText('Talk to a player');   // the Watch step names the talk control (UX review pass 8)
   await expect(page.locator('#tour-back')).toBeHidden();
   await page.click('#tour-go');
   await expect(d).toContainText('Step 2 of 5');

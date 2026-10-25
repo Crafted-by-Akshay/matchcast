@@ -64,6 +64,17 @@ def test_voice_for_picks_the_role_and_the_player_override() -> None:
     assert svc.voice_for("player", "away1") == "en-US-GuyNeural"
 
 
+def test_players_without_an_override_get_a_stable_voice_from_the_pool() -> None:
+    pool = ["en-US-GuyNeural", "en-US-DavisNeural", "en-GB-RyanNeural"]
+    voices = {**VOICES, "players": {"default": "en-US-GuyNeural", "pool": pool}}
+    svc = VoiceService(endpoint=ENDPOINT, synthesiser=FakeSynth(), voices=voices)
+    ids = [f"home{n}" for n in range(1, 12)] + [f"away{n}" for n in range(1, 12)]
+    picked = {pid: svc.voice_for("player", pid) for pid in ids}
+    assert set(picked.values()) == set(pool)  # every voice in the pool is used
+    assert all(svc.voice_for("player", pid) == v for pid, v in picked.items())  # stable
+    assert svc.voice_for("player", None) == "en-US-GuyNeural"  # no id: the default
+
+
 def test_only_a_valid_speech_endpoint_is_ready() -> None:
     assert VoiceService(endpoint=ENDPOINT, voices=VOICES).ready
     assert not VoiceService(endpoint="", voices=VOICES).ready
@@ -350,3 +361,80 @@ def test_a_recap_over_one_clip_is_voiced_through_the_route() -> None:
     flow.store.put_recap(flow.sk, "casual", recap)
     ok = client.get("/v1/matches/match-short/recap/casual/audio.mp3", params=Q)
     assert ok.status_code == 200 and len(synth.calls) > 1  # several clips, one mp3
+
+
+class MemoryStore:
+    """Stands in for the Blob container: clips by key."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.blobs: dict[str, bytes] = {}
+        self.asked: list[str] = []
+        self.fail = fail
+
+    def get(self, key: str) -> bytes | None:
+        self.asked.append(key)
+        if self.fail:
+            raise RuntimeError("blob down")
+        return self.blobs.get(key)
+
+    def put(self, key: str, audio: bytes) -> None:
+        if self.fail:
+            raise RuntimeError("blob down")
+        self.blobs[key] = audio
+
+
+def test_a_new_clip_is_saved_to_the_store() -> None:
+    store = MemoryStore()
+    svc = service(store=store)
+    audio = asyncio.run(svc.clip("Hello", "en-GB-RyanNeural"))
+    assert store.blobs == {clip_key("Hello", "en-GB-RyanNeural"): audio}
+
+
+def test_after_a_restart_a_saved_clip_is_read_not_synthesised_or_charged() -> None:
+    store = MemoryStore()
+    asyncio.run(service(store=store).clip("Hello", "en-GB-RyanNeural"))
+    synth = FakeSynth()
+    fresh = service(synth, store=store)  # a new process with an empty memory cache
+    audio = asyncio.run(fresh.clip("Hello", "en-GB-RyanNeural"))
+    assert audio == next(iter(store.blobs.values())) and synth.calls == [] and fresh.used == 0
+
+
+def test_an_audio_id_from_before_a_restart_still_plays() -> None:
+    store = MemoryStore()
+    audio = asyncio.run(service(store=store).clip("Hello", "en-GB-RyanNeural"))
+    key = clip_key("Hello", "en-GB-RyanNeural")
+    client = TestClient(create_app())
+    client.app.state.matches.voice = service(store=store)
+    r = client.get(f"/v1/audio/{key}.mp3")
+    assert r.status_code == 200 and r.content == audio
+
+
+def test_only_clip_keys_reach_the_store() -> None:
+    store = MemoryStore()
+    client = TestClient(create_app())
+    client.app.state.matches.voice = service(store=store)
+    assert client.get("/v1/audio/..%2Fsecret.mp3").status_code == 404
+    assert client.get("/v1/audio/not-a-key.mp3").status_code == 404
+    assert store.asked == []
+
+
+def test_a_store_that_fails_never_breaks_a_clip() -> None:
+    svc = service(store=MemoryStore(fail=True))
+    assert asyncio.run(svc.clip("Hello", "en-GB-RyanNeural")).startswith(b"fake-mp3")
+
+
+def test_a_slow_store_is_skipped_after_the_timeout(monkeypatch) -> None:
+    import time
+
+    class Slow(MemoryStore):
+        def get(self, key: str) -> bytes | None:
+            time.sleep(0.5)
+            return b"late"
+
+        def put(self, key: str, audio: bytes) -> None:
+            time.sleep(0.5)
+
+    monkeypatch.setattr(voice_module, "STORE_TIMEOUT_S", 0.05)
+    synth = FakeSynth()
+    audio = asyncio.run(service(synth, store=Slow()).clip("Hello", "en-GB-RyanNeural"))
+    assert audio.startswith(b"fake-mp3") and len(synth.calls) == 1

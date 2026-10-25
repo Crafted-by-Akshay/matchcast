@@ -58,7 +58,8 @@ from app.voice import (
 
 TENANT = "demo"
 HEARTBEAT_S = 15
-ASK_PER_MINUTE = 5
+ASK_PER_MINUTE = 20  # Copilot questions per browser session; a judge's quick run stays under it
+TALK_PER_MINUTE = 20  # player and producer replies per browser session, a budget of their own
 DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 STATUS = {
@@ -145,6 +146,7 @@ class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=300)
     persona: Literal["casual", "analyst", "broadcast"] = "casual"
     lang: Literal["en", "es", "hi"] = "en"
+    surface: Literal["ask", "broadcast"] = "ask"
 
 
 class ExportBody(BaseModel):
@@ -175,6 +177,7 @@ class TalkBody(BaseModel):
     session_id: str = Field(pattern=ID)
     target: str = Field(pattern=ID)
     utterance: str = Field(min_length=1, max_length=300)
+    position: str | None = Field(default=None, pattern=r"^[A-Z]{1,3}$")  # the sim's position code
 
 
 class RecapTrigger(BaseModel):
@@ -238,6 +241,7 @@ class Registry:
         self.stats_desk: Any = stats_desk_from_env(local)
         self._model_client: ModelClient | None = None
         self.asked: dict[str, deque[float]] = {}
+        self.talked: dict[str, deque[float]] = {}
         self.exports: dict[str, tuple[bytes, str, str]] = {}
         self.season = local.season if local else None
         self.ds_asked: dict[str, deque[float]] = {}
@@ -250,16 +254,11 @@ class Registry:
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
-        now = time.monotonic() if now is None else now
-        for key in [k for k, w in self.asked.items() if not w or now - w[-1] >= 60]:
-            del self.asked[key]  # idle sessions leave no entry behind
-        window = self.asked.setdefault(session_id, deque())
-        while window and now - window[0] >= 60:
-            window.popleft()
-        if len(window) >= ASK_PER_MINUTE:
-            return False
-        window.append(now)
-        return True
+        return _within(self.asked, session_id, ASK_PER_MINUTE, now)
+
+    def allow_talk(self, session_id: str, now: float | None = None) -> bool:
+        """At most TALK_PER_MINUTE talks per browser session per rolling minute."""
+        return _within(self.talked, session_id, TALK_PER_MINUTE, now)
 
     def agents_for(self, personas: tuple[str, ...], **seed: Any) -> AgentSet:
         """Live agents when MATCHCAST_AGENT_MODE=live and a model client exists, else rules."""
@@ -311,11 +310,15 @@ class Registry:
         key = (session_id, match_id)
         if (flow := self.flows.get(key)) is not None:
             return flow
+        stream = {"tenant_id": TENANT, "session_id": session_id, "match_id": match_id}
+        sk = stream_key(stream)
+        # one point read decides whether the match exists, so an unknown id costs no hydrate and
+        # no time under the lock (every stream retry for an id that is not there lands here)
+        if await asyncio.to_thread(self.store.get_match, sk) is None:
+            raise Problem(404, "not_found", f"unknown match {match_id}")
         async with self.create_lock:
             if (flow := self.flows.get(key)) is not None:
                 return flow
-            stream = {"tenant_id": TENANT, "session_id": session_id, "match_id": match_id}
-            sk = stream_key(stream)
 
             def stored() -> dict[str, Any] | None:
                 _is_stored(self.store, sk)  # hydrates a buffered store off the event loop
@@ -324,17 +327,28 @@ class Registry:
             info = await asyncio.to_thread(stored)
             if info is None:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
-            config = WorkflowConfig()
+            config = WorkflowConfig(approval_mode=info.get("approval_mode", "auto"))
+            seeds: dict[str, Any] = {}
+            # the seeded wrong claim fires once; a match rebuilt past its cue has already had it
+            cue = info.get("seed_bad_claim_at_ms", 720_000)
+            state = self.store.get_state(sk)
+            unfired = state.revision == 0 or state.event_time_ms < cue
+            if info.get("seed_bad_claim") and unfired:
+                seeds = {
+                    "seed_bad_claim": True,
+                    "seed_bad_claim_at_ms": cue,
+                }
             flow = MatchWorkflow(
                 stream=stream,
                 roster=info["roster"],
                 names=info.get("names", {}),
                 clubs=info.get("clubs", {}),
-                agents=self.agents_for(config.personas),
+                agents=self.agents_for(config.personas, **seeds),
                 config=config,
                 store=self.store,
                 stats_desk=self.stats_desk,
                 safety=self.safety,
+                answer_model=self.model_client(),  # Ask and talk answer on the model when live
             )
             self.flows[key] = flow
             return flow
@@ -356,6 +370,22 @@ def _bare_ip(entry: str) -> str | None:
         return str(ipaddress.ip_address(entry))
     except ValueError:
         return None
+
+
+def _within(
+    windows: dict[str, deque[float]], session_id: str, limit: int, now: float | None
+) -> bool:
+    """A rolling one-minute window per session: False when the session has used its ``limit``."""
+    now = time.monotonic() if now is None else now
+    for key in [k for k, w in windows.items() if not w or now - w[-1] >= 60]:
+        del windows[key]  # idle sessions leave no entry behind
+    window = windows.setdefault(session_id, deque())
+    while window and now - window[0] >= 60:
+        window.popleft()
+    if len(window) >= limit:
+        return False
+    window.append(now)
+    return True
 
 
 def client_ip(request: Request) -> str:
@@ -535,26 +565,35 @@ def build_router(registry: Registry) -> APIRouter:
                     store=registry.store,
                     stats_desk=registry.stats_desk,
                     safety=registry.safety,
+                    answer_model=registry.model_client(),
                 )
             except (ContractError, TypeError, KeyError) as error:
                 raise Problem(
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
             registry.flows[key] = flow
+            # what a rebuilt match needs to behave as this one does after a restart
+            seed = body.seed_bad_claim or x_matchcast_seed_bad_claim == "1"
+            registry.store.put_match(
+                flow.sk,
+                {
+                    **(registry.store.get_match(flow.sk) or {}),
+                    "approval_mode": body.approval_mode,
+                    "seed_bad_claim": seed,
+                    "seed_bad_claim_at_ms": body.seed_bad_claim_at_ms,
+                },
+            )
         return {"stream": stream, "approval_mode": body.approval_mode, "mode": flow.agents.mode}
 
     @router.get("/matches/{match_id}")
     async def get_match(match_id: str, session_id: str) -> dict[str, Any]:
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         return {"stream": flow.stream, "state": _state_json(flow), "stats": flow.stats,
                 "mode": flow.agents.mode, "approval_mode": flow.config.approval_mode}  # fmt: skip
 
     @router.post("/matches/{match_id}/events", status_code=202)
     async def post_events(match_id: str, session_id: str, body: EventBatch) -> dict[str, int]:
-        if registry.pipeline is None:
-            flow = registry.get(session_id, match_id)
-        else:
-            flow = await registry.flow_for(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         try:
             if registry.pipeline is None:
                 return await flow.ingest(body.events)
@@ -587,7 +626,7 @@ def build_router(registry: Registry) -> APIRouter:
         follow: bool = True,
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         if lang not in LANGUAGES:
             raise Problem(422, "contract_invalid", "lang must be en, es or hi", "/lang")
         if persona:
@@ -661,7 +700,7 @@ def build_router(registry: Registry) -> APIRouter:
         limit: int = Query(100, ge=1, le=500),
         cursor: int = Query(0, ge=0),
     ) -> dict[str, Any]:
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         rows = _claim_rows(flow, verdict, agent, metric)
         page = rows[cursor : cursor + limit]
         more = cursor + limit < len(rows)
@@ -675,7 +714,7 @@ def build_router(registry: Registry) -> APIRouter:
         x_matchcast_role: str | None = Depends(caller_role),
     ) -> dict[str, Any]:
         need_producer(x_matchcast_role)
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         rows = [ln for ln in flow.store.lines(flow.sk) if status in (None, ln.status)]
         return {"items": [_line_json(ln) for ln in rows]}
 
@@ -688,7 +727,7 @@ def build_router(registry: Registry) -> APIRouter:
     ) -> dict[str, Any]:
         need_producer(role)
         actor_id, actor_name = actor
-        flow = registry.get(body.session_id, body.match_id)
+        flow = await registry.flow_for(body.session_id, body.match_id)
         try:
             if action == "approve":
                 line = await flow.approve(line_id, actor_id, actor_name)
@@ -741,12 +780,12 @@ def build_router(registry: Registry) -> APIRouter:
         from_seq: int = Query(1, ge=1),
         limit: int = Query(1000, ge=1, le=1000),
     ) -> dict[str, Any]:
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         return {"items": flow.store.audit_records(flow.sk, from_seq, limit)}
 
     @router.get("/matches/{match_id}/trace/{line_id}")
     async def trace(match_id: str, line_id: str, session_id: str) -> dict[str, Any]:
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         line = flow.store.get_line(flow.sk, line_id)
         if line is None:
             raise Problem(404, "not_found", f"unknown line {line_id}")
@@ -764,7 +803,7 @@ def build_router(registry: Registry) -> APIRouter:
         match_id: str, body: ExportBody, _role: str | None = Depends(caller_role)
     ) -> dict[str, Any]:
         """A hash-stamped export of the claims ledger or the event log (7 days in Blob later)."""
-        flow = registry.get(body.session_id, match_id)
+        flow = await registry.flow_for(body.session_id, match_id)
         if body.kind == "claims_csv":
             rows = _claim_rows(flow, body.verdict, body.agent, body.metric)
             payload, media, ext = _claims_csv(rows), "text/csv", "csv"
@@ -794,7 +833,7 @@ def build_router(registry: Registry) -> APIRouter:
         match_id: str, body: VisionIdentify, request: Request
     ) -> dict[str, Any]:
         """Second opinion on a shirt number from a torso crop (DAT-11); budgeted, never stored."""
-        registry.get(body.session_id, match_id)
+        await registry.flow_for(body.session_id, match_id)
         try:
             return await asyncio.to_thread(registry.vision.identify, body.crop)
         except VisionError as error:
@@ -849,13 +888,13 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/matches/{match_id}/talk")
     async def talk(match_id: str, body: TalkBody, request: Request) -> dict[str, Any]:
-        flow = registry.get(body.session_id, match_id)
-        if not registry.allow_ask(body.session_id):  # /ask and /talk share one budget
+        flow = await registry.flow_for(body.session_id, match_id)
+        if not registry.allow_talk(body.session_id):
             raise Problem(
-                429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
+                429, "rate_limited", f"at most {TALK_PER_MINUTE} talks a minute", retry_after=60
             )
         try:
-            result = await flow.talk(body.target, body.utterance)
+            result = await flow.talk(body.target, body.utterance, position=body.position)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         result["lang"] = "en"
@@ -882,7 +921,7 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/audio/{audio_id}.mp3")
     async def audio_by_id(audio_id: str) -> Response:
-        audio = registry.voice.get(audio_id)
+        audio = await registry.voice.fetch(audio_id)
         if audio is None:
             raise Problem(404, "not_found", "no clip with that id")
         return Response(audio, media_type="audio/mpeg", headers=CLIP_HEADERS)
@@ -891,7 +930,7 @@ def build_router(registry: Registry) -> APIRouter:
     async def line_audio(
         match_id: str, line_id: str, session_id: str, request: Request
     ) -> Response:
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         line = next(
             (
                 ln
@@ -907,7 +946,7 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/matches/{match_id}/recap/{persona}")
     async def get_recap(match_id: str, persona: str, session_id: str) -> dict[str, Any]:
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         recap = flow.store.get_recap(flow.sk, ALIASES.get(persona, persona))
         if recap is None:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
@@ -918,7 +957,7 @@ def build_router(registry: Registry) -> APIRouter:
         match_id: str, persona: str, session_id: str, request: Request
     ) -> Response:
         """The stored recap read aloud: only sentences the Verifier marked verified are spoken."""
-        flow = registry.get(session_id, match_id)
+        flow = await registry.flow_for(session_id, match_id)
         recap = flow.store.get_recap(flow.sk, ALIASES.get(persona, persona))
         rows = recap["sentences"] if recap else []
         parts = pack([speakable(r["text"]) for r in rows if r["verdict"] == "verified"])
@@ -928,13 +967,13 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.post("/matches/{match_id}/ask")
     async def ask(match_id: str, body: AskBody) -> dict[str, Any]:
-        flow = registry.get(body.session_id, match_id)
+        flow = await registry.flow_for(body.session_id, match_id)
         if not registry.allow_ask(body.session_id):
             raise Problem(
                 429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
             )
         try:
-            result = await flow.ask(body.question, body.persona)
+            result = await flow.ask(body.question, body.persona, surface=body.surface)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         reply: dict[str, Any] = {
@@ -946,7 +985,10 @@ def build_router(registry: Registry) -> APIRouter:
             "retrieval": result.retrieval,
             "lang": "en",
         }
-        if body.lang != "en" and not result.abstained:
+        if result.broadcast is not None:  # the Broadcast Copilot's picks: highlights, focus or plan
+            reply["broadcast"] = result.broadcast
+        # the Broadcast picks stay English: the desk never reads variants, so no translation call
+        if body.lang != "en" and not result.abstained and result.broadcast is None:
             key = "ask-" + hashlib.sha256(result.answer.encode()).hexdigest()[:12]
             variant = await registry.translation.variant(
                 f"{body.session_id}/{match_id}",
@@ -973,7 +1015,7 @@ def build_internal_router(registry: Registry) -> APIRouter:
         """Called by fn-recap at full time; the api runs the recap workflow (F8)."""
         if registry.require_role and role not in PRODUCER_ROLES:
             raise Problem(403, "forbidden_role", "this route needs the recap function identity")
-        flow = registry.get(body.session_id, body.match_id)
+        flow = await registry.flow_for(body.session_id, body.match_id)
         try:
             recaps = await flow.recap(force=body.final)
         except WorkflowError as error:

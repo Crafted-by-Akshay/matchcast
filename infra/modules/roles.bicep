@@ -4,6 +4,9 @@ param eventHubNamespaceName string
 param keyVaultName string
 param foundryAccountName string
 
+@description('Cloud-build registry the Container Apps pull from (AcrPull).')
+param registryName string
+
 @description('Cognitive Services accounts the identity may call (Cognitive Services User).')
 param cognitiveNames array = []
 
@@ -17,6 +20,7 @@ var roleIds = {
   storageBlobDataOwner: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
   storageQueueDataContributor: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
   cognitiveServicesUser: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+  acrPull: '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 }
 
 resource st 'Microsoft.Storage/storageAccounts@2023-05-01' existing = { name: storageName }
@@ -118,3 +122,15 @@ resource cognitiveUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = [f
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.cognitiveServicesUser)
   }
 }]
+
+resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = { name: registryName }
+
+resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: acr
+  name: guid(acr.id, principalId, roleIds.acrPull)
+  properties: {
+    principalId: principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.acrPull)
+  }
+}

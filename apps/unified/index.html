@@ -31,18 +31,20 @@ button,select{font:inherit;color:inherit}
 
 /* ---- top bar: brand, the dashboard switcher, status ---- */
 .top{display:flex;align-items:center;gap:16px;height:var(--bar);padding:0 var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none}
-.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto}
+.brand>div{min-width:0}
 .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,var(--accent),#7B5CF0);color:var(--accent-ink);flex:none}
 .brand b{font-size:15px;letter-spacing:.01em}
-.brand small{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .switch{display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;overflow-x:auto;scrollbar-width:none;max-width:100%}
 .switch::-webkit-scrollbar{display:none}
 .switch button{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:8px;font-weight:600}
-.switch button small{font-weight:500;font-size:11px}
+.switch button small{font-weight:500;font-size:12px}
 .switch button[aria-selected="true"]{background:#2A62C9;color:var(--accent-ink)}
 .switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .status{display:flex;gap:6px;flex:none}
-.pill{font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.status .more{display:none}
+.pill{font-size:12px;min-height:32px;display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .pill.warn{color:var(--warn);border-color:rgba(245,185,66,.35)}
 button.pill{background:none;cursor:pointer;font-family:inherit}
 #status-dlg{background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:10px;max-width:560px;padding:16px 20px}
@@ -50,25 +52,28 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
 #lang-sel button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+#voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0;min-height:0}   /* a live region for voice announcements, not a visible control */
+#api-pill::before{content:"Agents ·";margin-right:.4em;color:var(--muted)}   /* says which part the pill is about, so it does not read as a contradiction of the engine chips */
+@media (max-width:1500px){.brand small{display:none}.proto{display:none}}
 @media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#fx,#lang-sel button,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
 .fx{display:flex;flex-direction:column;gap:3px;min-width:0}
-.fx label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.fx select{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:6px 10px;max-width:320px;min-width:220px}
+.fx label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fx select{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:6px 10px;max-width:380px;min-width:300px}
 .scoreline{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;justify-content:center}
 .team{display:flex;align-items:center;gap:7px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .team i{width:10px;height:10px;border-radius:50%;flex:none}
 .team.h{justify-content:flex-end}
 .score{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;padding:2px 12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;min-width:82px;text-align:center}
-.score small{display:block;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.score small{display:block;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
 .meta{color:var(--muted);font-size:12px;min-width:0}
 .meta b{color:var(--text);font-weight:600}
 .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.chip{font-size:12px;padding:4px 9px;border-radius:999px;background:var(--bg3);border:1px solid var(--line);white-space:nowrap}
+.chip{font-size:12px;padding:5px 10px;border-radius:999px;background:var(--bg3);border:1px solid var(--line);white-space:nowrap}
 .chip.ok{color:var(--ok);border-color:rgba(53,196,138,.35)}
-.chip.live{color:var(--hot);border-color:rgba(255,122,46,.4)}
+.chip.live{color:#8CC2FF;border-color:rgba(61,134,240,.55)}   /* running: blue, so it is not read as the amber Simulated label */
 .chip button{margin-left:6px;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-weight:600}
 
 /* ---- stage: the three views, one visible at a time, each kept loaded ---- */
@@ -81,9 +86,24 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .view .wait .bar{display:block;width:200px;height:3px;margin:14px auto 0;background:var(--line);border-radius:3px;overflow:hidden;position:relative}
 .view .wait .bar::after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:var(--accent);animation:slide 1.2s ease-in-out infinite}
 @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
+.view .wait .sk{position:absolute;z-index:0;inset:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,26%);grid-template-rows:auto minmax(0,1fr) auto;gap:10px;opacity:.55}
+.view .wait>div:not(.sk){position:relative;z-index:1;background:#060D17;padding:14px 26px;border-radius:12px}
+.view .wait .sk i{display:flex;align-items:flex-start;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;font-style:normal;font-size:12px;color:var(--muted);background:linear-gradient(90deg,transparent,rgba(140,194,255,.06),transparent) 0 0/200% 100%;animation:shimmer 2s linear infinite}
+.view .wait .sk .top{grid-column:1/3}.view .wait .sk .pitch{grid-row:2}.view .wait .sk .side{grid-row:2}.view .wait .sk .bot{grid-column:1/3}
+@keyframes shimmer{to{background-position:-200% 0}}
+@media (max-width:820px){.view .wait .sk{grid-template-columns:1fr}.view .wait .sk .top,.view .wait .sk .bot{grid-column:1}.view .wait .sk .side{display:none}}
 .view.ready .wait{opacity:0}
 .view.gone .wait{display:none}
-.foot{flex:none;padding:6px var(--gut);font-size:11px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
+/* Broadcast pane: Watch and Broadcast side by side on a wide screen, with a divider the viewer can drag (or move with the arrow keys) */
+.stage.split{display:flex;flex-direction:row}
+.stage.split .view{position:relative;inset:auto;flex:0 0 auto;height:100%;min-width:0}
+.stage.split #v-watch{order:1;flex-basis:var(--split,58%)}
+.stage.split #v-broadcast{order:3;flex:1 1 0}
+.split-bar{display:none;order:2;flex:0 0 8px;cursor:col-resize;background:var(--line);touch-action:none;outline-offset:-2px}
+.stage.split .split-bar{display:block}
+.split-bar:focus-visible{outline:2px solid var(--accent)}
+.stage.dragging iframe{pointer-events:none}
+.foot{flex:none;padding:6px var(--gut);font-size:12px;color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
 .foot kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--text)}
 .toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:5;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
@@ -91,7 +111,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .recap[hidden]{display:none}
 .recap h2{margin:0 0 4px;font-size:13px}
 .recap p{margin:0 0 8px;line-height:1.45}
-.recap .rm{color:var(--muted);font-size:11px}
+.recap .rm{color:var(--muted);font-size:12px}
 .recap button{min-height:44px;min-width:44px;margin-right:8px}
 
 /* ---- agents: one pipeline for the three views, drawn by the shell (no iframe) ---- */
@@ -105,7 +125,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .ag-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .ag-card small{color:var(--muted)}
 .ag-card p{margin:4px 0 0;font-size:13px}
-.tag{font-size:10px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--warn);white-space:nowrap}
+.tag{font-size:12px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--warn);white-space:nowrap}
 .ag-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
 .ag-panel{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;min-width:0}
 .ag-panel h3{margin:0 0 8px;font-size:14px}
@@ -137,7 +157,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .ag-filters select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
 .ag-panel table{width:100%;border-collapse:collapse;font-size:13px}
-.ag-panel th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
+.ag-panel th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
 .ag-panel td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 .ag-panel tbody tr{cursor:pointer}
 .ag-panel tbody tr:hover,.ag-panel tbody tr.on{background:var(--bg3)}
@@ -153,11 +173,32 @@ dialog.tour{max-width:460px;width:calc(100% - 2 * var(--gut));background:var(--b
 dialog.tour::backdrop{background:rgba(3,8,16,.7)}
 dialog.tour h2{margin:0 0 6px;font-size:17px}
 dialog.tour p{margin:0 0 10px;font-size:14px;line-height:1.5}
-dialog.tour .tour-n{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+dialog.tour .tour-n{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 dialog.tour .tour-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px}
 dialog.tour button{border:1px solid var(--line);background:var(--bg3);color:var(--text);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit;font-weight:600}
 dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-strong);color:var(--accent-ink)}
 @media (max-width:820px){ .ag-grid{grid-template-columns:1fr} }
+
+/* ---- story strip: the five stages of one moment, live, and the Fan / Analyst switch ---- */
+.story{display:flex;align-items:center;gap:12px;padding:6px var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+.story ol{list-style:none;margin:0;padding:0;display:flex;gap:4px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
+.story li{display:flex;align-items:center}
+.story li+li::before{content:"→"/"";color:var(--muted);margin:0 6px}
+.story li button{display:flex;flex-direction:column;align-items:flex-start;gap:0;background:none;border:1px solid transparent;border-radius:8px;padding:3px 8px;cursor:pointer;color:var(--text);text-align:left}
+.story li button:hover{background:var(--bg2);border-color:var(--line)}
+.story li b{font-size:12px;letter-spacing:.02em}
+.story li span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.story li.on b{color:var(--ok)}
+.story .demo{padding:6px 14px;min-height:32px;display:inline-flex;align-items:center;border-radius:999px;background:var(--ok);color:#06210F;font-weight:700;font-size:12px;text-decoration:none;white-space:nowrap}
+.story .demo svg{margin-right:6px;flex:none}.story .demo:hover{filter:brightness(1.08)}.story .demo:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.story-who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.story-who .seg{display:flex;gap:2px;padding:2px;background:var(--bg2);border:1px solid var(--line);border-radius:999px}
+.story-who .seg button{border:0;background:none;color:var(--muted);padding:5px 12px;min-height:32px;border-radius:999px;cursor:pointer;font-weight:600}
+.story-who .seg button[aria-pressed="true"]{background:#2A62C9;color:var(--accent-ink)}
+.story-who .seg button:focus-visible,.story li button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.story-who em{font-style:normal;color:var(--text)}
+@media (max-width:820px){.story{padding:4px var(--gut)}.story ol,.story .demo,.story-who>b{display:none}.story-who{width:100%;justify-content:space-between}.story-who::before{content:"Viewing as";color:var(--muted);font-size:12px}.story-who .seg button{min-height:44px}.story-who em{display:none}}
+@media (min-width:1200px){.matchbar .meta.err{white-space:normal;overflow:visible}.matchbar{flex-wrap:nowrap}.matchbar .meta{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.scoreline{flex:0 0 auto}}   /* one row on a desktop; the meta line ends in an ellipsis and keeps its full text as the tooltip */
 
 /* ---- narrow screens: the switcher scrolls, the match bar stacks ---- */
 @media (max-width:820px){
@@ -166,7 +207,6 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .switch{margin-left:0;width:100%}
   .switch button{flex:1 0 auto;justify-content:center}
   .status{width:100%;flex-wrap:wrap}   /* language, Voice and Status stay reachable on a phone */
-  #voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0}   /* out of sight, still in the accessibility tree for its announcements */
   .matchbar{gap:10px}
   .fx{width:100%}
   .fx select{max-width:none;min-width:0;width:100%}
@@ -174,11 +214,26 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .team{max-width:40%}
   .foot{display:none}
 }
+@media (max-width:560px){
+  /* one scrolling row of utilities instead of three or four wrapped rows */
+  .status{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:4px 2px;position:relative}
+  .status .more{display:flex;position:sticky;right:0;align-items:center;padding:0 4px 0 22px;margin-left:-22px;background:linear-gradient(90deg,transparent,var(--bg) 55%);color:var(--text);font-size:22px;line-height:1;pointer-events:none}   /* a visible cue that the row scrolls */
+  .status::-webkit-scrollbar{display:none}
+  .status.end .more{display:none}   /* the cue goes once the row is scrolled to its end */
+  .status>*{flex:none}
+  #api-pill{order:-1}
+  .matchbar .chips{display:none}
+  .matchbar .meta:not(.err){display:none}   /* the first screen belongs to the match: fixture, score, then the view; a load error still shows */
+  .toast{bottom:auto;top:var(--toast-top,150px);left:0;right:0;transform:none;max-width:none;height:var(--toast-h,48px);display:flex;align-items:center;justify-content:center;border-radius:0;border-width:1px 0;padding:4px 12px;font-size:12px;line-height:1.3;overflow:hidden}   /* it takes the place of the Viewing-as row for its 2.6 s (toast() sets --toast-top and --toast-h): clear of the brand, the scoreboard and the pitch controls */
+  #src{display:none}   /* the engine chip repeats what the view itself shows; the sync chip stays */
+  .fx label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .brand small{display:block}
+}
 @media (max-width:420px){
   .brand small{display:none}
   .switch button small{display:none}
 }
-@media (prefers-reduced-motion: reduce){ .view .wait{transition:none} .view .wait .bar::after{animation:none;width:100%;opacity:.5} }
+@media (prefers-reduced-motion: reduce){ .view .wait .sk i{animation:none} .view .wait{transition:none} .view .wait .bar::after{animation:none;width:100%;opacity:.5} }
 </style>
 </head>
 <body>
@@ -188,7 +243,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <header class="top">
   <div class="brand">
     <span class="mark" aria-hidden="true">MC</span>
-    <div><b>MatchCast</b><small>One console: fan Watch, Analyst and Broadcast on one match</small></div>
+    <div><b>MatchCast</b><small title="One console: fan Watch, Analyst and Broadcast on one match">Fan, Analyst and Broadcast on one match</small></div>
   </div>
   <nav class="switch" role="tablist" aria-label="Dashboards">
     <button role="tab" id="tab-watch" data-view="watch" aria-controls="v-watch" aria-selected="true" title="Watch (1)">Watch <small>fan 3D</small></button>
@@ -196,14 +251,15 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <button role="tab" id="tab-broadcast" data-view="broadcast" aria-controls="v-broadcast" aria-selected="false" title="Broadcast (3)">Broadcast <small>desk</small></button>
     <button role="tab" id="tab-agents" data-view="agents" aria-controls="v-agents" aria-selected="false" title="Agents (4)">Agents <small>pipeline</small></button>
   </nav>
-  <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
   <div class="status" aria-label="Environment">
+    <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
     <span id="lang-sel" style="display:inline-flex;gap:4px" role="group" aria-label="Language"><button type="button" class="pill" data-lang="en" aria-pressed="true">EN</button><button type="button" class="pill" data-lang="es" lang="es" aria-pressed="false">ES</button><button type="button" class="pill" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button></span>
-    <span class="pill" id="api-pill" role="status" title="">Offline (simulated)</span>
+    <span class="pill" id="api-pill" role="status" title="">Starting…</span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
     <span class="pill proto">Browser prototype</span>
     <span class="pill warn">Azure parts simulated</span>
+    <span class="more" aria-hidden="true">›</span>
   </div>
 </header>
 
@@ -235,15 +291,31 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   </div>
 </section>
 
+<section class="story" id="story" aria-label="How one moment becomes a line, live">
+  <ol role="list">
+    <li id="st-1"><button type="button" data-go="agents" title="Open the Agents tab"><b>1 Ingest</b><span>events from the match</span></button></li>
+    <li id="st-2"><button type="button" data-go="agents" title="Open the Agents tab"><b>2 Interpret</b><span>claims with evidence</span></button></li>
+    <li id="st-3"><button type="button" data-go="agents" title="Open the Agents tab"><b>3 Explain</b><span>verified lines</span></button></li>
+    <li id="st-4"><button type="button" data-go="watch" title="Open the 3D match"><b>4 Render</b><span>3D match on screen</span></button></li>
+  </ol>
+  <a class="demo" id="st-demo" href="?seed=2026&amp;speed=4#watch" title="Replay a fixed match (seed 2026) at 4× speed so goals and verified lines arrive within a minute"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3l6 5-6 5V3zm6 0l6 5-6 5V3z" fill="currentColor"/></svg>Demo at 4× speed</a>
+  <div class="story-who" role="group" aria-label="5 Personalise: who is watching">
+    <b>5 Personalise</b>
+    <span class="seg"><button type="button" data-persona="casual" aria-pressed="false" title="Plain lines for a casual fan">Fan</button><button type="button" data-persona="analyst" aria-pressed="false" title="Full lines with numbers, chips and evidence">Analyst</button></span>
+    <em id="st-who"></em>
+  </div>
+</section>
+
 <main class="stage" id="stage" tabindex="-1">
   <section class="view" id="v-watch" data-view="watch" aria-label="Watch: fan 3D match">
-    <div class="wait" role="status"><div><b>Starting Watch</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div></div>
+    <div class="wait" role="status"><div><b>Starting Watch</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div><div class="sk" aria-hidden="true"><i class="top">Score, clock and weather</i><i class="pitch">3D pitch</i><i class="side">Match Pulse and key moments</i><i class="bot">Live commentary · Copilot · camera modes</i></div></div>
   </section>
+  <div class="split-bar" id="split-bar" role="separator" aria-orientation="vertical" aria-label="Resize the Broadcast pane" aria-valuemin="25" aria-valuemax="80" tabindex="0" hidden></div>
   <section class="view gone" id="v-analyst" data-view="analyst" aria-label="Analyst: enterprise console" hidden>
     <div class="wait" role="status"><div><b>Opening the Analyst</b><span class="wt">Loading the season</span><i class="bar"></i></div></div>
   </section>
   <section class="view gone" id="v-broadcast" data-view="broadcast" aria-label="Broadcast: desk" hidden>
-    <div class="wait" role="status"><div><b>Starting the Broadcast desk</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div></div>
+    <div class="wait" role="status"><div><b>Starting the Broadcast desk</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div><div class="sk" aria-hidden="true"><i class="top">Camera modes · Dynamic, Tactical, Ball cam</i><i class="pitch">Broadcast camera</i><i class="side">Moments, calls and lower-thirds</i><i class="bot">Commentary feed and the Broadcast Copilot</i></div></div>
   </section>
   <section class="view gone" id="v-agents" data-view="agents" aria-label="Agents: the shared pipeline" hidden>
     <div class="ag">
@@ -302,6 +374,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="contracts.js"></script>
 <script src="config.js"></script>
 <script src="agents.js"></script>
+<script src="feed.js"></script>
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
 <dialog id="status-dlg" aria-labelledby="status-h"><h2 id="status-h">What is running</h2><div id="status-box"></div><form method="dialog"><button class="pill">Close</button></form></dialog>
@@ -327,7 +400,8 @@ const setupOf = (fx) => ({ h: fx.home.key, a: fx.away.key, seed: fx.setup.seed, 
 const fixtureOf = (s) => { const f = FX.find((x) => keyOf(setupOf(x)) === keyOf(s)); return f ? f.id : null; };
 const byId = (id) => FX.find((x) => x.id === id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const toast = (t) => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+{ const st = document.querySelector('.status'); if (st) { const edge = () => st.classList.toggle('end', st.scrollLeft + st.clientWidth >= st.scrollWidth - 2); st.addEventListener('scroll', edge, { passive: true }); addEventListener('resize', edge); edge(); } }
+const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 // the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
 let RECAP = { gen: 0, closed: false };
 const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };
@@ -373,7 +447,7 @@ function stallCheck() {
     const sec = $('v-' + v), w = sec && sec.querySelector('.wait'), btn = sec && sec.querySelector('.stall');
     if (!sec || !w || !FR[v] || sec.hidden || sec.classList.contains('ready')) { delete since[v]; if (btn) btn.remove(); const m0 = sec && sec.querySelector('.stallmsg'); if (m0) m0.remove(); continue; }
     if (v !== 'analyst' && !hasGL) {
-      if (w.querySelector('b').textContent !== 'This view needs WebGL') { w.querySelector('b').textContent = 'This view needs WebGL'; w.querySelector('.wt').textContent = NOGL; w.querySelector('.bar').hidden = true; }
+      if (w.querySelector('b').textContent !== 'This view needs WebGL') { w.querySelector('b').textContent = 'This view needs WebGL'; w.querySelector('.wt').textContent = NOGL; w.querySelector('.bar').hidden = true; const sk = w.querySelector('.sk'); if (sk) sk.hidden = true; }   // no skeleton for content that cannot load
       continue;
     }
     since[v] = since[v] || Date.now();
@@ -410,25 +484,51 @@ function ensure(view) {
 function routeAnalyst() {
   if (!M.fixture) return;
   if (!FR.analyst) { if (current !== 'analyst') return; FR.analyst = { el: null, ready: false, route: null }; const el = document.createElement('iframe'); if (window.mcHookKeys) window.mcHookKeys(el);
-    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#match.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
+    el.title = 'Analyst: enterprise console'; el.src = VIEWS.analyst + '#live.' + M.fixture; $('v-analyst').appendChild(el); FR.analyst.el = el; FR.analyst.route = M.fixture; return; }
   if (FR.analyst.ready && FR.analyst.route !== M.fixture) {
     FR.analyst.route = M.fixture;
-    post('analyst', { src: 'matchcast-shell', type: 'route', page: 'match', arg: M.fixture });
+    post('analyst', { src: 'matchcast-shell', type: 'route', page: 'live', arg: M.fixture });
   }
 }
 
 function post(view, msg) { const f = frameOf(view); if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); }
 
+// Watch and Broadcast share the screen on a wide window (the live match beside its desk); a phone shows one at a time.
+const SPLIT_VIEWS = ['watch', 'broadcast'];
+const wide = window.matchMedia('(min-width: 900px)');
+function shownViews(view) { return SPLIT_VIEWS.includes(view) && wide.matches ? SPLIT_VIEWS : [view]; }
+const SPLIT_KEY = 'mc.split', SPLIT_MIN = 0.25, SPLIT_MAX = 0.8;
+let splitFrac = 0.58;
+function applySplit(frac) {
+  splitFrac = Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, frac));
+  $('stage').style.setProperty('--split', (splitFrac * 100).toFixed(1) + '%');
+  $('split-bar').setAttribute('aria-valuenow', String(Math.round(splitFrac * 100)));
+  try { localStorage.setItem(SPLIT_KEY, String(splitFrac)); } catch (e) { /* a private window keeps the default */ }
+}
+try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applySplit(0.58); }
+(() => {
+  const bar = $('split-bar'); let drag = false;
+  bar.addEventListener('pointerdown', (e) => { drag = true; bar.setPointerCapture(e.pointerId); $('stage').classList.add('dragging'); });
+  bar.addEventListener('pointermove', (e) => { if (!drag) return; const r = $('stage').getBoundingClientRect(); applySplit((e.clientX - r.left) / r.width); });
+  const end = () => { drag = false; $('stage').classList.remove('dragging'); };
+  bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
+  bar.addEventListener('keydown', (e) => { const step = e.key === 'ArrowLeft' ? -0.02 : e.key === 'ArrowRight' ? 0.02 : 0; if (step) { e.preventDefault(); applySplit(splitFrac + step); } });
+  wide.addEventListener('change', () => show(current));
+})();
+
 function show(view) {
   if (!PANES.includes(view)) view = 'watch';
   current = view;
+  const on = shownViews(view);
   for (const v of PANES) {
-    const on = v === view;
-    $('v-' + v).hidden = !on; $('v-' + v).classList.toggle('gone', !on);
-    const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-selected', String(on));
-    tab.tabIndex = on ? 0 : -1;
+    const shown = on.includes(v);
+    $('v-' + v).hidden = !shown; $('v-' + v).classList.toggle('gone', !shown);
+    const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-selected', String(v === view));
+    tab.tabIndex = v === view ? 0 : -1;
   }
-  ensure(view);
+  $('stage').classList.toggle('split', on.length > 1);
+  $('split-bar').hidden = on.length < 2;
+  for (const v of on) ensure(v);
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   paint();
 }
@@ -437,7 +537,7 @@ function show(view) {
 function setMatch(setup, fixtureId) {
   M.setup = setup; M.fixture = fixtureId;
   for (const v of ['watch', 'broadcast']) if (FR[v]) FR[v].live = null;
-  ensure(current);
+  for (const v of shownViews(current)) ensure(v);   // a split pane shows both views, and both need the new match
   paint();
 }
 
@@ -462,20 +562,47 @@ function paint() {
     $('away-club').textContent = 'setup'; $('away-dot').style.background = '#FF7A2E';
     $('meta').innerHTML = '<b>' + stadiumName(s.st) + '</b> · ' + MONTHS[s.month] + ' · kick-off ' + s.kick + ' · ' + s.half + ' min halves · seed ' + s.seed;
   }
+  $('meta').title = $('meta').textContent;
   if (live) { $('score-v').textContent = live.live.score.join('–'); $('score-l').textContent = live.live.over ? 'Full time' : live.live.minute + "'"; }
   else if (fx) { $('score-v').textContent = fx.score.join('–'); $('score-l').textContent = 'Recorded'; }
   else { $('score-v').textContent = '–'; $('score-l').textContent = 'Not in season'; }
 
   const f = FR[current];
   const synced = f && f.key === keyOf(s);
-  $('sync').textContent = current === 'agents' ? 'Shared pipeline' : current === 'analyst' ? (fx ? 'Showing ' + fx.id : 'Season fixtures only') : (synced ? 'In sync' : 'Loads on switch');
+  $('sync').textContent = current === 'agents' ? 'Shared pipeline' : current === 'analyst' ? (fx ? 'Showing ' + fx.id : 'Season fixtures only') : (synced ? 'Same fixture as Analyst' : 'Loads on switch');
   $('sync').className = 'chip ' + (current === 'analyst' || synced ? 'ok' : '');
   $('src').textContent = current === 'analyst'
     ? (fx ? 'Analyst: season run ' + fx.id : 'Analyst: pick a season fixture')
-    : (live ? 'Live engine · ' + (current === 'agents' ? 'watch' : current) : 'Live engine: same setup as Analyst');
+    : (live ? 'Match engine running here · ' + (current === 'agents' ? 'watch' : current) : 'Match engine: same setup as Analyst');
   $('src').className = 'chip ' + (live ? 'live' : '');
-  pushFeed(); renderAgents();
+  pushFeed(); renderAgents(); paintStory();
 }
+
+// ---------------------------------------------------------------- the five-stage strip (ingest, interpret, explain, render, personalise)
+const PERSONA_NAME = { casual: 'Fan', analyst: 'Analyst' };
+function paintStory() {
+  const w = FR.watch && FR.watch.live, r = AG.run, on = !!(r && w && w.started && r.key === keyOf(M.setup));
+  const st = on ? r.stat : { events: 0, claims: 0, verified: 0, lines: 0 };
+  const set = (n, text, lit) => { const li = $('st-' + n); li.querySelector('span').textContent = text; li.classList.toggle('on', !!lit); };
+  set(1, on ? st.events + ' events' : 'waiting for kick-off', on && st.events);
+  set(2, on ? st.claims + ' claims with evidence' : 'claims with evidence', on && st.claims);
+  set(3, on ? st.verified + ' verified lines' : 'verified lines', on && st.verified);
+  set(4, current === 'agents' ? '3D in Watch and Broadcast' : ({ watch: 'Watch: 3D match', broadcast: 'Broadcast: desk', analyst: 'Analyst: console' })[current] || '3D match', true);
+  const q = new URLSearchParams(location.search); $('st-demo').hidden = q.get('speed') === '4';
+  q.set('seed', '2026'); q.set('speed', '4'); $('st-demo').setAttribute('href', '?' + q.toString() + '#watch');   // keeps other query switches such as tour or seedBadClaim   // already the demo pace
+  let stored = null; try { stored = (JSON.parse(localStorage.getItem('mcx-mode') || 'null') || {}).mode; } catch (e) { stored = null; }
+  const p = !M.persona || M.persona === 'fan' ? (stored || 'analyst') : M.persona;   // the shell's first value is the placeholder 'fan'; until Watch reports, show the saved mode, else Analyst (Watch's default)
+  for (const b of document.querySelectorAll('.story-who [data-persona]')) b.setAttribute('aria-pressed', b.dataset.persona === p ? 'true' : 'false');
+  $('st-who').textContent = PERSONA_NAME[p] ? '' : 'Showing: ' + String(p).replace(':', ' · ');
+}
+function setPersona(mode) {
+  try { const k = 'mcx-mode', o = JSON.parse(localStorage.getItem(k) || 'null') || {}; o.mode = mode; localStorage.setItem(k, JSON.stringify(o)); } catch (e) { /* storage may be blocked; the live message still works */ }
+  M.persona = mode; paintStory();
+  post('watch', { src: 'matchcast-shell', type: 'persona-set', mode });
+}
+for (const b of document.querySelectorAll('.story-who [data-persona]')) b.onclick = () => setPersona(b.dataset.persona);
+for (const b of document.querySelectorAll('.story [data-go]')) b.onclick = () => { location.hash = b.dataset.go; };
+setInterval(paintStory, 1000);
 
 // ---------------------------------------------------------------- the shared score, and the agents tab
 // Watch's live score for the shared match goes to the Broadcast scoreboard and the Analyst's live pill
@@ -483,7 +610,9 @@ function pushFeed() {
   const w = FR.watch && FR.watch.live;
   const on = !!(w && w.started && keyOf(w.setup) === keyOf(M.setup));
   const last = on && AG.run ? AG.run.events.slice(-5).map((e) => ({ minute: e.minute, type: e.type, player: e.player })) : [];
-  const msg = { src: 'matchcast-shell', type: 'feed', on, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over), last };
+  const st = on && FR.watch.stats;
+  const stats = st ? { xg: st.xg, shots: st.shots, poss: st.poss, passes: st.passes, done: st.done } : null;
+  const msg = { src: 'matchcast-shell', type: 'feed', on, fixture: M.fixture, score: on ? w.score : null, minute: on ? w.minute : 0, over: !!(on && w.over), last, stats };
   post('broadcast', msg); post('analyst', msg);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -607,19 +736,41 @@ function cardOf(c) {
   return card;
 }
 // ---------------------------------------------------------------- Ask (EXP-5)
-// 300 characters, 5 questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
+// 300 characters, ASK_LIMIT questions a minute per browser. The api answers when it is live; otherwise the in-page rules answer from the event log, or say they cannot confirm.
 const LANGS_OK = ['en', 'es', 'hi'];
+const ANSWER_WAIT_MS = 20000;   // the api's model call is given 15 s (packages/agents live/answers.py); Watch waits longer than this
 const askTimes = { watch: [], broadcast: [] };   // one budget per view
-async function answerAsk(id, q, to = 'watch') {
+const ASK_LIMIT = 20;   // questions a minute per view; the api has its own limit of the same size per session
+async function answerAsk(id, q, to = 'watch', surface = 'ask') {
   const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst' }); };   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
   const times = askTimes[to] || (askTimes[to] = []), now = Date.now(); while (times.length && now - times[0] > 60000) times.shift();
-  if (times.length >= 5) { reply({ text: 'You can ask 5 questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
+  if (times.length >= ASK_LIMIT) { reply({ text: 'You can ask ' + ASK_LIMIT + ' questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
   times.push(now);
-  if (LV.enabled && LV.status === 'live') { try { reply(await Promise.race([LV.ask(q), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))])); return; } catch (e) { /* the api could not answer: the rules below do */ } }
+  // the api answers whenever a match is on it (live or rules), so a viewer does not wait for the warm-up; it is given ANSWER_WAIT_MS before the rules answer
+  if (LV.enabled && LV.key) { try { reply(await Promise.race([LV.ask(q, surface), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ANSWER_WAIT_MS))])); return; } catch (e) { if (e.status === 429) { reply({ text: 'So many questions at once. Ask again in a minute.', verdict: 'abstained', note: 'rate limit' }); return; } /* the api could not answer: the rules below do */ } }
   const a = AG.ask(q);
   reply(Object.assign({}, a, { note: a.verdict === 'verified' ? 'rules fallback, recounted from the event log' : (LV.enabled ? 'rules fallback' : 'agent api not connected') }));
 }
+// the continuous feed goes to both views, at most every 200 ms: Watch and Broadcast draw the newest line and the list
+let linesT = 0;
+// the booth: each feed line is voiced once, when it arrives (VC drops a line older than 5 s). Play-by-play is the first voice; summaries and the agents' lines are the analyst's colour.
+const voiced = new Set();   // keyed by id and arrival time: line ids start again with each match
+function voiceFeed(items) {
+  const keys = new Set(items.map((x) => x.id + '@' + x.t));
+  for (const k of voiced) if (!keys.has(k)) voiced.delete(k);   // a line that left the feed is never needed again
+  for (const x of items) {
+    const key = x.id + '@' + x.t;
+    if (voiced.has(key)) continue;
+    voiced.add(key);
+    if (VC.on) VC.say(x.text, { id: 'feed-' + key, at: x.t, role: x.source === 'live' || x.kind === 'summary' ? 'analyst' : 'playByPlay', tone: x.tone });
+  }
+}
+function pushLines() {
+  if (linesT) return;
+  linesT = setTimeout(() => { linesT = 0; const items = CM.view(40); voiceFeed(items); const msg = { src: 'matchcast-shell', type: 'feed-lines', items }; post('watch', msg); post('broadcast', msg); }, 200);
+}
+CM.onChange(pushLines);
 function pushCards() {
   const r = AG.run; if (!r) return;
   for (const c of r.claims) {
@@ -629,7 +780,7 @@ function pushCards() {
     if (sentCards.get(c.id) === sig) continue;
     sentCards.set(c.id, sig);
     post('watch', { src: 'matchcast-shell', type: 'pulse', card: cardOf(c) });
-    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); { const t = !c.airText && M.lang !== 'en' && c.tr && c.tr[M.lang] && c.tr[M.lang].ok && c.tr[M.lang].text; VC.say(t || c.airText || c.text, { id: c.id, lang: t ? M.lang : 'en', at: c.airedAt, audio: t ? null : (c.audioUrl || null) }); } }
+    if (c.route !== 'analyst' && c.verdict === 'verified') { if (!c.airedAt) c.airedAt = Date.now(); { const t = !c.airText && M.lang !== 'en' && c.tr && c.tr[M.lang] && c.tr[M.lang].ok && c.tr[M.lang].text; VC.say(t || c.airText || c.text, { id: c.id, lang: t ? M.lang : 'en', at: c.airedAt, audio: t ? null : (c.audioUrl || null), tone: c.kind === 'score' || c.alert ? 'big' : '' }); } }
     $('sr-lines').textContent = (c.verdict === 'verified' ? 'Verified line: ' : 'Line awaiting review: ') + c.text;   // screen readers hear each published line
   }
 }
@@ -647,7 +798,13 @@ window.addEventListener('message', (e) => {
     return;
   }
   if (d.type === 'vision-events' && view === 'watch') { LV.visionEvents(d.batch); return; }   // the tracker's derived passes, on the separate .vision stream (DAT-11)
-  if (d.type === 'ask' && (view === 'watch' || view === 'broadcast')) { answerAsk(d.id, d.q, view); return; }
+  if (d.type === 'ask' && (view === 'watch' || view === 'broadcast' || view === 'analyst')) { answerAsk(d.id, d.q, view, view === 'broadcast' && d.surface === 'broadcast' ? 'broadcast' : 'ask'); return; }
+  if (d.type === 'persona' && view === 'broadcast') {   // the desk's lens steers the shared commentary persona; the language stays. Fan and Analyst also move Watch's strip, so the two views agree
+    const p = String(d.persona || 'casual'); LV.persona(p, LV.language);
+    if (p === 'casual' || p === 'analyst') { setPersona(p); CM.setPersona(p); }   // the same path as Watch's Fan and Analyst buttons: stored mode, strip, and Watch
+    return;
+  }
+  if (d.type === 'focus' && view === 'broadcast') { post('watch', { src: 'matchcast-shell', type: 'focus', player_id: String(d.player_id || ''), reason: String(d.reason || '').slice(0, 200) }); return; }   // the Broadcast copilot suggests a camera focus; Watch decides
   if (d.type === 'open' && VIEWS[d.view]) { location.hash = d.view; return; }
   if (d.type === 'indices' && view === 'watch') {   // control, chaos and tempo from Watch's events (DAT-4); the Analyst's match page shows them
     M.indices = d.data; if (FR.analyst && FR.analyst.ready) post('analyst', { src: 'matchcast-shell', type: 'indices', data: d.data }); return;
@@ -672,14 +829,15 @@ window.addEventListener('message', (e) => {
   if (d.type === 'talk' && view === 'watch') {   // EXP-16: the api's player agent, when there is a match on the api
     const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply });
     if (!LV.enabled || !LV.key) { back(null); return; }
-    LV.talk(d.player, d.utterance).then((r) => { back(r); if (r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
+    LV.talk(d.player, d.utterance, d.position).then((r) => { back(r); if (r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
     return;
   }
-  if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; LV.persona(d.persona, d.lang); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
+  if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; paintStory(); LV.persona(d.persona, d.lang); CM.setPersona(d.persona); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
    // the viewer's watch mode changed (EXP-4)
-  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); return; }   // Watch's pitch state goes to Broadcast (EXP-2)
+  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) { post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); if (FR.watch) { FR.watch.stats = d.frame.stats; if (Date.now() - (FR.watch.feedAt || 0) > 1000) { FR.watch.feedAt = Date.now(); pushFeed(); } } } return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
+    if (view === 'watch' && AG.run && AG.run.key === keyOf(d.setup)) CM.fromWatch(d.batch, d.moments);   // the continuous feed (feed.js): every moment, key event and quiet-stretch summary
     if (AG.run && AG.run.key === keyOf(d.setup)) { LV.events(d.batch); post('broadcast', { src: 'matchcast-shell', type: 'events', batch: d.batch }); pushFeed(); }
     return;
   }   // Watch's live events and moments
@@ -696,7 +854,7 @@ window.addEventListener('message', (e) => {
     $('v-' + view).classList.add('ready');
     if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });
     if (M.agents) post(view, M.agents);   // a view that (re)loaded learns the viewer's language
-    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
+    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); CM.reset(keyOf(s), teamsOf(s)); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
     prefetchOthers();
     toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
     paint(); routeAnalyst();
@@ -738,7 +896,7 @@ function init(list) {
   for (const m of Object.keys(md)) {
     const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
     for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
-      o.textContent = fx.home.club + ' ' + fx.score.join('–') + ' ' + fx.away.club; g.appendChild(o); }
+      o.textContent = fx.home.club + ' v ' + fx.away.club + ' (recorded ' + fx.score.join('–') + ')'; g.appendChild(o); }
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
@@ -796,7 +954,7 @@ function init(list) {
   $('ag-bad').onchange = (e) => { AG.seedBad(e.target.checked); LV.seedBad(e.target.checked); badNote(); };
   setInterval(badNote, 2000);
   // EXP-17: one viewer language (EN, ES, HI) for Watch, Broadcast, the voice and the api's translations. A line without a Verifier-checked translation stays English and says so.
-  M.lang = 'en'; M.persona = M.persona || 'fan';
+  M.lang = 'en'; M.persona = M.persona || 'fan'; CM.setPersona(M.persona);
   const LANGS = ['en', 'es', 'hi'];
   window.setLang = (l, from) => {
     if (!LANGS.includes(l) || (l === M.lang && from)) return;   // the selector's own click always re-syncs the views
@@ -809,7 +967,7 @@ function init(list) {
   try { const sv = localStorage.getItem('mc-lang'); if (LANGS.includes(sv) && sv !== 'en') setTimeout(() => window.setLang(sv, null), 0); } catch (e) { /* storage may be blocked */ }
   const vb = $('voice-btn'), vshow = () => {
     vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
-    $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') : '';
+    $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') + (VC.crowd ? ' · crowd bed (simulated)' : '') : '';
     vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
   };
   const vd = $('voice-demo'), vdShow = () => { vd.hidden = !LV.enabled; };
@@ -837,7 +995,19 @@ function init(list) {
   AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'The api did not answer or is on rules; the in-page rules agents are producing the lines', 'warn'],
     warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 45 s from a cold start)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
-  const paintPill = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); renderAgents(); };   // Broadcast shows where its lines come from
+  let warmTick = null;   // while warming, count the seconds so a cold start shows progress; the api's own limit is MATCHCAST_WARM_MS (45 s), then the rules agents take over
+  const paintPill = (s) => {
+    clearInterval(warmTick); warmTick = null;
+    if (s === 'warming') {
+      const lim = Math.round((window.MATCHCAST_WARM_MS || 45000) / 1000), t0 = Date.now(), base = PILL.warming[0], p = $('api-pill');
+      const tick = () => { const n = Math.min(lim, Math.round((Date.now() - t0) / 1000)); p.textContent = base + ' · ' + n + ' s of up to ' + lim; };
+      warmTick = setInterval(tick, 1000);
+    }
+    paintPillNow(s);
+    renderAgents();   // the Agents tab follows the api's status
+    if (s === 'warming') $('api-pill').textContent = PILL.warming[0] + ' · 0 s of up to ' + Math.round((window.MATCHCAST_WARM_MS || 45000) / 1000);
+  };
+  const paintPillNow = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
   LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
@@ -848,7 +1018,7 @@ function init(list) {
 
 // first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
 const TOUR = [
-  ['Watch', 'watch', 'A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Try the Copilot Ask tab: it answers only what the match data can prove.'],
+  ['Watch', 'watch', 'A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Press Talk to a player to ask a player a question or give an order (typed questions are checked against the match record when the agent api is connected; otherwise a labelled rules fallback answers), or try the Copilot Ask tab: it answers only what the match data can prove.'],
   ['Agents', 'agents', 'Four agents write lines about the match and a Verifier recounts every number from the event log before anything is shown. Switch the approval mode to Producer to approve, edit or kill a line yourself. Provenance on any row shows its source events and audit records.'],
   ['Broadcast', 'broadcast', 'The broadcaster desk: lower-thirds and a teleprompter fed only by approved lines, instant replay, odds with the reasons on screen, and Ask the producer.'],
   ['Analyst', 'analyst', 'The enterprise workspace for the same match: pre-match, live and post-match pages, players, reports and a data-science section.'],
@@ -877,7 +1047,7 @@ function tourInit() {
 
 tourInit();
 fetch('shared/fixtures.json').then((r) => r.json()).then(init).catch((err) => {
-  $('meta').textContent = 'Could not load the season fixtures: ' + err.message;
+  $('meta').className = 'meta err'; $('meta').textContent = 'Could not load the season fixtures: ' + err.message; $('meta').title = $('meta').textContent;
 });
 </script>
 </body>

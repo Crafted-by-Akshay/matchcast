@@ -41,9 +41,26 @@ test('indices: Watch in Analyst mode draws the sparkline and the Analyst match p
   await expect(w.locator('#mcx-idx')).toContainText('Control');
   await page.locator('#tabs [data-view="analyst"], [role="tab"]:has-text("Analyst")').first().click();
   const a = await viewFrame(page, 'analyst');
+  await ready('analyst', 120_000)(page);   // the shell routes the Analyst to its live page once it is ready; the match page is opened after that
   await a.evaluate(() => (window as any).go('match'));
   await expect(a.locator('#idx-panel table')).toBeVisible({ timeout: 20_000 });
   await expect(a.locator('#idx-panel')).toContainText('Control');
   await expect(a.locator('#idx-panel')).toContainText('Tempo');
+  expect(errs).toEqual([]);
+});
+
+test('indices: the sparkline panel stays hidden until it has two minutes to draw (no stuck "too early" box)', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errs = collectErrors(page);
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const w = await viewFrame(page, 'watch');
+  await stepSim(w, 300);   // 15 simulated seconds
+  await expect.poll(() => w.evaluate(() => (window as any).mcIndicesNow().series.length), { timeout: 30_000 }).toBeLessThan(2);
+  await w.waitForTimeout(2500);   // the panel repaints every 2 s
+  await expect(w.locator('#mcx-idx')).toBeHidden();
+  await stepSim(w, 3000);
+  await expect(w.locator('#mcx-idx')).toBeVisible({ timeout: 10_000 });
+  await expect(w.locator('#mcx-idx')).not.toContainText('too early');
   expect(errs).toEqual([]);
 });

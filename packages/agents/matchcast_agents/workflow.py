@@ -11,7 +11,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from matchcast_contracts import ContractError, validate
 from opentelemetry import trace
@@ -24,10 +24,14 @@ from .personas import MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
 from .safety import LocalSafetyScreen, SafetyScreen
+from .season_clubs import season_code
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .tools import InProcessTools, ToolCall, ToolError
+
+if TYPE_CHECKING:
+    from .live.client import ModelClient
 
 STATS_DESK_BUDGET_S = 2.0
 
@@ -171,17 +175,23 @@ class MatchWorkflow:
         safety: SafetyScreen | None = None,
         clock: Callable[[], datetime] = _utc_now,
         stats_desk: StatsDesk | None = None,
+        answer_model: "ModelClient | None" = None,
     ) -> None:
+        from .live.answers import LiveAnswers  # lazy: the live package imports this module
+
         self.stats_desk = stats_desk
+        self._answers = LiveAnswers(answer_model) if answer_model is not None else None
         self._verified_claims: dict[str, dict[str, Any]] = {}
         self._repair_lock = asyncio.Lock()
         self._redrafts: dict[tuple[str, str], tuple[MatchContext, list[dict], list[DraftLine]]] = {}
         self.stream = stream
         self.sk = stream_key(stream)
         self.roster = validate(roster)
-        self.names = names or {}
-        self.clubs = clubs or {}
         self.store = store or MemoryStore()
+        # a rebuild without names or clubs keeps the ones stored at creation, never blanks them
+        stored = self.store.get_match(self.sk) or {}
+        self.names = {**stored.get("names", {}), **(names or {})}
+        self.clubs = {**stored.get("clubs", {}), **(clubs or {})}
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()
         self.agents = agents or rules_agents(self.config.personas)
@@ -191,8 +201,14 @@ class MatchWorkflow:
         self._fallback_reason: str | None = None
         self._lock = asyncio.Lock()
         self.extra_personas: list[str] = []
-        self.store.put_match(
-            self.sk, {"roster": self.roster, "names": self.names, "clubs": self.clubs}
+        self.store.put_match(  # keeps what the api stored at creation (approval mode, demo seed)
+            self.sk,
+            {
+                **(self.store.get_match(self.sk) or {}),
+                "roster": self.roster,
+                "names": self.names,
+                "clubs": self.clubs,
+            },
         )
         self._restore()
         self.stats = {
@@ -390,7 +406,11 @@ class MatchWorkflow:
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
-        if isinstance(decision, ProducerTask) and self.extra_personas:
+        if (
+            isinstance(decision, ProducerTask)
+            and self.extra_personas
+            and decision.reason != "colour"
+        ):
             both = dict.fromkeys([*decision.personas, *self.extra_personas])
             decision = decision.model_copy(update={"personas": tuple(both)})
         if isinstance(decision, Skip):
@@ -417,31 +437,48 @@ class MatchWorkflow:
 
     # ---- ask the match (AGT-16) ---------------------------------------------------------
 
-    async def ask(self, question: str, persona: str = "casual", assistant: Any = None) -> Any:
-        """Answer one fan question from the match tools and the knowledge base, with citations."""
+    async def ask(
+        self, question: str, persona: str = "casual", assistant: Any = None, surface: str = "ask"
+    ) -> Any:
+        """Answer one fan question from the match, with citations: the model when it passes its
+        checks, else the rules Assistant over the match tools and the knowledge base. The Broadcast
+        picks (``surface="broadcast"``) are rules only, so the model is not asked for them."""
         from .ask import default_assistant
 
-        async with self._lock:
-            shield = await self.safety.shield(question)
-            if shield.attack_detected:
+        shield = await self.safety.shield(question)
+        if shield.attack_detected:
+            self._audit("system", "content-safety", "safety_blocked", "ask",
+                        {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+            raise WorkflowError("prompt_attack", "the question was flagged as a prompt attack")
+        # An answer reads a snapshot and never waits for the ingest lock: a live batch holds that
+        # lock while the agents write, and a viewer must not wait behind it (ADR-0018).
+        result, rejected = None, ""
+        if assistant is None and self._answers is not None and surface == "ask":
+            result, rejected = await self._answers.ask(self._ctx().as_of(), question, persona)
+            if result is not None and not (await self.safety.analyze(result.answer)).allowed:
                 self._audit("system", "content-safety", "safety_blocked", "ask",
-                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
-                raise WorkflowError("prompt_attack", "the question was flagged as a prompt attack")
-            result = await (assistant or default_assistant()).ask(self, question, persona)
-            self._audit(
-                "agent",
-                "assistant",
-                "ask_answered",
-                "ask",
-                {
-                    "intent": result.intent,
-                    "abstained": result.abstained,
-                    "dropped": result.dropped,
-                    "citations": [c["id"] for c in result.citations],
-                    "mode": result.mode,
-                },
+                            {"source": self.safety.source, "kind": "unsafe_content"})  # fmt: skip
+                result, rejected = None, "unsafe_content"  # the rules answer instead
+        if result is None:
+            result = await (assistant or default_assistant()).ask(
+                self, question, persona, surface=surface
             )
-            return result
+        self._audit(
+            "agent",
+            "assistant",
+            "ask_answered",
+            "ask",
+            {
+                "surface": surface,
+                "intent": result.intent,
+                "abstained": result.abstained,
+                "dropped": result.dropped,
+                "citations": [c["id"] for c in result.citations],
+                "mode": result.mode,
+                "rejected": rejected or None,  # why the model's answer was not shown, if it was not
+            },
+        )
+        return result
 
     def record_export(self, export_id: str, kind: str, sha256: str, rows: int) -> None:
         self._audit("person", "viewer", "export_created", export_id,
@@ -449,41 +486,84 @@ class MatchWorkflow:
 
     # ---- talk to a player or the producer (EXP-16) ---------------------------------------
 
-    async def talk(self, target: str, utterance: str) -> dict[str, Any]:
-        """A role agent answers from its own facts; the reply is checked before it is returned."""
-        from .roles import player_reply, producer_reply
+    async def talk(
+        self, target: str, utterance: str, position: str | None = None
+    ) -> dict[str, Any]:
+        """A role agent answers from its own facts; the reply is checked before it is returned.
+
+        An instruction is an order only when the role guard accepts it for this position, and the
+        sim changes only for an order whose reply is verified.
+        """
+        from .roles import player_stats, producer_reply
+        from .roles.orders import NONE, decide
         from .verify import extract_names
 
-        async with self._lock:
-            shield = await self.safety.shield(utterance)
-            if shield.attack_detected:
+        shield = await self.safety.shield(utterance)
+        if shield.attack_detected:
+            self._audit("system", "content-safety", "safety_blocked", "talk",
+                        {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
+            raise WorkflowError("prompt_attack", "the utterance was flagged as a prompt attack")
+        ctx = self._ctx().as_of()  # a snapshot: a talk never waits for the ingest lock (ADR-0018)
+        origin, heard = "rules", NONE
+        if target == "producer":
+            reply, facts = producer_reply(ctx, utterance)
+        elif self._is_player(ctx, target):
+            reply, facts, origin, heard = await self._player_reply(ctx, target, utterance, position)
+        else:
+            raise WorkflowError("not_found", f"unknown talk target {target}")
+        order = None
+        if heard != NONE:
+            decision = decide(position, heard)
+            if not (origin == "model" and decision.accepted):  # his own words, if the guard allows
+                reply = decision.line
+            order = {"key": heard, "accepted": decision.accepted}
+            stats = player_stats(ctx, target)  # the counts the order was checked against
+            facts = stats.as_dict() if stats is not None else facts
+        numbers_ok = self._talk_numbers_ok(ctx, target, reply)
+        names_ok = all(n.casefold() in ctx.allowed_names for n in extract_names(reply))
+        words = len(reply.split())
+        verdict = "verified" if numbers_ok and names_ok and words <= 60 else "rejected"
+        if verdict == "verified":  # Content Safety before the reply is shown or spoken
+            safe = await self.safety.analyze(reply)
+            if not safe.allowed:
                 self._audit("system", "content-safety", "safety_blocked", "talk",
-                            {"source": shield.source, "kind": "prompt_attack"})  # fmt: skip
-                raise WorkflowError("prompt_attack", "the utterance was flagged as a prompt attack")
-            ctx = self._ctx()
-            if target == "producer":
-                reply, facts = producer_reply(ctx, utterance)
-            elif target in ctx.names or any(
-                e["payload"].get("player_id") == target for e in ctx.events
-            ):
-                reply, facts = player_reply(ctx, target, utterance)
-            else:
-                raise WorkflowError("not_found", f"unknown talk target {target}")
-            numbers_ok = self._talk_numbers_ok(ctx, target, reply)
-            names_ok = all(n.casefold() in ctx.allowed_names for n in extract_names(reply))
-            words = len(reply.split())
-            verdict = "verified" if numbers_ok and names_ok and words <= 60 else "rejected"
-            if verdict == "verified":  # Content Safety before the reply is shown or spoken
-                safe = await self.safety.analyze(reply)
-                if not safe.allowed:
-                    self._audit("system", "content-safety", "safety_blocked", "talk",
-                                {"source": safe.source, "kind": "unsafe_content"})  # fmt: skip
-                    verdict = "rejected"
-            if verdict == "rejected":
-                reply, facts = "I can't confirm that from the match data yet.", {}
-            self._audit("agent", f"talk-{target}", "talk_answered", "talk",
-                        {"target": target, "verdict": verdict, "facts": facts})  # fmt: skip
-            return {"target": target, "reply": reply, "verdict": verdict, "facts": facts}
+                            {"source": safe.source, "kind": "unsafe_content"})  # fmt: skip
+                verdict = "rejected"
+        if verdict == "rejected":
+            reply, facts = "I can't confirm that from the match data yet.", {}
+            if order is not None:
+                order = {"key": order["key"], "accepted": False}  # an unchecked reply moves nothing
+        self._audit("agent", f"talk-{target}", "talk_answered", "talk",
+                    {"target": target, "verdict": verdict, "facts": facts,
+                     "origin": origin, "order": order})  # fmt: skip
+        return {
+            "target": target,
+            "reply": reply,
+            "verdict": verdict,
+            "facts": facts,
+            "order": order,
+        }
+
+    @staticmethod
+    def _is_player(ctx: MatchContext, target: str) -> bool:
+        return target in ctx.names or any(
+            e["payload"].get("player_id") == target for e in ctx.events
+        )
+
+    async def _player_reply(
+        self, ctx: MatchContext, target: str, utterance: str, position: str | None
+    ) -> tuple[str, dict[str, Any], str, str]:
+        """(reply, facts, origin, order): the player's reply from the model when it passes the same
+        checks the Verifier runs, else the rules template. The order is the one he heard."""
+        from .roles import player_reply
+        from .roles.orders import keyword_order
+
+        if self._answers is not None:
+            live = await self._answers.talk(ctx, target, utterance, position)
+            if live is not None and self._talk_numbers_ok(ctx, target, live[0]):
+                return live[0], live[1], "model", live[2]
+        reply, facts = player_reply(ctx, target, utterance)
+        return reply, facts, "rules", keyword_order(utterance)
 
     @staticmethod
     def _talk_numbers_ok(ctx: MatchContext, target: str, reply: str) -> bool:
@@ -508,7 +588,19 @@ class MatchWorkflow:
                     if metric in recount:
                         recount[metric] += 1
         named = [(float(m.group(1)), TALK_PHRASES[m.group(2)]) for m in TALK_RE.finditer(reply)]
-        return len(named) == len(numbers) and all(recount[k] == n for n, k in named)
+        upto = ctx.state.max_sequence
+
+        def from_the_log(n: float, metric: str) -> bool:
+            """His own count, or a club's total from the log when the reply names that club."""
+            if recount[metric] == n:
+                return True
+            return any(
+                recompute(ctx.events, f"{metric}:{team}", upto) == n
+                and ctx.club_name(team).casefold() in reply.casefold()
+                for team in (ctx.home, ctx.away)
+            )
+
+        return len(named) == len(numbers) and all(from_the_log(n, k) for n, k in named)
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
@@ -709,7 +801,9 @@ class MatchWorkflow:
         claim = next((c for c in claims if c["metric"].split(":")[0] in TEAM_METRICS), None)
         if claim is None:
             return
-        metric, _, team_id = claim["metric"].partition(":")
+        metric, _, side = claim["metric"].partition(":")
+        # the season is keyed by club code; a name it does not know falls through to league-wide
+        team_id = season_code(self.clubs.get(side), side) or side
         details: dict[str, Any] = {
             "skill": "compare_to_season",
             "metric": metric,

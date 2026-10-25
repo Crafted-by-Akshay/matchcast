@@ -94,7 +94,7 @@ mcL3.id = 'mc-l3'; mcL3.setAttribute('role', 'status'); mcL3.hidden = true;
 mcL3.style.cssText = 'position:absolute;left:12px;bottom:100px;max-width:60%;padding:10px 16px;background:rgba(10,20,40,.92);color:#fff;border-left:4px solid #3aa0ff;font:600 15px system-ui,sans-serif;z-index:10;border-radius:4px';
 const mcTele = document.createElement('ol');
 mcTele.id = 'mc-tele'; mcTele.setAttribute('aria-label', 'Teleprompter: approved lines');
-mcTele.style.cssText = 'position:absolute;right:10px;top:44px;width:280px;margin:0;padding:8px 8px 8px 28px;background:rgba(10,20,40,.85);color:#e8eefc;font:13px system-ui,sans-serif;border-radius:4px;max-height:40%;overflow:auto;z-index:10'; mcTele.hidden = true;
+mcTele.style.cssText = 'position:absolute;right:10px;top:44px;width:min(280px,34%);margin:0;padding:8px 8px 8px 28px;background:rgba(10,20,40,.85);color:#e8eefc;font:13px system-ui,sans-serif;border-radius:4px;max-height:40%;overflow:auto;z-index:10'; mcTele.hidden = true;
 // bc.css hides every direct child of body except #bc, #stage and #load, so on-air graphics sit inside the live view
 (document.getElementById('bc-view') || document.body).append(mcL3, mcTele);
 let mcL3Timer = 0; const mcAired = [];
@@ -152,3 +152,5 @@ if (MCS.framed) {
   const attachMic = () => { const q = $('bcd-q'); if (q && !q.dataset.ptt) MCS.ptt(q, { requestSubmit: () => bcAsk() }, BC.lang === 'es' ? 'es-ES' : BC.lang === 'hi' ? 'hi-IN' : 'en-GB'); };
   const pane = $('pane-desk'); if (pane) { new MutationObserver(attachMic).observe(pane, { childList: true, subtree: true }); attachMic(); }
 }
+// type floor: 12 px for the desk text that was 10 to 11 px (UX review pass 6, finding 18)
+(() => { const st = document.createElement('style'); st.textContent = '.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}'; document.head.appendChild(st); })();

@@ -141,7 +141,7 @@ sequenceDiagram
   A-->>U: answer, citations, claim IDs, trace ID
 ```
 
-Rules: out-of-scope questions get "I can only answer questions about this match and MatchCast." Abstain text: "I can't confirm that from the match data yet." 5 questions a minute per browser session. Full design in [05-assistant-rag.md](05-assistant-rag.md).
+Rules: out-of-scope questions get "I can only answer questions about this match and MatchCast." Abstain text: "I can't confirm that from the match data yet." 10 questions a minute per browser session. In live mode the model answers from a fact sheet and the answer is checked before it is shown (ADR-0018); the question does not wait for the ingest lock. Full design in [05-assistant-rag.md](05-assistant-rag.md).
 
 ## F5 Talk to a player by voice
 
@@ -164,7 +164,7 @@ sequenceDiagram
   A-->>U: reply text + audio URL
 ```
 
-Orders that change play ("press higher") are a game feature labelled "Game mode". They change the simulator's behaviour but never edit past events.
+Orders that change play ("press higher") are a game feature labelled "Game mode". They change the simulator's behaviour but never edit past events. An order a fan types or speaks to a player goes through the talk flow above: the player agent names the instruction it heard, the role guard (ADR-0016) accepts or refuses it for his position, and only an accepted order from a verified reply reaches the simulator. Quick buttons for a disallowed order are greyed out. As a last line of defence the engine itself (`setOrder`, patched in by `apps/unified/build.py` in Watch and Broadcast) ignores any order outside the role, using the table in `apps/unified/embed/roles.js`, which a test keeps equal to `orders.py`.
 
 ## F6 Translation and voice for a publication
 

@@ -7,7 +7,7 @@ const LV = (() => {
   const vstats = { passes: 0, reads: 0, readsFailed: 0 };   // what Vision has reached the api with: passes accepted, shirt-number reads answered or refused
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
-  const set = (s) => { if (s !== st) { st = s; onStatus(s); } };
+  const set = (s, again) => { if (s !== st || again) { st = s; onStatus(s); } };
 
   // Watch events to the contract's event payloads (docs/contracts.md). Types the contract has no fields for here return null:
   // tackles and pressure need a target player and a distance Watch does not record.
@@ -54,14 +54,19 @@ const LV = (() => {
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
     run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, sending: false };
-    set('warming');
+    set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the 45 s timer
     timer = setTimeout(() => { if (run && !run.claimed) set('fallback'); }, WARM_MS);
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
       players: roster.players.map((q) => ({ player_id: slug(q.name), team_id: slug(q.team) })) } : null;
+    // the names go on create, so Ask knows the clubs and players by the names the fan sees
+    run.clubs = roster ? Object.fromEntries(roster.teams.map((t) => [slug(t), t])) : {};
+    run.names = roster ? Object.fromEntries(roster.players.map((q) => [slug(q.name), q.name])) : {};
     open();
   };
   const open = () => {
-    const r = run; if (!r) return;
+    const r = run; if (!r || !r.created) return;
+    if (r.es) r.es.close();   // one stream at a time: a pending retry must not add a second
+    // the api only knows the match once it is created; flush opens the stream right after
     try {
       const es = new EventSource(url('/v1/matches/' + r.id + '/stream', { persona, lang }));
       r.es = es;
@@ -70,7 +75,7 @@ const LV = (() => {
       on('claim', (d) => { r.claimed = true; if (st === 'warming') set('live'); onClaim(d, st); });
       on('line', (d) => onLine(d, st));
       on('publication', (d) => { r.claimed = true; if (st === 'warming') set('live'); onLine(d, st); });
-      es.onerror = () => { es.close(); if (run !== r) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
+      es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
     } catch (e) { set('fallback'); }
   };
 
@@ -80,11 +85,12 @@ const LV = (() => {
     try {
       if (!r.created) {
         const bad = badClaim;   // the api takes the demo switch at match creation only
-        const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored
+        const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
+        if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; open(); } else throw new Error('create ' + res.status);   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
       }
       const batch = r.queue.slice(0, BATCH);
       const res = await post('/v1/matches/' + r.id + '/events', { events: batch });
+      if (res.status === 404) { r.created = false; if (r.es) r.es.close(); }   // the api lost the match (a restart on a store that did not keep it): create it again with the next batch
       if (!res.ok) throw new Error('events ' + res.status);
       r.queue.splice(0, batch.length);
     } catch (e) { if (run === r && st === 'warming') { /* keep waiting; the 45 s timer decides */ } }
@@ -96,24 +102,26 @@ const LV = (() => {
   // a question to the agents (EXP-5): the api's Ask router answers with citations and a verdict; throws when it cannot
   // the api's Ask takes one of three audiences and answers {answer, abstained, citations, mode, variants?}
   const audience = () => (persona === 'analyst' || persona === 'broadcast' ? persona : 'casual');
-  const ask = async (question) => {
+  const ask = async (question, surface = 'ask') => {
     if (!run) throw new Error('no match yet');
     if (!String(question).trim()) throw new Error('empty question');   // the api needs at least one character
-    const res = await post('/v1/matches/' + run.id + '/ask', { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' });
-    if (!res.ok) throw new Error('ask ' + res.status);
+    const body = { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' };
+    if (surface === 'broadcast') body.surface = surface;   // the Copilot's picks; a plain question sends exactly what it always did
+    const res = await post('/v1/matches/' + run.id + '/ask', body);
+    if (!res.ok) throw Object.assign(new Error('ask ' + res.status), { status: res.status });
     const j = await res.json();
     const t = j.variants && j.variants[lang];
-    return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j) };
+    return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j), broadcast: j.broadcast || null };
   };
 
-  // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply
-  const talk = async (target, utterance) => {
+  // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply; position is the sim's code (GK, ST...) so the role guard can bound an order
+  const talk = async (target, utterance, position) => {
     if (!run) throw new Error('no match yet');
     if (!String(utterance).trim()) throw new Error('empty utterance');
-    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300) });
+    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}) });
     if (!res.ok) throw Object.assign(new Error('talk ' + res.status), { status: res.status });
     const j = await res.json();
-    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, api: true, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // the api's Azure Speech clip of a verified reply (Voice lane)
+    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, order: j.order || null, api: true, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // the api's Azure Speech clip of a verified reply (Voice lane)
   };
 
   // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one
@@ -188,7 +196,7 @@ const LV = (() => {
     try {
       if (!v.created) {
         const res = await fetch(api() + '/v1/matches', json({ session_id: v.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1-vision', home_team_id: r.roster.team_ids[0], away_team_id: r.roster.team_ids[1], venue_id: 'v1',
-          kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', roster: Object.assign({}, r.roster, { stream: v.key }) }));
+          kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: Object.assign({}, r.roster, { stream: v.key }) }));
         if (res.ok || res.status === 409) v.created = true; else throw new Error('create ' + res.status);
       }
       const batch = v.queue.slice(0, BATCH);
@@ -221,5 +229,5 @@ const LV = (() => {
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
     begin, events, visionEvents, stop, talk, recap, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
-     toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
+     toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();
