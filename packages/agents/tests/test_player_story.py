@@ -97,19 +97,19 @@ def test_quiet_spell_summary_comes_from_memory_only(match) -> None:
     )
     ctx = replace(base, extra={"storylines": storylines(base, [verified])})
     # the quiet spell is measured from the player's last stored involvement, not from the goal
-    last_minute = max(
-        e["event_time_ms"] // 60_000
-        for e in match["events"]
-        if e["payload"].get("player_id") == player
+    last_ms = max(
+        e["event_time_ms"] for e in match["events"] if e["payload"].get("player_id") == player
     )
+    last_minute = last_ms // 60_000
     story = PlayerStory(player_id=player)
-    summary = quiet_summary(ctx, story, now_ms=(last_minute + 10) * 60_000)
-    assert summary is not None
+    result = quiet_summary(ctx, story, now_ms=last_ms + 10 * 60_000)
+    assert result is not None
+    summary, _ = result
     assert base.player_name(player) in summary
     assert extract_numbers(summary) == [float(last_minute)]
     # not quiet for ten minutes yet, or nothing remembered: no summary airs
-    assert quiet_summary(ctx, story, now_ms=(last_minute + 5) * 60_000) is None
-    assert quiet_summary(base, story, now_ms=(last_minute + 30) * 60_000) is None
+    assert quiet_summary(ctx, story, now_ms=last_ms + 5 * 60_000) is None
+    assert quiet_summary(base, story, now_ms=last_ms + 30 * 60_000) is None
 
 
 def test_verifier_recount_accepts_the_stated_total_and_rejects_a_wrong_one(match) -> None:
@@ -152,16 +152,10 @@ def test_quiet_summary_airs_once_per_spell(match) -> None:
     story = PlayerStory(player_id=player)
     first = quiet_summary(ctx, story, now_ms=now)
     assert first is not None
-    again = quiet_summary(ctx, story.summarised(_minute_of(ctx, player, now)), now_ms=now)
+    story = first[1]
+    assert first is not None
+    again = quiet_summary(ctx, story, now_ms=now)
     assert again is None
-
-
-def _minute_of(ctx: MatchContext, player: str, now: int) -> int:
-    return max(
-        e["event_time_ms"] // 60_000
-        for e in ctx.events
-        if e["event_time_ms"] <= now and e["payload"].get("player_id") == player
-    )
 
 
 def test_a_red_card_reads_as_sent_off(match) -> None:
@@ -191,13 +185,13 @@ def test_quiet_summary_counts_remembered_moments_in_words(match) -> None:
     ]
     ctx = replace(base, extra={"storylines": storylines(base, records)})
     last = max(
-        e["event_time_ms"] // 60_000
-        for e in match["events"]
-        if e["payload"].get("player_id") == player
+        e["event_time_ms"] for e in match["events"] if e["payload"].get("player_id") == player
     )
-    summary = quiet_summary(ctx, PlayerStory(player_id=player), now_ms=(last + 10) * 60_000)
-    assert summary is not None and "after two moments" in summary
-    assert extract_numbers(summary) == [float(last)]
+    result = quiet_summary(ctx, PlayerStory(player_id=player), now_ms=last + 10 * 60_000)
+    assert result is not None
+    summary, _ = result
+    assert "after two moments" in summary
+    assert extract_numbers(summary) == [float(last // 60_000)]
 
 
 def test_a_pass_beat_does_not_count_toward_the_summary(match) -> None:
@@ -205,9 +199,7 @@ def test_a_pass_beat_does_not_count_toward_the_summary(match) -> None:
     player = goal["payload"]["player_id"]
     base = context(match)
     last = max(
-        e["event_time_ms"] // 60_000
-        for e in match["events"]
-        if e["payload"].get("player_id") == player
+        e["event_time_ms"] for e in match["events"] if e["payload"].get("player_id") == player
     )
     passer = next(
         e
@@ -227,13 +219,13 @@ def test_a_pass_beat_does_not_count_toward_the_summary(match) -> None:
         )
     ]
     ctx = replace(base, extra={"storylines": storylines(base, records)})
-    assert quiet_summary(ctx, PlayerStory(player_id=player), now_ms=(last + 10) * 60_000) is None
+    assert quiet_summary(ctx, PlayerStory(player_id=player), now_ms=last + 10 * 60_000) is None
 
 
 def test_reselecting_the_same_player_keeps_the_summary_guard() -> None:
-    story = PlayerStory(player_id="home9").summarised(12)
-    assert story.switch("home9").summarised_minute == 12
-    assert story.switch("away2").summarised_minute is None
+    story = PlayerStory(player_id="home9").summarised(720_000)
+    assert story.switch("home9").summarised_ms == 720_000
+    assert story.switch("away2").summarised_ms is None
 
 
 def test_an_unknown_metric_fails_the_check_instead_of_raising(match) -> None:

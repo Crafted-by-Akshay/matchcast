@@ -35,15 +35,15 @@ class PlayerStory:
     """The player one fan follows. Its totals are always counted from the start of the match."""
 
     player_id: str
-    summarised_minute: int | None = None  # the last involvement a quiet-spell summary covered
+    summarised_ms: int | None = None  # the last involvement a quiet-spell summary already covers
 
     def switch(self, player_id: str) -> "PlayerStory":
         if player_id == self.player_id:
             return self  # re-selecting the same player keeps this spell's summary guard
-        return replace(self, player_id=player_id, summarised_minute=None)
+        return replace(self, player_id=player_id, summarised_ms=None)
 
-    def summarised(self, minute: int) -> "PlayerStory":
-        return replace(self, summarised_minute=minute)
+    def summarised(self, ms: int) -> "PlayerStory":
+        return replace(self, summarised_ms=ms)
 
 
 def _counts_for(payload: dict[str, Any]) -> list[tuple[str, str]]:
@@ -95,30 +95,35 @@ def story_line(ctx: MatchContext, event: dict[str, Any], story: PlayerStory) -> 
     return f"{who} {verb.format(club=club)} {label}: {total}."
 
 
-def _last_involvement_minute(ctx: MatchContext, player_id: str, now_ms: int) -> int | None:
-    """The match minute of the player's last stored event up to now, own goals included."""
-    minutes = [
-        e["event_time_ms"] // 60_000
+def _last_involvement_ms(ctx: MatchContext, player_id: str, now_ms: int) -> int | None:
+    """The time of the player's last stored event up to now, own goals included."""
+    times = [
+        e["event_time_ms"]
         for e in ctx.events
         if e["event_time_ms"] <= now_ms
         and e["payload"].get("player_id") == player_id
         and e["payload"]["type"] not in ("correction", "retraction")
     ]
-    return max(minutes) if minutes else None
+    return max(times) if times else None
 
 
 _WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
 
 
-def quiet_summary(ctx: MatchContext, story: PlayerStory, now_ms: int) -> str | None:
+def quiet_summary(
+    ctx: MatchContext, story: PlayerStory, now_ms: int
+) -> tuple[str, PlayerStory] | None:
     """After a quiet spell, one summary line of the player's involvement so far, once per spell.
-    The spell is measured on the stored events. The involvement is what shared memory remembers
-    (verified beats for the player), counted in words so the line keeps one number at most.
-    Call ``story.summarised(minute)`` after it airs."""
-    last = _last_involvement_minute(ctx, story.player_id, now_ms)
-    if last is None or now_ms // 60_000 - last < QUIET_MINUTES:
+
+    Returns the line and the story with this spell marked as summarised, so the caller keeps the
+    returned story. The spell is measured on the stored events. The count is the storyline beats
+    shared memory still holds for the player (its window keeps the latest beats, so an old beat
+    can drop out of it). The count is written in words, so the line keeps its one number at most.
+    """
+    last = _last_involvement_ms(ctx, story.player_id, now_ms)
+    if last is None or now_ms - last < QUIET_MINUTES * 60_000:
         return None
-    if last == story.summarised_minute:
+    if last == story.summarised_ms:
         return None  # this spell already has its summary
     # only remembered beats that are storyline plays count: a pass or pressure line is no beat
     by_sequence = {e["stream_sequence"]: e for e in ctx.events}
@@ -128,13 +133,15 @@ def quiet_summary(ctx: MatchContext, story: PlayerStory, now_ms: int) -> str | N
         if (e := by_sequence.get(b["sequence"])) is not None and _storyline_play(e, story.player_id)
     ]
     if not beats:
-        return None  # nothing remembered as a storyline beat: no involvement to summarise
+        return None  # no storyline beat in memory: no involvement to summarise
     count = _WORDS[len(beats)] if len(beats) < len(_WORDS) else "many"
     moments = "moment" if len(beats) == 1 else "moments"
-    return (
-        f"{ctx.player_name(story.player_id)} has been quiet since minute {last}, "
+    minute = last // 60_000
+    text = (
+        f"{ctx.player_name(story.player_id)} has been quiet since minute {minute}, "
         f"after {count} {moments} on the storyline."
     )
+    return text, story.summarised(last)
 
 
 def total_check(ctx: MatchContext, player_id: str, metric: str, upto: int, stated: int) -> Check:
