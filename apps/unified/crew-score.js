@@ -55,7 +55,7 @@
   function draw(S) {
     var sc = S.score;
     var sim = !!S.simulated && S.scoreSource !== 'api';   // the fetched score is real even while the page still shows fixture moments
-    var sig = JSON.stringify([sim, sc, S.scoreNote]);
+    var sig = JSON.stringify([sim, sc, S.scoreNote, S.scoreSource]);
     if (sig === lastSig) return;
     lastSig = sig;
     var oldDet = root.querySelector('details'), wasOpen = !!(oldDet && oldDet.open);
@@ -67,6 +67,7 @@
     h.id = 'cs-h';
     sec.appendChild(h);
     if (sim) sec.appendChild(el('span', 'cs-badge sim', 'Simulated'));
+    else if (S.scoreSource === 'api' && sc) sec.appendChild(el('span', 'cs-badge pre', 'Rules-only'));   // the api's arms are all rules-mode runs on the stored events
     if (!known(sc)) {
       sec.appendChild(el('p', 'muted', S.scoreNote || 'Waiting for graded lines. Each arm is graded against simulator truth.'));
       root.appendChild(sec);
@@ -102,7 +103,7 @@
       });
       arm.appendChild(dl);
       grid.appendChild(arm);
-      rows.push([a.label, pct(accV), pct(catchV), secs(d.latency_ms), usd(d.cost), num(d.n) ? String(d.n) : 'n/a', d.precomputed ? 'Precomputed' : (sim ? 'Simulated' : 'Live')]);
+      rows.push([a.label, pct(accV), pct(catchV), secs(d.latency_ms), usd(d.cost), num(d.n) ? String(d.n) : 'n/a', d.precomputed ? 'Precomputed' : sim ? 'Simulated' : d.mode === 'rules' ? 'Rules' : 'Live']);
     });
     sec.appendChild(grid);
     sec.appendChild(el('p', 'muted', 'Method: ' + (sc.method || 'not stated')));

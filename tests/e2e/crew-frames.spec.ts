@@ -89,38 +89,46 @@ test('frames: onair airs a verified line in CREW.state.feeds and clears simulate
   expect(s2.lines.filter((l: any) => l.id === 'L-17')).toHaveLength(1);
 });
 
-test('frames: onair with a moment_id records a claim entry on that moment', async ({ page }) => {
+test('frames: onair and feed_drop name no moment: a stray moment_id is ignored, entries go to lines, and lines keep the newest 200', async ({ page }) => {
   await open(page);
-  await ingest(page, [onair({ moment_id: 'm-e42', publication_id: 'L-2', feed: 'casual', repair_count: 1 })]);
+  await ingest(page, [onair({ moment_id: 'm-e42', publication_id: 'L-2', feed: 'casual', repair_count: 1 }), drop({ moment_id: 'm-e42' })]);
   const s = await state(page);
-  expect(s.moments[0].id).toBe('m-e42');
-  expect(s.moments[0].claims[0]).toMatchObject({ id: 'L-2', verdict: 'verified', text: 'Goal for Northgate FC.', repair_count: 1, feed: 'casual' });
-  expect(s.feeds.casual).toHaveLength(1);
+  expect(s.moments).toEqual([]);
+  expect(s.lines.map((l: any) => [l.id, l.verdict])).toEqual([['L-2', 'verified'], ['L-1', 'dropped']]);
+  await page.evaluate(() => { for (let i = 0; i < 230; i++) CREW.ingest({ kind: 'feed_drop', publication_id: 'D' + i, feed: 'casual', reason_code: 'repeat', audit_id: 'a' + i }); });
+  const s2 = await state(page);
+  expect(s2.lines).toHaveLength(200);
+  expect(s2.lines[199].id).toBe('D229');
 });
 
-test('frames: a translated onair row never overwrites the English row', async ({ page }) => {
+test('frames: a translated onair row never overwrites the English row, and one that arrives first is kept for it', async ({ page }) => {
   await open(page);
   await ingest(page, [onair(), onair({ lang: 'es', text: 'Gol del Northgate.' }), onair({ lang: 'es-419', text: 'Otra.' })]);
   const s = await state(page);
   expect(s.feeds.analyst).toHaveLength(1);
   expect(s.feeds.analyst[0].text).toBe('Goal for Northgate FC.');
-  expect(s.feeds.analyst[0].translations).toMatchObject({ es: 'Gol del Northgate.' });
-  // a translation that arrives before the English row does not become the line
+  expect(s.feeds.analyst[0].translations).toMatchObject({ es: 'Gol del Northgate.', 'es-419': 'Otra.' });
+  // a translation that arrives before the English row is not the line, but is attached once the English row airs
   await ingest(page, [onair({ publication_id: 'L-30', lang: 'fr', text: 'Un but.' })]);
   expect((await state(page)).feeds.analyst.filter((l: any) => l.publication_id === 'L-30')).toEqual([]);
   await ingest(page, [onair({ publication_id: 'L-30', text: 'A goal.' })]);
-  expect((await state(page)).feeds.analyst.find((l: any) => l.publication_id === 'L-30').text).toBe('A goal.');
+  const row = (await state(page)).feeds.analyst.find((l: any) => l.publication_id === 'L-30');
+  expect(row.text).toBe('A goal.');
+  expect(row.translations).toEqual({ fr: 'Un but.' });
+  // only the exact tag 'en' is the English row: 'en-GB' is kept as a translation, not shown as the line
+  await ingest(page, [onair({ publication_id: 'L-31', lang: 'en-GB', text: 'A goal, mate.' })]);
+  expect((await state(page)).feeds.analyst.filter((l: any) => l.publication_id === 'L-31')).toEqual([]);
 });
 
 test('frames: feed_drop records a dropped claim with its reason and audit id, never airs, stores no text', async ({ page }) => {
   await open(page);
-  await ingest(page, [drop({ text: 'A wrong line that must not be stored.', moment_id: 'm-e42' }), drop({ publication_id: 'L-5', reason_code: 'repeat', audit_id: 'aud-8' })]);
+  await ingest(page, [drop({ text: 'A wrong line that must not be stored.' }), drop({ publication_id: 'L-5', reason_code: 'repeat', audit_id: 'aud-8' })]);
   const s = await state(page);
   expect(s.simulated).toBe(false);
   expect(Object.values(s.feeds).flat()).toHaveLength(0);
   expect(JSON.stringify(s)).not.toContain('must not be stored');
-  expect(s.moments[0].claims[0]).toMatchObject({ id: 'L-1', verdict: 'dropped', reason: 'number_mismatch', audit_id: 'aud-7' });
-  expect(s.moments[0].claims[0].text).toBeUndefined();
+  expect(s.lines[0]).toMatchObject({ id: 'L-1', verdict: 'dropped', reason: 'number_mismatch', audit_id: 'aud-7' });
+  expect(s.lines[0].text).toBeUndefined();
   expect(s.lines.find((l: any) => l.id === 'L-5')).toMatchObject({ verdict: 'dropped', reason: 'repeat', audit_id: 'aud-8' });
   // a drop for a line that already aired does not remove it from the feed
   await ingest(page, [onair({ publication_id: 'L-9' }), drop({ publication_id: 'L-9', feed: 'analyst' })]);
@@ -142,8 +150,8 @@ test('frames: Play Simulated goal goes through onair and crew_* frames, stays Si
   // the fixture emits onair (the repair airs with repair_count 1); the Showrunner id comes only via crew_spawn, minute only via crew_ledger or crew_spawn
   const s = await state(page);
   expect(s.simulated).toBe(true);
-  expect(s.moments[0].claims.length).toBeGreaterThanOrEqual(2);
-  expect(s.moments[0].claims.some((c: any) => c.verdict === 'verified' && c.repair_count === 1)).toBe(true);
+  expect(s.lines.length).toBeGreaterThanOrEqual(2);
+  expect(s.lines.some((c: any) => c.verdict === 'verified' && c.repair_count === 1)).toBe(true);
   expect(s.moments[0]).toMatchObject({ minute: 23, called: ['analyst', 'narrator', 'verifier'], status: 'done' });
   expect(s.moments[0].agents.find((a: any) => a.role === 'Replay')).toMatchObject({ parent: 'm-23:show', status: 'done' });
   expect(s.feeds.casual[0].text).toContain('Second shot on target');
@@ -210,14 +218,14 @@ test('frames: a malformed frame as the first frame does not clear simulated or w
 
 test('frames: out of order (onair and spawn before the ledger) and duplicates end in the same state', async ({ page }) => {
   await open(page);
-  const frames = [onair({ moment_id: 'm-e42' }), spawn({ status: 'done', ended_ms: 721000 }), spawn({ spawn_id: 'm-e42:h', role: 'history', status: 'no_data', ended_ms: 720500 }), ledger()];
+  const frames = [onair(), spawn({ status: 'done', ended_ms: 721000 }), spawn({ spawn_id: 'm-e42:h', role: 'history', status: 'no_data', ended_ms: 720500 }), ledger()];
   await ingest(page, [...frames, ...frames]);
   const s = await state(page);
   expect(s.moments).toHaveLength(1);
   const m = s.moments[0];
   expect(m).toMatchObject({ minute: 12, why: 'goal', routed_by: 'rules', status: 'done' });
   expect(m.agents.map((a: any) => a.id).sort()).toEqual(['m-e42:h', 'm-e42:replay', 'm-e42:show']);
-  expect(m.claims).toHaveLength(1);
+  expect(s.lines).toHaveLength(1);
   expect(s.feeds.analyst).toHaveLength(1);
 });
 
@@ -230,7 +238,7 @@ test('frames: a terminal spawn status does not regress on a late running frame, 
   expect(m.agents.find((a: any) => a.id === 'm-e42:replay')).toMatchObject({ status: 'done', ended: 721000, tokens: 9, why: 'replay ready', started: 720000, role: 'replay' });
   expect(m.agents.find((a: any) => a.id === 'x').status).toBe('budget_exhausted');
   // claims: a later frame without a verifier or text keeps the verdict and the text
-  await ingest(page, [onair({ moment_id: 'm-e42' }), onair({ moment_id: undefined, claim_ids: undefined, aired_at: undefined })]);
+  await ingest(page, [onair(), onair({ claim_ids: undefined, aired_at: undefined })]);
   expect((await state(page)).feeds.analyst[0]).toMatchObject({ verdict: 'verified', text: 'Goal for Northgate FC.', claim_ids: ['c-9'], aired_at: '2026-10-25T10:00:00Z' });
 });
 
@@ -292,4 +300,16 @@ test('frames: a real onair then play() starts clean and Simulated, then a real o
   expect(s.simulated).toBe(false);
   expect(s.feeds.casual).toEqual([]);
   expect(s.feeds.analyst.map((l: any) => l.publication_id)).toEqual(['real-2']);
+});
+
+test('frames: a ledger keeps its spawn_reason', async ({ page }) => {
+  await open(page);
+  await ingest(page, [ledger({ spawn_reason: 'budget exhausted', called: ['analyst'] }), ledger({ moment_id: 'm-2', spawn_reason: 5 })]);
+  const s = await state(page);
+  expect(s.moments[0].spawn_reason).toBe('budget exhausted');
+  expect(s.moments[1].spawn_reason).toBeUndefined();
+  await page.evaluate(() => { location.hash = '#agents'; });
+  await expect(page.locator('#ct-spawn-why')).toBeHidden();   // the latest moment (m-2) has no reason
+  await ingest(page, [ledger({ moment_id: 'm-3', spawn_reason: 'budget exhausted' })]);
+  await expect(page.locator('#ct-spawn-why')).toHaveText('No specialists spawned: budget exhausted');
 });
