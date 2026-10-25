@@ -180,3 +180,14 @@ def test_the_events_digest_is_the_same_for_the_same_events_only() -> None:
     assert events_digest(events) == events_digest(reordered_keys)
     changed = [{"event_id": "e1", "payload": {"type": "shot", "minute": 4}}]
     assert events_digest(events) != events_digest(changed)
+
+
+def test_a_recording_missing_a_field_the_route_reads_is_no_run(tmp_path) -> None:
+    # teams, seed and rate can match while a field the route reads is absent: that must not
+    # reach the route as a KeyError
+    for key in ("fixture", "run_id", "run_date", "events_sha256"):
+        path = write_record(tmp_path)
+        record = json.loads(open(path).read())
+        del record[key]
+        open(path, "w").write(json.dumps(record))
+        assert load_live_run(path, teams=TEAMS) is None, key

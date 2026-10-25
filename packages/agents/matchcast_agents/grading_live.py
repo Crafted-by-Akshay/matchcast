@@ -49,6 +49,7 @@ from .rules.analyst import ClaimResult
 from .workflow import AgentSet
 
 RUN_KIND = "crew_live_run"
+RECORD_KEYS = ("fixture", "run_id", "run_date", "events_sha256")
 MAX_CALLS_PER_ARM = 1000  # the recording script's ceiling, enforced here too
 log = logging.getLogger(__name__)
 
@@ -319,6 +320,9 @@ def load_live_run(
     if record.get("teams") != sorted(teams) or record.get("seed") != seed:
         return None
     if record.get("seed_rate") != rate:
+        return None
+    if not all(key in record for key in RECORD_KEYS):  # the route reads each of these
+        log.warning("scoreboard live run %s is missing fields; showing rules arms", path)
         return None
     arms = record.get("arms")
     if not isinstance(arms, dict) or not arms:
