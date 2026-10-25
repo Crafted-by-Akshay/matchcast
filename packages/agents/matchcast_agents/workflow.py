@@ -77,8 +77,10 @@ ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale
 RUNDOWN_KEEP = 400
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
-# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1)
-SPAWN_POOL = ("replay", "tactics", "stats", "rhythm", "history")
+# the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1).
+# History is built but not in the pool: a goal's four slots go to the four above, so it has no slot
+# until the planner's cap is decided (see 04-agents.md §2.1).
+SPAWN_POOL = ("replay", "tactics", "stats", "rhythm")
 QUIET_SPAWNS_PER_MATCH = 40  # the quiet moments' own allowance, apart from the priority-1 pool
 
 
@@ -444,6 +446,8 @@ class MatchWorkflow:
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
+        self.spawn_budget.used = row.get("spawn_used", 0)  # a restart must not refill the pools
+        self.quiet_budget.used = row.get("quiet_used", 0)
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
             restore(row["producer"])
@@ -457,6 +461,8 @@ class MatchWorkflow:
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
                 "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
+                "spawn_used": self.spawn_budget.used,
+                "quiet_used": self.quiet_budget.used,
             },
         )
 

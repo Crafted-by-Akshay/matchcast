@@ -23,7 +23,9 @@ def test_a_goal_gets_an_entry_naming_the_agents_it_called(match) -> None:
     run(flow.ingest(match["events"]))
     goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
     entry = entry_for(flow, goal)
-    assert {"analyst", "narrator", "verifier"} <= set(entry["called"])
+    spawned = {s["name"] for s in entry["spawns"]}
+    assert set(entry["called"]) == {"analyst", "narrator", "verifier"} | spawned
+    assert spawned == {"replay", "tactics", "stats", "rhythm"}
     assert entry["skipped"] == ["stats_desk"]  # no Stats Desk is wired into this build
     assert entry["why"] == "goal"
     assert entry["routed_by"] == "rules"
@@ -80,11 +82,24 @@ def test_quiet_moments_cannot_use_up_a_goals_specialists(match, monkeypatch) -> 
     flow.quiet_budget.used = flow.quiet_budget.limit  # every quiet moment is out of allowance
     run(flow.ingest(match["events"]))
     goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
-    assert {"replay", "tactics", "stats", "rhythm"} <= {
-        s["name"] for s in entry_for(flow, goal)["spawns"]
-    }
+    goal_spawns = entry_for(flow, goal)["spawns"]
+    assert {"replay", "tactics", "stats", "rhythm"} <= {s["name"] for s in goal_spawns}
+    assert all(s["status"] in ("ok", "no_data") for s in goal_spawns)
     priority_one = {"goal", "red_card"}  # the producer's priority-1 moments draw on the main pool
+    main_pool = sum(len(r["spawns"]) for r in flow.rundown if r["why"] in priority_one)
+    assert flow.spawn_budget.used == main_pool
     quiet = [r for r in flow.rundown if r["why"] not in priority_one]
     assert quiet and all(
         r["spawns"] == [] and r["spawn_reason"] == "budget exhausted" for r in quiet
     )
+
+
+def test_the_spawn_budgets_survive_a_restart(match) -> None:
+    """A restart must not refill either pool: the caps are per match, not per process."""
+    store = MemoryStore()
+    first = build(match, store)
+    run(first.ingest(match["events"]))
+    assert first.spawn_budget.used > 0 and first.quiet_budget.used > 0
+    restarted = build(match, store)
+    assert restarted.spawn_budget.used == first.spawn_budget.used
+    assert restarted.quiet_budget.used == first.quiet_budget.used
