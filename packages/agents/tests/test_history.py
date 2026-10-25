@@ -88,3 +88,18 @@ def test_roster_history_needs_exactly_two_teams_named_by_clubs() -> None:
 def test_the_api_image_ships_the_results_file() -> None:
     dockerfile = (Path(__file__).resolve().parents[3] / "services/api/Dockerfile").read_text()
     assert "COPY data/history data/history" in dockerfile
+
+
+def test_accents_and_known_spelling_differences_resolve() -> None:
+    from matchcast_agents.history import resolve_team
+
+    assert resolve_team("Côte d'Ivoire") == "Ivory Coast"
+    assert resolve_team("St Kitts and Nevis") == "Saint Kitts and Nevis"
+
+
+def test_federation_named_competitions_become_a_generic_label() -> None:
+    from matchcast_agents.history import _competition
+
+    assert _competition("CONMEBOL–UEFA Cup of Champions") == "International competition"
+    assert _competition("FIFA World Cup qualification") == "International competition"
+    assert _competition("Friendly") == "Friendly"

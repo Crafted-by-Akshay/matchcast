@@ -198,7 +198,7 @@ class MatchWorkflow:
         self.history = (
             history
             if history is not None
-            else history_for_roster(self.roster.get("team_ids"), self.clubs)
+            else history_for_roster(self.roster.get("team_ids"), self.clubs, clock().date())
         )
         self.hub = hub or StreamHub()
         self.config = config or WorkflowConfig()

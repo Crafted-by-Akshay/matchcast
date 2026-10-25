@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import logging
 import re
+import unicodedata
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -26,7 +27,7 @@ HOME_EDGE = 100.0
 K = 30.0
 FORM_LENGTH = 5
 # federation names are trademarks; ADR-0020 keeps them out of what we show
-_FEDERATION = re.compile(r"\b(FIFA|UEFA)\s+")
+_FEDERATION = re.compile(r"\b(FIFA|UEFA)\b")
 
 
 @lru_cache(maxsize=1)
@@ -51,16 +52,29 @@ def _matches() -> tuple[Match, ...]:
 
 @lru_cache(maxsize=1)
 def _names() -> dict[str, str]:
-    """Dataset spelling by casefolded name, so "Bosnia And Herzegovina" still matches."""
+    """Dataset spelling by folded name, so "Bosnia And Herzegovina" still matches."""
     names = {m[1] for m in _matches()} | {m[2] for m in _matches()}
-    return {n.casefold(): n for n in names}
+    return {_fold(n): n for n in names}
+
+
+def _fold(name: str) -> str:
+    """Casefolded, accents removed: "Côte d'Ivoire" and "cote d'ivoire" compare equal."""
+    plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return " ".join(plain.casefold().split())
+
+
+# names other sources use for a nation the dataset spells differently
+_ALIASES = {
+    _fold("Côte d'Ivoire"): "Ivory Coast",
+    _fold("Korea Republic"): "South Korea",
+    _fold("St Kitts and Nevis"): "Saint Kitts and Nevis",
+}
 
 
 def resolve_team(name: str) -> str | None:
-    """The dataset spelling of a nation, ignoring case; None when the dataset lacks it."""
-    aliases = {"korea republic": "South Korea"}
-    key = aliases.get(name.casefold(), name).casefold()
-    return _names().get(key)
+    """The dataset spelling of a nation, ignoring case and accents; None if the dataset lacks it."""
+    key = _fold(name)
+    return _names().get(_fold(_ALIASES.get(key, name)))
 
 
 @lru_cache(maxsize=8)
@@ -96,7 +110,8 @@ def _winner(m: Match) -> str | None:
 
 
 def _competition(name: str) -> str:
-    return _FEDERATION.sub("", name)
+    """The competition as we may show it: a federation-named one becomes a generic label."""
+    return "International competition" if _FEDERATION.search(name) else name
 
 
 def _h2h(home: str, away: str, matches) -> dict[str, Any]:
@@ -178,7 +193,7 @@ def for_match(home_team: str, away_team: str, on: date | None = None) -> dict[st
 
 
 def history_for_roster(
-    team_ids: list[str] | None, clubs: dict[str, str] | None
+    team_ids: list[str] | None, clubs: dict[str, str] | None, on: date | None = None
 ) -> dict[str, Any] | None:
     """The block for a roster's two teams, named by `clubs`; None unless there are two."""
     if not team_ids or len(team_ids) != 2 or not clubs:
@@ -186,4 +201,4 @@ def history_for_roster(
     home, away = (clubs.get(t) for t in team_ids)
     if not home or not away:
         return None
-    return for_match(home, away)
+    return for_match(home, away, on)
