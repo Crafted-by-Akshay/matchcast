@@ -1,6 +1,6 @@
 # 12 Interfaces: REST, SSE, MCP, A2A, events
 
-Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file is the final word on field types; this file is the design it must match.
+Status: **Agreed design**. Last reviewed 25 Oct 2026. The generated OpenAPI file is the final word on field types; this file is the design it must match.
 
 ## 1. Conventions
 
@@ -30,8 +30,8 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/lines/{line_id}/approve` | Producer | `session_id, match_id` | 200 line (+ publication) | 403, 404, 409 not approvable |
 | `POST /v1/lines/{line_id}/edit` | Producer | `session_id, match_id, text ≤ 280` | 200 line after re-verification | 403, 404, 422 rejected (verdict in body) |
 | `POST /v1/lines/{line_id}/kill` | Producer | `session_id, match_id, reason ≤ 200` | 200 | 403, 404 |
-| `POST /v1/matches/{match_id}/feeds/{feed}/kill` | Producer | `session_id, reason ≤ 200`; `feed` one of the six keys in `docs/contracts.md` (AB#499; the route is built, the air gate is **Planned**) | 200 `{feed, state: killed, audit_id, enforced: false}` | 403, 422 unknown feed, 404 |
-| `POST /v1/matches/{match_id}/feeds/{feed}/resume` | Producer | `session_id, reason ≤ 200` | 200 `{feed, state: live, audit_id, enforced: false}` | 403, 422, 404 |
+| `POST /v1/matches/{match_id}/feeds/{feed}/kill` | Producer | `session_id, reason ≤ 200`; `feed` one of the six keys in `docs/contracts.md` (AB#499; the air gate enforces the kill) | 200 `{feed, state: killed, audit_id, enforced: true}` | 403, 422 unknown feed, 404 |
+| `POST /v1/matches/{match_id}/feeds/{feed}/resume` | Producer | `session_id, reason ≤ 200` | 200 `{feed, state: live, audit_id, enforced: true}` | 403, 422, 404 |
 | `GET /v1/matches/{match_id}/audit` | anyone | `session_id, from_seq?, limit ≤ 1000` | 200 records | 404 |
 | `GET /v1/matches/{match_id}/scoreboard` | anyone | `session_id` | 200 the three-arm crew scoreboard (`kind: crew_ablation_scoreboard`, every arm `mode: rules`), computed from the stored events and cached per match, event count and run date | 404 |
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
@@ -67,10 +67,10 @@ Every match route rebuilds the workflow of a stored match from its roster when t
 | `claim` | claim packet | `claim:<claim_id>` |
 | `line` | line with status | `line:<line_id>:<status>` |
 | `publication` | publication with the variant for `lang` (+ English) | `pub:<publication_id>` |
-| `audit` | audit record | `audit:<sequence>` |
+| `audit` | audit record, with `details.why` (the Producer's free text, not yet verified) left out; the stored record keeps it | `audit:<sequence>` |
 | `recap_ready` | personas available | `recap` |
-| `onair` | **Planned** (AB#498 contract, AB#499 wiring): the `onair` record of a derived feed line that aired (`docs/contracts.md`, "Derived feed lines") | `onair:<publication_id>:<lang>` |
-| `feed_drop` | **Planned** (same): the `feed_drop` record of a derived line that did not air; the text stays in the audit chain | `feed_drop:<publication_id>` |
+| `onair` | the `onair` record of a derived feed line that aired (AB#498 contract, AB#499 wiring; `docs/contracts.md`, "Derived feed lines"). Feed records reach every stream, as line records do; the desk reads them by `feed` key | `onair:<publication_id>` |
+| `feed_drop` | the `feed_drop` record of a derived line that did not air. The text stays in the audit chain (the `line_abstained` record it points to), except for a line Content Safety refused (`unsafe_content`), whose text is never written to the audit. Its `publication_id` is `pub-<line_id>` even though nothing published, so a join on it finds no publication | `drop:<line_id>` |
 | `crew_ledger` | `crew_ledger` (contract 1.3.0): one moment the crew took, sent once its run has ended; `called`, `skipped`, `why`, `routed_by`, `spawn_reason`. Live only, not replayed on reconnect | `ledger:<moment_id>` |
 | `crew_spawn` | `crew_spawn` (contract 1.3.0): one specialist on one moment, on start (`running`) and on end (`done`, `no_data`, `failed` or `budget_exhausted`). Live only | `spawn:<moment_id>:<name>:<status>` |
 | `status` | `{status, reason?}`: `live`, `rules_fallback` (with `reason` from the `fallback_reason` list in 04-agents.md §4) or `warming_up`. Sent only when the status or reason changes; every refusal is still audited as `fallback_used` | none |

@@ -6,13 +6,24 @@ import httpx
 import pytest
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
+from matchcast_agents.personas import BOOTH
 from matchcast_agents.safety import AzureContentSafety, LocalSafetyScreen
-from matchcast_agents.workflow import WorkflowError
+from matchcast_agents.workflow import (
+    NOT_SHOWN,
+    PASSED,
+    UNCHECKED,
+    WITHHELD,
+    WorkflowError,
+    public_line,
+)
 from matchcast_contracts.audit import verify_chain
 
 
 def build(match, **kwargs) -> MatchWorkflow:
-    config = WorkflowConfig(approval_mode=kwargs.pop("approval_mode", "auto"))
+    config = WorkflowConfig(
+        approval_mode=kwargs.pop("approval_mode", "auto"),
+        **({"personas": kwargs.pop("personas")} if "personas" in kwargs else {}),
+    )
     return MatchWorkflow(
         stream=match["roster"]["stream"],
         roster=match["roster"],
@@ -56,7 +67,7 @@ def test_unsafe_line_is_blocked_audited_and_never_published(match) -> None:
 
 
 def test_prompt_attack_in_a_producer_edit_is_refused(match) -> None:
-    flow = build(match, approval_mode="producer")
+    flow = build(match, approval_mode="producer", personas=BOOTH)
     run(flow.ingest(match["events"][:60]))
     line = flow.store.lines(flow.sk)[-1]
     with pytest.raises(WorkflowError) as error:
@@ -66,7 +77,7 @@ def test_prompt_attack_in_a_producer_edit_is_refused(match) -> None:
 
 
 def test_unsafe_edit_text_is_rejected_not_aired(match) -> None:
-    flow = build(match, approval_mode="producer")
+    flow = build(match, approval_mode="producer", personas=BOOTH)
     run(flow.ingest(match["events"][:60]))
     line = flow.store.lines(flow.sk)[-1]
     _line, verdict = run(flow.edit(line.line_id, "That referee is an idiot."))
@@ -238,3 +249,82 @@ def test_half_the_recent_screens_on_the_local_word_list_is_degraded_and_recovers
     for _ in range(WINDOW):
         run(screen.analyze("x"))
     assert not screen.degraded and screen.recent_local == 0
+
+
+def test_a_refused_lines_text_never_leaves_the_workflow(match) -> None:
+    flow = build(match, safety=UnsafeScreen())
+    run(flow.ingest(match["events"]))
+    unsafe = [ln for ln in flow.store.lines(flow.sk) if ln.reason_code == "unsafe_content"]
+    assert unsafe and all("scores" in ln.text for ln in unsafe)  # the store keeps it for audit
+    for ln in unsafe:
+        out = public_line(ln)
+        assert out["text"] == WITHHELD and out["status"] == ln.status
+        assert out["reason_code"] == "unsafe_content" and out["line_id"] == ln.line_id
+    clean = next(ln for ln in flow.store.lines(flow.sk) if ln.reason_code is None)
+    assert public_line(clean) == clean.model_dump()
+    # and nor does the stream: the hub's line events carry the withheld text
+    seen = [e.data for e in flow.hub.history() if e.event == "line"]
+    refused = [d for d in seen if d["reason_code"] == "unsafe_content"]
+    assert refused and all(d["text"] == WITHHELD for d in refused)
+    # no event of a refused line shows its text: not the verdict, and not the draft before it
+    assert not [
+        d for d in seen if "scores" in d["text"] and d["line_id"] in {u.line_id for u in unsafe}
+    ]
+    assert all(d["text"] == UNCHECKED for d in seen if d["status"] in ("drafted", "verifying"))
+
+
+def test_the_open_stream_carries_a_lines_text_only_after_it_passed_its_checks(match) -> None:
+    flow = build(match, safety=UnsafeScreen())
+    run(flow.ingest(match["events"]))
+    seen = [e.data for e in flow.hub.history() if e.event == "line"]
+    assert seen
+    for d in seen:
+        if d["status"] in PASSED:
+            assert d["text"] not in (UNCHECKED, NOT_SHOWN, WITHHELD)
+        else:
+            assert d["text"] in (UNCHECKED, NOT_SHOWN, WITHHELD), d["status"]
+    rejected = next(ln for ln in flow.store.lines(flow.sk) if ln.status == "rejected")
+    assert (
+        public_line(rejected)["text"] == rejected.text or rejected.reason_code == "unsafe_content"
+    )
+    assert public_line(rejected, stream=True)["text"] in (NOT_SHOWN, WITHHELD)
+
+
+def test_model_written_check_reasons_are_blanked_with_the_text(match) -> None:
+    from matchcast_agents.messages import Check
+
+    flow = build(match)
+    run(flow.ingest(match["events"][:40]))
+    line = flow.store.lines(flow.sk)[0].model_copy(
+        update={
+            "status": "rejected",
+            "checks": [Check(name="meaning", passed=False, detail="unsupported: quotes the line")],
+        }
+    )
+    assert public_line(line, stream=True)["checks"][0]["detail"] == ""
+    assert public_line(line)["checks"][0]["detail"] == "unsupported: quotes the line"
+
+
+def test_a_line_waiting_for_approval_shows_its_text_on_the_stream(match) -> None:
+    """The producer's one human gate: a verified line awaiting approval (booth lines included
+    when held) must carry its real text, never a placeholder."""
+    config = WorkflowConfig(
+        personas=("casual", "booth:pbp", "booth:colour"), approval_mode="producer", hold_booth=True
+    )
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"],
+        roster=match["roster"],
+        names=match["names"],
+        clubs=match["teams"],
+        agents=rules_agents(config.personas),
+        config=config,
+        clock=fixed_clock(),
+    )
+    run(flow.ingest(match["events"]))
+    waiting = [
+        e.data for e in flow.hub.history() if e.event == "line" and e.data["status"] == "verified"
+    ]
+    booth = [d for d in waiting if d["persona"].startswith("booth:")]
+    assert booth and all(
+        d["text"] not in (UNCHECKED, NOT_SHOWN, WITHHELD) and d["text"] for d in waiting
+    )

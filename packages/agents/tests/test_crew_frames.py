@@ -1,9 +1,12 @@
 """The crew's live frames (contract 1.3.0): one crew_ledger per moment whose run has ended, and a
 crew_spawn on start and on end of each specialist. Each frame validates against the contract."""
 
-from conftest import run
+from conftest import fixed_clock, run
+from matchcast_agents import MatchWorkflow, WorkflowConfig
 from matchcast_agents.messages import ProducerTask
+from matchcast_agents.vision import pass_facts
 from matchcast_contracts import validate
+from test_vision import vision_events
 
 SPAWN_STATUSES = {"running", "done", "no_data", "failed", "budget_exhausted"}
 
@@ -82,3 +85,32 @@ def test_a_model_route_why_never_reaches_the_ledger(make_workflow, match) -> Non
     validate(frame)
     assert frame["why"] == "buildup"
     assert frame["routed_by"] == "model"
+
+
+def test_the_vision_moment_sends_a_ledger_and_spawn_frames(match) -> None:
+    # the one Vision moment is a crew moment too: it gets a rundown entry, a ledger frame and
+    # its specialists' start and end frames, like every other moment
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"],
+        roster=match["roster"],
+        names=match["names"],
+        clubs=match["teams"],
+        config=WorkflowConfig(vision_moment_ms=60_000),
+        clock=fixed_clock(),
+        vision_feed=lambda: pass_facts(vision_events(match)),
+    )
+    run(flow.ingest(match["events"]))
+    vision = [e for e in flow.rundown if e["moment_id"].startswith("v-")]
+    assert len(vision) == 1
+    ledgers = [f for f in frames(flow, "crew_ledger") if f["moment_id"].startswith("v-")]
+    assert [f["moment_id"] for f in ledgers] == [vision[0]["moment_id"]]
+    assert ledgers[0]["why"] == "vision" and ledgers[0]["routed_by"] == "rules"
+    spawns = [f for f in frames(flow, "crew_spawn") if f["moment_id"].startswith("v-")]
+    assert spawns, "the vision moment should spawn its specialists"
+    assert {f["status"] for f in spawns} <= {
+        "running",
+        "done",
+        "no_data",
+        "failed",
+        "budget_exhausted",
+    }

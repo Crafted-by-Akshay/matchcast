@@ -22,9 +22,13 @@ class HistorySpecialist:
         try:
             if resolve_team(home_name) is None or resolve_team(away_name) is None:
                 return SpecialistReport(self.name, request.moment_id, "no_data")
-            today = date.today()
-            block = pre_match(home_name, away_name, on=today)
-            rows = tuple(f"results:{n}" for n in meeting_rows(home_name, away_name, on=today))
+            # the same cut the Verifier recounts against: the day the match was created
+            cut = ctx.extra.get("history_on")
+            if cut is None:  # no history block on this match, so nothing to count against
+                return SpecialistReport(self.name, request.moment_id, "no_data")
+            on = date.fromisoformat(cut)
+            block = pre_match(home_name, away_name, on=on)
+            rows = tuple(f"results:{n}" for n in meeting_rows(home_name, away_name, on=on))
         except OSError:
             return SpecialistReport(self.name, request.moment_id, "failed")
 
