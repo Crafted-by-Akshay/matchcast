@@ -1,8 +1,7 @@
 /* Crew data layer (Experience lane). Everything the crew panels draw comes through CREW.
    Flag: ?crew=1 (or localStorage mc-crew=1). Off by default until the orchestration frames merge.
    CREW.play() feeds a Simulated fixture. CREW.ingest(frame) is the single place a real SSE adapter plugs in.
-   The crew_ledger / crew_spawn / crew_trace adapter below follows a PROPOSAL (vision/interfaces/crew-frames-proposal.md):
-   nothing emits those frames yet and names may change before AB#498. Change the shapes here only. */
+   crew_ledger / crew_spawn follow contract 1.3.0 (PR #379), onair / feed_drop contract 1.2.0; the scoreboard is a GET (fetchScore). Change the shapes here only. */
 (function () {
   'use strict';
   var qs = '';
@@ -28,17 +27,24 @@
   var S = {
     simulated: true,            // true while the data is the fixture, not the api
     moments: [],                // {id, minute, why, routed_by, status, agents:[{id,role,parent,status,t0,t1}], claims:[claim]}
-    feeds: {},                  // key -> [{publication_id, text, match_time_ms, source_event_ids}]
-    score: null                 // {arms:{key:{accuracy,catch_rate,latency_ms,cost,n}}, method}
+    feeds: {},                  // key -> [{publication_id, text, match_time_ms, source_event_ids, verdict, lang, repair_count, claim_ids, aired_at, translations?}]
+    lines: [],                  // claim entries (aired or dropped) for frames that carry no moment_id
+    score: null,                // {arms:{key:{accuracy,catch_rate,latency_ms,cost,n,precomputed?,run_id?}}, method}
+    scoreSource: null,          // 'fixture' (Simulated) or 'api' (the real GET /v1/matches/{id}/scoreboard)
+    scoreNote: ''               // shown instead of the scoreboard when the api has none yet
   };
   FEEDS.forEach(function (f) { S.feeds[f.key] = []; });
   var subs = [];
   function emit() { subs.forEach(function (fn) { try { fn(S); } catch (e) { console.error(e); } }); }
 
-  function moment(id, match) {   // keyed by match_id + moment_id when the frame has a match_id, by id alone otherwise
-    for (var i = 0; i < S.moments.length; i++) if (S.moments[i].id === id && (!match || S.moments[i].match_id === match)) return S.moments[i];
+  function moment(id, stream) {   // keyed by stream + moment_id when the frame has a stream, by id alone otherwise
+    for (var i = 0; i < S.moments.length; i++) if (S.moments[i].id === id && (!stream || !S.moments[i].stream || S.moments[i].stream === stream.key)) {
+      var f = S.moments[i];
+      if (stream && !f.stream) { f.stream = stream.key; f.match_id = stream.match; }   // a moment first seen without a stream adopts the first stream that names it
+      return f;
+    }
     var m = { id: id, minute: 0, why: '', routed_by: 'rules', status: 'open', agents: [], claims: [] };
-    if (match) m.match_id = match;
+    if (stream) { m.stream = stream.key; m.match_id = stream.match; }
     S.moments.push(m);
     return m;
   }
@@ -48,6 +54,11 @@
   var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
   function minuteOf(ms) { return Math.floor((+ms || 0) / 60000); }
   function idOf(v) { return typeof v === 'string' && v ? v : (typeof v === 'number' && isFinite(v) ? String(v) : null); }
+  /* a frame's stream identity {tenant_id, session_id, match_id} (contract 1.3.0): the key is all three, so two sessions of one match stay apart */
+  function streamOf(v) {
+    if (!obj(v) || !idOf(v.match_id)) return null;
+    return { key: [idOf(v.tenant_id) || '', idOf(v.session_id) || '', idOf(v.match_id)].join('/'), match: idOf(v.match_id) };
+  }
   function obj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
   function strs(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === 'string'; }) : []; }
   function showrunner(m) {
@@ -67,27 +78,29 @@
 
   /* PROPOSAL shapes (AB#498). Each handler validates first and returns an apply function, or null for a malformed frame:
      nothing is touched until the whole frame is known good. */
-  /* crew_ledger: one per moment, after its run ends. */
+  /* crew_ledger (contract 1.3.0): kind, schema_version, stream, moment_id, at_ms, called, skipped, why, routed_by (rules|model|fallback). One per moment, after its run ends. */
   function ledger(f) {
     var id = idOf(f.moment_id);
     if (!id) return null;
     return function () {
-      var m = moment(id, idOf(f.match_id));
+      var m = moment(id, streamOf(f.stream));
       m.minute = minuteOf(f.at_ms); m.why = typeof f.why === 'string' ? f.why : m.why; m.routed_by = typeof f.routed_by === 'string' ? f.routed_by : m.routed_by;
       m.called = strs(f.called); m.skipped = strs(f.skipped);
+      if (typeof f.spawn_reason === 'string' && f.spawn_reason) m.spawn_reason = f.spawn_reason.slice(0, 200);   // why the planner spawned no specialists (the rundown entry's spawn_reason)
       m.status = 'done';          // sent once the run ends, so the moment is over
       var sh = showrunner(m);
       if (sh.status === 'running') sh.status = 'done';
     };
   }
-  /* crew_spawn: one per specialist per status change. The raw status is kept (running, done, no_data, failed, budget_exhausted);
+  /* crew_spawn (contract 1.3.0): kind, schema_version, stream, moment_id, spawn_id, agent_id, role, parent_id, status, started_ms, ended_ms, tokens, why.
+     No at_ms: the minute comes from started_ms. One per specialist per status change. The raw status is kept (running, done, no_data, failed, budget_exhausted);
      a terminal status never goes back to running on a late or duplicate frame. */
   function spawn(f) {
     var mid = idOf(f.moment_id), sid = idOf(f.spawn_id);
     if (!mid || !sid) return null;
     return function () {
-      var m = moment(mid, idOf(f.match_id));
-      if (!m.minute && f.at_ms != null) m.minute = minuteOf(f.at_ms);
+      var m = moment(mid, streamOf(f.stream));
+      if (!m.minute && f.started_ms != null) m.minute = minuteOf(f.started_ms);
       var sh = showrunner(m), pid = idOf(f.parent_id);
       var a = { id: sid, role: idOf(f.role) || idOf(f.agent_id) || undefined, parent: !pid || pid === 'showrunner' ? sh.id : pid,
         status: typeof f.status === 'string' ? f.status : 'running', started: f.started_ms, ended: f.ended_ms, tokens: f.tokens, why: f.why || undefined };
@@ -98,38 +111,58 @@
       upsert(m.agents, a);
     };
   }
-  /* crew_trace: one per line at a terminal state. Every claim is recorded; only published derived-feed lines air.
-     Text is kept for published and review lines only; a dropped line keeps its reason and no text. */
-  function trace(f) {
-    var mid = idOf(f.moment_id), lid = idOf(f.line_id);
-    if (!mid || !lid) return null;
-    if (f.claims != null && !Array.isArray(f.claims)) return null;
-    var cs = f.claims && f.claims.length ? f.claims : [{ claim_id: lid }];   // a line with no claims still records its reason
-    for (var i = 0; i < cs.length; i++) if (!obj(cs[i]) || !idOf(cs[i].claim_id)) return null;
+  /* onair / feed_drop: the FINAL contract 1.2.0 records (docs/contracts.md, "Derived feed lines"), not a proposal.
+     onair: one verified derived-feed line that aired, so it carries the verdict 'verified' by contract. A translated row (another lang) shares the
+     publication_id and is kept under the English row's translations; it never edits the English text and is ignored if no English row exists.
+     feed_drop: a line that did not air. Only the reason and audit_id are kept: the text stays in the audit chain and is never stored here.
+     The frames name no moment, so these claim entries go in the flat S.lines (newest 200 kept); moment claims stay empty. */
+  var LINES_CAP = 200, PENDING_CAP = 100, pending = Object.create(null);   // translated rows that arrived before their English row
+  function feedOk(v) { return typeof v === 'string' && has(S.feeds, v); }
+  function note(f, entry) {
+    var list = S.lines;
+    var old = list.filter(function (x) { return x.id === entry.id; })[0];
+    if (old && old.verdict === 'verified' && entry.verdict === 'dropped') return;   // an aired line stays aired
+    if (old && entry.verdict === 'verified') { Object.keys(old).forEach(function (k) { delete old[k]; }); Object.assign(old, entry); return; }
+    upsert(list, entry);
+    if (list.length > LINES_CAP) list.splice(0, list.length - LINES_CAP);
+  }
+  function onair(f) {
+    var pid = idOf(f.publication_id), src = strs(f.source_event_ids);
+    if (!pid || !feedOk(f.feed) || typeof f.text !== 'string' || !Array.isArray(f.source_event_ids) || !src.length || src.length !== f.source_event_ids.length) return null;
+    var lang = typeof f.lang === 'string' && f.lang ? f.lang : 'en';
     return function () {
-      var m = moment(mid, idOf(f.match_id)); seenMin(m, f);
-      var v = obj(f.verifier) ? f.verifier : {}, st = f.state;
-      var base = { verdict: v.verdict, reason: v.reason_code, repair_of: f.repair_of, audit_hash: f.audit_hash, state: st, line_id: lid, feed: f.feed };
-      var text = (st === 'published' || st === 'review') && typeof f.text === 'string' ? f.text : undefined;
-      var srcAll = [];
-      cs.forEach(function (c) {
-        var src = strs(c.source_event_ids);
-        srcAll = srcAll.concat(src);
-        upsert(m.claims, Object.assign({ id: idOf(c.claim_id), sources: src, history: strs(c.history_row_ids), metric: c.metric, value: c.value, text: text }, base));
-      });
-      if (st === 'published' && text !== undefined && typeof f.feed === 'string' && has(S.feeds, f.feed)) {
-        var line = { publication_id: lid, text: text, match_time_ms: f.at_ms, source_event_ids: srcAll, verdict: v.verdict }, list = S.feeds[f.feed], k = -1;
-        list.forEach(function (x, j) { if (x.publication_id === lid) k = j; });
-        if (k < 0) list.push(line); else list[k] = line;
+      var list = S.feeds[f.feed], k = -1;
+      list.forEach(function (x, j) { if (x.publication_id === pid) k = j; });
+      if (lang !== 'en') {   // a translated row: attach to the English line, never replace it; one that comes first waits for its English row
+        if (k >= 0) { list[k].translations = list[k].translations || {}; list[k].translations[lang] = f.text; }
+        else {
+          var pk = f.feed + '|' + pid;
+          if (!has(pending, pk)) { if (Object.keys(pending).length >= PENDING_CAP) delete pending[Object.keys(pending)[0]]; pending[pk] = Object.create(null); }
+          pending[pk][lang] = f.text;
+        }
+        return;
       }
+      var line = { publication_id: pid, text: f.text, match_time_ms: f.match_time_ms, source_event_ids: src, verdict: 'verified', lang: 'en',
+        repair_count: f.repair_count, claim_ids: Array.isArray(f.claim_ids) ? strs(f.claim_ids) : undefined, aired_at: f.aired_at };
+      var pk2 = f.feed + '|' + pid;
+      if (has(pending, pk2)) { line.translations = Object.assign({}, pending[pk2]); delete pending[pk2]; }
+      if (k < 0) list.push(line);
+      else { if (list[k].translations) line.translations = Object.assign({}, list[k].translations, line.translations); merge(list[k], line); }
+      note(f, { id: pid, verdict: 'verified', state: 'aired', feed: f.feed, text: f.text, sources: src, claim_ids: Array.isArray(f.claim_ids) ? strs(f.claim_ids) : undefined, repair_count: f.repair_count, aired_at: f.aired_at });
     };
   }
-  function seenMin(m, f) { if (!m.minute && f.at_ms != null) m.minute = minuteOf(f.at_ms); }
+  function feedDrop(f) {
+    var pid = idOf(f.publication_id);
+    if (!pid || !feedOk(f.feed) || typeof f.reason_code !== 'string' || !f.reason_code) return null;
+    return function () {
+      note(f, { id: pid, verdict: 'dropped', state: 'dropped', feed: f.feed, reason: f.reason_code, audit_id: idOf(f.audit_id) || undefined, repair_count: f.repair_count, sources: strs(f.source_event_ids) });
+    };
+  }
   var REAL = Object.create(null);
-  REAL.crew_ledger = ledger; REAL.crew_spawn = spawn; REAL.crew_trace = trace;
+  REAL.crew_ledger = ledger; REAL.crew_spawn = spawn; REAL.onair = onair; REAL.feed_drop = feedDrop;
   var fixtureLoaded = false;
 
-  /* frame kinds: crew_ledger, crew_spawn, crew_trace (proposal) and the older fixture kinds moment, spawn, claim, publish, score.
+  /* frame kinds: crew_ledger, crew_spawn (1.3.0), onair, feed_drop (final contract 1.2.0) and the older fixture kinds moment, spawn, claim, publish, score.
      opts.simulated marks the fixture's own crew_* frames, which must not clear S.simulated. Inert while the flag is off.
      Never throws: a malformed frame is skipped whole. */
   function ingest(f, opts) {
@@ -152,7 +185,7 @@
         if (c) Object.assign(c, f.claim); else mm.claims.push(f.claim);
       } else if (f.kind === 'publish') {
         (S.feeds[f.feed] = S.feeds[f.feed] || []).push(f.line);
-      } else if (f.kind === 'score') S.score = f.score;
+      } else if (f.kind === 'score') { S.score = f.score; S.scoreSource = 'fixture'; S.scoreNote = ''; }
       else return;
     } catch (e) { console.warn('CREW.ingest skipped a malformed ' + f.kind + ' frame'); return; }
     emit();
@@ -162,25 +195,20 @@
   function fixtureGoal(minute) {
     var id = 'm-' + minute, ms = minute * 60000, steps = [], ev = 'e-' + minute + '-1';
     function at(t, f) { steps.push([t, f]); }
-    var base = { match_id: 'sim', moment_id: id };
+    var base = { schema_version: '1.3.0', stream: { tenant_id: 'demo', session_id: 'sim', match_id: 'sim' }, moment_id: id };
     function sp(t, role, status, why) {
-      at(t, Object.assign({ kind: 'crew_spawn', at_ms: ms + t, spawn_id: id + ':' + role, agent_id: role, role: role, parent_id: 'showrunner', status: status,
+      at(t, Object.assign({ kind: 'crew_spawn', spawn_id: id + ':' + role, agent_id: role, role: role, parent_id: 'showrunner', status: status,
         started_ms: ms, ended_ms: status === 'running' ? null : ms + t, tokens: 0, why: why || '' }, base));
     }
-    function tr(t, o) {
-      at(t, Object.assign({ kind: 'crew_trace', at_ms: ms, called: ['analyst', 'narrator', 'verifier'], audit_hash: 'sim:' + o.line_id }, base, o));
+    function oa(t, o) {   // the fixture airs through onair
+      at(t, Object.assign({ kind: 'onair', lang: 'en', source_event_ids: [ev], claim_ids: [], match_time_ms: ms, aired_at: 'sim', repair_count: 0 }, o));
     }
     var roles = ['Analyst', 'Stats Researcher', 'History', 'Replay', 'Narrator'];
     roles.forEach(function (r, i) { sp(400 + i * 250, r, 'running'); });
-    // the Stats line is wrong: the Verifier drops it, the repair airs (the dropped line carries its reason, not its text)
-    tr(2400, { line_id: id + ':L1', feed: 'casual', state: 'dropped', claims: [{ claim_id: id + ':c1', metric: 'shots_on_target:home', value: 3, source_event_ids: [ev], history_row_ids: [] }],
-      verifier: { verdict: 'rejected', reason_code: 'number_mismatch', checks: ['numbers'] } });
-    tr(3800, { line_id: id + ':L2', feed: 'casual', state: 'published', repair_of: id + ':L1', text: 'GOAL! Second shot on target and it counts.',
-      claims: [{ claim_id: id + ':c2', metric: 'shots_on_target:home', value: 2, source_event_ids: [ev], history_row_ids: [] }],
-      verifier: { verdict: 'verified', reason_code: null, checks: ['numbers', 'names'] } });
-    tr(4100, { line_id: id + ':L3', feed: 'analyst', state: 'published', text: 'Second shot on target, first goal; xG 0.31.',
-      claims: [{ claim_id: id + ':c3', metric: 'xg:home', value: 0.31, source_event_ids: [ev], history_row_ids: [] }],
-      verifier: { verdict: 'verified', reason_code: null, checks: ['numbers'] } });
+    // the Stats line is wrong: the Verifier catches it and the line airs after its single repair (repair_count 1). A dropped first attempt is
+    // not how the contract works for booth lines, so no feed_drop is simulated here.
+    oa(3800, { publication_id: id + ':L2', feed: 'casual', text: 'GOAL! Second shot on target and it counts.', claim_ids: [id + ':c2'], repair_count: 1 });
+    oa(4100, { publication_id: id + ':L3', feed: 'analyst', text: 'Second shot on target, first goal; xG 0.31.', claim_ids: [id + ':c3'] });
     roles.forEach(function (r, i) { sp(4300 + i * 20, r, 'done'); });
     at(4600, Object.assign({ kind: 'crew_ledger', at_ms: ms, called: ['analyst', 'narrator', 'verifier'], skipped: [], why: 'goal', routed_by: 'rules' }, base));
     at(4600, { kind: 'score', score: { method: 'Simulated fixture', arms: {
@@ -190,6 +218,78 @@
     return steps;
   }
 
+  /* The scoreboard is a GET, not a frame (contract 1.3.0): /v1/matches/{match_id}/scoreboard, the dict of grading.scoreboard().
+     Its arms nest their figures ({accuracy:{wrong_rate}, catch_rate:{rate}, latency_ms:{p50}, lines_aired}); a flat number is taken as is.
+     Cost stays n/a: the api states model calls and no price. The data is real, so it carries no Simulated badge. */
+  function fin(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
+  function mapScore(j) {
+    if (!obj(j) || !obj(j.arms)) return null;
+    var arms = {}, any = false;
+    ARMS.forEach(function (a) {
+      var d = j.arms[a.key];
+      if (!obj(d)) return;
+      var acc = fin(d.accuracy), cr = fin(d.catch_rate), lat = fin(d.latency_ms);
+      if (acc === null && obj(d.accuracy) && fin(d.accuracy.wrong_rate) !== null) acc = 1 - d.accuracy.wrong_rate;
+      if (cr === null && obj(d.catch_rate)) cr = fin(d.catch_rate.rate);
+      if (lat === null && obj(d.latency_ms)) lat = fin(d.latency_ms.p50);
+      var n = fin(d.n); if (n === null) n = fin(d.lines_aired);
+      arms[a.key] = { accuracy: acc, catch_rate: cr, latency_ms: lat, cost: fin(d.cost), n: n };
+      if (typeof d.mode === 'string') arms[a.key].mode = d.mode;
+      if (d.precomputed === true || d.mode === 'precomputed') arms[a.key].precomputed = true;
+      if (typeof d.run_id === 'string' && d.run_id) arms[a.key].run_id = d.run_id;
+      any = true;
+    });
+    if (!any) return null;
+    var method = typeof j.method === 'string' && j.method ? j.method : 'Accuracy is the share of aired numbers that were right, graded against simulator truth (rules-mode arms)' + (typeof j.run_date === 'string' ? ', run ' + j.run_date : '') + (fin(j.seed) !== null ? ', seed ' + j.seed : '');
+    if (obj(j.difference) && typeof j.difference.note === 'string') method += '. ' + j.difference.note;
+    return { method: method, arms: arms };
+  }
+  var scoreBusy = false, scoreFor = '', noteFor = '', gen = 0, NOTE_404 = 'The scoreboard is not available yet. It appears once the api has graded lines for this match.';
+  function keyOf(lv) { var k = lv && lv.key; return k && k.match_id ? [k.session_id || '', k.match_id].join('/') : ''; }
+  function dropApiScore() {   // the api score belongs to one match and session
+    if (S.scoreSource === 'api') { S.score = null; S.scoreSource = null; S.scoreNote = ''; scoreFor = ''; emit(); }
+  }
+  function fetchScore() {
+    if (!on || scoreBusy || fixtureLoaded) return Promise.resolve(false);
+    var lv = typeof LV !== 'undefined' ? LV : null, key = lv && lv.key, base = lv && lv.base;
+    if (!base || !key || !key.match_id) return Promise.resolve(false);
+    var asked = keyOf(lv), g = gen, opts = { headers: { Accept: 'application/json' }, cache: 'no-store' };
+    var stale = function () { return g !== gen || asked !== keyOf(typeof LV !== 'undefined' ? LV : null) || fixtureLoaded; };   // a reset, another match or the fixture took over while it was in flight
+    try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) opts.signal = AbortSignal.timeout(8000); } catch (e) { /* no timeout support */ }
+    scoreBusy = true;
+    var req;
+    try { req = fetch(base + '/v1/matches/' + encodeURIComponent(key.match_id) + '/scoreboard?' + new URLSearchParams({ session_id: key.session_id }), opts)
+      .then(function (res) {
+        if (stale()) return false;
+        if (res.status === 404) {   // keep the last good score; the note only matters while there is none, and only a changed note emits
+          if (!S.score) { noteFor = asked; if (S.scoreNote !== NOTE_404) { S.scoreNote = NOTE_404; emit(); } }
+          return false;
+        }
+        if (!res.ok) return false;
+        return res.json().then(function (j) {
+          var sc = mapScore(j);
+          if (!sc || stale()) return false;
+          S.score = sc; S.scoreSource = 'api'; S.scoreNote = ''; scoreFor = asked; emit();
+          return true;
+        });
+      }); } catch (e) { scoreBusy = false; return Promise.resolve(false); }
+    return req.catch(function () { return false; }).then(function (ok) { scoreBusy = false; return ok; });
+  }
+  var lastPoll = 0, lastKey = '';
+  function pollScore() {   // gently: at most one GET per interval, only while the api match is live
+    var lv = typeof LV !== 'undefined' ? LV : null;
+    if (S.scoreSource === 'api' && keyOf(lv) !== scoreFor) dropApiScore();   // a new match or session
+    var k = keyOf(lv);
+    if (S.scoreNote && !S.score && k !== noteFor) { S.scoreNote = ''; noteFor = ''; emit(); }   // the note belongs to the match that was asked
+    if (k !== lastKey) { lastKey = k; lastPoll = 0; }   // a new match polls at once
+    if (!lv || !lv.key || lv.status !== 'live') { lastPoll = 0; return; }
+    var gap = +window.MATCHCAST_SCORE_MS || 15000, now = Date.now();
+    if (lastPoll && now - lastPoll < gap) return;
+    lastPoll = now;
+    fetchScore();
+  }
+  if (on) setInterval(pollScore, 1000);
+
   var timers = [];
   function play(minute) {
     stop();
@@ -198,12 +298,12 @@
     fixtureGoal(minute || 23).forEach(function (s) { timers.push(setTimeout(function () { ingest(s[1], { simulated: true }); }, s[0])); });
   }
   function stop() { timers.forEach(clearTimeout); timers = []; }
-  function resetData() { S.moments = []; FEEDS.forEach(function (f) { S.feeds[f.key] = []; }); S.score = null; fixtureLoaded = false; }
+  function resetData() { S.moments = []; S.lines = []; FEEDS.forEach(function (f) { S.feeds[f.key] = []; }); S.score = null; S.scoreSource = null; S.scoreNote = ''; scoreFor = ''; noteFor = ''; gen++; pending = Object.create(null); fixtureLoaded = false; }
   function reset() { stop(); resetData(); emit(); }
 
   window.CREW = {
     enabled: on, FEEDS: FEEDS, ARMS: ARMS, state: S,
     subscribe: function (fn) { subs.push(fn); fn(S); return function () { subs = subs.filter(function (x) { return x !== fn; }); }; },
-    ingest: ingest, play: play, stop: stop, reset: reset
+    ingest: ingest, fetchScore: fetchScore, get playing() { return fixtureLoaded; }, play: play, stop: stop, reset: reset
   };
 })();

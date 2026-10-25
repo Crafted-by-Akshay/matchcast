@@ -26,7 +26,7 @@ test('crew tree: Showrunner fans out, labelled goal 23\' and routed by rules, th
   const sec = page.locator('#crew-tree');
   await expect(sec).toBeVisible();
   await expect(sec.getByRole('heading', { name: 'Crew' })).toBeVisible();
-  await expect(sec.locator('#ct-sim')).toHaveText('Simulated');
+  await expect(sec.locator('#ct-sim')).toBeHidden();   // nothing to label yet: the badge belongs to fixture data only
   await expect(sec).toContainText('No moment yet');
   await page.evaluate(() => {
     CREW.ingest({ kind: 'moment', id: 'm-23', data: { minute: 23, why: 'goal', routed_by: 'rules', status: 'open' } });
