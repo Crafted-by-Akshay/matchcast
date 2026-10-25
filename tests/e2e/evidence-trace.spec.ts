@@ -255,6 +255,9 @@ test('evidence trace: an onair event on the api stream reaches the panel', async
   await expect(ev.locator('.tp-tools')).toContainText('tc-9');
   await expect(ev.locator('.tp-trace')).toContainText('match-demo:m-e42');
   await expect(ev.locator('.tp-history')).toContainText('results row 7');
+  const dropRow = page.locator('#ag-claims tr[data-id="onair-analyst-goal"]');   // the feed_drop on the same stream is a card in the Agents tab
+  await expect(dropRow).toContainText('dropped');
+  await expect(dropRow).toContainText('number_mismatch');
   expect(errs.filter((e) => !/EventSource/.test(e))).toEqual([]);
   } finally { server.closeAllConnections(); server.close(); }
 });
@@ -278,4 +281,85 @@ test('evidence trace: a claim card shows its own claim fields; a translation or 
   await expect(ev.locator('.tp-extra')).toContainText('also aired in es');
   await expect(ev.locator('.tp-extra')).toContainText('a later row for this line was dropped (translation)');
   await expect(ev.locator('.tp-crew-audit')).toHaveCount(0);
+});
+
+// the Verifier catching a line is a card in the Agents tab: reason and audit id, no text, and an Evidence panel
+test('evidence trace: a feed_drop becomes a "Verifier dropped" card in the Agents tab with its reason and audit id, and the Evidence panel opens from it', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openEvidence(page, '?evidence=1');
+  const ev0 = await apiLine(page);
+  await page.evaluate(() => (document.getElementById('tp') as HTMLDialogElement).close());   // the helper leaves a claim's panel open
+  const d = { ...drop(ev0), publication_id: 'onair-analyst-goal', reason_code: 'number_mismatch' };
+  expect(await page.evaluate((x) => [(window as any).mcCrewTrace(x), AG.ingestDrop(x, 'live'), AG.ingestDrop(x, 'live')], d), 'the same drop twice is one card').toEqual([true, true, true]);
+  expect(await page.evaluate(() => AG.run.claims.filter((c: any) => c.dropped).length)).toBe(1);
+  const row = page.locator('#ag-claims tr[data-id="onair-analyst-goal"]');
+  await expect(row).toBeVisible();
+  await expect(row.locator('td.v')).toContainText('dropped');
+  await expect(row).toContainText('number_mismatch');
+  await expect(row).toContainText('feed analyst');
+  await expect(page.locator('#ag-cards')).toContainText('1 dropped');
+  await expect(page.locator('#ag-feed')).toContainText('dropped a line on the analyst feed: number_mismatch');
+  await row.click();
+  const prov = page.locator('#ag-prov');
+  await expect(prov).toContainText('Verifier dropped');
+  await expect(prov).toContainText('the text stays in the audit chain, not shown');
+  await expect(prov).toContainText('audit-drop-1');
+  await prov.locator('.ag-how').click();
+  const ev = page.locator('#tp .tp-evidence');
+  await expect(ev.locator('.tp-state')).toContainText('dropped');
+  await expect(ev.locator('.tp-verifier')).toContainText('number_mismatch');
+  await expect(ev.locator('.tp-crew-audit')).toContainText('audit-drop-1');
+  await expect(ev.locator('.tp-rows li')).toHaveCount(1);
+  await expect(ev.locator('.tp-tools')).toContainText('names no claims');
+  // a line that aired is not turned into a drop; a hostile reason is text; a drop with no id makes no card
+  expect(await page.evaluate((x) => [AG.ingestDrop({ ...x, publication_id: 'onair-casual-goal' }, 'live'), AG.ingestDrop({ ...x, publication_id: undefined }, 'live'), AG.ingestDrop(null, 'live'), AG.ingestDrop({ publication_id: 'pub-x', reason_code: '<img src=x onerror=window.__xss=1>', feed: { toString: 1 } }, 'live')], d)).toEqual([false, false, false, true]);
+  await expect(page.locator('#ag-claims tr[data-id="pub-x"]')).toContainText('<img src=x onerror=window.__xss=1>');
+  expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  await page.locator('#tp .tp-x').click();
+  expect(errs).toEqual([]);
+});
+
+test('evidence trace: without the flag a dropped line is still a card, with no Evidence section', async ({ page }) => {
+  await openEvidence(page, '');
+  await apiLine(page);
+  await page.evaluate(() => AG.ingestDrop({ publication_id: 'onair-analyst-goal', feed: 'analyst', reason_code: 'repeat', audit_id: 'audit-drop-2', repair_count: 0 }, 'live'));
+  await expect(page.locator('#ag-claims tr[data-id="onair-analyst-goal"]')).toContainText('repeat');
+  await page.evaluate(() => TP.open('onair-analyst-goal'));
+  await expect(page.locator('#tp')).toBeVisible();
+  await expect(page.locator('#tp .tp-evidence')).toHaveCount(0);
+});
+
+test('evidence trace: a drop never shows for a line that aired, whatever order the stream sends things in; ids and counts are bounded', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openEvidence(page, '?evidence=1');
+  await page.evaluate(() => (document.getElementById('tp') as HTMLDialogElement).close());
+  const dropOf = (id: string, extra: object = {}) => ({ publication_id: id, feed: 'analyst', reason_code: 'number_mismatch', audit_id: 'a-' + id, repair_count: 1, source_event_ids: ['e1'], ...extra });
+  // a translation drop means the English line aired: no card, even before its publication is known
+  expect(await page.evaluate((x) => AG.ingestDrop(x, 'live'), dropOf('pub-t', { reason_code: 'translation' }))).toBe(false);
+  // an onair record seen first: a later drop row for the same id is not a drop of the line
+  expect(await page.evaluate((x) => { AG.noteAired('pub-a'); return AG.ingestDrop(x, 'live'); }, dropOf('pub-a'))).toBe(false);
+  // the drop first, the publication after: the card becomes the published line and the count goes back down
+  await page.evaluate((x) => AG.ingestDrop(x, 'live'), dropOf('pub-late'));
+  await expect(page.locator('#ag-cards')).toContainText('1 dropped');
+  await page.evaluate(() => AG.ingest({ publication_id: 'pub-late', line_id: 'L-9', claim_ids: [], text: 'Goal for Northgate FC.' }, 'live'));
+  const c = await page.evaluate(() => { const k = AG.run.claims.find((x: any) => x.id === 'pub-late'); return { dropped: k.dropped, pub: k.pub, approval: k.approval, kind: k.kind, n: AG.run.stat.dropped }; });
+  expect(c).toEqual({ dropped: false, pub: true, approval: undefined, kind: 'line', n: 0 });
+  await expect(page.locator('#ag-claims tr[data-id="pub-late"]')).toHaveCount(0);   // a published line is not a ledger claim
+  // a hostile publication_id is text, and a card selected by default does not run it
+  await page.evaluate((x) => AG.ingestDrop(x, 'live'), dropOf('<img src=x onerror=window.__xss=1>', { match_time_ms: 'soon', repair_count: 1.5, source_event_ids: [null, {}, 'e1'] }));
+  await expect(page.locator('#ag-prov')).toContainText('<img src=x onerror=window.__xss=1>');
+  expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  const h = await page.evaluate(() => { const k = AG.run.claims.at(-1); return { repairs: k.repairs, ev: k.eventIds, minute: k.minute, source: k.source }; });
+  expect(h).toEqual({ repairs: null, ev: ['e1'], minute: 12.4, source: 'model' });   // a bad count is none; a missing time takes the last event's minute
+  expect(await page.evaluate((x) => { AG.ingestDrop(x, 'fallback'); return AG.run.claims.at(-1).source; }, dropOf('pub-fb')), 'a drop seen when the api is not live is tagged rules').toBe('rules');
+  await expect(page.locator('#ag-prov')).toContainText('feed_drop · 1.2.0');
+  await expect(page.locator('#ag-prov')).toContainText('Api Verifier');
+  // the ledger can be filtered to the dropped lines; they are not counted as claims
+  await page.selectOption('#lg-verdict', 'dropped');
+  await expect(page.locator('#ag-claims tr[data-id]')).toHaveCount(2);
+  await page.selectOption('#lg-verdict', '');
+  await expect(page.locator('#ag-n')).not.toContainText('dropped');
+  // a flood of distinct ids is bounded
+  expect(await page.evaluate(() => { for (let i = 0; i < 520; i++) AG.ingestDrop({ publication_id: 'flood-' + i, reason_code: 'repeat' }, 'live'); return AG.run.claims.filter((k: any) => k.dropped).length; })).toBe(500);
+  expect(errs).toEqual([]);
 });
