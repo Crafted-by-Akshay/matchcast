@@ -95,18 +95,28 @@ def _last_involvement_minute(ctx: MatchContext, player_id: str, now_ms: int) -> 
     return max(minutes) if minutes else None
 
 
+_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+
+
 def quiet_summary(ctx: MatchContext, story: PlayerStory, now_ms: int) -> str | None:
-    """After a quiet spell, one summary line, once per spell. The spell is measured on the stored
-    events; the line only airs when shared memory holds a verified beat for the player, and its
-    words come from that memory. Call ``story.summarised(minute)`` after it airs."""
+    """After a quiet spell, one summary line of the player's involvement so far, once per spell.
+    The spell is measured on the stored events. The involvement is what shared memory remembers
+    (verified beats for the player), counted in words so the line keeps one number at most.
+    Call ``story.summarised(minute)`` after it airs."""
     last = _last_involvement_minute(ctx, story.player_id, now_ms)
     if last is None or now_ms // 60_000 - last < QUIET_MINUTES:
         return None
     if last == story.summarised_minute:
         return None  # this spell already has its summary
-    if not ctx.extra.get("storylines", {}).get(f"player:{story.player_id}"):
-        return None  # nothing remembered: no words to build the summary from
-    return f"{ctx.player_name(story.player_id)} has been quiet since minute {last}."
+    beats = ctx.extra.get("storylines", {}).get(f"player:{story.player_id}", ())
+    if not beats:
+        return None  # nothing remembered: no involvement to summarise
+    count = _WORDS[len(beats)] if len(beats) < len(_WORDS) else "many"
+    moments = "moment" if len(beats) == 1 else "moments"
+    return (
+        f"{ctx.player_name(story.player_id)} has been quiet since minute {last}, "
+        f"after {count} {moments} on the storyline."
+    )
 
 
 def total_check(ctx: MatchContext, player_id: str, metric: str, upto: int, stated: int) -> Check:

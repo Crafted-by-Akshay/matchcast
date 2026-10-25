@@ -162,3 +162,39 @@ def _minute_of(ctx: MatchContext, player: str, now: int) -> int:
         for e in ctx.events
         if e["event_time_ms"] <= now and e["payload"].get("player_id") == player
     )
+
+
+def test_a_red_card_reads_as_sent_off(match) -> None:
+    player = next(e for e in match["events"] if e["payload"]["type"] == "card")["payload"]
+    red = {"type": "card", "player_id": player.get("player_id"), "team_id": "home", "colour": "red"}
+    event = {**next(e for e in match["events"] if e["payload"]["type"] == "card"), "payload": red}
+    line = story_line(context(match), event, PlayerStory(player_id=red["player_id"]))
+    assert line is not None and "is sent off for" in line and "Red cards so far: 1" in line
+
+
+def test_quiet_summary_counts_remembered_moments_in_words(match) -> None:
+    goal = goal_event(match)
+    player = goal["payload"]["player_id"]
+    base = context(match)
+    records = [
+        LineRecord(
+            line_id=f"l{i}",
+            moment_id=f"m-{goal['event_id']}",
+            claim_ids=[],
+            persona="casual",
+            text=f"beat {i} about {base.player_name(player)}",
+            status="verified",
+            created_at="2026-10-25T14:00:00Z",
+            snapshot_revision=0,
+        )
+        for i in range(2)
+    ]
+    ctx = replace(base, extra={"storylines": storylines(base, records)})
+    last = max(
+        e["event_time_ms"] // 60_000
+        for e in match["events"]
+        if e["payload"].get("player_id") == player
+    )
+    summary = quiet_summary(ctx, PlayerStory(player_id=player), now_ms=(last + 10) * 60_000)
+    assert summary is not None and "after two moments" in summary
+    assert extract_numbers(summary) == [float(last)]
