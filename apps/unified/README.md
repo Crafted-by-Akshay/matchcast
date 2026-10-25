@@ -5,7 +5,7 @@ This is the unified app for the hackathon. Generated folders (`watch/`, `broadca
 One app for the three MatchCast dashboards, switched from one top bar:
 
 - **Watch** (fan 3D match): the 3D app from `sources/3d-source/v2`, without its v10 Director and v11 Analyst boards.
-- **Analyst** (enterprise console): `sources/enterprise-console/src` with its data.
+- **Analyst** (enterprise console): `sources/enterprise-console/src` with its data. The default nav is focused on the match: Live match, Match centre (five tabs), Ask the match, How was this made? and Match library; the rest sits under More (`analyst-pages/70_focus.js`).
 - **Broadcast** (broadcaster desk): `sources/broadcaster-console`, same build.
 
 Sources are in `sources/`, a copy of the three prototype folders. They are read only. `build.py` copies each view from its source folder and applies a few asserted patches. The shell, `index.html`, is written by hand.
@@ -111,7 +111,7 @@ The shell: arrow keys, Home and End move between the dashboard tabs (tab 1 to 4 
 - `analyst-pages/00_a11y.js` sets `lang`, redefines the light-theme `--good`/`--warn` tokens (the dark theme keeps its own) and darkens club crests that failed WCAG AA contrast, names unlabelled chart SVGs and makes `#main` keyboard-focusable. It exists because `sources/` is read only.
 - `tests/e2e/a11y-analyst.spec.ts` runs axe (WCAG 2 A/AA) on 13 Analyst pages in both the light and dark scheme and fails on any serious or critical violation (minor and moderate are not checked). Uses `@axe-core/playwright` (dev dependency). Watch and Broadcast are still to audit.
 ## Copilot Ask answered by the agents (EXP-5)
-A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chips still use Watch's own live-data answers). With the api live, the shell posts it to `POST /v1/matches/{id}/ask` and shows the answer with its verdict. Otherwise the in-page rules answer from the event log: who has the most shots or goals, the score, xG, each counted from the log with the events cited and a "Verified" tick; anything else gets "I can't confirm that from the match data yet." Questions are cut at 300 characters and limited to 5 a minute per browser. Planned: Prompt Shields on input and the knowledge-base route (AGT-12, AGT-16), which live in the api.
+A question typed in Watch's Copilot Ask tab goes to the shell (the suggested chips still use Watch's own live-data answers). With the api live, the shell posts it to `POST /v1/matches/{id}/ask` and shows the answer with its verdict. Otherwise the in-page rules answer from the event log: who has the most shots or goals, the score, xG, each counted from the log with the events cited and a "Verified" tick; anything else gets "I can't confirm that from the match data yet." Questions are cut at 300 characters and limited to 20 a minute per view; a 429 from the api shows "Ask again in a minute". Planned: Prompt Shields on input and the knowledge-base route (AGT-12, AGT-16), which live in the api.
 
 ## Full-time recap in the Analyst library (AGT-15, task 105)
 - At full time the shell adds `recap: { api, session_id, match_id }` to the import message it sends the Analyst (only when Watch is the source and an api is configured; `LV.key` exposes the run's key). `embed/analyst.js` stores it on the imported match.
@@ -186,3 +186,13 @@ The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which W
 ## Keyboard path and plain-words states (Broadcast)
 - `tests/e2e/broadcast-keyboard.spec.ts` walks the desk with Tab: every control is reachable and shows a focus ring. Broadcast has no popovers of its own, so there is no Escape path to test.
 - Below the tabs a line says where the agents' lines come from: "live from the api", "api did not answer, rules in this page", or "rules in this page (no api connected)" (the shell sends it with the status pill). With no speech in the browser, Speak is disabled with "Speech is not available here; the text still shows."
+
+## Continuous commentary feed (Experience, live commentary)
+- `feed.js` (`CM`) is the one feed for Watch and Broadcast. Every Watch moment (goal, red card, turning point, control spell, pressing wave and the rest) becomes a line with its explanation. Shots (xG on the line, big chances marked), yellow cards, corners, tactical changes, kick-off, half time and full time become lines too.
+- A quiet stretch of two match minutes gets a summary counted from the events in that window: passes and shots for each side, and the score. The feed never goes silent while a match runs.
+- A line the agent api writes (its Verifier checked it) replaces the rules line for the same match minute, or joins the feed. The label says who wrote it: `Rules · recounted` or `Live agents · verified`, and the list shows the agents that made it (Producer › Analyst › Narrator › Verifier).
+- `embed/feed.js` draws it in both views: the newest line at the bottom left, and `All lines` for the last 40. The shell posts `feed-lines` at most every 200 ms.
+- Voice: a line Voice speaks is sent to Azure Speech as SSML (`speech.js`): a cheerful style, a measured rate, and a higher pitch and emphasis on a goal, a red card or a score claim. Azure ignores a style the voice does not offer. Check the styles on the live voices before the demo.
+- Ask (rules) also counts from the event log: "how many passes has Ana made", "shots for Ridgeview", "who has the most fouls". Each answer cites the events it counted.
+- A talk order always gets a reply in the chat: the checked reply, or "Not checked against the match record", or "No checked answer yet" when the api has no live match.
+- Tests: `tests/e2e/feed.spec.ts`.

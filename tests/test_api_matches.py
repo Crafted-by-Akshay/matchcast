@@ -360,6 +360,36 @@ def test_a_restarted_api_still_serves_the_stream_and_the_match_of_a_stored_match
     assert unknown.status_code == 404
 
 
+def test_a_rebuilt_match_keeps_its_approval_mode_and_demo_seed() -> None:
+    first = TestClient(create_app())
+    create(first, approval_mode="producer", seed_bad_claim=True, seed_bad_claim_at_ms=0)
+    restarted = TestClient(create_app())
+    restarted.app.state.matches.store = first.app.state.matches.store
+    info = restarted.get("/v1/matches/match-short", params=Q).json()
+    assert info["approval_mode"] == "producer"
+    post_all(restarted)  # the seeded wrong claim still fires and is rejected
+    assert _rejections(restarted)
+    published = restarted.get("/v1/matches/match-short/lines", params=Q).json()["items"]
+    assert not [ln for ln in published if ln["status"] in ("approved", "published")]
+
+
+def test_a_match_rebuilt_past_the_cue_does_not_fire_the_seed_again() -> None:
+    first = TestClient(create_app())
+    create(first, seed_bad_claim=True, seed_bad_claim_at_ms=0)
+    events = FIXTURE["events"]
+    post = lambda c, chunk: c.post(  # noqa: E731
+        "/v1/matches/match-short/events", params=Q, json={"events": chunk}
+    )
+    assert post(first, events[:50]).status_code == 202
+    before = len(_rejections(first))
+    assert before >= 1
+    restarted = TestClient(create_app())
+    restarted.app.state.matches.store = first.app.state.matches.store
+    for start in range(50, len(events), 50):
+        assert post(restarted, events[start : start + 50]).status_code == 202
+    assert len(_rejections(restarted)) == before  # the one wrong claim was seeded once
+
+
 def test_an_unknown_match_is_a_point_read_not_a_hydrate() -> None:
     client = TestClient(create_app())
     calls: list[str] = []
@@ -625,6 +655,20 @@ def test_talk_route_answers_and_validates(client: TestClient) -> None:
     )
 
 
+def test_talk_route_applies_the_role_guard_to_orders(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    url = "/v1/matches/match-short/talk"
+    body = {"session_id": "short", "target": "home1", "position": "GK"}
+    refused = client.post(url, json={**body, "utterance": "shoot from range"}).json()
+    assert refused["order"] == {"key": "shoot", "accepted": False}
+    assert refused["verdict"] == "verified" and refused["facts"]
+    kept = client.post(url, json={**body, "utterance": "keep it simple"}).json()
+    assert kept["order"] == {"key": "simple", "accepted": True}
+    lower = client.post(url, json={**body, "utterance": "rest", "position": "gk"})
+    assert lower.status_code == 422
+
+
 def test_talk_is_rate_limited_on_its_own_budget_and_refuses_attacks_and_unknown_targets(
     client: TestClient,
 ) -> None:
@@ -662,3 +706,11 @@ def _no_live_search(monkeypatch):
     default_assistant.cache_clear()
     yield
     default_assistant.cache_clear()
+
+
+def test_the_api_and_mcp_images_ship_the_knowledge_base() -> None:
+    """Ask's rules fallback, search_kb and the club code lookup all read kb/ at run time."""
+    root = Path(__file__).resolve().parents[1]
+    for name in ("api", "mcp"):
+        dockerfile = (root / "services" / name / "Dockerfile").read_text()
+        assert "COPY kb kb" in dockerfile.splitlines(), name

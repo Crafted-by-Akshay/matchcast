@@ -238,6 +238,28 @@ def test_a_club_the_season_does_not_know_is_compared_with_every_team(match, monk
     assert not [r for r in records if r["action"] == "a2a_failed"]
 
 
+def test_a_club_name_in_the_season_is_sent_as_its_club_code(match, monkeypatch) -> None:
+    from matchcast_agents.rules import producer
+    from matchcast_agents.season_clubs import season_code
+
+    assert season_code("Thames Rovers") == "TRV" and season_code("TRV") is None
+    assert season_code(None, "trv") == "TRV" and season_code("Nowhere FC", "home") is None
+    original = producer.moment_score
+    monkeypatch.setattr(
+        producer, "moment_score", lambda payload: (original(payload)[0], 1, original(payload)[2])
+    )
+    desk = FakeDesk()
+    clubs = dict.fromkeys(match["teams"], "Thames Rovers")  # both sides: a club the season knows
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"], roster=match["roster"], names=match["names"],
+        clubs=clubs, stats_desk=desk,
+    )  # fmt: skip
+    run(flow.ingest(match["events"]))
+    assert desk.calls and {c[3] for c in desk.calls} == {"TRV"}
+    calls = [r for r in flow.store.audit_records(flow.sk) if r["action"] == "a2a_call"]
+    assert calls and all(r["details"]["team_id"] == "TRV" for r in calls)
+
+
 def test_a_slow_desk_times_out_without_blocking_the_moment(match, monkeypatch) -> None:
     import asyncio
 

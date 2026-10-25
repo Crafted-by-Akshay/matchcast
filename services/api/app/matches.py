@@ -58,8 +58,8 @@ from app.voice import (
 
 TENANT = "demo"
 HEARTBEAT_S = 15
-ASK_PER_MINUTE = 10  # Copilot questions per browser session
-TALK_PER_MINUTE = 10  # player and producer replies per browser session, a budget of their own
+ASK_PER_MINUTE = 20  # Copilot questions per browser session; a judge's quick run stays under it
+TALK_PER_MINUTE = 20  # player and producer replies per browser session, a budget of their own
 DS_PER_MINUTE = 5
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 STATUS = {
@@ -177,6 +177,7 @@ class TalkBody(BaseModel):
     session_id: str = Field(pattern=ID)
     target: str = Field(pattern=ID)
     utterance: str = Field(min_length=1, max_length=300)
+    position: str | None = Field(default=None, pattern=r"^[A-Z]{1,3}$")  # the sim's position code
 
 
 class RecapTrigger(BaseModel):
@@ -326,13 +327,23 @@ class Registry:
             info = await asyncio.to_thread(stored)
             if info is None:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
-            config = WorkflowConfig()
+            config = WorkflowConfig(approval_mode=info.get("approval_mode", "auto"))
+            seeds: dict[str, Any] = {}
+            # the seeded wrong claim fires once; a match rebuilt past its cue has already had it
+            cue = info.get("seed_bad_claim_at_ms", 720_000)
+            state = self.store.get_state(sk)
+            unfired = state.revision == 0 or state.event_time_ms < cue
+            if info.get("seed_bad_claim") and unfired:
+                seeds = {
+                    "seed_bad_claim": True,
+                    "seed_bad_claim_at_ms": cue,
+                }
             flow = MatchWorkflow(
                 stream=stream,
                 roster=info["roster"],
                 names=info.get("names", {}),
                 clubs=info.get("clubs", {}),
-                agents=self.agents_for(config.personas),
+                agents=self.agents_for(config.personas, **seeds),
                 config=config,
                 store=self.store,
                 stats_desk=self.stats_desk,
@@ -561,6 +572,17 @@ def build_router(registry: Registry) -> APIRouter:
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
             registry.flows[key] = flow
+            # what a rebuilt match needs to behave as this one does after a restart
+            seed = body.seed_bad_claim or x_matchcast_seed_bad_claim == "1"
+            registry.store.put_match(
+                flow.sk,
+                {
+                    **(registry.store.get_match(flow.sk) or {}),
+                    "approval_mode": body.approval_mode,
+                    "seed_bad_claim": seed,
+                    "seed_bad_claim_at_ms": body.seed_bad_claim_at_ms,
+                },
+            )
         return {"stream": stream, "approval_mode": body.approval_mode, "mode": flow.agents.mode}
 
     @router.get("/matches/{match_id}")
@@ -872,7 +894,7 @@ def build_router(registry: Registry) -> APIRouter:
                 429, "rate_limited", f"at most {TALK_PER_MINUTE} talks a minute", retry_after=60
             )
         try:
-            result = await flow.talk(body.target, body.utterance)
+            result = await flow.talk(body.target, body.utterance, position=body.position)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         result["lang"] = "en"
@@ -899,7 +921,7 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/audio/{audio_id}.mp3")
     async def audio_by_id(audio_id: str) -> Response:
-        audio = registry.voice.get(audio_id)
+        audio = await registry.voice.fetch(audio_id)
         if audio is None:
             raise Problem(404, "not_found", "no clip with that id")
         return Response(audio, media_type="audio/mpeg", headers=CLIP_HEADERS)

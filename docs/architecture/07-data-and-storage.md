@@ -70,7 +70,7 @@ All tables live in `stmatchcastdev`. Columns hold JSON as strings where noted. A
 
 | Table | PartitionKey | RowKey | Columns | Written by | Read by |
 | --- | --- | --- | --- | --- | --- |
-| `matches` | `tenant_id` | `session_id|match_id` | seed, engine_version, home_team_id, away_team_id, venue_id, kickoff_local, approval_mode (`auto`, `producer`), status (`scheduled`, `live`, `full_time`, `abandoned`), languages_active (JSON), score_home, score_away, created_at, ended_at | `api` | all |
+| `matches` | `tenant_id` | `session_id|match_id` | seed, engine_version, home_team_id, away_team_id, venue_id, kickoff_local, approval_mode (`auto`, `producer`), seed_bad_claim and seed_bad_claim_at_ms (the demo switch, kept so a rebuilt match behaves as created), roster, names, clubs, status (`scheduled`, `live`, `full_time`, `abandoned`), languages_active (JSON), score_home, score_away, created_at, ended_at | `api` | all |
 | `events` | `sk` | `stream_sequence` (10 digits) `.` `revision` (4 digits) | event_id, kind, revision, event_time_ms, period, team_id, player_id, payload (JSON), emitted_at, ingested_at | `api` consumer | `mcp`, `api` |
 | `matchstate` | `sk` | `current` or `rev:<revision 10 digits>` | revision, last_sequence, state (JSON), updated_at | `api` consumer (only writer) | `mcp`, `api` |
 | `claims` | `sk` | `claim_id` | moment_id, agent, metric, value, units, source_event_ids (JSON), tool_call_ids (JSON), formula_inputs (JSON), derivation_version, snapshot_revision, verdict, reason_code, approval_status, created_at | workflow | `api`, `mcp` (`get_evidence`) |

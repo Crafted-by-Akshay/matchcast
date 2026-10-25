@@ -46,7 +46,7 @@ Paste this block into the root `CLAUDE.md`. Each lane's own `CLAUDE.md` repeats 
 Source of truth: docs/architecture/README.md. If code and docs disagree, stop and say so.
 - Every task: 01-goals-and-constraints.md §4-5, 19-engineering-practices.md, 18-glossary.md
 - Platform lane: 13-deployment-and-operations.md, 14-security-and-responsible-ai.md, 15-observability.md, adr/0005-0008
-- Agents lane: 04-agents.md, 05-assistant-rag.md, 12-api.md, 03-runtime-flows.md (F1-F6, F8-F10), adr/0002, 0009, 0013, 0014
+- Agents lane: 04-agents.md, 05-assistant-rag.md, 12-api.md, 03-runtime-flows.md (F1-F6, F8-F10), adr/0002, 0009, 0013, 0014, 0016 (talk orders)
 - Experience lane: 11-frontend.md, 10-voice-and-translation.md, 12-api.md §2-3, 03-runtime-flows.md (F1, F3-F6)
 - Data lane: 06-simulation.md, 07-data-and-storage.md, 08-analytics-and-ml.md, 09-vision-identification.md, adr/0004, 0006, 0007, 0010, 0012, 0015
 - Quality lane: 16-testing-and-quality.md, 01-goals-and-constraints.md §5, 14-security-and-responsible-ai.md §3-4, 17-risks-and-debt.md

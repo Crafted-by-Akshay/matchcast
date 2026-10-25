@@ -103,20 +103,20 @@ const LV = (() => {
     const body = { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: lang === 'es' || lang === 'hi' ? lang : 'en' };
     if (surface === 'broadcast') body.surface = surface;   // the Copilot's picks; a plain question sends exactly what it always did
     const res = await post('/v1/matches/' + run.id + '/ask', body);
-    if (!res.ok) throw new Error('ask ' + res.status);
+    if (!res.ok) throw Object.assign(new Error('ask ' + res.status), { status: res.status });
     const j = await res.json();
     const t = j.variants && j.variants[lang];
     return { text: typeof t === 'string' && t ? t : j.answer, verdict: j.abstained ? 'abstained' : 'verified', source: j.mode === 'live' ? 'model' : 'rules', citations: j.citations || [], api: true, retrieval: j.retrieval || null, note: chipOf(j), broadcast: j.broadcast || null };
   };
 
-  // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply
-  const talk = async (target, utterance) => {
+  // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply; position is the sim's code (GK, ST...) so the role guard can bound an order
+  const talk = async (target, utterance, position) => {
     if (!run) throw new Error('no match yet');
     if (!String(utterance).trim()) throw new Error('empty utterance');
-    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300) });
+    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}) });
     if (!res.ok) throw Object.assign(new Error('talk ' + res.status), { status: res.status });
     const j = await res.json();
-    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, api: true, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // the api's Azure Speech clip of a verified reply (Voice lane)
+    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, order: j.order || null, api: true, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // the api's Azure Speech clip of a verified reply (Voice lane)
   };
 
   // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one

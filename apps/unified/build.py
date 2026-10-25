@@ -61,6 +61,14 @@ def sub(text, old, new, label):
     return text.replace(old, new)
 
 
+ORDER_OLD = "function setOrder(p, k, text, by) {\n  if (!k || k === 'none') return;"
+ORDER_NEW = (
+    "function setOrder(p, k, text, by) {\n"
+    "  if (!k || k === 'none' || !mcAllowed(p.pos, k)) return;"
+    "   // role bound (embed/roles.js): an order outside the role never reaches p.orders"
+)
+
+
 def importmap():
     return (
         '<script type="importmap">\n{"imports":{"three":"'
@@ -99,6 +107,7 @@ def build_watch():
         .replace("/*@@TACTICS@@*/", r(W + "tactics.js"))
         .replace("/*@@SETUP@@*/", "\n".join(r(W + f) for f in WATCH_MODS))
     )
+    main = sub(main, ORDER_OLD, ORDER_NEW, "watch role bound")
     main = sub(main, "'./players.json'", "'../shared/players.json'", "watch players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
@@ -114,12 +123,11 @@ def build_watch():
         " team: p.T.key, player: p.name, to: q.name, kind:",
         "watch pass positions",
     )
-    # EXP-16: a typed order also asks the api's player agent, which answers from the stored events (or says nothing)
+    # EXP-16: in Watch every quick order and typed line goes through embed/watch.js (mcTalk), which applies the role guard; the sim's own in-page order paths are not reached
     main = sub(
         main,
-        "talkLine(p, 'pl', r); speak(p, r); renderTalk(); return; }",
-        "talkLine(p, 'pl', r); speak(p, r); renderTalk();"
-        " if (!quick && window.mcTalkApi) window.mcTalkApi(p, text); return; }",
+        "if (quick || !SAMPLE) { const k = quick || keywordOrder(text); setOrder(p, k, text); const r = ruleReply(p, k); talkLine(p, 'pl', r); speak(p, r); renderTalk(); return; }",
+        "window.mcTalk(p, text, quick); return;",
         "watch talk api",
     )
     head = sub(
@@ -150,6 +158,8 @@ def build_watch():
         + "\n"
         + r(EMB + "hook.js")
         + "\n"
+        + r(EMB + "roles.js")
+        + "\n"
         + r(EMB + "watch.js")
         + "\n"
         + r(EMB + "focus.js")
@@ -159,6 +169,8 @@ def build_watch():
         + r(EMB + "vision-events.js")
         + "\n"
         + r(EMB + "indices.js")
+        + "\n"
+        + r(EMB + "feed.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
@@ -191,6 +203,14 @@ def build_broadcast():
             + "\n"
             + "\n".join(r(BS + f) for f in BC),
         )
+    )
+    main = sub(main, ORDER_OLD, ORDER_NEW, "broadcast role bound")
+    # a refused order is said out loud, not acknowledged: the same line Watch uses
+    main = sub(
+        main,
+        "if (quick || !SAMPLE) { const k = quick || keywordOrder(text); setOrder(p, k, text);",
+        "if (quick || !SAMPLE) { const k = quick || keywordOrder(text); if (!mcAllowed(p.pos, k)) { talkLine(p, 'pl', MC_REFUSAL); speak(p, MC_REFUSAL); renderTalk(); return; } setOrder(p, k, text);",
+        "broadcast role refusal",
     )
     main = sub(main, "'./players.json'", "'../shared/players.json'", "broadcast players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "broadcast intl path")
@@ -240,11 +260,15 @@ def build_broadcast():
         + "\n"
         + r(EMB + "hook.js")
         + "\n"
+        + r(EMB + "roles.js")
+        + "\n"
         + r(EMB + "broadcast.js")
         + "\n"
         + r(EMB + "bclang.js")
         + "\n"
         + r(EMB + "replay.js")
+        + "\n"
+        + r(EMB + "feed.js")
         + "\n"
         + r(EMB + "onair.js")
         + "\n"
@@ -379,7 +403,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "contracts.js", "agents.js", "live.js", "trace-panel.js"]
+        shell = ["index.html", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)

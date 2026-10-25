@@ -27,6 +27,9 @@ MCS.progress('Loading the stadium and players');
     + '#mcx-log{max-height:190px;overflow:auto;display:flex;flex-direction:column;gap:6px}#mcx-log[hidden]{display:none}'
     + '.fm-planned{font-size:9px;opacity:.7}.mcx-w{margin-top:6px;border-top:1px solid var(--line);padding-top:6px;font:11px/1.4 var(--f-mono);color:var(--muted)}.mcx-w b{color:var(--ink)}';
   st.textContent += '@media (max-width:560px){button:not(.sw):not(.dk-grab),select,input:not([type=checkbox]),textarea,#px-head{min-height:44px !important;min-width:44px !important}input[type=checkbox]{width:24px;height:24px}label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}';   // phone: 44 px tap targets
+  st.textContent += '#pulse,#visp,#datap,#fan-strip{--panel:rgb(9,13,19)}#px-body .px-row{flex-wrap:wrap;gap:0 8px}#px-ctlv{margin-left:auto}';   // panels fully opaque so player labels do not show through (pass 4; 96 percent in pass 3 still showed a ghost); the control line wraps instead of running into its label (UX review pass 3)
+  st.textContent += '@media (max-width:640px){#fan-strip,#fan-metric{display:none !important}}';   // phone: the live stats strip sat under the Match Pulse bar; Match data holds the numbers (UX review, finding 14)
+  st.textContent += '#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
   document.head.appendChild(st);
   const box = document.createElement('div'); box.id = 'mcx-box';
   box.innerHTML = '<div id="mcx-live" aria-live="polite"></div><div id="mcx-log" hidden></div><button class="mcx-b" id="mcx-tog" hidden>Pulse log (0)</button>';
@@ -72,16 +75,45 @@ MCS.progress('Loading the stadium and players');
   // EXP-16: the same words go to the api's player agent through the shell; a reply built from checked facts is added to the chat, anything else is not
   const talks = new Map(); let talkN = 0;
   if (!document.documentElement.lang) document.documentElement.lang = 'en';   // the source head has no lang (WCAG 3.1.1); Watch's own language list changes the text, not this
+  window.__mcSetOrder = (p, k) => setOrder(p, k, 'test');   // read by tests (role-clamp.spec.ts)
   window.__mcTalkLog = (p) => (TK.log.get(p) || []).map((m) => m.text);   // read by tests
-  window.mcTalkApi = (p, text) => { const id = ++talkN; talks.set(id, p); MCS.send({ type: 'talk', id, player: p.name, utterance: text }); setTimeout(() => talks.delete(id), 24000); };
+  // Role bounds for orders (mirrors packages/agents/matchcast_agents/roles/orders.py). Typed lines go to the api, which applies the same table to the position this browser sends. Quick buttons and the rules fallback are checked here only.
+  const mcRulesOrder = (p, k, text) => {
+    if (!mcAllowed(p.pos, k)) { talkLine(p, 'pl', MC_REFUSAL); speak(p, MC_REFUSAL); renderTalk(); return; }
+    setOrder(p, k, text); const r = ruleReply(p, k); talkLine(p, 'pl', r); speak(p, r); renderTalk();
+  };
+  // the rules reading of a typed line: the same keywords and the same question and negation rules as orders.py
+  const MC_RULES = [['clear', /forget|as you were|cancel|\bnormal\b|\breset\b/], ['rest', /\brest\b|\blegs\b|breath|\btired\b|\beasy\b|conserve/], ['shoot', /\bshoot|shot on sight|\btake (a |the |your )?shots?\b|\bstrike\b|hit it|\brange\b/], ['mark', /\bmark|\bfollow\b|\btrack\b|shadow|man.?to.?man/], ['press', /\bpress|\bhunt\b|close down|harass|win (it|the ball) back/], ['runs', /\brun|behind|channel|over the top|\bspace\b/], ['simple', /simple|\bsafe\b|keep (the )?ball|possession|\bcalm\b/], ['wide', /\bwide|width|touchline|stretch/], ['inside', /inside|\btuck|narrow|half.?space|\bcentre\b|\bcenter\b/], ['deep', /\bdeep|\bback\b|\bdrop\b|defend|\bsit\b/], ['push', /\bpush|higher|up the pitch|forward|attack|squeeze/]];
+  const MC_NEGATED = /\b(\w+n'?t|do not|stop|never|no need to|not)\b/;
+  const mcKeyword = (text) => { const t = text.toLowerCase().replace(/’/g, "'"); if (t.includes('?') || MC_NEGATED.test(t)) return 'none'; const hit = MC_RULES.find(([, re]) => re.test(t)); return hit ? hit[0] : 'none'; };
+  const mcRulesFallback = (p, text) => { mcRulesOrder(p, mcKeyword(text), text); $('tk-note').textContent = 'Rules fallback: the agent api did not answer for this match, so orders follow the keyword rules.'; };
+  window.mcTalk = (p, text, quick) => (quick ? mcRulesOrder(p, quick, text) : window.mcTalkApi(p, text));   // called by sendToPlayer (build.py) for every line: a quick order is checked here, a typed line goes to the api
+  window.mcTalkApi = (p, text) => { const id = ++talkN; talks.set(id, { p, text }); MCS.send({ type: 'talk', id, player: p.name, position: p.pos, utterance: text }); setTimeout(() => { if (talks.delete(id)) mcRulesFallback(p, text); }, 24000); };
   window.addEventListener('message', (e) => {
     const d = e.data || {};
     if (d.src !== 'matchcast-shell' || d.type !== 'talk-reply' || !talks.has(d.id)) return;
-    const p = talks.get(d.id); talks.delete(d.id);
+    const { p, text } = talks.get(d.id); talks.delete(d.id);
     window.__mcTalkReplies = (window.__mcTalkReplies || 0) + 1;   // read by tests
     const r = d.reply;
-    if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) { talkLine(p, 'pl', r.text); renderTalk(); }   // the player's own answer, checked against the match record
+    if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) {   // the player's own answer, checked against the match record
+      talkLine(p, 'pl', r.text);
+      if (r.order && r.order.accepted) setOrder(p, r.order.key, text);   // the api's role guard passed this order
+      renderTalk(); return;
+    }
+    // the api answered but nothing checked came back: the chat says so, and no order moves
+    if (r && r.api) { talkLine(p, 'pl', 'No checked answer: the match record did not confirm that.'); renderTalk(); return; }   // never the unverified reply itself
+    mcRulesFallback(p, text);   // no api for this match: the rules answer, inside the same role bounds
   });
+  // a quick order the player's role does not allow is greyed out, as the api would refuse it; picking a player follows him with the camera (Watch's player mode)
+  const mcRenderTalk = renderTalk;
+  let mcFollowed = null;
+  renderTalk = function () {
+    mcRenderTalk();
+    const p = TK.p, qo = $('tk-orders');
+    if (p !== mcFollowed) { mcFollowed = p; if (p) fanSet({ mode: 'player', player: p }, 'talk-pick'); }
+    if (!p || !qo) return;
+    [...qo.querySelectorAll('button')].forEach((b, i) => { const k = Object.keys(ORDERS)[i]; b.disabled = !mcAllowed(p.pos, k); b.title = b.disabled ? 'Outside this player\'s role' : ''; });
+  };
   // EXP-16: a label for what orders do (Watch's own mic button already does speech recognition)
   const gm = document.createElement('div'); gm.className = 'mcx-gm'; gm.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px';
   gm.textContent = 'Game mode: orders change how the simulated match is played. They never change the event record behind the claims.';
@@ -112,6 +144,7 @@ MCS.progress('Loading the stadium and players');
   const go = setInterval(() => {
     if (!window.__mc || !players.length || !$('load').hidden) return;
     clearInterval(go);
+    try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { saved = null; }   // the shell's Fan / Analyst switch may have written it while Watch loaded
     if (saved && FAN_MODES.some((m) => m[0] === saved.mode)) {
       const p = saved.player ? players.find((q) => q.name === saved.player) : null;
       _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric: FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
@@ -119,6 +152,13 @@ MCS.progress('Loading the stadium and players');
     tell();
   }, 300);
 })();
+
+// ---- the shell's Fan / Analyst switch (UX review, finding 10) sets Watch's mode; every other mode (club, player, metric) stays in Watch's own picker.
+window.addEventListener('message', (e) => {
+  const d = e.data || {};
+  if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'persona-set' || !['casual', 'analyst'].includes(d.mode)) return;
+  if (FAN.mode !== d.mode) fanSet({ mode: d.mode }, 'shell');
+});
 
 // ---- EXP-2: Watch is the only engine. Four times a second it sends the pitch state (22 players, the ball, score, clock, stats) for the shell to hand to Broadcast.
 (() => {

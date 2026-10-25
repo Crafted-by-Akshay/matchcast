@@ -41,6 +41,7 @@ test('indices: Watch in Analyst mode draws the sparkline and the Analyst match p
   await expect(w.locator('#mcx-idx')).toContainText('Control');
   await page.locator('#tabs [data-view="analyst"], [role="tab"]:has-text("Analyst")').first().click();
   const a = await viewFrame(page, 'analyst');
+  await ready('analyst', 120_000)(page);   // the shell routes the Analyst to its live page once it is ready; the match page is opened after that
   await a.evaluate(() => (window as any).go('match'));
   await expect(a.locator('#idx-panel table')).toBeVisible({ timeout: 20_000 });
   await expect(a.locator('#idx-panel')).toContainText('Control');

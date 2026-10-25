@@ -40,3 +40,43 @@
     if (batch.length) { stats.sent += batch.length; MCS.send({ type: 'vision-events', batch }); }
   }, 500);
 })();
+// Vision is on by default in Watch: the pixel tracker runs from kick-off, and its passes reach the agents' .vision stream. The viewer can still turn it off with the Vision button.
+(() => {
+  const go = setInterval(() => {
+    if (!window.__mc || !window.__mc.vis || !$('load') || !$('load').hidden) return;
+    clearInterval(go);
+    if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
+    if (!window.__mc.vis.VIS.on) window.__mc.vis.toggle(true);
+    if (narrow()) { $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false'); }   // phone: the tracker runs, the panel stays closed until asked for (UX review, finding 1)
+  }, 300);
+})();
+// Phone (≤ 640 px): the Vision panel would cover most of the pitch, so the Vision button and the panel's close button only show or hide the panel.
+// The tracker keeps running for the agents; a desktop viewer still turns it off with the same button.
+function narrow() { return window.matchMedia('(max-width:640px)').matches; }
+(() => {
+  const panelOnly = (e) => {
+    const v = window.__mc && window.__mc.vis, vp = $('visp');
+    if (!narrow() || !v || !v.VIS.on || !vp) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    vp.hidden = !vp.hidden;
+    const b = $('visb'); if (b) b.setAttribute('aria-pressed', vp.hidden ? 'false' : 'true');
+  };
+  for (const id of ['visb', 'visp-x']) { const el = $(id); if (el) el.addEventListener('click', panelOnly, true); }
+})();
+// Vision throttle: a capture reads the GPU back, which on a slow machine stalls the frame loop. The tracker's period (VIS.period, in match seconds) is stretched so that captures use about a tenth of the wall time, up to 3 s, and eases back to 0.2 s when they are cheap. The panel's "Hz" shows the period actually in use.
+(() => {
+  const BASE = 0.2, MAX = 3, SHARE = 0.1;
+  let prev = null;
+  window.mcVisThrottle = () => {
+    if (typeof VIS === 'undefined' || !VIS.cost) return null;
+    const c = VIS.cost, now = { ms: c.cap + c.cls + c.det, n: c.n };
+    const fresh = prev && now.n > prev.n && now.ms >= prev.ms;   // a reset (visReset) makes the counters drop: start again from here
+    const per = fresh ? (now.ms - prev.ms) / (now.n - prev.n) : 0;   // wall ms one capture job costs
+    prev = now;
+    if (!fresh) return VIS.period;   // nothing captured since the last look (or the counters were reset)
+    const want = Math.min(MAX, Math.max(BASE, (per / 1000 / SHARE) * Math.max(S.speed || 1, 0.25)));   // VIS.acc advances by wall time x playback speed
+    VIS.period += (want - VIS.period) * 0.5;
+    return VIS.period;
+  };
+  setInterval(window.mcVisThrottle, 2000);
+})();

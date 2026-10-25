@@ -17,7 +17,8 @@ async function liveShell(page: Page, creates: any[], posts: any[], roster: objec
   await openShell(page, 'watch');
   await ready('watch')(page);
   if (roster !== undefined) await page.evaluate((ro) => LV.begin('k1', ro), roster);   // undefined: keep the run Watch's own start made, with its real roster
-  await page.waitForFunction(() => LV.status === 'live', null, { timeout: 20_000 });
+  // the run exists once begin has been called; its engine stream only opens after the engine's first events (#234), and the vision stream needs neither
+  await page.waitForFunction(() => !!LV.key, null, { timeout: 20_000 });
 }
 
 const roster = { teams: ['Harbor', 'Coloso'], players: [{ name: 'Ana Lopez', team: 'Harbor' }, { name: 'Ben Ito', team: 'Harbor' }, { name: 'Cy Roe', team: 'Coloso' }, { name: 'Di Sol', team: 'Coloso' }] };

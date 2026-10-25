@@ -19,7 +19,7 @@ test('speech: with a token Azure speaks with the role and language voice; the br
   await expect.poll(() => page.evaluate(() => (window as any).__azure.voices)).toEqual(['en-GB-RyanNeural', 'en-GB-SoniaNeural', 'es-ES-ElviraNeural', 'hi-IN-SwaraNeural']);
   expect(new Set((await page.evaluate(() => (window as any).__azure.tokens)).map((t: string[]) => t.join('@')))).toEqual(new Set(['tok-abc@eastus2']));   // used as issued, one fetch shared by the four lines
   expect(calls).toBe(1);
-  await expect(page.locator('#voice-src')).toHaveText('Azure Speech');
+  await expect(page.locator('#voice-src')).toContainText('Azure Speech');
   expect(await page.evaluate(() => (window as any).__spoken.length)).toBe(0);
   expect(await page.evaluate(() => SPX.listen('en-GB'))).toBe('who is on the ball');
 
@@ -36,7 +36,7 @@ test('speech: 503 not_ready and 429 fall back to the browser voice with its labe
   await page.click('#voice-btn');
   await page.evaluate(() => { VC.say('One.', { id: 'b1' }); VC.say('Two.', { id: 'b2' }); });
   await expect.poll(() => page.evaluate(() => (window as any).__spoken)).toEqual(['One.', 'Two.']);
-  await expect(page.locator('#voice-src')).toHaveText('Browser voice (simulated)');
+  await expect(page.locator('#voice-src')).toContainText('Browser voice (simulated)');
   expect(calls).toBe(1);   // one failed fetch, then a minute of quiet
   expect(await page.evaluate(() => SPX.reason)).toBe('no Speech resource configured');
   expect(await page.evaluate(() => SPX.listen('en-GB'))).toBeNull();   // null = Azure unavailable, so the caller falls back
@@ -124,9 +124,9 @@ test('speech: Broadcast Ask shows the rate-limit message and only the newest que
   await expect.poll(() => bc.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
   await page.evaluate(() => { AG.ask = (q: string) => ({ text: 'Answer to ' + q, verdict: 'verified' }); });
   await bc.locator('#bc-tabs button[data-p="desk"]').click();
-  for (let i = 1; i <= 5; i++) { await bc.locator('#bcd-q').fill('q' + i); await bc.locator('#bcd-ask').click(); await expect(bc.locator('#bcd-ans')).toHaveText('Answer to q' + i); }
-  await bc.locator('#bcd-q').fill('q6'); await bc.locator('#bcd-ask').click();
-  await expect(bc.locator('#bcd-ans')).toContainText('5 questions a minute');
+  for (let i = 1; i <= 10; i++) { await bc.locator('#bcd-q').fill('q' + i); await bc.locator('#bcd-ask').click(); await expect(bc.locator('#bcd-ans')).toHaveText('Answer to q' + i); }
+  await bc.locator('#bcd-q').fill('q11'); await bc.locator('#bcd-ask').click();
+  await expect(bc.locator('#bcd-ans')).toContainText('10 questions a minute');
   await expect(bc.locator('#bcd-ai')).toHaveText('Slow down');
   expect(errs).toEqual([]);
 });

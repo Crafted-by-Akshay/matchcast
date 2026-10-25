@@ -1,0 +1,25 @@
+import { test, expect } from './fixtures';
+import { collectErrors, openShell, ready, viewFrame } from './helpers';
+
+// UX review pass 3: on a 1440 px desktop the Match Pulse control line must not run into its label, and the HUD panels must be opaque
+// enough that player name labels do not show through them (pass 3 made them 96 percent opaque; pass 4 made them fully opaque).
+test('Watch at 1440 px: the Match Pulse control line does not overlap its label and the panels are opaque', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errs = collectErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  await f.waitForSelector('#px-ctlv', { state: 'visible', timeout: 60_000 });
+  const m = await f.evaluate(() => {
+    const k = document.querySelector('#px-body .px-k')!.getBoundingClientRect(), v = document.getElementById('px-ctlv')!.getBoundingClientRect();
+    const overlap = k.left < v.right && v.left < k.right && k.top < v.bottom && v.top < k.bottom;
+    const alphas = ['pulse', 'visp', 'datap', 'fan-strip'].map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el)
+      .map((el) => { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(getComputedStyle(el).backgroundColor); return m ? Number(m[1]) : 1; });
+    return { overlap, alphas };
+  });
+  expect(m.overlap, 'CONTROL · CHAOS and the control value share no pixels').toBe(false);
+  expect(m.alphas.length, 'the Match Pulse panel exists').toBeGreaterThan(0);
+  for (const a of m.alphas) expect(a, 'fully opaque').toBe(1);
+  expect(errs).toEqual([]);
+});
