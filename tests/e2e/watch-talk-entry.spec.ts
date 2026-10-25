@@ -29,6 +29,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['laptop', 1024, 76
     for (const [id, box] of Object.entries(g.others)) if (box) expect(hit(t, box), `clear of ${id}`).toBe(false);
     // the camera and speed chips; a 320 px screen is already crowded by the Copilot button itself, so that width only checks the Copilot button
     if (width > 340) expect(g.chips.filter((c) => hit(t, c)).length, 'clear of the camera and speed chips').toBe(0);
+    if (width > 340) expect(g.chips.filter((c) => hit(g.cp!, c)).length, 'the Copilot button is clear of the camera and speed chips (Watch is a pane, not the whole window)').toBe(0);
     if (width <= 560) expect(t.h, 'a 44 px target').toBeGreaterThanOrEqual(43);
     await talk.focus();
     await page.keyboard.press('Enter');   // keyboard activation
