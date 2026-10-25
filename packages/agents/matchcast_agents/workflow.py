@@ -20,16 +20,19 @@ from . import recap as recap_mod
 from .context import MatchContext
 from .history import history_for_roster
 from .hub import StreamHub
+from .memory import storylines
 from .messages import Check, DraftLine, LineRecord, Persona, ProducerTask, Skip, Verdict
 from .personas import BOOTH, MAX_WATCH_MODES, known
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
 from .rules.analyst import ClaimResult
+from .rules.producer import BOOTH_MOMENTS
 from .safety import LocalSafetyScreen, SafetyScreen
 from .season_clubs import season_code
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .tools import InProcessTools, ToolCall, ToolError
+from .vision import agreement, is_vision_stream, pass_facts
 
 if TYPE_CHECKING:
     from .live.client import ModelClient
@@ -184,10 +187,15 @@ class MatchWorkflow:
         answer_model: "ModelClient | None" = None,
         history: dict[str, Any] | None = None,
         knowledge: "TalkKnowledge | None" = None,
+        truth_feed: Callable[[], list[dict[str, Any]]] | None = None,
     ) -> None:
         from .live.answers import LiveAnswers  # lazy: the live package imports this module
 
         self.stats_desk = stats_desk
+        # a Vision stream reads the engine match's events here, to check them (ADR-0022)
+        self._truth_feed = truth_feed
+        self._vision_lines = 0
+        self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
         self._knowledge = knowledge  # squads and the knowledge base for talk (EXP-18)
         self._verified_claims: dict[str, dict[str, Any]] = {}
@@ -247,7 +255,7 @@ class MatchWorkflow:
     # ---- helpers -----------------------------------------------------------------------
 
     def _ctx(self) -> MatchContext:
-        return MatchContext(
+        ctx = MatchContext(
             stream=self.stream,
             roster=self.roster,
             names=self.names,
@@ -255,8 +263,29 @@ class MatchWorkflow:
             state=self.store.get_state(self.sk),
             events=tuple(self.store.events(self.sk)),
             personas=self.config.personas,
+            truth=tuple(self._truth_feed()) if self._truth_feed else (),
             extra={"history": self.history} if self.history else {},
         )
+        if all(p in (*self.config.personas, *self.extra_personas) for p in BOOTH):
+            ctx.extra["booth"] = (
+                True  # kick-off and quiet-spell moments only when a viewer has the booth
+            )
+        memory = storylines(ctx, list(self.store.lines(self.sk)))
+        if memory:
+            ctx.extra["storylines"] = memory
+        return ctx
+
+    def vision_summary(self) -> dict[str, Any]:
+        """What Vision contributes on this stream: passes in, the lines the Verifier passed on them,
+        the latest such line, and how far Vision's passes agree with the engine's (ADR-0022)."""
+        passes = pass_facts(self.store.events(self.sk))
+        truth = list(self._truth_feed()) if self._truth_feed else []
+        return {
+            "passes_in": len(passes),
+            "lines_verified": self._vision_lines,
+            "latest_line": self._latest_vision_line,
+            "agreement": agreement(passes, truth),
+        }
 
     def _audit(
         self, actor_kind: str, actor_id: str, action: str, subject: str, details: dict[str, Any]
@@ -438,7 +467,12 @@ class MatchWorkflow:
         decision = await self._call(
             self.agents.producer, "decide", f"m-{event['event_id']}", ctx, event
         )
-        if isinstance(decision, ProducerTask) and self.extra_personas:
+        if (
+            isinstance(decision, ProducerTask)
+            and self.extra_personas
+            and decision.reason
+            not in BOOTH_MOMENTS  # the booth's own moments keep the booth voices
+        ):
             # a colour moment is the analyst's line (and the booth's), never a watch mode's
             extra = [p for p in self.extra_personas if decision.reason != "colour" or p in BOOTH]
             both = dict.fromkeys([*decision.personas, *extra])
@@ -1027,6 +1061,10 @@ class MatchWorkflow:
         )
         if record.status == "verified":
             self.stats["verified"] += 1
+            if is_vision_stream(self.stream):
+                self._vision_lines += 1
+                if draft.persona == "analyst":
+                    self._latest_vision_line = draft.text
             for claim in claims:
                 if claim["claim_id"] in record.claim_ids:
                     self._verified_claims[claim["claim_id"]] = claim

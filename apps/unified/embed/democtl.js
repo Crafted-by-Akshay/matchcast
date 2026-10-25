@@ -4,11 +4,11 @@
   const ctrl = document.getElementById('ctrl');
   if (!ctrl || document.getElementById('bc-view') || document.getElementById('mc-demo')) return;
   const st = document.createElement('style');
-  st.textContent = '#ctrl.mc-folded>.grp:not(.mc-demo){display:none}#mc-demo{font:600 12px system-ui,sans-serif}';
+  st.textContent = '#ctrl.mc-folded>.grp:not(.mc-demo){display:none}body:not(.mc-demo-open) #wxchip{display:none}#mc-demo{font:600 12px system-ui,sans-serif}';
   document.head.appendChild(st);
   const grp = document.createElement('div'); grp.className = 'grp mc-demo';
   const b = document.createElement('button'); b.id = 'mc-demo'; b.type = 'button'; b.title = 'Camera presets, player names, speed and match data';
-  const paint = () => { const open = !ctrl.classList.contains('mc-folded'); b.setAttribute('aria-expanded', String(open)); b.textContent = 'Demo controls'; b.title = (open ? 'Hide' : 'Show') + ' the camera presets, player names, speed and match data'; };
+  const paint = () => { const open = !ctrl.classList.contains('mc-folded'); b.setAttribute('aria-expanded', String(open)); document.body.classList.toggle('mc-demo-open', open); b.textContent = 'Demo controls'; b.title = (open ? 'Hide' : 'Show') + ' the camera presets, player names, speed, match data and the weather chip'; };
   b.onclick = () => { ctrl.classList.toggle('mc-folded'); paint(); };
   let outer = ''; try { outer = parent.location.search; } catch (e) { /* cross-origin parent */ }
   if (!/[?&]demo=1\b/.test(location.search + outer)) ctrl.classList.add('mc-folded');

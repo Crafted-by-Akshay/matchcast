@@ -353,3 +353,19 @@ def test_history_subject_must_be_a_side_of_the_match_and_elo_rounds_half_up(matc
     assert verdict(ctx, line("Rated 1843."), [claim(ctx, "elo:home", 1843)]).verdict == "verified"
     stray = verdict(ctx, line("They have met 12 times."), [claim(ctx, "h2h_played:nobody", 12)])
     assert stray.reason_code == "number_mismatch"
+
+
+def test_a_generic_booth_colour_line_is_refused_and_a_specific_one_passes(match) -> None:
+    ctx = context(match)
+    shots = ctx.state.count("shots", "home")
+    c = claim(ctx, "shots:home", shots)
+    generic = line("The balance of the game is getting clearer.", "booth:colour", 180)
+    bad = verdict(ctx, generic, [c])
+    assert bad.verdict == "rejected" and bad.reason_code == "unsupported_statement"
+    for text in ("Northgate FC are pressing higher now.", f"{shots} shots says they are brave."):
+        assert verdict(ctx, line(text, "booth:colour", 180), [c]).verdict != "rejected", text
+    for text in ("Northgate's shape is stretching.", "Northgate’s press is high."):
+        assert verdict(ctx, line(text, "booth:colour", 180), [c]).verdict != "rejected", text
+    assert verdict(ctx, line("United look flat.", "booth:colour", 180), [c]).verdict == "rejected"
+    # only the colour voice has to be specific
+    assert verdict(ctx, line("The ball is in play.", "booth:pbp", 180), [c]).verdict != "rejected"

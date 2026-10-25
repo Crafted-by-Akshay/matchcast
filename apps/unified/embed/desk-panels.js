@@ -1,9 +1,16 @@
+// ---- Broadcast desk panels: the production desk, the producer section and the Broadcast Copilot.
+// A classic script, not part of the desk module (see build.py): it runs before the three.js import, so the queue and the Copilot show while the 3D engine loads.
+// It posts { type: 'panels' } to the shell when the panels are up, and the shell lifts its loading card then, not on the pitch's start.
+// The desk module reports two things back: window.MC_PLAYERS (the players) and MCDesk.lowerThird (the lower-third it makes).
+const framed = window.parent !== window;
+const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ src: 'matchcast', view: 'broadcast' }, msg), '*'); };   // the same message the hook sends (hook.js)
+
 // ---- Production desk (Broadcast): the orchestration strip and the Broadcast Copilot (ADR-0019).
 // The strip shows the agents' own trace for the last line on air: who acted, which step, and whether a model or the rules made it.
 // The Copilot answers highlight, camera-focus and production-plan questions from the api's ranked picks. Without the api it says so.
-// Appended after onair.js in the same module (see build.py). Only the consumer desk has it: its pitch is Watch's.
+// This is a classic script that runs before the 3D module, so the desk shows while the engine loads. Only the consumer desk has it: its pitch is Watch's.
 (() => {
-  if (!window.MC_CONSUMER) return;
+  if (!framed) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const style = document.createElement('style');
   style.textContent = '#mc-desk{position:absolute;left:10px;top:10px;bottom:56px;width:min(360px,50%,calc(100% - 20px));z-index:40;display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(10,20,40,.92);border-radius:8px;font:500 12px system-ui,sans-serif;color:#e8eefc;overflow:hidden}'
@@ -11,7 +18,7 @@
     + '#mc-desk button:disabled{opacity:.55;cursor:default}'
     + '#mc-desk-body{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto}'
     + '#mc-desk-body[hidden]{display:none}'
-    + '@media (max-width:480px){#mc-desk{top:64px!important;bottom:auto!important;width:calc(100% - 20px)!important;background:none!important;padding:0!important;overflow:visible!important}#mc-desk>div:first-child,#mc-desk-body{display:none!important}#mc-replay{order:-1}}'   // a phone stage is about 180 px tall: only the replay row shows there, where it was before the desk; the Copilot and the strip need a wider pane
+    + '@media (max-width:480px){#mc-desk{top:64px!important;bottom:auto!important;width:calc(100% - 20px)!important;background:none!important;padding:0!important;overflow:visible!important}#mc-desk>div:first-child,#mc-desk-body{display:none!important}}'   // a phone stage is about 180 px tall: only the replay row shows there, where it was before the desk; the Copilot and the strip need a wider pane
     + '#mc-desk ol,#mc-desk ul{margin:0;padding-left:18px}'
     + '.mcd-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}'
     + '.mcd-ch{padding:2px 6px;border-radius:999px;background:#17283F;border:1px solid #2c4a72;font-size:11px}'
@@ -19,8 +26,9 @@
   document.head.append(style);
   const box = document.createElement('section');
   box.id = 'mc-desk'; box.setAttribute('aria-label', 'Production desk: orchestration and Broadcast Copilot');
-  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center"><b>Production desk</b>'
+  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center"><b>Production desk</b> <span id="mc-pitch">3D pitch: loading</span>'
     + '<button type="button" id="mc-desk-hide" aria-expanded="true" aria-controls="mc-desk-body">Hide</button></div>'
+    + '<div id="mc-replay-slot"></div>'   // the instant-replay row (replay.js) sits here, above the body
     + '<div id="mc-desk-body">'
     + '<div id="mc-lens" role="group" aria-label="Steer the agents: who the commentary is written for"><span>Lens</span><button type="button" data-lens="casual">Casual</button><button type="button" data-lens="analyst">Analyst</button><button type="button" data-lens="broadcast">Broadcast</button><select id="mc-lens-more" aria-label="More lenses: a club, a player or a metric" style="max-width:150px;padding:3px;border-radius:4px;background:#12294a;color:#fff;border:1px solid #3aa0ff;font:inherit"></select></div>'
     + '<div id="mc-orch" aria-live="polite"><b>On air</b> <span>Nothing aired yet.</span></div>'
@@ -29,12 +37,9 @@
     + '<div id="mc-cop-out" aria-live="polite" style="margin-top:6px"></div>'
     + '</div></div>';
   (document.getElementById('bc-view') || document.body).append(box);
-  // instant replay is a row of the desk, above its body: the desk covered the bar on the left, and a split pane has no free corner for it
-  const rb = document.getElementById('mc-replay');
-  if (rb) { rb.style.cssText += ';position:static;box-sizing:border-box;width:100%;max-width:none;flex-wrap:wrap'; box.querySelector('#mc-desk-body').before(rb); }
   const $ = (id) => box.querySelector('#' + id);
   // the desk runs down to just above the lower-third while it is on air, and shrinks to its header when Hide collapses it
-  const l3 = document.getElementById('mc-l3');
+  let l3 = null;   // the lower-third is made by the desk module after this script runs; MCDesk.lowerThird sets it
   const placeDesk = () => {
     const host = box.offsetParent; if (!host) return;
     let bottom = 56;
@@ -42,7 +47,6 @@
     box.style.bottom = $('mc-desk-body').hidden ? 'auto' : bottom + 'px';
   };
   placeDesk();
-  if (l3) new ResizeObserver(placeDesk).observe(l3);
   window.addEventListener('resize', placeDesk);
 
   // the production strip: the last five lines on air, newest first. Each shows the numbers it was built on and one chip per agent that acted on it
@@ -62,12 +66,12 @@
     $('mc-orch').innerHTML = '<b>On air, newest first</b>' + flow.map(lineHtml).join('');
   });
   // the lens steers what the agents write for: the same personas the api takes (casual, analyst, broadcast)
-  box.querySelectorAll('[data-lens]').forEach((b) => { b.onclick = () => { MCS.send({ type: 'persona', persona: b.dataset.lens }); box.querySelectorAll('[data-lens]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }; });
+  box.querySelectorAll('[data-lens]').forEach((b) => { b.onclick = () => { send({ type: 'persona', persona: b.dataset.lens }); box.querySelectorAll('[data-lens]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }; });
   // the other lenses: each club of the match, each player, and the metrics the api can follow (the same grammar Watch uses: club:<key>, player:<name>, metric:<name>)
   const METRIC_LENSES = [['xg', 'xG'], ['shots', 'Shots'], ['shots_on_target', 'Shots on target'], ['tackles_won', 'Tackles won'], ['fouls', 'Fouls']];
   const more = $('mc-lens-more');
   function fillLenses() {
-    const list = typeof players !== 'undefined' ? players : [];
+    const list = window.MC_PLAYERS || [];   // the desk module sets this once the players load
     const clubs = [...new Set(list.map((q) => q.T.key))], names = [...new Set(list.map((q) => q.name))].sort();
     const key = clubs.join('|') + '#' + names.length;
     if (more.dataset.key === key) return;
@@ -81,7 +85,7 @@
   more.onfocus = fillLenses; fillLenses();
   more.onchange = () => {
     if (!more.value) return;
-    MCS.send({ type: 'persona', persona: more.value });
+    send({ type: 'persona', persona: more.value });
     box.querySelectorAll('[data-lens]').forEach((x) => x.setAttribute('aria-pressed', 'false'));
   };
 
@@ -96,7 +100,7 @@
   function ask(intent) {
     const id = 'c' + Date.now().toString(36) + (++n); latest = id; pending.set(id, intent);
     out('Checking the match…');
-    MCS.send({ type: 'ask', id, q: QUESTIONS[intent], surface: 'broadcast' });
+    send({ type: 'ask', id, q: QUESTIONS[intent], surface: 'broadcast' });
     setTimeout(() => { if (pending.delete(id) && id === latest) out('No answer from the agent api. Live picks need it; the strip above still shows what the agents did.'); }, 25000);
   }
   function render(intent, b) {
@@ -114,6 +118,65 @@
     out(b ? render(intent, b) : 'Live picks need the agent api. The strip above still shows what the agents did.');
   });
   $('mc-cop').addEventListener('click', (e) => {
-    if (e.target && e.target.id === 'mc-cop-go' && lastFocus) MCS.send({ type: 'focus', player_id: lastFocus.player || '', reason: lastFocus.reason });   // Watch matches the player by name
+    if (e.target && e.target.id === 'mc-cop-go' && lastFocus) send({ type: 'focus', player_id: lastFocus.player || '', reason: lastFocus.reason });   // Watch matches the player by name
   });
+  // the desk module reports the lower-third it makes, and the players once they load
+  window.MCDesk = { lowerThird(el) { l3 = el; new ResizeObserver(placeDesk).observe(el); placeDesk(); }, lenses: fillLenses };
 })();
+
+// ---- Producer section of the Broadcast desk: the lines waiting for a person, the Verifier's verdict on each, and the event-to-air time.
+// The shell owns the approval gate (agents.js); this section sends approve, kill and the mode, and shows what the shell sends back.
+// The producer section: the same classic script, after the Copilot's block, so the desk exists.
+(() => {
+  if (!framed) return;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const style = document.createElement('style');
+  style.textContent = '#mc-producer{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;border-bottom:1px solid #22395c}'
+    + '#mc-producer .mcp-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}'
+    + '#mc-pmode button[aria-pressed="true"]{background:#3aa0ff;color:#06182e}'
+    + '#mc-pq{margin:0;padding:0;list-style:none}'
+    + '.mcp-item{border-left:2px solid #F5B942;padding:2px 0 4px 8px;margin:0 0 4px}'
+    + '.mcp-v{font-size:11px;color:#9fb6d6}.mcp-v.bad{color:#F26B6B}'
+    + '.mcp-esc{border-left-color:#F26B6B}.mcp-tag{color:#F26B6B;text-transform:uppercase;font-size:11px;letter-spacing:.06em}';
+  document.head.append(style);
+  const box = document.createElement('section');
+  box.id = 'mc-producer'; box.setAttribute('aria-label', 'Producer: approve each line before it airs');
+  box.innerHTML = '<div class="mcp-row"><b>Producer</b>'
+    + '<div id="mc-pmode" role="group" aria-label="Approval mode"><button type="button" data-mode="producer" aria-pressed="true">Approve each line</button><button type="button" data-mode="demo" aria-pressed="false">Auto-air</button></div></div>'
+    + '<ol id="mc-pq" aria-live="polite"></ol>'
+    + '<div id="mc-pt" class="mcp-v">Event to air: no line on air yet.</div>';
+  const body = document.getElementById('mc-desk-body');
+  if (body) body.prepend(box); else (document.getElementById('bc-view') || document.body).append(box);
+  const list = box.querySelector('#mc-pq'), note = box.querySelector('#mc-pt');
+  // what the Verifier did, in words: a wording it rejected is kept, and the line shows the repaired one
+  const verdict = (x) => {
+    if (x.repaired) return 'Verifier rejected a wrong number and repaired the line from the event log';
+    if (x.verdict === 'verified') return 'Verifier: verified against the event log';
+    return 'Verifier: ' + (x.verdict || 'not checked') + (x.reason ? ' · ' + x.reason : '');
+  };
+  const item = (x) => '<li class="mcp-item' + (x.escalated ? ' mcp-esc' : '') + '" data-id="' + esc(x.id) + '"><div>' + (x.escalated ? '<b class="mcp-tag">Escalated</b> ' : '') + '<b>' + esc(x.minute) + "'</b> " + esc(x.text) + '</div>'
+    + (x.escalated ? '<div class="mcp-v bad">The Verifier could not repair this line: ' + esc(x.escalation || 'no reason given') + '. Kill is the only action: nothing airs it.</div>' : '')
+    + (x.escalated ? '' : '<div class="mcp-v' + (x.repaired ? ' bad' : '') + '">' + esc(verdict(x)) + '</div>')
+    + (x.repaired && x.was ? '<div class="mcp-v">First wording: ' + esc(x.was) + '</div>' : '')
+    + '<div>' + (x.escalated ? '' : '<button type="button" data-act="approve">Approve</button> ') + '<button type="button" data-act="kill">Kill</button> <span class="mcp-v">waiting ' + Math.round((x.waiting_ms || 0) / 1000) + ' s</span></div></li>';
+  let last = null;
+  const render = (d) => {
+    for (const b of box.querySelectorAll('#mc-pmode [data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === (d.mode === 'demo' ? 'demo' : 'producer')));
+    const items = (Array.isArray(d.items) ? d.items : []).slice().sort((a, b) => !!b.alert - !!a.alert);   // priority 1 alerts first, as in the Agents queue
+    list.innerHTML = items.length ? items.map(item).join('') : '<li class="mcp-v">' + (d.mode === 'demo' ? 'Auto-air: verified lines go straight to air.' : 'No lines waiting for approval.') + '</li>';
+  };
+  const showAired = () => {
+    note.textContent = last ? 'Event to air: ' + (last.aired_ms / 1000).toFixed(1) + ' s' + (last.repaired ? ' · the wording was repaired before it aired' : '') : 'Event to air: no line on air yet.';
+  };
+  box.querySelector('#mc-pmode').onclick = (e) => { const b = e.target.closest('[data-mode]'); if (b) send({ type: 'producer', action: 'mode', mode: b.dataset.mode }); };
+  list.onclick = (e) => { const b = e.target.closest('[data-act]'); if (b) send({ type: 'producer', action: b.dataset.act, id: b.closest('li').dataset.id }); };
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source !== window.parent || d.src !== 'matchcast-shell') return;
+    if (d.type === 'queue') render(d);
+    if (d.type === 'air' && d.line) { last = d.line; showAired(); }
+  });
+  send({ type: 'producer', action: 'sync' });   // the shell answers with the queue, so a desk that loads late shows it
+})();
+
+send({ type: 'panels' });   // the desk's panels are up: the shell may lift its loading card now, while the pitch still loads

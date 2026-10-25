@@ -32,7 +32,7 @@ test('analyst focus: hidden pages keep their code and open by route', async ({ p
 test('analyst focus: the match centre has five tabs', async ({ page }) => {
   const errs = collectErrors(page);
   const f = await openPage(page, 'match');
-  expect(await f.locator('.tabs [role=tab]').allTextContents()).toEqual(['Overview', 'Shots', 'Patterns', 'Players', 'Verifier']);
+  expect(await f.locator('.tabs [role=tab]').allTextContents()).toEqual(['Overview', 'Shots', 'Patterns', 'Players', 'Trust · Verifier']);
   expect(errs).toEqual([]);
 });
 
@@ -61,6 +61,10 @@ test('analyst focus: How was this made lists each agent insight with its Verifie
   const f = await openPage(page, 'trace');
   await expect(f.locator('h1')).toHaveText('How was this made?');
   await expect(f.locator('#trace-list')).toBeVisible();
+  // the Trust page has a clear name and a way in from here (judge re-test, Oct 25)
+  await f.locator('#trace-trust a').click();
+  await expect(f.locator('.tabs [role=tab][aria-selected=true]')).toHaveText('Trust · Verifier');
+  await expect(f.getByText('Verifier checks').first()).toBeVisible();
   expect(errs).toEqual([]);
 });
 

@@ -248,6 +248,7 @@ test('a live booth line keeps the speaker its persona gives it', async ({ page }
 });
 
 test('the booth speaks each new feed line once, play-by-play and colour on different voices', async ({ page }) => {
+  await page.route(/\/(watch|broadcast)\/index\.html/, (rt) => rt.abort());   // no 3D view: its own kick-off would reset the feed (and add a pre-match build-up) under the test
   await openShell(page, 'watch', '?seed=2026');
   await page.evaluate(() => { VC.set(true); });
   const spoken = await page.evaluate(async () => {
@@ -289,6 +290,19 @@ test('the commentary card says Sound is off until Voice is on', async ({ page })
   await expect(f.locator('#mcf-sound')).toBeHidden();
   await page.click('#voice-btn');
   await expect(f.locator('#mcf-sound')).toBeVisible();
+});
+
+test('the commentary card says when the live booth is off, and why, and hides that once it is on', async ({ page }) => {
+  await openShell(page, 'broadcast', '?seed=2026');
+  const f = await viewFrame(page, 'broadcast');
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
+  // GET /booth said no: every watch slot is taken, so the rules booth talks on its own
+  await page.evaluate(() => post('broadcast', { src: 'matchcast-shell', type: 'booth-state', ready: false, reason: 'watch_mode_cap' }));
+  await expect(f.locator('#mcf-booth')).toBeVisible({ timeout: 10_000 });
+  await expect(f.locator('#mcf-booth')).toContainText('every watch mode for this match is taken');
+  await expect(f.locator('#mcf-booth')).toContainText('rules booth');
+  await page.evaluate(() => post('broadcast', { src: 'matchcast-shell', type: 'booth-state', ready: true, reason: '' }));
+  await expect(f.locator('#mcf-booth')).toBeHidden();
 });
 
 test('the booth voices a new match, even though its line ids start again', async ({ page }) => {

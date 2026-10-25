@@ -2436,6 +2436,60 @@
         ]
       }
     },
+    "/v1/matches/{match_id}/vision/summary": {
+      "get": {
+        "description": "What Vision contributes to the agents on this match (ADR-0022): passes in, the lines the\nVerifier passed on them, the latest such line, and agreement with the engine's passes.\n``ready`` is false until the match and its Vision stream exist; the page polls this before\na match starts, so that is an answer, not an error.",
+        "operationId": "vision_summary_v1_matches__match_id__vision_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Vision Summary V1 Matches  Match Id  Vision Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Vision Summary",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/models/danger/card": {
       "get": {
         "description": "The danger model's card (metrics, calibration, limits) for the Analyst page.",

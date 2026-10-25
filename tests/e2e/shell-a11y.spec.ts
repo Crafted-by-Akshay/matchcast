@@ -16,6 +16,7 @@ test('shell: arrow keys move between tabs, a skip link exists, published lines a
   await expect(page.locator('a.skip')).toHaveAttribute('href', '#stage');
   // a published line goes to the polite live region
   await page.evaluate(() => {
+    AG.setMode('demo');   // the default mode holds each line for a person; an aired line is the one announced
     AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
     AG.onWatch('k1', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });

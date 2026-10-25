@@ -29,7 +29,7 @@ MCS.progress('Loading the stadium and players');
   st.textContent += '@media (max-width:560px){button:not(.sw):not(.dk-grab),select,input:not([type=checkbox]),textarea,#px-head{min-height:44px !important;min-width:44px !important}input[type=checkbox]{width:24px;height:24px}label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}';   // phone: 44 px tap targets
   st.textContent += '#pulse,#visp,#datap,#fan-strip{--panel:rgb(9,13,19)}#px-body .px-row{flex-wrap:wrap;gap:0 8px}#px-ctlv{margin-left:auto}';   // panels fully opaque so player labels do not show through (pass 4; 96 percent in pass 3 still showed a ghost); the control line wraps instead of running into its label (UX review pass 3)
   st.textContent += '@media (max-width:640px){#fan-strip,#fan-metric{display:none !important}}';   // phone: the live stats strip sat under the Match Pulse bar; Match data holds the numbers (UX review, finding 14)
-  st.textContent += '#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
+  st.textContent += '#mcf-sound,#mc-trust,#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
   st.textContent += '@media (max-width:1100px){#third{display:none !important}}';
   // Watch shares the stage with Broadcast, so its pane is 561 to 1100 px wide on most laptops: the Copilot button centred at the top then lands on the camera chips, so it takes its narrow-pane place at the right, above the bottom cards
   st.textContent += '@media (min-width:561px) and (max-width:1100px){#cpbtn{left:auto !important;transform:none !important;right:14px !important;top:auto !important;bottom:152px !important}}';   // 152 px keeps it above the caption card, which is up to 125 px tall in the right corner   // phone and small laptop: there is no room beside the commentary card, which says the same and used to cover this card
@@ -43,7 +43,7 @@ MCS.progress('Loading the stadium and players');
     if (!m) return;
     m.style.clipPath = ''; m.style.pointerEvents = ''; delete m.dataset.dockHidden; const tog = document.getElementById('mcf-tog'); if (tog) tog.removeAttribute('tabindex');
     m.style.left = ''; m.style.width = ''; if (l) l.style.maxHeight = '';
-    if (fc) { fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = ''; }
+    if (fc) { fc.style.left = ''; fc.style.bottom = ''; fc.style.maxWidth = ''; fc.style.clipPath = ''; fc.inert = false; delete fc.dataset.dockHidden; }
     if (!m.getBoundingClientRect().width) return;
     const phone = innerWidth <= 560, wide = innerWidth > 1100;
     const dRect = dr && !dr.hidden && getComputedStyle(dr).display !== 'none' && dr.getBoundingClientRect().width ? dr.getBoundingClientRect() : null;
@@ -64,7 +64,8 @@ MCS.progress('Loading the stadium and players');
       mr = m.getBoundingClientRect();
       if (hit(mr, dRect) || (dRect && onPulse(mr))) hide = true;
     }
-    const fcOn = !!fc && getComputedStyle(fc).display !== 'none' && fc.getBoundingClientRect().width > 0;
+    let fcOn = !!fc && getComputedStyle(fc).display !== 'none' && fc.getBoundingClientRect().width > 0;
+    if (fcOn && dRect && !phone) { fc.style.clipPath = 'inset(50%)'; fc.inert = true; fc.dataset.dockHidden = '1'; fcOn = false; }   // the open Copilot shows the followed player in its Talk tab: the corner goes to the commentary card (UX pass 10)
     let fcRight = 0;
     if (fcOn) {
       const f = fc.getBoundingClientRect();
@@ -78,6 +79,10 @@ MCS.progress('Loading the stadium and players');
         else hide = true;   // no room for both: the player the viewer chose to follow wins, the commentary stays in the caption card
       }
     }
+    // say so in the drawer when the commentary card has stepped aside for it (UX pass 10: the booth must not just vanish)
+    let note = document.getElementById('mcx-booth-note');
+    if (!note && dr) { const tabs = document.getElementById('cp-tabs'); note = document.createElement('p'); note.id = 'mcx-booth-note'; note.hidden = true; note.style.cssText = 'margin:6px 14px;font-size:12px;color:var(--muted,#9fb0c8)'; note.textContent = 'The Live commentary card is hidden while Copilot is open. Close Copilot to see it again.'; if (tabs && tabs.parentNode) tabs.parentNode.insertBefore(note, tabs); else dr.appendChild(note); }
+    if (note) note.hidden = !(hide && dRect);
     if (hide) { m.style.clipPath = 'inset(50%)'; m.style.pointerEvents = 'none'; m.dataset.dockHidden = '1'; if (tog) tog.tabIndex = -1; }   // out of sight and out of the tab order, but still in the page, so its live region keeps announcing the lines
     // the caption card (#cap) is centred in the pane and shows for a few seconds: it never sits on the commentary card (which shows the same line) or the followed-player card (it rises above that one)
     const cap = document.getElementById('cap');

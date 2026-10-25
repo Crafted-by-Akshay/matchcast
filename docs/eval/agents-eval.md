@@ -24,6 +24,9 @@ Goals and red cards covered: 100.0% of 4. Key moments among those picked: 88.2% 
 ## Narrator
 34 first drafts, whatever the Verifier later did with them. Each number must be backed by its own claim, each name must be in the roster: 100.0%. Inside the persona length limit: 100.0%. Casual and analyst wording differ on 100.0% of 17 shown moments. Offline this grades templates, so 100% is expected; the number matters for a model-written line.
 
+## Booth colour
+18 first drafts of the colour voice. Generic (no player, no club, no number, so it could be said of any match): 0.0%; the Verifier refuses these. Different wording from every other colour line: 44.4%. Offline the colour lines are stock sentences, so repeats are expected; the number matters for a model-written line.
+
 ## Verifier
 The real checks, replayed on 34 lines the workflow verified, each changed in one way. A mutation counts as caught only when the Verifier gives the intended reason.
 

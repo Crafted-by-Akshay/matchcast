@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from ..context import MatchContext
+from ..memory import already_said
 from ..messages import DraftLine, ProducerTask
 from ..personas import max_chars, slug
 from ..resilience import ModelError
@@ -53,6 +54,7 @@ class LiveNarrator:
             "player": ctx.player_name(payload["player_id"]) if "player_id" in payload else None,
             "clubs": {t: ctx.club_name(t) for t in (ctx.home, ctx.away)},
             "personas": list(task.personas),
+            "already_said_about_this_play": already_said(ctx, payload),
         }
         if attempt:
             facts["note"] = (

@@ -13,9 +13,11 @@ import json
 from typing import Any
 
 from ..context import MatchContext
+from ..memory import already_said
 from ..messages import ProducerTask, Skip
 from ..resilience import TIMEOUT_S, CircuitBreaker, ModelError, ModelRateLimited, ModelTimeout
 from ..rules import ProducerRules
+from ..rules.producer import BOOTH_MOMENTS
 from .client import ModelClient, prompt
 
 AIRED_MEMORY = 5  # aired moments the Producer sees, so it can skip a storyline it just covered
@@ -72,8 +74,11 @@ class LiveProducer:
     async def decide(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | Skip:
         self.call_mode = "rules"
         decision = await self._rules.decide(ctx, event)
-        if isinstance(decision, ProducerTask) and decision.priority != 1:
-            decision = await self._ask_model(ctx, event, decision)
+        booth = isinstance(decision, ProducerTask) and decision.reason in BOOTH_MOMENTS
+        if isinstance(decision, ProducerTask) and decision.priority != 1 and not booth:
+            decision = await self._ask_model(
+                ctx, event, decision
+            )  # booth moments are not up for a skip
         if isinstance(decision, ProducerTask):
             self._aired.append(
                 {
@@ -158,4 +163,5 @@ class LiveProducer:
             },
             "allowed_personas": list(decision.personas),
             "aired_recently": self._aired,
+            "already_said_about_this_play": already_said(ctx, payload),
         }

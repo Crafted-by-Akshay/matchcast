@@ -48,7 +48,7 @@ const MCS = (() => {
     }
   };
   // call right after every kick-off: the engine has started, the fixture's clubs replace the defaults
-  const started = () => { applyClubs(); live('start'); };
+  const started = () => { applyClubs(); live('start'); const pitch = document.getElementById('mc-pitch'); if (pitch) pitch.textContent = '3D pitch: live'; };   // the desk's header says when the pitch is on
   const progress = (text) => send({ type: 'progress', text });   // shown on the shell's loading card
   let sentOver = false;
   const loop = () => {

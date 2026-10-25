@@ -13,6 +13,7 @@
 import glob
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -256,6 +257,7 @@ def build_broadcast():
             '<button data-l="es" aria-pressed="false">ES</button><button data-l="hi" aria-pressed="false">हिन्दी</button>',
             "broadcast language buttons",
         )
+        + '<script>\n' + r(EMB + "desk-panels.js") + '\n</script>\n'   # the desk panels: a classic script, so they show before the 3D module's imports load
         + importmap()
         + '<script type="module">\n'
         + main
@@ -274,8 +276,6 @@ def build_broadcast():
         + "\n"
         + r(EMB + "onair.js")
         + "\n"
-        + r(EMB + "copilot.js")
-        + r(EMB + "producer.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
@@ -406,24 +406,38 @@ def national_fixtures(season):
     ]
 
 
-NO_REAL_LEAGUE = [
-    ("FIFA protocol: play restarts", "Stadium rule: play restarts"),
-    ("A FIFA cooling break at WBGT", "A cooling break at WBGT"),
+# Federation and competition names are trademarks. The copied engine sources are read-only, so their user-facing wording is neutralised
+# here, on the way out; the guard below fails the build if any such name is left (the same list is checked by tests/e2e/neutral-names.spec.ts).
+NEUTRAL = [
+    ("A FIFA cooling break", "A cooling break"),
+    ("FIFA cooling breaks", "Cooling breaks"),
+    ("FIFA protocol", "Lightning protocol"),
+    ("FIFA heat protocol", "Heat protocol"),
+    ("above FIFA\\'s 32", "above the 32"),
     ("(8 miles, FIFA)", "(8 miles)"),
-    ("FIFA cooling breaks at 30", "Cooling breaks at 30"),
-    ("FIFA\\'s 32", "the 32"),
-    ("// FIFA heat protocol", "// heat protocol"),
-    ("// FIFA-style dynamic cam", "// broadcast-style dynamic cam"),
+    ("FIFA-style dynamic cam", "Broadcast-style dynamic cam"),
+    ("so La Liga kicks off", "so league matches kick off"),
+    ("World Cup level", "top international level"),
+    ("at a World Cup", "at a major tournament"),
+    ("IFAB Law", "Law"),
     # before kick-off the fixture's clubs are not applied yet, so the pre-match caption and kick-off line must not name a season club
     ("Players are out. Harbor City kick off.", "Players are out. Kick-off to come."),
     ("TEAMS[0].club + ' get us under way.'", "'Both sides get us under way.'"),
 ]
+BANNED = r"\b(FIFA|UEFA|IFAB|CONMEBOL|CONCACAF|World Cup|La Liga|Premier League|Champions League|Bundesliga|Serie A)\b"
+
+
+def neutral(text, label):
+    for old, new in NEUTRAL:
+        text = text.replace(old, new)
+    left = sorted(set(re.findall(BANNED, text, re.I)))
+    assert not left, label + ": federation or competition names left in the build: " + ", ".join(left)
+    return text
 
 
 def write(path, text):
-    # the read-only sources name a real league's rules (lightning, heat); the product is a synthetic world, so those names come out here
-    for old, new in NO_REAL_LEAGUE:
-        text = text.replace(old, new)
+    if path.endswith(".html"):
+        text = neutral(text, path.replace(U, ""))
     if path.endswith(".html") and not text.lstrip().lower().startswith("<!doctype"):
         text = (
             "<!doctype html>\n" + text

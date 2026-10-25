@@ -12,7 +12,7 @@ NAV.splice(0, NAV.length,
 
 // Five tabs in the match centre. Patterns puts the pass network and the average shape on one tab.
 MC_RENDER.pat = (m) => MC_RENDER.pass(m) + '<div style="height:14px"></div>' + MC_RENDER.shape(m);
-MC_TABS.splice(0, MC_TABS.length, ['ov', 'Overview'], ['shots', 'Shots'], ['pat', 'Patterns'], ['ply', 'Players'], ['trust', 'Verifier']);
+MC_TABS.splice(0, MC_TABS.length, ['ov', 'Overview'], ['shots', 'Shots'], ['pat', 'Patterns'], ['ply', 'Players'], ['trust', 'Trust · Verifier']);   // "Trust" names the page judges look for (judge re-test, Oct 25)
 
 const focusLive = () => (window.MC_FEED && window.MC_FEED.on ? window.MC_FEED : null);
 const focusMatch = (arg) => D.match(arg || (focusLive() || {}).fixture) || D.matches[D.matches.length - 1];
@@ -96,6 +96,9 @@ page({
     el.innerHTML = pgHead('How was this made?', 'Each agent line in ' + esc(m.title) + ' (recorded run, Simulated), with the steps that made it. The in-page rules agents wrote them, and the Verifier recounts each one from the event log.') +
       '<div class="card" id="trace-list">' + (ins.length
         ? '<div class="list">' + ins.map((e) => '<div class="li"><span class="chip ' + (e.status === 'verified' ? 'good' : e.status === 'rejected' ? 'bad' : 'warn') + '">' + esc(e.status) + '</span><div><div class="t">' + esc(e.text) + '</div><div class="s">' + minLbl(e.minute) + ' · Analyst (' + esc(e.agent || 'rules') + ') made the claim · Narrator wrote the line · Verifier ' + esc(e.status) + ' it against the event log (Simulated)</div></div></div>').join('') + '</div>'
-        : '<div class="empty">No agent lines in this match.</div>') + '</div>';
+        : '<div class="empty">No agent lines in this match.</div>') + '</div>' +
+      '<p class="note" id="trace-trust">Every Verifier check for this match (rules, motion, vision and predictions) is on the <a href="#match.' + esc(m.id) + '" data-trust>Trust · Verifier</a> tab of the Match centre.</p>';
+    const a = el.querySelector('[data-trust]');
+    a.onclick = (ev) => { ev.preventDefault(); go('match', m.id); setTimeout(() => { const t = [...document.querySelectorAll('.tabs [role=tab]')].find((x) => /Trust/.test(x.textContent)); if (t) t.click(); }, 0); };
   },
 });

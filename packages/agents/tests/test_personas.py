@@ -136,7 +136,10 @@ def test_goal_moment_gives_the_booth_a_call_and_a_reaction_in_order(match) -> No
     by_moment: dict[str, list] = {}
     for line in lines:
         by_moment.setdefault(line.moment_id, []).append(line)
-    goal = next(v for v in by_moment.values() if {ln.persona for ln in v} >= {"booth:pbp"})
+    # the goal, not the booth-only kick-off: it is the moment that also has the casual line
+    goal = next(
+        v for v in by_moment.values() if {ln.persona for ln in v} >= {"casual", "booth:pbp"}
+    )
     assert {ln.persona for ln in goal} == {"casual", "booth:pbp", "booth:colour"}
     pbp = next(ln for ln in goal if ln.persona == "booth:pbp")
     colour = next(ln for ln in goal if ln.persona == "booth:colour")
