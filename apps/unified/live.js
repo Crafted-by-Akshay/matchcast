@@ -4,6 +4,7 @@
 const LV = (() => {
   const WARM_MS = window.MATCHCAST_WARM_MS || 90000, CLAIM_MS = window.MATCHCAST_WARM_MS || 60000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
   let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
+  const vstats = { passes: 0, reads: 0, readsFailed: 0 };   // what Vision has reached the api with: passes accepted, shirt-number reads answered or refused
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
   const set = (s, again) => { if (s !== st || again) { st = s; onStatus(s); } };
@@ -49,6 +50,7 @@ const LV = (() => {
   const begin = (matchKey, roster) => {
     stop();
     teamIds = roster ? roster.teams.map(slug) : [];
+    vstats.passes = 0; vstats.reads = 0; vstats.readsFailed = 0;   // Vision counts belong to one match
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
     run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, sending: false };
@@ -128,8 +130,8 @@ const LV = (() => {
     if (!run) throw Object.assign(new Error('no match yet'), { status: 0 });
     const res = await fetch(api() + '/v1/matches/' + run.id + '/vision/identify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: run.key.session_id, crop, track_id: trackId, team_hint: team }) });
-    if (!res.ok) throw Object.assign(new Error('identify ' + res.status), { status: res.status, retry_after: +res.headers.get('Retry-After') || 0 });
-    return res.json();
+    if (!res.ok) { vstats.readsFailed++; throw Object.assign(new Error('identify ' + res.status), { status: res.status, retry_after: +res.headers.get('Retry-After') || 0 }); }
+    const j = await res.json(); vstats.reads++; return j;
   };
 
   // the server's audit records for this match (EXP-12), and the same check the server's verifyChain does (packages/contracts/src/audit.ts)
@@ -202,6 +204,7 @@ const LV = (() => {
       const res = await fetch(at('/v1/matches/' + r.id + '/events'), json({ events: batch }));
       if (!res.ok) throw new Error('events ' + res.status);
       v.queue.splice(0, batch.length);
+      vstats.passes += batch.length;
     } catch (e) { /* kept; the next batch retries */ }
     v.sending = false;
     if (v.queue.length && run === r && v.created) sendVision(r, v);
@@ -230,7 +233,7 @@ const LV = (() => {
   };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); run = null; };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, visionSummary, stop, talk, recap, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, events, visionEvents, visionSummary, stop, talk, recap, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

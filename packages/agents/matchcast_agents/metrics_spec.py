@@ -15,6 +15,11 @@ METRIC_UNITS = {
     "pressures": "count",
     "possession_won": "count",
     "xg": "ratio",
+    "h2h_played": "count",  # pre-match history, see history_metrics.py
+    "h2h_home_wins": "count",
+    "h2h_draws": "count",
+    "h2h_away_wins": "count",
+    "elo": "count",
 }
 TOLERANCE = {"count": 0.0, "ratio": 0.01, "m": 0.5, "m/s": 0.5, "s": 0.5, "ms": 500.0}
 

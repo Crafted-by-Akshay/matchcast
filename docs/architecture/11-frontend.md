@@ -88,6 +88,7 @@ Other views can move Watch's camera with `window.MCWatch.focus({ player_id })` (
 
 1. Anything not connected is labelled "Simulated" (or the specific label in [08-analytics-and-ml.md](08-analytics-and-ml.md) §3).
 2. Every published line shows its verdict mark (green tick verified, amber dot awaiting review) and a "How was this made?" link to the trace panel (EXP-6).
+   The Agents tab also shows how the agents work, live: one lane per claim with its handoffs (Analyst, Narrator, Verifier, Producer), each marked model or rules, the agent chip taken from the api's stream status, and what Vision has sent to the api. A line the stream repeats is listed once in the Live flow.
 3. Rules-made lines show the "Rules fallback" chip.
 4. Accessibility: keys 1, 2, 3 switch views; Tab order through cards; Enter opens a trace; Esc closes; an `aria-live="polite"` region reads each published line; WCAG AA contrast.
 5. Performance: Watch interactive in ≤ 4 s cold on 50 Mbps; other views load on first switch; `players.json` and match files served compressed with long cache headers.
