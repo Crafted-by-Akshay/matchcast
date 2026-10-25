@@ -19,6 +19,7 @@ calls a fallback answered. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYM
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import sys
 import urllib.error
@@ -33,6 +34,8 @@ from matchcast_agents.live.client import FoundryModelClient
 
 def fetch_input(api: str, session_id: str, match_id: str) -> dict:
     """The stored match of a live session, from the read-only scoreboard input export."""
+    if match_id in ("", ".", ".."):  # a dot segment would climb out of the match route
+        raise ValueError(f"not a match id: {match_id!r}")
     query = urllib.parse.urlencode({"session_id": session_id})
     path = f"/v1/matches/{urllib.parse.quote(match_id, safe='')}/scoreboard/input?{query}"
     with urllib.request.urlopen(api.rstrip("/") + path, timeout=30) as response:
@@ -66,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     elif from_api:
         try:
             match = fetch_input(args.api, args.session_id, args.match_id)
-        except (urllib.error.URLError, ValueError) as error:  # HTTPError is a URLError
+        except (OSError, http.client.HTTPException, ValueError) as error:  # URLError is an OSError
             print(f"could not export the match from {args.api}: {error}", file=sys.stderr)
             return 1
     else:

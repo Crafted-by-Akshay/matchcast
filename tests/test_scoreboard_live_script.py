@@ -54,7 +54,7 @@ def test_a_match_file_and_the_api_options_do_not_mix(capsys, tmp_path) -> None:
     code = script.main(
         [
             "--match",
-            "m.json",
+            str(tmp_path / "m.json"),
             "--api",
             "https://api.example",
             "--fixture",
@@ -72,7 +72,16 @@ def test_a_match_file_and_the_api_options_do_not_mix(capsys, tmp_path) -> None:
 def test_the_fixture_is_still_required(tmp_path) -> None:
     script = load_script()
     with pytest.raises(SystemExit) as stop:
-        script.main(["--match", "m.json", "--max-calls", "5", "--out", str(tmp_path / "o.json")])
+        script.main(
+            [
+                "--match",
+                str(tmp_path / "m.json"),
+                "--max-calls",
+                "5",
+                "--out",
+                str(tmp_path / "o.json"),
+            ]
+        )
     assert stop.value.code == 2
 
 
@@ -117,6 +126,42 @@ def test_an_export_that_fails_is_a_message_not_a_traceback(monkeypatch, capsys, 
     )
     assert code == 1
     assert "could not export the match" in capsys.readouterr().err
+
+
+def test_a_read_that_is_cut_off_is_a_message_too(monkeypatch, capsys, tmp_path) -> None:
+    script = load_script()
+
+    class Cut(Reply):
+        def read(self, *args):
+            raise TimeoutError("read timed out")
+
+    monkeypatch.setattr(script.urllib.request, "urlopen", lambda url, timeout: Cut(b""))
+    code = script.main(
+        [
+            "--api",
+            "https://api.example",
+            "--session-id",
+            "s1",
+            "--match-id",
+            "m1",
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "o.json"),
+        ]
+    )
+    assert code == 1
+    assert "could not export the match" in capsys.readouterr().err
+
+
+def test_a_dot_segment_is_not_a_match_id(monkeypatch) -> None:
+    script = load_script()
+    monkeypatch.setattr(script.urllib.request, "urlopen", lambda url, timeout: Reply(b"{}"))
+    for match_id in ("..", "."):
+        with pytest.raises(ValueError):
+            script.fetch_input("https://api.example", "s1", match_id)
 
 
 def test_a_saved_export_is_recorded_with_the_given_fixture(monkeypatch, tmp_path) -> None:
