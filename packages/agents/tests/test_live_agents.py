@@ -321,6 +321,19 @@ def test_no_reaction_airs_when_the_call_it_answers_is_turned_away(match, monkeyp
     assert not [ln for ln in lines if ln.status == "published"]
 
 
+def test_history_metrics_are_offered_to_the_analyst_only_with_history(match) -> None:
+    menus: list[list[str]] = []
+
+    def record(system, user):
+        facts = json.loads(user)
+        if "metrics_available" in facts:
+            menus.append(facts["metrics_available"])
+        return answer(system, user)
+
+    run(build(match, ScriptedModelClient(record)).ingest(match["events"]))
+    assert menus and not [m for menu in menus for m in menu if m.startswith(("elo", "h2h"))]
+
+
 def test_colour_falls_back_to_a_rules_line_when_the_model_fails(match) -> None:
     class Down:
         async def complete(self, system, user, schema, **_):
