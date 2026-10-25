@@ -9,6 +9,7 @@ test('trace panel: four agents in order with durations, tools, and the seeded ba
   await openShell(page, 'agents');
   await page.evaluate(() => {
     const key = 'k1', names = { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' };
+    AG.setMode('demo');   // the trace panel checks the agents' steps for a line that airs at once (the approval path has its own spec)
     AG.reset(key, names);
     AG.onWatch(key, [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);   // a normal goal
     AG.seedBad(true);
