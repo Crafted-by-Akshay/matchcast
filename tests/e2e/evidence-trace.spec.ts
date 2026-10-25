@@ -93,125 +93,130 @@ test('evidence trace: an unknown event id, a history row and a hostile name are 
   await expect(ev.locator('.tp-rows li').first()).toContainText('<img src=x');
 });
 
-// AB#498 (proposal: matchcast-v2/vision/interfaces/crew-frames-proposal.md): a crew_trace frame for a line fills the Evidence section of an api line.
-// The whole mapping from the frame's field names is one function in trace-panel.js (fromFrame), so a rename there is the only change.
+// AB#498, final contract (docs/contracts.md "Derived feed lines", 1.2.0): an `onair` or `feed_drop` record fills the Evidence section of an api line, and claims carry
+// optional tool_call_ids, evidence_ids (results:<row>) and trace_id. The whole mapping from the record's field names is one function in trace-panel.js (fromFrame).
 const apiLine = (page: Page) => page.evaluate(() => {
-  AG.ingest({ claim_id: 'c-9', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved' }, 'live');
-  AG.ingest({ publication_id: 'pub-L-17', line_id: 'L-17', claim_ids: ['c-9'], text: 'Goal for Northgate FC.' }, 'live');
+  AG.ingest({ claim_id: 'c-9', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved', trace_id: 'match-demo:m-e42', tool_call_ids: ['tc-1', 'tc-2'], evidence_ids: ['results:41230', 'results:7'] }, 'live');
+  AG.ingest({ publication_id: 'onair-casual-goal', line_id: 'L-17', claim_ids: ['c-9'], text: 'Goal for Northgate FC.' }, 'live');
   return AG.run.events[0].id as string;
 });
-const frame = (ev: string) => ({
-  match_id: 'm1', at_ms: 720000, line_id: 'L-17', moment_id: 'm-e42', feed: 'analyst', state: 'published', text: 'Goal for Northgate FC.',
-  claims: [{ claim_id: 'c-9', metric: 'goals:home', value: 1, source_event_ids: [ev, 'e-gone'], history_row_ids: ['results:41230'] }],
-  verifier: { verdict: 'verified', reason_code: null, checks: ['numbers', 'names', 'freshness'] }, repair_of: 'L-16', called: ['analyst', 'narrator', 'verifier'], audit_hash: 'sha256:' + 'ab'.repeat(32),
+const onair = (ev: string) => ({
+  kind: 'onair', schema_version: '1.2.0', publication_id: 'onair-casual-goal', feed: 'casual', lang: 'en', text: 'Goal for Northgate FC.',
+  source_event_ids: [ev, 'e-gone'], claim_ids: ['c-9'], match_time_ms: 720000, aired_at: '2026-10-17T10:00:01Z', repair_count: 1,
 });
+const drop = (ev: string) => ({ kind: 'feed_drop', schema_version: '1.2.0', publication_id: 'onair-casual-goal', feed: 'analyst', source_event_ids: [ev], reason_code: 'number_mismatch <i>x</i>', repair_count: 1, audit_id: 'audit-drop-1', match_time_ms: 720000 });
+const crew = (page: Page, f: object) => page.evaluate((x) => (window as any).mcCrewTrace(x), f);
 
-test('evidence trace: a crew_trace frame fills an api line with its agents, event rows, history rows, verifier verdict and repair', async ({ page }) => {
+test('evidence trace: an onair record and the claim fields fill an api line with its events, history rows, tool call ids, run id and repair count', async ({ page }) => {
   await openEvidence(page, '?evidence=1');
   const ev0 = await apiLine(page);
-  await page.evaluate((f) => { (window as any).mcCrewTrace(f); TP.open('pub-L-17'); }, frame(ev0));
+  expect(await crew(page, onair(ev0))).toBe(true);
+  await page.evaluate(() => TP.open('onair-casual-goal'));
   const ev = page.locator('#tp .tp-evidence');
-  await expect(ev.locator('.tp-agents')).toContainText('analyst → narrator → verifier');
-  await expect(ev.locator('.tp-agents')).not.toContainText('Planned');
-  await expect(ev.locator('.tp-tools'), 'tool names are not on the frame: still said to be Planned, not guessed').toContainText('Planned (AB#498)');
+  await expect(ev.locator('.tp-state')).toContainText('published');
+  await expect(ev.locator('.tp-state')).toContainText('feed casual');
+  await expect(ev.locator('.tp-verifier')).toContainText('(as the api reports it)');
+  await expect(ev.locator('.tp-verifier')).toContainText('after one repair');
+  await expect(ev.locator('.tp-trace')).toContainText('match-demo:m-e42');
+  await expect(ev.locator('.tp-agents'), 'the api does not say which agents ran: still Planned, not guessed').toContainText('Planned (AB#498)');
+  await expect(ev.locator('.tp-tools')).toContainText('tc-1, tc-2');
+  await expect(ev.locator('.tp-tools')).toContainText('ids only');
   const rows = ev.locator('.tp-rows li');
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText(ev0);
   await expect(rows.nth(1)).toContainText('an api event id this page no longer holds or never sent');
   await expect(ev.locator('.tp-history')).toContainText('results row 41230');
+  await expect(ev.locator('.tp-history')).toContainText('results row 7');
   await expect(ev.locator('.tp-history')).not.toContainText('Planned');
-  await expect(ev.locator('.tp-verifier')).toContainText('(as the api reports it)');
-  await expect(ev.locator('.tp-verifier')).toContainText('verified');
-  await expect(ev.locator('.tp-verifier')).toContainText('numbers, names, freshness');
-  await expect(ev.locator('.tp-repair')).toContainText('repairs L-16');
-  await expect(ev.locator('.tp-crew-audit')).toContainText('sha256:abab');
-  await expect(ev.locator('.tp-crew-audit')).toContainText('not recomputed in this page');
+  await expect(ev.locator('.tp-crew-audit')).toHaveCount(0);   // an aired line has no drop audit record
 });
 
-test('evidence trace: a frame that arrives while the panel is open updates it; a dropped line shows the reason, not the text', async ({ page }) => {
+test('evidence trace: a record that arrives while the panel is open updates it; a dropped line shows the reason and audit id, not the text', async ({ page }) => {
   await openEvidence(page, '?evidence=1');
   const ev0 = await apiLine(page);
-  await page.evaluate(() => TP.open('pub-L-17'));
+  await page.evaluate(() => TP.open('onair-casual-goal'));
   const ev = page.locator('#tp .tp-evidence');
-  await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
-  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, state: 'dropped', verifier: { verdict: 'rejected', reason_code: 'number_mismatch <i>x</i>', checks: ['numbers'] } }), frame(ev0));
-  await expect(ev.locator('.tp-agents')).toContainText('analyst → narrator → verifier');
-  await expect(ev.locator('.tp-verifier')).toContainText('rejected');
-  await expect(ev.locator('.tp-verifier')).toContainText('number_mismatch <i>x</i>');   // escaped, shown as text
-  await expect(ev.locator('.tp-verifier i')).toHaveCount(0);
+  await expect(ev.locator('.tp-rows')).toHaveCount(0);
+  await expect(ev).toContainText('has not sent this line\'s record');
+  await crew(page, drop(ev0));
   await expect(ev.locator('.tp-state')).toContainText('dropped');
   await expect(ev.locator('.tp-state')).toContainText('text is in the audit chain, not shown');
+  await expect(ev.locator('.tp-verifier')).toContainText('number_mismatch <i>x</i>');   // escaped, shown as text
+  await expect(ev.locator('.tp-verifier i')).toHaveCount(0);
+  await expect(ev.locator('.tp-crew-audit')).toContainText('audit-drop-1');
+  await expect(ev.locator('.tp-crew-audit')).toContainText('not recomputed in this page');
+  await expect(ev.locator('.tp-rows li')).toHaveCount(1);
 });
 
-test('evidence trace: a malformed crew_trace frame is ignored, and the flag off leaves the panel alone', async ({ page }) => {
+test('evidence trace: an unknown record kind or one with no line id is ignored, and the flag off leaves the panel alone', async ({ page }) => {
   await openEvidence(page, '?evidence=1');
   await apiLine(page);
-  const r = await page.evaluate(() => [(window as any).mcCrewTrace(null), (window as any).mcCrewTrace({}), (window as any).mcCrewTrace({ line_id: 'L-17', claims: 'x' })]);
-  expect(r).toEqual([false, false, true]);   // a frame with no line id is refused; one with a bad claims field is kept with no claims
-  await page.evaluate(() => TP.open('pub-L-17'));
-  await expect(page.locator('#tp .tp-agents')).toContainText('none recorded');
+  expect(await page.evaluate(() => [(window as any).mcCrewTrace(null), (window as any).mcCrewTrace({}), (window as any).mcCrewTrace({ kind: 'crew_trace', publication_id: 'onair-casual-goal' }), (window as any).mcCrewTrace({ kind: 'onair' })])).toEqual([false, false, false, false]);
+  await page.evaluate(() => TP.open('onair-casual-goal'));
+  await expect(page.locator('#tp .tp-state')).toHaveCount(0);
   const page2 = await page.context().newPage();
   await openEvidence(page2, '');
   await apiLine(page2);
-  expect(await page2.evaluate(() => (window as any).mcCrewTrace({ line_id: 'L-17', called: ['analyst'] })), 'with the flag off the frame is refused and nothing is kept').toBe(false);
-  await page2.evaluate(() => TP.open('pub-L-17'));
+  expect(await crew(page2, onair('e1')), 'with the flag off the record is refused and nothing is kept').toBe(false);
+  await page2.evaluate(() => TP.open('onair-casual-goal'));
   await expect(page2.locator('#tp .tp-evidence')).toHaveCount(0);
   await page2.close();
 });
 
-test('evidence trace: a line never borrows another line\'s trace, and a claim card takes none', async ({ page }) => {
+test('evidence trace: a line never borrows another line\'s record, and a claim card takes none', async ({ page }) => {
   await openEvidence(page, '?evidence=1');
   const ev0 = await apiLine(page);
-  await page.evaluate(() => AG.ingest({ publication_id: 'pub-L-18', line_id: 'L-18', claim_ids: ['c-9'], text: 'Second line citing the same claim.' }, 'live'));
-  await page.evaluate((f) => { (window as any).mcCrewTrace({ ...f, state: 'dropped', repair_of: null }); TP.open('pub-L-18'); }, frame(ev0));   // the frame is for L-17 only
+  await page.evaluate(() => AG.ingest({ publication_id: 'onair-analyst-goal', line_id: 'L-18', claim_ids: ['c-9'], text: 'Second line citing the same claim.' }, 'live'));
+  await crew(page, onair(ev0));   // the record is for onair-casual-goal only
+  await page.evaluate(() => TP.open('onair-analyst-goal'));
   const ev = page.locator('#tp .tp-evidence');
-  await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
   await expect(ev.locator('.tp-state')).toHaveCount(0);
+  await expect(ev).toContainText('has not sent this line\'s record');
   await page.evaluate(() => TP.open('c-9'));   // the claim both lines cite
-  await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
+  await expect(ev.locator('.tp-state')).toHaveCount(0);
   await expect(ev.locator('.tp-verifier')).toHaveCount(0);
 });
 
-test('evidence trace: a new match drops the old frames; hostile or odd frames neither crash nor invent rows', async ({ page }) => {
+test('evidence trace: a new match drops the old records; odd fields neither crash nor invent rows; many event ids are capped', async ({ page }) => {
   await openEvidence(page, '?evidence=1');
   const ev0 = await apiLine(page);
-  const ok = await page.evaluate((f) => [(window as any).mcCrewTrace({ ...f, claims: [null, 7, { claim_id: 'c-9', source_event_ids: [f.claims[0].source_event_ids[0], 12, {}, null], history_row_ids: [41230] }] }), (window as any).mcCrewTrace({ line_id: { toString: 1 } })], frame(ev0));
-  expect(ok[0]).toBe(true);
-  // fields that are not strings (an object whose toString is not callable) are shown as nothing, and the panel still opens
+  // claim fields and record fields that are not strings are shown as nothing, and the panel still opens
   await page.evaluate(() => {
-    (window as any).mcCrewTrace({ line_id: 'L-odd', state: { toString: 1 }, called: [{ toString: 1 }, 'analyst'], verifier: { verdict: { toString: 1 }, checks: [{ toString: 1 }] }, audit_hash: { toString: 1 } });
-    AG.ingest({ publication_id: 'pub-L-odd', line_id: 'L-odd', claim_ids: [], text: 'A line with an odd frame.' }, 'live'); TP.open('pub-L-odd');
+    AG.ingest({ claim_id: 'c-odd', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved', trace_id: { toString: 1 }, tool_call_ids: [{ toString: 1 }, 'tc-ok', 5], evidence_ids: 'results:3' }, 'live');
+    AG.ingest({ publication_id: 'pub-odd', line_id: 'L-odd', claim_ids: ['c-odd', 'c-missing', null], text: 'A line with odd fields.' }, 'live');
+    (window as any).mcCrewTrace({ kind: 'onair', publication_id: 'pub-odd', feed: { toString: 1 }, lang: 7, source_event_ids: [null, {}, 12, 'e1', 'e1'], claim_ids: 'x', repair_count: 'one', audit_id: { toString: 1 } });
+    TP.open('pub-odd');
   });
-  await expect(page.locator('#tp .tp-evidence .tp-agents')).toContainText('analyst');
-  await page.evaluate(() => TP.open('pub-L-17'));
   const ev = page.locator('#tp .tp-evidence');
-  await expect(ev.locator('.tp-rows li')).toHaveCount(2);   // the string id and the number 12; null and {} are dropped
-  await expect(ev.locator('.tp-history')).toContainText('41230');
-  // a frame for a line that was never published, then a new match: the old trace is gone
-  await page.evaluate(() => { AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); AG.ingest({ publication_id: 'pub-L-17', line_id: 'L-17', claim_ids: [], text: 'A line in the next match.' }, 'live'); TP.open('pub-L-17'); });
-  await expect(ev.locator('.tp-agents')).toContainText('Planned (AB#498)');
+  await expect(ev.locator('.tp-tools')).toContainText('tc-ok');
+  await expect(ev.locator('.tp-rows li')).toHaveCount(2);   // the number 12 and the string e1 once; null and {} are dropped
+  await expect(ev.locator('.tp-history'), 'evidence_ids that is not a list is not read as one').toContainText('has not sent');
+  // a new match: the old record is gone, and a line of the same id in the next match takes none of it
+  await crew(page, onair(ev0));
+  await page.evaluate(() => { AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); AG.ingest({ publication_id: 'onair-casual-goal', line_id: 'L-17', claim_ids: [], text: 'A line in the next match.' }, 'live'); TP.open('onair-casual-goal'); });
   await expect(ev.locator('.tp-state')).toHaveCount(0);
   // many event ids: capped, with a count of the rest
-  await page.evaluate(() => (window as any).mcCrewTrace({ line_id: 'L-17', called: ['analyst'], claims: [{ claim_id: 'c', source_event_ids: Array.from({ length: 120 }, (_, i) => 'x' + i) }] }));
+  await crew(page, { kind: 'onair', publication_id: 'onair-casual-goal', source_event_ids: Array.from({ length: 120 }, (_, i) => 'x' + i), claim_ids: [], repair_count: 0 });
   await expect(ev.locator('.tp-rows li')).toHaveCount(50);
   await expect(ev).toContainText('+70 more event ids not listed');
+  await expect(ev.locator('.tp-verifier')).toContainText('first time');
 });
 
-test('evidence trace: a frame for another line does not redraw the open panel', async ({ page }) => {
+test('evidence trace: a record for another line does not redraw the open panel', async ({ page }) => {
   await openEvidence(page, '?evidence=1');
   const ev0 = await apiLine(page);
-  await page.evaluate((f) => { (window as any).mcCrewTrace(f); TP.open('pub-L-17'); document.querySelector('#tp .tp-evidence')!.setAttribute('data-mark', '1'); }, frame(ev0));
-  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, line_id: 'L-99' }), frame(ev0));
+  await page.evaluate((f) => { (window as any).mcCrewTrace(f); TP.open('onair-casual-goal'); document.querySelector('#tp .tp-evidence')!.setAttribute('data-mark', '1'); }, onair(ev0));
+  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, publication_id: 'onair-other' }), onair(ev0));
   expect(await page.evaluate(() => document.querySelector('#tp .tp-evidence')!.getAttribute('data-mark')), 'not redrawn').toBe('1');
-  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, called: ['analyst'] }), frame(ev0));   // the line on screen: redrawn
-  await expect(page.locator('#tp .tp-evidence .tp-agents')).not.toContainText('narrator');
+  await page.evaluate((f) => (window as any).mcCrewTrace({ ...f, repair_count: 0 }), onair(ev0));   // the line on screen: redrawn
+  await expect(page.locator('#tp .tp-verifier')).toContainText('first time');
 });
 
-// the stream end to end: a crew_trace event from the api reaches the panel through live.js (a mock api, as in connection.spec.ts)
-test('evidence trace: a crew_trace event on the api stream reaches the panel', async ({ page }) => {
+// the stream end to end: an onair event from the api reaches the panel through live.js (a mock api, as in connection.spec.ts)
+test('evidence trace: an onair event on the api stream reaches the panel', async ({ page }) => {
   const errs = collectErrors(page);
   // events the api's numbering skips (no team or player) make the page's ids and the api's ids differ from the second event on: e1 to the api is the goal, e1 to the page is the whistle
-  const frame0 = { match_id: 'm1', at_ms: 720000, line_id: 'L-17', moment_id: 'm-e42', feed: 'analyst', state: 'published', claims: [{ claim_id: 'c-9', source_event_ids: ['e1', 'e77'], history_row_ids: ['results:7'] }], verifier: { verdict: 'verified', reason_code: null, checks: ['numbers'] }, called: ['analyst', 'verifier'], audit_hash: 'sha256:' + 'cd'.repeat(32) };
+  const rec = { schema_version: '1.2.0', publication_id: 'onair-casual-goal', feed: 'casual', lang: 'en', source_event_ids: ['e1', 'e77'], claim_ids: ['c-9'], match_time_ms: 720000, repair_count: 0 };
   const server = createServer((q, r) => {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
     if (q.method === 'OPTIONS') { r.writeHead(204, cors); return r.end(); }
@@ -220,9 +225,10 @@ test('evidence trace: a crew_trace event on the api stream reaches the panel', a
     r.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...cors });
     const send = (ev: string, d: object) => r.write('event: ' + ev + '\ndata: ' + JSON.stringify(d) + '\n\n');
     send('status', { status: 'live' });
-    send('claim', { claim_id: 'c-9', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved' });
-    send('publication', { publication_id: 'pub-L-17', line_id: 'L-17', claim_ids: ['c-9'], text: 'Goal for Northgate FC.' });
-    send('crew_trace', frame0);
+    send('claim', { claim_id: 'c-9', metric: 'goals:home', value: 1, units: 'count', approval_status: 'approved', tool_call_ids: ['tc-9'], evidence_ids: ['results:7'], trace_id: 'match-demo:m-e42' });
+    send('publication', { publication_id: 'onair-casual-goal', line_id: 'L-17', claim_ids: ['c-9'], text: 'Goal for Northgate FC.' });
+    send('onair', rec);
+    send('feed_drop', { schema_version: '1.2.0', publication_id: 'onair-analyst-goal', feed: 'analyst', source_event_ids: ['e1'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'audit-drop-1', match_time_ms: 720000 });
   });
   await new Promise<void>((res) => server.listen(0, res));
   const api = 'http://127.0.0.1:' + (server.address() as any).port;
@@ -236,16 +242,18 @@ test('evidence trace: a crew_trace event on the api stream reaches the panel', a
     const batch = [{ minute: 3, type: 'whistle' }, { minute: 12.4, type: 'goal', team: 'thr', player: 'A One', score: '1-0' }];
     AG.onWatch('k1', batch, []); LV.events(batch);
   });
-  await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.id === 'pub-L-17')), { timeout: 20_000 }).toBe(true);
-  await page.evaluate(() => TP.open('pub-L-17'));
+  await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.id === 'onair-casual-goal')), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => { TP.open('onair-casual-goal'); return document.querySelectorAll('#tp .tp-state').length; }), { timeout: 10_000 }).toBe(1);
   const ev = page.locator('#tp .tp-evidence');
-  await expect(ev.locator('.tp-agents')).toContainText('analyst → verifier', { timeout: 10_000 });
+  await expect(ev.locator('.tp-state')).toContainText('published');
+  await expect(ev.locator('.tp-verifier')).toContainText('first time');
   const rows = ev.locator('.tp-rows li');
   await expect(rows.first(), 'the api\'s e1 is the goal it was sent, not the page\'s own e1 (the whistle)').toContainText('goal · A One');
   await expect(rows.first()).not.toContainText('whistle');
   await expect(rows.nth(1)).toContainText('an api event id this page no longer holds or never sent');
+  await expect(ev.locator('.tp-tools')).toContainText('tc-9');
+  await expect(ev.locator('.tp-trace')).toContainText('match-demo:m-e42');
   await expect(ev.locator('.tp-history')).toContainText('results row 7');
-  await expect(ev.locator('.tp-crew-audit')).toContainText('sha256:cdcd');
   expect(errs.filter((e) => !/EventSource/.test(e))).toEqual([]);
   } finally { server.closeAllConnections(); server.close(); }
 });
