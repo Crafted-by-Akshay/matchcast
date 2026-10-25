@@ -44,10 +44,10 @@ _MARKER = re.compile(r"\[(?:claim|kb|line|event):[^\]]+\]")
 _TAG = re.compile(r"<[^>]+>")
 # The neutral-wording list (ADR-0020, tests/test_neutral_names.py) applies to translations too.
 # Latin letters on both sides, not \b: Japanese and Chinese set no spaces around a Latin name.
+# Case-sensitive for "La Liga" and "Serie A": in Spanish "la liga" is a faithful common noun.
 _NEUTRAL = re.compile(
-    r"(?<![A-Za-z])(FIFA|UEFA|IFAB|CONMEBOL|CONCACAF|World Cup|La Liga|"
-    r"Premier League|Champions League|Bundesliga|Serie A)(?![A-Za-z])",
-    re.I,
+    r"(?<![A-Za-z])(?:(?i:FIFA|UEFA|IFAB|CONMEBOL|CONCACAF|World Cup|Premier League|"
+    r"Champions League|Bundesliga)|(?-i:La Liga|Serie A))(?![A-Za-z])",
 )
 
 log = logging.getLogger("matchcast.translate")

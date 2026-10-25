@@ -31,6 +31,19 @@ On-demand agents (never on the live loop):
 | Ask pipeline | `POST /v1/matches/{id}/ask` | Chatbot answers | Model answer from a fact sheet in live mode (`packages/agents/prompts/ask.md`); router + AI Search + core tools otherwise | Verifier, see [05-assistant-rag.md](05-assistant-rag.md) |
 | Broadcast Copilot | `POST /v1/matches/{id}/ask` with `surface: "broadcast"` | Highlights, camera focus and a production plan for the Broadcast view | Ranking in code over events and state (`matchcast_agents/broadcast.py`); no model call yet | Rules; every pick cites its event. See [ADR-0019](adr/0019-broadcast-copilot-reuses-ask.md) |
 
+### 2.1 Specialists (per moment, `matchcast_agents/specialists/`)
+
+The Showrunner (CREW-1.1) spawns specialists for one moment through `plan_spawns`, which returns 0 to 4 `SpawnRequest`s. Each specialist implements `Specialist.run(ctx, request) -> SpecialistReport`. A report carries findings, each with its figures and the event ids (or history row ids) they came from, so the Verifier can recount them. Specialists never write a line.
+
+| Specialist | Story | Input | Output | Model call | Fallback |
+| --- | --- | --- | --- | --- | --- |
+| History | CREW-2.2 (AB#391) | Real past meetings of two nations (martj42 CC0 results file, ADR-0020), cut at today | Head-to-head counts, last meeting, each finding citing `results:<row>`, the data row of the file it counted (header excluded) | none, deterministic | `no_data` for a fictional squad or a pair with no past meeting; `failed` if the results file is missing; no why line in either case, so the Narrator writes no history claim |
+| Rhythm | CREW-2.3 (AB#486) | Raw events in a trailing five-minute window ending at the moment | Whole-minute control index (-1 to 1, positive means home), the control team when the index passes 0.2 and at least 10 on-ball actions are in the window, and swings (a sign flip within three minutes, both readings at least 0.1, at most one per team per span) written to `ctx.extra["rhythm"]`; a `why` line naming a swing from the last five minutes, with the event ids of the window that ends at the swing | none, deterministic | `no_data` report when the window is empty; the rules twin still writes the line |
+
+`plan_spawns` (CREW-2.1, AB#385) sizes the call: a priority-1 moment gets up to four specialists in parallel, any other moment at most one, and the per-match `SpawnBudget` (60 spawns, a cost guard) is shared by every moment. When the budget is spent, or no specialist is available, it spawns nothing and gives the reason, which the ledger records and the rules twin covers.
+
+Rhythm weights on-ball actions (passes and carries) and pass tempo at 0.6 of the index, and territory, pressure, shots and turnovers won at 0.4. The engine emits no possession time, so possession is the share of on-ball actions. The sides swap at half time, the usual convention; the fixture has only one period, so the swap is not checked against engine data.
+
 ## 3. Workflow graph (Microsoft Agent Framework)
 
 Exported image: [img/2-agent-workflow.png](img/2-agent-workflow.png) (regenerate with `scripts/export_diagrams.sh`).
@@ -166,6 +179,6 @@ packages/agents/
 | --- | --- |
 | Distinct roles | Trace panel shows four agents with their own tools and outputs (EXP-6) |
 | Shared state and handoffs | Claims ledger: one claim, its Analyst evidence, Narrator lines, Verifier verdict (EXP-10) |
-| Failure recovery | Seeded bad claim repaired on cue (`?seedBadClaim=1`); rules fallback chip; kill-and-resume clip (QUA-5) |
+| Failure recovery | Seeded bad claim repaired on cue (`?seedBadClaim=1`); failure drill: "Cut the model" on the Agents tab cuts the match's model calls mid-match and the rules twins take over with no gap (`POST …/drill`, 12-api.md); rules fallback chip; kill-and-resume clip (QUA-5) |
 | Better than one agent | QUA-4: same 30 moments, one agent vs four, verified-claim rate and hallucinations per 100 lines, real numbers in the README |
 | Interoperability | MCP for tools and Copilot; A2A Stats Desk with an Agent Card |

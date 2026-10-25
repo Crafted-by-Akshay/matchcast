@@ -4,7 +4,7 @@ import json
 
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig
-from matchcast_agents.live import ScriptedModelClient, live_agents
+from matchcast_agents.live import ModelCut, ScriptedModelClient, live_agents
 from matchcast_agents.resilience import ModelError, ModelTimeout
 
 
@@ -110,6 +110,26 @@ def test_a_model_outage_falls_back_to_rules_and_is_audited(match, monkeypatch) -
     assert "fallback_used" in actions(flow)
     lines = flow.store.lines(flow.sk)
     assert lines and all(ln.origin == "template" for ln in lines)
+
+
+def test_a_model_cut_mid_match_hands_the_lines_to_the_rules_twins(match, monkeypatch) -> None:
+    """The failure drill: the model is cut halfway, no call reaches it after that, and the
+    lines keep coming from the rules twins with each refusal audited."""
+    monkeypatch.setenv("MATCHCAST_LIVE_MAX_PRIORITY", "3")  # every moment goes to the model
+    cut = ModelCut()
+    inner = ScriptedModelClient(lambda s, u: answer(s, u))
+    flow = build(match, cut.guard(inner))
+    events = match["events"]
+    half = len(events) // 2
+    run(flow.ingest(events[:half]))
+    before = len(inner.calls)
+    assert before and flow.status == "live"
+    cut.on = True
+    run(flow.ingest(events[half:]))
+    assert len(inner.calls) == before
+    assert flow.status == "rules_fallback" and "fallback_used" in actions(flow)
+    origins = {ln.origin for ln in flow.store.lines(flow.sk)}
+    assert {"model", "template"} <= origins
 
 
 def test_unknown_metrics_from_the_analyst_are_not_trusted(match) -> None:

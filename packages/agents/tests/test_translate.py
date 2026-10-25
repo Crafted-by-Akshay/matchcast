@@ -217,3 +217,7 @@ def test_a_translation_naming_a_competition_is_rejected():
         "neutral_wording"
     )
     assert recheck(EN, "Northgate FC tiene 7 tiros y 2,5 xG [claim:c-1].", []) is None
+
+
+def test_a_faithful_spanish_line_with_la_liga_in_lowercase_is_kept():
+    assert recheck(EN, "Northgate FC tiene 7 tiros y 2,5 xG, en la liga [claim:c-1].", []) is None

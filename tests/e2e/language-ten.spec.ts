@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { collectErrors, openShell } from './helpers';
+import { collectErrors, openShell, viewFrame } from './helpers';
 
 declare const VC: any;
 
@@ -19,5 +19,16 @@ test('language picker: ten feed languages, the choice is kept on reload', async 
   await page.reload();
   await openShell(page, 'agents');
   await expect(page.locator('#lang-pick')).toHaveValue('ja');
+  expect(errs).toEqual([]);
+});
+
+test('language: picking Portuguese with Watch open keeps Portuguese, Watch does not echo English back', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openShell(page, 'watch');
+  await page.locator('#lang-pick').selectOption('pt');
+  await page.waitForTimeout(1500);
+  await expect(page.locator('#lang-pick')).toHaveValue('pt');
+  const f = await viewFrame(page, 'watch');
+  expect(await f.evaluate(() => (window as any).__shellLang)).toBe('pt');
   expect(errs).toEqual([]);
 });

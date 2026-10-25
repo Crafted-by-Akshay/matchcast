@@ -1,6 +1,6 @@
 # 11 Front end (unified app)
 
-Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: EXP-1 to EXP-17. Current build notes: `apps/unified/README.md` (on branch `feature/unified-app`, PR #4).
+Status: **Agreed design**. Last reviewed 25 Oct 2026. Backlog: EXP-1 to EXP-17. Current build notes: `apps/unified/README.md` (on branch `feature/unified-app`, PR #4).
 
 ## 1. Structure
 
@@ -114,6 +114,9 @@ The Data science and Platform pages are not in the nav any more. They stay regis
 ### Analyst Data platform page (EXP-13)
 `apps/unified/analyst-pages/10_data_platform.js` adds the Data platform page (not in the focused nav since 24 Oct; open it with `go('data-platform')`). It shows the Fabric clip/screenshot and the Databricks model card from `shared/` (copied from `apps/unified/platform-assets/` by `build.py`). Until DAT-8 / DAT-6 supply the files each block is labelled Planned. The card moves to a Blob read through the api when DAT-6 lands.
 
+### Sprint first screen: one 3D view, no camera presets (AB#497, AB#500)
+The second 3D view (the Broadcast desk beside Watch, `#bc-toggle`) is off the first screen; `?split=1` still opens it for the specs. The seven Watch camera presets (`#cams`) stay in the page and are hidden by `embed/democtl.js`. The desk shows a simulated overlay feed preview (`#mc-overlay`, `embed/desk-panels.js`): the last two records of the on-air export (`window.MCOnAir.json()` in `embed/onair.js`, `matchcast.onair/1`), refreshed when a line airs. The timed stream endpoint and the overlay schema are not changed here (AB#498, AB#499 belong to the orchestration thread).
+
 ### Broadcast desk panels before the 3D engine
 `apps/unified/embed/desk-panels.js` is a classic script in the Broadcast page, placed before the three.js import. It builds the production desk (the orchestration strip, the Broadcast Copilot and the lens menu) and the Producer section (the approval queue, Auto-air and event to air). The desk module (`broadcast.js` and the engine) still imports three.js first, so it cannot run the panels; the panels run without it. The panels post `{ type: 'panels' }` to the shell, which lifts its loading card on that message (`.view.panels .wait`), not on the pitch's start. The desk header's "3D pitch" label says loading until the engine starts, then live. The replay bar mounts into the desk's slot (`#mc-replay-slot`) when the desk is up. The desk module reports back two things: `window.MC_PLAYERS` (for the lens menu) and `MCDesk.lowerThird` (the lower-third it makes). With three.js blocked, the queue and the Copilot still render (`tests/e2e/desk-panels.spec.ts`). The Copilot answers with picks once the shared match has started.
 
@@ -215,6 +218,10 @@ A desk that joins mid-match is sent the approval queue and mode, the commentary 
 - 12 px floor: the Verifier chip, the "Sound is off" line and the producer's verdict lines are 12 px.
 - Agents tab at 390 and 320 px: the claims ledger becomes one card per claim (the 600 px table made 17 elements run past the edge); the header row is visually hidden and the table keeps explicit ARIA table roles so a screen reader still hears the column names. Spec: `shell-layout.spec.ts`.
 - The header pill (this match's agents: live, rules fallback, warming) and the Foundry chip (the api's deployment from `/v1/status`) can differ: Foundry can be live while one match is on rules. Their tooltips now say so.
+- Event to on air: the header pill `#lat-pill` (visible over every tab, the Broadcast desk included) shows the median wall-clock time from a Watch event reaching the shell to the api's published line arriving, over the last 30 matched lines. `live.js` stamps each event by its stream sequence when it is queued and matches a publication through `state.max_evidence_sequence`, one sample per event so a replay after a reconnect is not counted again; Watch batches events for up to a second before they reach the shell, which is before the stamp and not in the number; the pill stays hidden until the first sample (`tests/e2e/latency.spec.ts`).
+
+## Crew accuracy scoreboard (AB#442, flagged `?crew=1`)
+`apps/unified/crew-score.js` mounts into `#crew-score` in the Agents tab, only when `CREW.enabled`. It reads `CREW.state.score` (`{method, arms:{full_crew, single_agent, crew_no_verifier}}`) and nothing else, so the real endpoint plugs in through `CREW.ingest` later. Each arm shows accuracy against simulator truth as the headline bar, with catch rate, latency, cost per match and lines graded as small figures, plus the method text. The panel says **Simulated** while `CREW.state.simulated` is true, and **Precomputed** (with `run_id`) on any arm whose data sets `precomputed`. Bars are DOM blocks with a different fill pattern per arm (solid, stripes, dots) so colour is never the only cue; every value is text, a "Show as table" fallback repeats them, and the bar transition is off under reduced motion. Spec: `tests/e2e/crew-score.spec.ts`.
 
 ## Evidence trace (CREW-6.2, AB#444), behind `?evidence=1`
 The trace panel ("How was this made?", `trace-panel.js`) gets an **Evidence** section when the page is opened with `?evidence=1`. For a line from the rules agents it lists:

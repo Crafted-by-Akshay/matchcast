@@ -34,7 +34,8 @@ const VC = (() => {
     };
     // Azure Speech (token from the api) when it is there, otherwise the browser voice; one voice per role and language
     if (typeof SPX === 'undefined') { browser(); return; }
-    const voice = it.lang !== 'en' && voices[it.lang] ? voices[it.lang] : it.role === 'analyst' ? voices.analyst : voices.playByPlay;
+    if (it.lang !== 'en' && !voices[it.lang]) { done(); return; }   // no voice for this language: captioned, never read in another voice
+    const voice = it.lang !== 'en' ? voices[it.lang] : it.role === 'analyst' ? voices.analyst : voices.playByPlay;
     SPX.speak(it.text, voice, lang, it.tone === 'big').then((ok) => { if (my !== gen || !on) return; if (ok) { source = 'azure'; onChange(); done(); } else if (Date.now() - it.at > EXPIRY_MS) done(); else browser(); });   // not spoken late by the browser after a slow Azure try
   };
   // a line to show and (if voice is on) speak. at: when it was written, in ms; lang: a language in VOICED; audio: an api audio url

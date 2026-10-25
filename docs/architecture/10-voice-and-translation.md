@@ -46,7 +46,7 @@ Rules:
 1. Only verified English text is ever translated. Agents always work in English.
 2. "Active viewer" means a browser that sent a heartbeat with that language in the last 30 s (SSE query parameter `lang`). Translation also stops after 500,000 characters in total (`TRANSLATOR_MAX_CHARS`, about $5 at the S1 price); after that, lines stay English with the note "Translation paused".
 3. Translator resource `tr-matchcast-dev`, S1, with a custom subdomain so managed identity works (role Cognitive Services User).
-4. The re-check compares the sets of numbers (digits normalised from Devanagari to ASCII for Hindi) and names between English and the translation. Any difference drops that language for that line.
+4. The re-check compares the sets of numbers (digits normalised to ASCII from Devanagari, Arabic-Indic and full-width, Arabic decimal separators read as points) and names between English and the translation, and rejects any competition or federation name (neutral wording, ADR-0023). Any difference drops that language for that line.
 5. Captions show in the chosen language. If a line has no variant in that language, the English line shows with a small "EN" tag.
 6. Ask and Talk answers are translated the same way before they are shown.
 
@@ -75,5 +75,5 @@ The top-bar selector (the ten feed languages, ADR-0023) is the single viewer lan
 - **Checks.** Same as section 4, plus a neutral-wording check: a translation that names a competition or federation is dropped with reason `neutral_wording`. Arabic-Indic and full-width digits compare as numbers.
 - **Picker.** One select in the shell header (the `#lang-pick` control). The choice is kept in `localStorage` (`mc-lang`) and sent to Watch and the Broadcast desk.
 - **Voice.** Browser voice speaks checked lines in `en, es, pt, hi` only (`voices.json`). A language without a voice shows its caption and is not read in the English voice.
-- **Limits.** Watch and the Broadcast desk have rules templates for `es` and `hi` only, so a desk on `pt` shows English with the note. The feed-specific spoken routes (casual, audio description, catch-me-up) wait on the feeds thread. The Speech voice for a line on air (`/lines/{id}/audio.mp3`) is still English.
+- **Limits.** Watch's own picker lists only some feed languages; a line in another language is shown with its checked translation when there is one, and otherwise the English line with a 'no checked translation' label. The Broadcast desk has rules templates for `es` and `hi` only, so a desk on `pt` shows English with the note. The feed-specific spoken routes (casual, audio description, catch-me-up) wait on the feeds thread. The Speech voice for a line on air (`/lines/{id}/audio.mp3`) is still English.
 - **Cost.** `TRANSLATOR_MAX_CHARS` (default 500,000 per api process) is the cap; the Translator resource is S1 in Bicep. The free tier (F0, 2M characters a month) is a Platform-lane change to make in Azure, not in code.
