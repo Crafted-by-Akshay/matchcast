@@ -1,5 +1,6 @@
 """Cloud builds (AB#47): images build in Azure Container Registry, so a deploy needs no Docker."""
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -56,5 +57,78 @@ def test_cloud_deploy_retries_the_steps_a_first_run_can_trip_on():
     assert "retry az acr build" in branch  # Docker Hub rate limits on shared build agents
     assert branch.index("azd provision") < branch.index("az acr build")  # registry before builds
     # the switch-over provision waits for the new AcrPull assignment to propagate
-    assert 'retry azd provision -e "$ENV_NAME" --no-prompt' in LOCAL.read_text()
+    assert "\nretry provision\n" in LOCAL.read_text()
     assert "registryName: registry.outputs.name" in MAIN
+
+
+def _params():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("azd_params", ROOT / "scripts/azd_params.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_bicep_parameters_render_from_the_azd_env_like_azd_does():
+    """The acr path deploys main.bicep with az, because azd provision checks for Docker."""
+    env = _params().parse_env(
+        'AZURE_ENV_NAME="dev"\nAPI_IMAGE="acrx.azurecr.io/matchcast-api:sha-1"\n'
+        'FOUNDRY_PROJECT_ENDPOINT="https://f.example/api/projects/p"\nKEEP_WARM="true"\n'
+        'QUOTED="a \\"b\\""\n'
+    )
+    assert env["QUOTED"] == 'a "b"'
+    params = _params().render((ROOT / "infra/main.parameters.json").read_text(), env)["parameters"]
+    assert params["apiImage"]["value"] == "acrx.azurecr.io/matchcast-api:sha-1"
+    assert params["environmentName"]["value"] == "dev"
+    assert params["keepWarm"]["value"] == "true"
+    assert (
+        params["location"]["value"] == "eastus2"
+    )  # ${AZURE_LOCATION=eastus2}: unset takes the default
+    assert params["entraClientId"]["value"] == ""
+    assert "${" not in json.dumps(params)
+
+
+def test_cloud_deploy_never_calls_azd_provision():
+    script = LOCAL.read_text()
+    provision = script.split("provision() {", 1)[1].split("\n}\n", 1)[0]
+    acr, local = provision.split("else", 1)
+    assert "provision_acr" in acr and "azd" not in acr
+    assert "azd provision" in local
+    # every provision in the script goes through provision(), never azd directly
+    code = [ln for ln in script.splitlines() if not ln.lstrip().startswith("#")]
+    assert sum("azd provision" in ln for ln in code) == 1
+    assert "az deployment group create" in script
+
+
+def test_a_failed_cloud_provision_is_retried_and_fails_the_deploy(tmp_path):
+    """retry runs its command left of &&, where bash ignores set -e inside functions."""
+    script = LOCAL.read_text()
+    funcs = "\n".join(
+        script[script.index(f"{name}() {{") :].split("\n}\n", 1)[0] + "\n}"
+        for name in ("retry", "provision_acr")
+    )
+    for tool, body in (
+        ("azd", "echo 'AZURE_ENV_NAME=\"dev\"'; echo 'FOUNDRY_PROJECT_ENDPOINT=\"https://f\"'"),
+        ("az", f"echo az >> {tmp_path}/calls; exit 3"),
+    ):
+        (tmp_path / tool).write_text(f"#!/bin/sh\n{body}\n")
+        (tmp_path / tool).chmod(0o755)
+    (tmp_path / "sleep").write_text("#!/bin/sh\n")
+    (tmp_path / "sleep").chmod(0o755)
+    run = subprocess.run(
+        ["bash", "-c", f"set -euo pipefail\nENV_NAME=dev\n{funcs}\nretry provision_acr"],
+        cwd=ROOT,
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+    )
+    assert run.returncode != 0
+    assert (tmp_path / "calls").read_text().count("az") == 3
+
+
+def test_an_unset_required_parameter_stops_the_render():
+    import pytest
+
+    with pytest.raises(SystemExit):
+        _params().render((ROOT / "infra/main.parameters.json").read_text(), {})

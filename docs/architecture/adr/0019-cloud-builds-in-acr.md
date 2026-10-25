@@ -23,6 +23,7 @@ Option 2. `scripts/deploy_cloud.sh [api] [web] [mcp]` (deploy_local.sh with `BUI
 - The deploying machine needs only az, azd, git, curl and python3: no Docker, no image layers on disk.
 - The build context is uploaded to Azure, so both `.dockerignore` files exclude `.azure`, `.env*`, `*.pem` and `*.key`.
 - Builds and the provision retry three times a minute apart (Docker Hub rate limits, AcrPull propagation).
+- `azd provision` refuses to run without Docker because azure.yaml declares Docker services (found 25 Oct), so the acr path deploys `infra/main.bicep` with `az deployment group create`, with parameters rendered from the azd env by `scripts/azd_params.py`. The azd postprovision hook does not run on that path; it only re-stores the search keys, which are already in Key Vault.
 - Cost: Basic is about $0.17 a day (about $5 to 20 Nov) plus build seconds; inside the ~$100 cap.
 - Images are private in ACR; no pull secret anywhere.
 
