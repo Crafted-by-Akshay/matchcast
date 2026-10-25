@@ -909,7 +909,7 @@ function init(list) {
   for (const m of Object.keys(md)) {
     const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
     for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
-      o.textContent = fx.home.club + ' v ' + fx.away.club + ' (recorded ' + fx.score.join('–') + ')'; g.appendChild(o); }
+      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = 'Recorded result ' + fx.score.join('–') + ' (the Analyst replays it)'; g.appendChild(o); }
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
