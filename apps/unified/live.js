@@ -3,7 +3,7 @@
 // With an api, the rules agents keep running beside it, so if the api never answers the viewer still gets lines: status 'fallback'.
 const LV = (() => {
   const WARM_MS = window.MATCHCAST_WARM_MS || 90000, CLAIM_MS = window.MATCHCAST_WARM_MS || 60000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
-  let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, timer = null;
+  let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, onBooth = () => {}, timer = null;
   const vstats = { passes: 0, reads: 0, readsFailed: 0 };   // what Vision has reached the api with: passes accepted, shirt-number reads answered or refused
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
@@ -66,6 +66,9 @@ const LV = (() => {
   // the booth's own stream (persona=booth): only booth:pbp and booth:colour publications, in speaking order. Its persona is the speaker, which feed.js voices. It is not retried: if it drops, the rules booth carries on
   const openBooth = (r) => {
     if (r.booth) r.booth.close();
+    onBooth(null);   // a new match or a reconnect clears the last answer until this one arrives
+    // the api says whether the booth is on and, when it is not, why (the watch-mode cap); the card shows it, and the rules booth carries on either way
+    fetch(url('/v1/matches/' + r.id + '/booth'), { headers: { Accept: 'application/json' } }).then((res) => (res.ok ? res.json() : null)).then((j) => { if (j && run === r) onBooth(j); }).catch(() => { /* the card keeps its default */ });
     try {
       const es = new EventSource(url('/v1/matches/' + r.id + '/stream', { persona: 'booth', lang }));
       r.booth = es;
@@ -238,7 +241,7 @@ const LV = (() => {
     return null;
   };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); if (run && run.booth) run.booth.close(); run = null; };
-  return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
+  return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
     begin, events, visionEvents, stop, talk, recap, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };

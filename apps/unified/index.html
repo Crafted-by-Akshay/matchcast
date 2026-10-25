@@ -797,6 +797,7 @@ function pushCards() {
 }
 
 // ---------------------------------------------------------------- messages from the views
+let boothLast = null;   // the booth's state (GET /booth), sent to both cards and re-sent to a card that loads after it
 window.addEventListener('message', (e) => {
   const d = e.data || {};
   if (d.src !== 'matchcast') return;
@@ -804,6 +805,7 @@ window.addEventListener('message', (e) => {
   if (!view) return;
   if (d.type === 'feed-ready') {
     post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on });
+    if (boothLast) post(view, boothLast);
     if (view === 'broadcast') {   // a desk that joins mid-match gets what it missed: the queue and mode, the feed and where the lines come from (lines already aired are not replayed: Broadcast would speak them again)
       postQueue(); post('broadcast', { src: 'matchcast-shell', type: 'feed-lines', items: CM.view(40) });
       if (M.agents) post('broadcast', M.agents);
@@ -1049,7 +1051,8 @@ function init(list) {
     if (s === 'warming') $('api-pill').textContent = PILL.warming[0] + ' · 0 s of up to ' + Math.round((window.MATCHCAST_WARM_MS || 90000) / 1000);
   };
   const paintPillNow = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
-  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest });
+  const boothState = (j) => { boothLast = { src: 'matchcast-shell', type: 'booth-state', ready: !j || !!j.ready, reason: (j && j.reason) || '' }; post('watch', boothLast); post('broadcast', boothLast); };   // no answer yet (null): the card shows nothing
+  LV.configure(window.MATCHCAST_API || '', { status: paintPill, claim: AG.ingest, line: AG.ingest, booth: boothState });
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
   renderAgents();
