@@ -85,7 +85,7 @@ MCS.progress('Loading the stadium and players');
   };
   window.MCWatch = {
     focus(spec) {
-      if (!spec || !players.length || $('load').hidden === false) return false;
+      if (!spec || !players.length || !S.started || $('load').hidden === false) return false;
       let who = null;
       if (spec.player_id) who = players.find((q) => !q.off && mcSlug(q.name) === mcSlug(spec.player_id));
       else if (spec.zone && MC_ZONES[spec.zone]) { const b = bp2(); who = players.filter((q) => !q.off && MC_ZONES[spec.zone](q)).sort((x, y) => x.pos2.distanceTo(b) - y.pos2.distanceTo(b))[0]; }   // the player in the zone nearest the ball
