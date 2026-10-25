@@ -18,7 +18,7 @@ class CrashingNarrator(NarratorRules):
     def __init__(self, die_on: int) -> None:
         self.die_on, self.calls = die_on, 0
 
-    async def write(self, ctx, task, claims, *, attempt=0):
+    async def write(self, ctx, task, claims, *, attempt=0, feedback=""):
         self.calls += 1
         if self.calls == self.die_on:
             raise Crash("container killed")

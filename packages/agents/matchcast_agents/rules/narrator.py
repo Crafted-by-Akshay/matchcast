@@ -87,6 +87,7 @@ class NarratorRules:
         claims: list[dict[str, Any]],
         *,
         attempt: int = 0,
+        feedback: str = "",
     ) -> list[DraftLine]:
         event = ctx.event(task.event_ids[0])
         assert event is not None

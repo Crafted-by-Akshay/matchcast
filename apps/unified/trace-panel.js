@@ -36,35 +36,69 @@ const TP = (() => {
       + '<p class="note">Verdict: ' + esc(c.verdict) + (c.repaired ? ' (repaired once)' : '') + ' · Source: ' + (c.source === 'model' ? 'model' : 'rules') + (aud ? ' · Audit ' + esc(aud) : '') + '</p>';
   };
   // CREW-6.2 (AB#444), behind ?evidence=1: the evidence behind a line. Agents and tool calls come from the claim's trace; data rows are the match events (or the moment) its
-  // evidence ids point at; history rows (CREW-2.2) are not built, so the panel says so; audit hashes are checked against the chain. A line from the api carries none of this
-  // yet (claim-level event ids arrive with AB#498), and the panel says that instead of showing a guess.
+  // evidence ids point at; history rows (CREW-2.2) are not built, so the panel says so; audit hashes are checked against the chain. A line from the api shows what its onair or
+  // feed_drop record and its claims' trace fields (AB#498) carry; what the api does not send is said to be Planned instead of shown as a guess.
   const FLAG = /[?&]evidence=1(&|$)/.test(location.search);
+  // AB#498, final contract (docs/contracts.md, "Derived feed lines", 1.2.0): an `onair` record (a derived-feed line that aired) or a `feed_drop` record (one that did not) says where a line stands, which events
+  // it cites and, for a drop, why. Claims carry optional `tool_call_ids`, `evidence_ids` (results:<row>) and `trace_id`. fromFrame is the only code that knows the record's field names.
+  const CT = new Map();   // publication_id -> the line's record, in the panel's own words; only for the run on screen, at most CAP lines
+  const CAP = 500, ROWS = 50;
+  const id1 = (x) => (typeof x === 'string' && x) || (Number.isFinite(x) ? String(x) : '');
+  const str = (x) => id1(x).slice(0, 200);
+  const uniq = (a) => [...new Set((Array.isArray(a) ? a : []).map(id1).filter(Boolean))];
+  const fromFrame = (f) => {
+    const drop = f.kind === 'feed_drop';
+    if (!drop && f.kind !== 'onair') return { line: '' };
+    return { line: id1(f.publication_id), state: drop ? 'dropped' : 'published', feed: str(f.feed), lang: str(f.lang), events: uniq(f.source_event_ids), claims: uniq(f.claim_ids),
+      repairs: Number.isFinite(f.repair_count) ? f.repair_count : null, reason: str(f.reason_code), auditId: str(f.audit_id) };
+  };
+  // the card of a published line has the record's publication_id; a claim card is not a line and takes no line's record
+  const crewFor = (c) => { const t = c.pub ? CT.get(String(c.id)) : null; return t && t.run === AG.run ? t : null; };
+  const claimsOf = (c) => (c.apiClaims || []).map((cid) => AG.run.claims.find((x) => x.id === cid && x.api)).filter(Boolean);
+  const histRow = (id) => { const m = /^results:(\d+)$/.exec(id); return m ? { label: 'results row ' + m[1], value: '', dataset: 'data/history/results.csv · the row is not loaded in this page' } : { label: id, value: '', dataset: '' }; };
+  // the api's own event ids (live.js numbers only the events it sent) are looked up in live.js's table of what it sent, never matched to the page's own ids, which count every event
+  const apiRow = (id) => {
+    const e = typeof LV !== 'undefined' && LV.apiEvent ? LV.apiEvent(id) : null;
+    return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') } : { id, text: 'an api event id this page no longer holds or never sent (it keeps the last 2000)' };
+  };
   const evidence = (c) => {
     const r = AG.run, chain = MCC.records();
-    const tr = c.trace || [];
-    const rows = (c.evidence || []).map((id) => {
+    const tr = c.trace || [], crew = c.api ? crewFor(c) : null, cl = c.api ? (c.pub ? claimsOf(c) : [c]) : [];
+    const rows = crew ? crew.events.slice(0, ROWS).map(apiRow) : (c.evidence || []).map((id) => {
       const e = r.events.find((x) => x.id === id), m = !e && r.moments.find((x) => x.id === id);
       return e ? { id, text: Math.floor(e.minute) + "' " + String(e.type).replace(/_/g, ' ') + (e.player ? ' · ' + e.player : '') + (e.team ? ' (' + e.team + ')' : '') }
         : m ? { id, text: Math.floor(m.minute) + "' moment · " + (m.title || m.type) } : { id, text: 'not in the event log' };
     });
     const audit = (c.audit || []).map((a) => { const rec = chain[a.seq - 1]; return { seq: a.seq, hash: a.hash, ok: !!rec && typeof a.hash === 'string' && a.hash.length >= 12 && rec.ref === c.id && rec.hash.slice(0, a.hash.length) === a.hash, action: rec ? rec.agent + ' ' + rec.action : '' }; });
-    return { api: !!c.api, agents: [...new Set(tr.map((s) => s.agent))], tools: [...new Set(tr.flatMap((s) => s.tools || []))], rows, history: c.history || null, audit };
+    const toolIds = [...new Set(cl.flatMap((k) => k.toolCallIds || []))], evIds = [...new Set(cl.flatMap((k) => k.evidenceIds || []))];
+    return { api: !!c.api, crew, more: crew ? Math.max(0, crew.events.length - ROWS) : 0, agents: [...new Set(tr.map((s) => s.agent))], tools: [...new Set(tr.flatMap((s) => s.tools || []))], toolIds,
+      history: c.api ? (cl.some((k) => k.evidenceIds) ? evIds.map(histRow) : null) : c.history || null, traceId: (cl.find((k) => k.traceId) || {}).traceId || '', rows, audit };
   };
+  // what the record adds: where the line stands, how it got there (repairs) or why it was dropped, and the api's audit record for a drop (the api's own chain, which this page cannot recompute)
+  const crewHtml = (t) => '<p class="tp-state"><b>State</b> ' + esc(t.state) + (t.feed ? ' · feed ' + esc(t.feed) : '') + (t.lang ? ' · ' + esc(t.lang) : '') + (t.state === 'dropped' ? ' <span class="m">· the text is in the audit chain, not shown here</span>' : '') + '</p>'
+    + (t.state === 'published' ? '<p class="tp-verifier"><b>Server Verifier</b> <span class="m">(as the api reports it)</span> aired, so verified' + (t.repairs === 1 ? ' after one repair' : t.repairs === 0 ? ' first time' : '') + '</p>'
+      : '<p class="tp-verifier"><b>Server Verifier</b> <span class="m">(as the api reports it)</span> dropped' + (t.reason ? ' · reason ' + esc(t.reason) : '') + (t.repairs ? ' after ' + esc(t.repairs) + ' repair' : '') + '</p>')
+    + (t.auditId ? '<p class="tp-crew-audit"><b>Api audit record</b> <code>' + esc(t.auditId) + '</code> <span class="m">· the api\'s chain, not recomputed in this page</span></p>' : '');
   const evidenceHtml = (c) => {
     const x = evidence(c);
-    const planned = '<span class="m">Planned (AB#498): the api does not send its agents, tool calls or event ids on the stream yet.</span>';
+    const none = '<span class="m">The api sent no <code>tool_call_ids</code> for ' + (c.pub ? 'this line\'s claims' : 'this claim') + '.</span>';
     return '<section class="tp-evidence"><h4>Evidence</h4>'
-      + '<p class="tp-agents"><b>Agents</b> ' + (x.api ? planned : x.agents.length ? x.agents.map(esc).join(' → ') : '<span class="m">none recorded</span>') + '</p>'
-      + '<p class="tp-tools"><b>Tool calls</b> ' + (x.api ? planned : x.tools.length ? x.tools.map(esc).join(', ') : '<span class="m">none reported</span>') + '</p>'
-      + '<p><b>Data rows</b></p>' + (x.rows.length ? '<ol class="tp-rows">' + x.rows.map((o) => '<li data-id="' + esc(o.id) + '">' + esc(o.text) + ' <span class="m">' + esc(o.id) + '</span></li>').join('') + '</ol>'
-        : '<p class="m">' + (x.api ? 'Planned (AB#498): the api does not send claim-level event ids yet.' : 'This line cites no single event (a running total over the shots up to its minute).') + '</p>')
-      + '<p class="tp-history"><b>History rows</b> ' + (x.history && x.history.length ? x.history.map((h) => esc(h.label) + ' ' + esc(h.value) + ' <span class="m">' + esc(h.dataset || '') + '</span>').join(' · ') : '<span class="m">none used. Planned (CREW-2.2): head-to-head and Elo rows are not built yet.</span>') + '</p>'
+      + (x.crew ? crewHtml(x.crew) : '')
+      + (x.crew && x.crew.extra.length ? '<p class="tp-extra m">' + x.crew.extra.map(esc).join(' · ') + '</p>' : '')
+      + (x.traceId ? '<p class="tp-trace"><b>Run</b> <code>' + esc(x.traceId) + '</code></p>' : '')
+      + '<p class="tp-agents"><b>Agents</b> ' + (x.api ? '<span class="m">Planned (AB#498): the api does not say which agents ran.</span>' : x.agents.length ? x.agents.map(esc).join(' → ') : '<span class="m">none recorded</span>') + '</p>'
+      + '<p class="tp-tools"><b>Tool calls</b> ' + (x.api ? (x.toolIds.length ? x.toolIds.map(esc).join(', ') + ' <span class="m">· ids only; the names are in the audit records</span>' : none) : x.tools.length ? x.tools.map(esc).join(', ') : '<span class="m">none reported</span>') + '</p>'
+      + '<p><b>Data rows</b></p>' + (x.rows.length ? '<ol class="tp-rows">' + x.rows.map((o) => '<li data-id="' + esc(o.id) + '">' + esc(o.text) + ' <span class="m">' + esc(o.id) + '</span></li>').join('') + '</ol>' + (x.more ? '<p class="m">+' + x.more + ' more event ids not listed</p>' : '')
+        : '<p class="m">' + (x.api ? (x.crew ? 'The api cites no event for this line.' : c.pub ? 'The api has not sent this line\'s record (onair or feed_drop) yet.' : 'A claim\'s events come with the lines that cite it: open a line.') : 'This line cites no single event (a running total over the shots up to its minute).') + '</p>')
+      + '<p class="tp-history"><b>History rows</b> ' + (x.history && x.history.length ? x.history.map((h) => esc(h.label) + ' ' + esc(h.value) + ' <span class="m">' + esc(h.dataset || '') + '</span>').join(' · ') : x.api ? (x.history ? '<span class="m">none cited by this line\'s claims</span>' : '<span class="m">The api sent no <code>evidence_ids</code> for ' + (c.pub ? 'this line\'s claims' : 'this claim') + '.</span>') : '<span class="m">none used. Planned (CREW-2.2): head-to-head and Elo rows are not built yet.</span>') + '</p>'
       + '<p><b>Audit</b></p>' + (x.audit.length ? '<ol class="tp-audit">' + x.audit.map((a) => '<li class="' + (a.ok ? 'ok' : 'bad') + '">#' + esc(a.seq) + ' <code>' + esc(a.hash) + '</code> ' + esc(a.action) + ' · ' + (a.ok ? 'matches the chain record' : 'no matching chain record') + '</li>').join('') + '</ol>' : '<p class="m">no audit record yet (they are written as each agent acts; reopen to refresh)</p>')
       + '<p class="tp-chain note">Checking the chain…</p></section>';
   };
+  let cur = null;   // the card the open panel shows, so a frame that arrives late can refresh it
   const open = (id) => {
     const r = AG.run; if (!r) return false;
     const c = r.claims.find((x) => x.id === id); if (!c) return false;
+    cur = id;
     if (!dlg) build();
     const body = dlg.querySelector('.tp-b');
     body.innerHTML = html(c) + (FLAG ? evidenceHtml(c) : '');
@@ -72,5 +106,27 @@ const TP = (() => {
     if (!dlg.open) dlg.showModal();
     return true;
   };
-  return { open, steps, html, evidence };
+  // the stream hook (live.js calls window.mcCrewTrace for each onair or feed_drop record): kept only with ?evidence=1 and only for the run on screen
+  const crewTrace = (f) => {
+    if (!FLAG || !f || typeof f !== 'object') return false;
+    const t = fromFrame(f); if (!t.line || !AG.run) return false;
+    t.run = AG.run;   // a frame belongs to the run on screen; a new match drops the old ones
+    for (const [k, o] of CT) if (o.run !== AG.run) CT.delete(k);
+    // a translated row reuses the line's publication_id and a translation can be dropped: neither replaces the English line that aired, each is a note on it
+    const old = CT.get(t.line); t.extra = [];
+    if (old && old.run === AG.run && old.state === 'published' && (t.state === 'dropped' || (t.lang && old.lang && t.lang !== old.lang))) {
+      const n = t.state === 'dropped' ? 'a later row for this line was dropped' + (t.reason ? ' (' + t.reason + ')' : '') : 'also aired in ' + t.lang;
+      if (old.extra.length < 10 && !old.extra.includes(n)) old.extra.push(n);
+      const card = cur && dlg && dlg.open && AG.run.claims.find((x) => x.id === cur);
+      if (card && crewFor(card) === old) open(cur);
+      return true;
+    }
+    CT.delete(t.line); CT.set(t.line, t);
+    if (CT.size > CAP) CT.delete(CT.keys().next().value);
+    const card = cur && dlg && dlg.open && AG.run.claims.find((x) => x.id === cur);
+    if (card && crewFor(card) === t) open(cur);   // only the line on screen is redrawn
+    return true;
+  };
+  window.mcCrewTrace = crewTrace;
+  return { open, steps, html, evidence, crewTrace };
 })();

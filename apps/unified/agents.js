@@ -308,6 +308,10 @@ const AG = (() => {
       c.seenAt = clock();
       if (!c.pub) hop(c, 'analyst', 'claim');
     }
+    // contract 1.2.0 optional claim fields (docs/contracts.md, Derived feed lines): ids only, kept for the evidence trace
+    if (Array.isArray(d.tool_call_ids)) c.toolCallIds = d.tool_call_ids.filter((x) => typeof x === 'string').slice(0, 50);
+    if (Array.isArray(d.evidence_ids)) c.evidenceIds = d.evidence_ids.filter((x) => typeof x === 'string').slice(0, 50);
+    if (typeof d.trace_id === 'string') c.traceId = d.trace_id.slice(0, 120);
     if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; if (c.verdict === 'verified') hop(c, 'verifier', 'verified'); }
     if (d.publication_id) { c.verdict = 'verified'; c.reason = 'api: published after the server Verifier'; c.apiClaims = d.claim_ids || [];
       for (const cid of c.apiClaims) { const e = run.claims.find((x) => x.id === cid); if (e && e.api) { e.verdict = 'verified'; e.reason = 'api: published in ' + c.id; hop(e, 'verifier', 'verified'); if (d.text) hop(e, 'narrator', 'draft'); hop(e, 'producer', 'publication'); } } }   // the evidence behind a published line was approved
