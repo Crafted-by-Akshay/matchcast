@@ -90,8 +90,8 @@ const LV = (() => {
       on('claim', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); onClaim(d, st); });   // a claim after the warm-up timed out means the api is live after all, unless the api itself said it is on rules
       on('line', (d) => onLine(d, st));
       // contract 1.2.0 records for derived feeds (docs/contracts.md): the stream's event names are assumed to be the record kinds until the overlay stream (AB#499) fixes them
-      on('onair', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'onair' }, d)); });
-      on('feed_drop', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'feed_drop' }, d)); });
+      on('onair', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'onair' }, d)); window.CREW && CREW.enabled && CREW.ingest(Object.assign({ kind: 'onair' }, d)); });
+      on('feed_drop', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'feed_drop' }, d)); window.CREW && CREW.enabled && CREW.ingest(Object.assign({ kind: 'feed_drop' }, d)); });
       on('publication', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); measure(r, d); onLine(d, st); });
       es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; if (r.tries >= 2 && st === 'live') set('fallback');   /* a stream that keeps failing is not live agents; the next status, claim or line brings it back */ const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
     } catch (e) { set('fallback'); }

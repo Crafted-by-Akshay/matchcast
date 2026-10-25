@@ -71,6 +71,16 @@
     return { li: li, d: d, kids: null };
   }
 
+  // frames are not replayed on reconnect (contract 1.3.0), so a viewer who joins mid-match has no crew until the next moment
+  function midMatch() { try { return typeof LV !== 'undefined' && !!LV.base && !!LV.key && (LV.status === 'live' || LV.status === 'warming'); } catch (e) { return false; } }
+  function idleText() {
+    var e = $('ct-empty'), mid = midMatch();
+    e.setAttribute('data-state', mid ? 'next-moment' : 'idle');
+    var t = mid ? 'The crew starts at the next moment. Crew frames are not replayed, so a match joined part-way shows its crew from the next moment on. Play a Simulated goal to preview the tree.'
+      : 'No moment yet. Play a Simulated goal to watch the Showrunner spawn its crew.';
+    if (e.textContent !== t) e.textContent = t;
+  }
+
   function clearAll() {
     $('ct-root').textContent = ''; nodes = {}; lastStatus = {}; doneSaid = {}; expanded = false; shownMoment = null;
     pending = []; if (flushT) { clearTimeout(flushT); flushT = null; }
@@ -101,6 +111,7 @@
     var m = S.moments.length ? S.moments[S.moments.length - 1] : null;
     $('ct-sim').hidden = !S.simulated;
     $('ct-empty').hidden = !!m;
+    if (!m) idleText();
     $('ct-tree').hidden = !m;
     if (!m) { clearAll(); $('ct-label').textContent = ''; $('ct-routed').textContent = ''; $('ct-state').textContent = ''; $('ct-more').hidden = true; return; }
     if (shownMoment !== m.id) { clearAll(); shownMoment = m.id; }   // a newer moment replaces the old tree
@@ -145,4 +156,5 @@
   }
 
   C.subscribe(render);
+  setInterval(function () { if (!C.state.moments.length) idleText(); }, 1000);   // the api status changes without a CREW emit
 })();
