@@ -203,15 +203,13 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
 
 // ---- Six-feed monitor (Broadcast): the six English derived feeds, what each has aired, the lines the Verifier dropped and why, and a kill per feed.
 // Derived lines never enter the producer queue: booth lines keep it. The record fields are the matchcast.onair/1 1.2.0 onair and feed_drop packets (AB#498, merged; docs/contracts.md).
-// The shell forwards the stream's feed-air and feed-drop records (AB#499). ?feeds=fixture feeds the monitor on its own, for demos and tests. A kill is enforced on the air path; this desk shows it.
+// The shell forwards the stream's onair and feed_drop records as feed-air and feed-drop (AB#499). A kill is sent to the api, which stops that feed at the air gate, once the match run exists and an api is configured; this desk shows the kill at once either way.
 (() => {
   if (!framed) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const FEEDS = [['casual', 'Casual'], ['analyst', 'Analyst'], ['audio_description', 'Audio description'], ['catch_me_up', 'Catch-me-up'], ['half_time', 'Half-time'], ['ticker', 'Ticker']];
   const feeds = Object.fromEntries(FEEDS.map(([k, label]) => [k, { label, on: true, aired: 0, last: '' }]));
   const seen = new Set(), drops = [], droppedIds = new Set();
-  let fixture = false;   // a demo and test parameter: off unless the URL asks for it
-  try { fixture = /[?&]feeds=fixture(&|$)/.test(window.parent.location.search); } catch (err) { /* a cross-origin parent keeps the monitor on the live records */ }
   const feedOf = (k) => (Object.hasOwn(feeds, k) ? feeds[k] : null);
   const style = document.createElement('style');
   style.textContent = '#mc-feeds{display:flex;flex-direction:column;gap:4px;padding-bottom:6px;border-bottom:1px solid #22395c}'
@@ -223,14 +221,14 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   document.head.append(style);
   const box = document.createElement('section');
   box.id = 'mc-feeds'; box.setAttribute('aria-label', 'Six feeds, simulated: what each aired, the drops, and a kill per feed');
-  box.innerHTML = '<div class="mcp-row"><b>Feeds</b> <span class="mcp-v">simulated · English · no human approval' + (fixture ? ' · fixture feed' : '') + '</span></div>'
+  box.innerHTML = '<div class="mcp-row"><b>Feeds</b> <span class="mcp-v">simulated · English · no human approval</span></div>'
     + '<ul id="mc-feed-list">' + FEEDS.map(([k, label]) => '<li data-feed="' + k + '"><b>' + label + '</b><span class="mcp-v"></span><button type="button" data-kill>Kill</button></li>').join('') + '</ul>'
     + '<div><b>Dropped</b> <ul id="mc-drop-list"></ul></div>';
   document.getElementById('mc-overlay').before(box);
   const render = (k) => {
     const s = feeds[k], row = box.querySelector('[data-feed="' + k + '"]');
     row.dataset.off = String(!s.on);
-    row.querySelector('span').textContent = (s.on ? '' : 'Killed on this desk, not yet stopped at air · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
+    row.querySelector('span').textContent = (s.on ? '' : 'Killed on this desk · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
     row.querySelector('[data-kill]').textContent = s.on ? 'Kill' : 'Resume';
   };
   FEEDS.forEach(([k]) => render(k));
@@ -274,16 +272,6 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     if (d.type === 'feed-air') aired(d.record);
     if (d.type === 'feed-drop') dropped(d.record);
   });
-  // ?feeds=fixture: one fixture line every 12 s, round-robin over the six feeds, and a drop every fourth tick
-  if (fixture) {
-    let tick = 0;
-    setInterval(() => {
-      const k = FEEDS[tick % FEEDS.length][0];
-      tick++;
-      if (tick % 4 === 0) dropped({ feed: k, publication_id: 'fixture-drop-' + tick, source_event_ids: [], reason_code: 'repeat', repair_count: 0, audit_id: 'fixture-' + tick });
-      else aired({ feed: k, publication_id: 'fixture-' + tick, lang: 'en', text: 'fixture line ' + tick + ' for ' + feeds[k].label + '.', source_event_ids: [], claim_ids: [], match_time_ms: 0, aired_at: new Date().toISOString(), repair_count: 0 });
-    }, 12000);
-  }
 })();
 
 send({ type: 'panels' });   // the desk's panels are up: the shell may lift its loading card now, while the pitch still loads
