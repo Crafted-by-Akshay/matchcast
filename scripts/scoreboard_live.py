@@ -10,10 +10,10 @@ each with its own call budget. The scoreboard route shows the recorded run besid
 
 Either export the match from the api (`--api`, `--session-id`, `--match-id`, read-only) or read
 a saved export (`--match`, a JSON file with `events`, `roster`, `names` and `teams`, the shape the
-api builds for a match). Each arm has its own budget of --max-calls model calls, one per complete() call
-(the SDK may retry one request inside a call). Calls past a budget are refused and fall back to
-the rules. The record says how many were sent, failed or refused, and how many agent calls a
-fallback answered. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
+api builds for a match). Each arm has its own budget of --max-calls model calls, one per
+complete() call (the SDK may retry one request inside a call). Calls past a budget are refused and
+fall back to the rules. The record says how many were sent, failed or refused, and how many agent
+calls a fallback answered. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
 """
 
 from __future__ import annotations
