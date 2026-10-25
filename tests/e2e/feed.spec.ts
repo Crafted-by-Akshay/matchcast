@@ -101,12 +101,13 @@ test('the booth calls the play between the key events, counted from the actions'
     const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
     CM.reset('booth', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
     CM.fromWatch([pass(1, 'H', 'Ana'), pass(1.1, 'H', 'Ben'), pass(1.2, 'H', 'Cal'), pass(1.3, 'H', 'Ana'), pass(1.4, 'H', 'Ben'), { minute: 1.6, type: 'slide_tackle', team: 'A', player: 'Dev' }], []);
-    CM.fromWatch([pass(1.7, 'A', 'Eli')], []);   // inside the gap after the last call: no new line yet
+    CM.fromWatch([pass(1.7, 'A', 'Eli')], []);   // 0.1 minutes after the last call, past the 0.05 gap: the carrier is named
     CM.fromWatch([pass(2.2, 'A', 'Eli'), pass(2.3, 'A', 'Fay')], []);
     return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => ({ minute: l.minute, text: l.text, label: l.label }));
   });
   expect(lines).toEqual([
     { minute: 1.6, text: 'Dev challenges for Thames Rovers.', label: 'Rules · recounted' },
+    { minute: 1.7, text: 'Eli plays it on for Thames Rovers.', label: 'Rules · recounted' },
     { minute: 2.3, text: 'Thames Rovers keep the ball: 3 passes, last from Fay.', label: 'Rules · recounted' },
   ]);
 });
@@ -153,6 +154,34 @@ test('a play line is never overwritten by an api line, and a run of passes stops
   expect(run).toEqual(['Cal plays it on for Ridgeview.']);   // the interception ended Ana's run, so Ben and Cal are two passes, not three
 });
 
+test('a build-up of three passes is a hot line, and a single pass is calm', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const plays = await page.evaluate(() => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('booth', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([pass(1, 'H', 'Ana'), pass(1.1, 'H', 'Ben'), pass(1.2, 'H', 'Cal')], []);
+    CM.fromWatch([pass(2.5, 'A', 'Eli')], []);
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => ({ text: l.text, tone: l.tone }));
+  });
+  expect(plays).toEqual([
+    { text: 'Ridgeview keep the ball: 3 passes, last from Cal.', tone: 'hot' },
+    { text: 'Eli plays it on for Thames Rovers.', tone: '' },
+  ]);
+});
+
+test('a possession change is called at once, even inside the gap', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const plays = await page.evaluate(() => {
+    const pass = (minute: number, team: string, player: string) => ({ minute, type: 'pass', team, player });
+    CM.reset('booth', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([pass(3, 'H', 'Ana')], []);
+    CM.fromWatch([pass(3.01, 'A', 'Eli')], []);   // 0.01 minutes later: inside the gap, but the ball has changed side
+    CM.fromWatch([pass(3.02, 'A', 'Eli')], []);   // same side, inside the gap: no new line
+    return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
+  });
+  expect(plays).toEqual(['Ana plays it on for Ridgeview.', 'Eli plays it on for Thames Rovers.']);
+});
+
 test('a run of passes is counted across calls, within one minute', async ({ page }) => {
   await openShell(page, 'watch', '?seed=2026');
   const text = await page.evaluate(() => {
@@ -160,7 +189,7 @@ test('a run of passes is counted across calls, within one minute', async ({ page
     const pass = (i: number) => ({ minute: 5 + i * 0.05, type: 'pass', team: 'H', player: names[i % 3] });
     CM.reset('span', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
     CM.fromWatch([0, 1, 2, 3, 4].map(pass), []);     // one call at 5.20, after five passes (the newest pass is at 5.20)
-    CM.fromWatch([5, 6, 7, 8].map(pass), []);        // 5.25 to 5.40: the call at 5.40 is exactly 0.2 minutes after the first, and counts all nine passes from 5.00
+    CM.fromWatch([5, 6, 7, 8].map(pass), []);        // 5.25 to 5.40: the call at 5.40 is 0.2 minutes after the first (the gap is 0.05), and counts all nine passes from 5.00
     return CM.view().filter((l: any) => l.kind === 'play').map((l: any) => l.text);
   });
   expect(text.at(-1)).toBe('Ridgeview keep the ball: 9 passes, last from Cal.');
