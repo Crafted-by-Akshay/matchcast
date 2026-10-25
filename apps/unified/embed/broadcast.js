@@ -4,11 +4,11 @@ MCS.progress('Loading the stadium and players');
 // called by the desk once the players have loaded (replaces bcNewMatch(seed) at boot)
 function bcEmbedStart(q) {
   MCS.progress('Setting up the match');
-  const go = () => { if (q.get('seed')) { MCS.apply(q); bcNewMatch(q.get('seed')); } else bcNewMatch(); MCS.started(); };
+  const go = () => { if (q.get('seed')) { MCS.apply(q); bcNewMatch(q.get('seed')); } else bcNewMatch(); window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); };   // the lens menu lists the players once they load
   if (MCS.clubs.ready) go(); else MCS.clubs.load.then(go);
 }
 MCS.ptt($('dk-q'), $('dk-askf'));   // EXP-16: push-to-talk for Ask the producer
-$('bc-new').addEventListener('click', () => setTimeout(() => MCS.started(), 0));   // after the desk's own handler has set the new seed
+$('bc-new').addEventListener('click', () => setTimeout(() => { window.MC_PLAYERS = players; if (window.MCDesk) MCDesk.lenses(); MCS.started(); }, 0));   // after the desk's own handler has set the new seed
 MCS.loop();
 
 // the shared score: while Watch runs the shared match, the scoreboard shows Watch's score and minute.
@@ -92,6 +92,7 @@ function consumerStep(dt, snap) {
 const mcL3 = document.createElement('div');
 mcL3.id = 'mc-l3'; mcL3.setAttribute('role', 'status'); mcL3.hidden = true;
 mcL3.style.cssText = 'position:absolute;left:12px;bottom:100px;max-width:60%;padding:10px 16px;background:rgba(10,20,40,.92);color:#fff;border-left:4px solid #3aa0ff;font:600 15px system-ui,sans-serif;z-index:10;border-radius:4px';
+if (window.MCDesk) MCDesk.lowerThird(mcL3);   // the desk panels (desk-panels.js) watch its size to sit above it
 const mcTele = document.createElement('ol');
 mcTele.id = 'mc-tele'; mcTele.setAttribute('aria-label', 'Teleprompter: approved lines');
 mcTele.style.cssText = 'position:absolute;right:10px;top:44px;width:min(280px,34%);margin:0;padding:8px 8px 8px 28px;background:rgba(10,20,40,.85);color:#e8eefc;font:13px system-ui,sans-serif;border-radius:4px;max-height:40%;overflow:auto;z-index:10'; mcTele.hidden = true;

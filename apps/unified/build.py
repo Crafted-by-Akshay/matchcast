@@ -257,6 +257,7 @@ def build_broadcast():
             '<button data-l="es" aria-pressed="false">ES</button><button data-l="hi" aria-pressed="false">हिन्दी</button>',
             "broadcast language buttons",
         )
+        + '<script>\n' + r(EMB + "desk-panels.js") + '\n</script>\n'   # the desk panels: a classic script, so they show before the 3D module's imports load
         + importmap()
         + '<script type="module">\n'
         + main
@@ -275,8 +276,6 @@ def build_broadcast():
         + "\n"
         + r(EMB + "onair.js")
         + "\n"
-        + r(EMB + "copilot.js")
-        + r(EMB + "producer.js")
         + "\n</script>\n</body>\n</html>\n"
     )
 
