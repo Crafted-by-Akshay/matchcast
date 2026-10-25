@@ -10,7 +10,8 @@ from jsonschema import Draft7Validator, FormatChecker
 _SCHEMA = json.loads(files(__package__).joinpath("schemas/v1.json").read_text())
 Draft7Validator.check_schema(_SCHEMA)
 SUPPORTED_VERSIONS = tuple(_SCHEMA["definitions"]["SchemaVersion"]["enum"])
-SCHEMA_VERSION = SUPPORTED_VERSIONS[-1]
+# What the audit writer stamps. It stays on 1.1.0; 1.2.0 is for onair and feed_drop.
+SCHEMA_VERSION = "1.1.0"
 V1_0_PAYLOADS = frozenset({"goal", "pass", "shot", "period_boundary", "correction", "retraction"})
 _VALIDATORS = {}
 for _entry in _SCHEMA["oneOf"]:
