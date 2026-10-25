@@ -118,10 +118,16 @@ const AG = (() => {
     if (c.approval === 'approved') trace(c, 'producer', 'publication', t, { detail: 'line published to the ' + c.route + ' view' });
     return r;
   };
-  const approve = (id, who) => act(id, who, 'line_approved', {}, (c) => { c.approval = 'approved'; c.approvedBy = who; onAir(air(c)); return { ok: true }; });
+  // a line the Verifier could not repair never airs: a person can kill it, but not approve or reword it (its numbers are the ones that failed)
+  const held = (c) => (c.escalated ? { ok: false, reason: 'the Verifier could not check this line: kill it' } : null);
+  const approve = (id, who) => act(id, who, 'line_approved', {}, (c) => {
+    if (held(c)) return held(c);
+    c.approval = 'approved'; c.approvedBy = who; onAir(air(c)); return { ok: true };
+  });
   const kill = (id, who, reason) => act(id, who, 'line_killed', { reason: reason || '' }, (c) => { c.approval = 'killed'; c.approvedBy = who; return { ok: true }; });
   // an edit may reword, but every number in it must already be in the verified line, so it cannot add a fact
   const edit = (id, who, text) => act(id, who, 'line_edited', { text }, (c) => {
+    if (held(c)) return held(c);
     const ok = new Set(nums(c.text).concat(nums(min(c.minute))));
     const bad = nums(text).filter((n) => !ok.has(n));
     if (!text.trim() || bad.length) return { ok: false, reason: 'not aired: ' + (bad.length ? 'number ' + bad[0] + ' is not in the verified line' : 'empty line') };
@@ -268,6 +274,8 @@ const AG = (() => {
     changed();
   };
 
+  // why the Verifier could not repair a line, in words a producer can act on (the keys are the api's escalating reason codes)
+  const ESCALATION = { number_mismatch: 'a number does not match the event log', unknown_player: 'a player is not in the event log', unknown_source: 'it cites a source the event log does not have', stale_state: 'the match moved on before it was checked' };
   // a new match from Watch (its start, or a fixture change) starts a new run, and the audit chain starts again with it
   // a claim or line from the live api (live.js): shown beside the rules claims, tagged with where it came from ('model' when the api says live, else 'rules')
   const ingest = (d, status) => {
@@ -277,21 +285,29 @@ const AG = (() => {
     // `line` events walk one drafted line through drafted, verified, approved, published (or rejected, killed) for every audience;
     // `publication` events are the line a viewer of this stream's audience sees, published after the server Verifier and approval.
     // Only a claim or a publication becomes a card; a line event updates the publication it belongs to.
+    // A line the Verifier could not repair (status 'review', escalated) is the one line event that becomes a card: it waits for a person.
     const isLine = !!d.line_id && !d.publication_id && !d.claim_id;
+    const escalated = isLine && (!!d.escalated || d.status === 'review');
     const id = d.claim_id || d.publication_id || (isLine ? 'pub-' + d.line_id : null) || (d.claim_ids && d.claim_ids[0]);
     if (!id) return;
     let c = run.claims.find((x) => x.id === id);
-    if (!c && isLine) return;
+    if (!c && isLine && !escalated) return;
     if (!c) {
       c = MCC.claim({ id, kind: d.metric || 'line', minute: last, agent: 'analyst', evidence: [], inputs: d.metric ? { metric: d.metric, value: d.value, units: d.units } : {}, source: src, api: true });
-      if (d.publication_id) c.pub = true; else run.stat.claims++;   // a publication is the viewer-facing line, not evidence: it stays out of the claims ledger
+      if (d.publication_id || isLine) c.pub = true; else run.stat.claims++;   // a publication or a line is the viewer-facing text, not evidence: it stays out of the claims ledger
       run.claims.push(c);
     }
     if (d.approval_status) { c.verdict = d.approval_status === 'approved' ? 'verified' : d.approval_status === 'pending' ? 'pending' : 'abstained'; c.reason = 'api: ' + d.approval_status; }
     if (d.publication_id) { c.verdict = 'verified'; c.reason = 'api: published after the server Verifier'; c.apiClaims = d.claim_ids || [];
       for (const cid of c.apiClaims) { const e = run.claims.find((x) => x.id === cid); if (e && e.api) { e.verdict = 'verified'; e.reason = 'api: published in ' + c.id; } } }   // the evidence behind a published line was approved
     if (isLine) {
-      if (['abstained', 'rejected', 'killed'].includes(d.status)) { c.verdict = 'abstained'; c.reason = 'api: line ' + d.status; }
+      if (['abstained', 'rejected', 'killed'].includes(d.status)) { c.verdict = 'abstained'; c.reason = 'api: line ' + d.status; if (c.approval === 'pending') c.approval = 'killed'; }   // the api took it off the queue
+      if (escalated) {   // the Verifier could not check it, so it is held: a person may kill it, but nothing airs it (approve and edit refuse it)
+        c.escalated = true; c.escalation = ESCALATION[d.reason_code] || 'the Verifier could not repair it';
+        c.born = c.born || clock(); c.trace = c.trace || []; c.text = d.text || c.text; c.verdict = 'abstained'; c.reason = 'api: could not repair';
+        if (!c.approval) c.approval = 'pending';
+        trace(c, 'verifier', 'escalated', clock(), { detail: c.escalation + ': a person decides' });
+      }
       if (Array.isArray(d.checks) && d.checks.length) c.apiChecks = d.checks;
       changed(); return;
     }
@@ -306,6 +322,6 @@ const AG = (() => {
     c.source = src; changed();
   };
   const reset = (key, names) => { run = fresh(key, names); MCC.reset(); changed(); };
-  const queue = () => (run ? run.claims.filter((c) => c.approval === 'pending').map((c) => Object.assign(air(c), { approval: 'pending', waiting_ms: Math.round(clock() - c.born) })) : []);
-  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending')) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  const queue = () => (run ? run.claims.filter((c) => c.approval === 'pending').map((c) => Object.assign(air(c), { approval: 'pending', waiting_ms: Math.round(clock() - c.born), escalated: !!c.escalated, escalation: c.escalation || null })) : []);
+  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending' && !x.escalated)) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();

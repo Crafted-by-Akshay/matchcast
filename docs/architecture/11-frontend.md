@@ -51,7 +51,7 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | `persona`, `language` | any view → shell | viewer's choice, sent upstream as SSE query parameters |
 | `persona-set` | shell → Watch | `casual` or `analyst`, from the story strip's Fan / Analyst switch |
 | `ask`, `talk` | any view → shell | request; reply arrives as `ask_reply`, `talk_reply`. An `ask` from Broadcast with `surface: "broadcast"` asks for the Copilot's picks (ADR-0019); the answer carries them as `broadcast` |
-| `queue` | shell → Broadcast | the lines waiting for a person (`items`: the line, its Verifier verdict, the repaired wording `was` when the Verifier changed it, `waiting_ms`) and the approval `mode`. The Broadcast Producer section shows them |
+| `queue` | shell → Broadcast | the lines waiting for a person (`items`: the line, its Verifier verdict, the repaired wording `was` when the Verifier changed it, `waiting_ms`) and the approval `mode`. A line the Verifier could not repair (`escalated`, with `escalation` in words) is marked and waits for a person, but only Kill is offered: approve, edit and Auto-air never air it. The Broadcast Producer section and the Agents queue show them |
 | `producer` | Broadcast → shell | `action`: `approve` or `kill` with the line `id`, or `mode` (`producer` or `demo`). The shell maps them to the approval gate in agents.js |
 | `focus` | Broadcast → shell → Watch | a camera focus suggestion (`player_id`, `reason`). Watch shows it as a pill; "Go to it" moves the camera to that player (`MCWatch.focus`) and says whether it moved |
 | `approve`, `edit`, `kill` | Broadcast or Analyst → shell | line ID (ADR-0013) |
