@@ -1042,6 +1042,24 @@ def test_lines_route_withholds_the_text_of_a_safety_refused_line() -> None:
     assert out["status"] == "rejected" and out["reason_code"] == "unsafe_content"
 
 
+def test_the_scoreboard_input_is_the_stored_match_read_only(client: TestClient) -> None:
+    # the export the live scoreboard recording reads: the stored events, roster, names and teams
+    create(client)
+    post_all(client)
+    body = client.get("/v1/matches/match-short/scoreboard/input", params=Q).json()
+    assert set(body) == {"events", "roster", "names", "teams"}
+    assert len(body["events"]) > 0
+    assert body["roster"]["stream"]["match_id"] == "match-short"
+    assert sorted(body["teams"].values()) == sorted(FIXTURE["teams"].values())
+
+
+def test_the_scoreboard_input_needs_the_match_in_its_session(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    other = {**Q, "session_id": "not-this-session"}
+    assert client.get("/v1/matches/match-short/scoreboard/input", params=other).status_code == 404
+
+
 def test_the_scoreboard_is_three_rules_arms_and_is_labelled_rules(client: TestClient) -> None:
     create(client)
     post_all(client)
