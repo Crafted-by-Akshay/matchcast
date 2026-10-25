@@ -18,6 +18,23 @@ COUNT_METRICS = {
     "summary": ("shots:{h}", "shots:{a}"),
     "period_end": ("goals:{h}", "goals:{a}"),
 }
+# a colour moment counts what the picked play adds to: shots, tackles or fouls of its team
+COLOUR_METRICS = {
+    "shot": ("shots:{t}", "xg:{t}"),
+    "tackle": ("tackles_won:{t}",),
+    "foul": ("fouls:{t}",),
+}
+
+
+def metrics_for(ctx: MatchContext, task: ProducerTask, event: dict[str, Any]) -> list[str]:
+    payload = event["payload"]
+    team = payload.get("team_id", ctx.home)
+    names = (
+        COLOUR_METRICS.get(payload["type"], ())
+        if task.reason == "colour"
+        else COUNT_METRICS.get(task.reason, ())
+    )
+    return [m.format(t=team, h=ctx.home, a=ctx.away) for m in names]
 
 
 class ClaimResult(BaseModel):
@@ -48,10 +65,7 @@ class AnalystRules:
         """The metrics the rules Narrator needs for this moment; a live Analyst never drops them."""
         event = ctx.event(task.event_ids[0])
         assert event is not None
-        team = event["payload"].get("team_id", ctx.home)
-        return [
-            m.format(t=team, h=ctx.home, a=ctx.away) for m in COUNT_METRICS.get(task.reason, ())
-        ]
+        return metrics_for(ctx, task, event)
 
     async def analyse(
         self,
@@ -63,10 +77,7 @@ class AnalystRules:
     ) -> list[ClaimResult]:
         event = ctx.event(task.event_ids[0])
         assert event is not None
-        team = event["payload"].get("team_id", ctx.home)
-        metrics = metrics or [
-            m.format(t=team, h=ctx.home, a=ctx.away) for m in COUNT_METRICS.get(task.reason, ())
-        ]
+        metrics = metrics or metrics_for(ctx, task, event)
         snapshot = ctx.state.snapshot()
         if self._tool_call is not None:  # MATCHCAST_TOOLS=mcp: the same lookup over an MCP client
             if "get_metrics" in self._failing:

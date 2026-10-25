@@ -76,6 +76,24 @@ MCS.progress('Loading the stadium and players');
   const talks = new Map(); let talkN = 0;
   if (!document.documentElement.lang) document.documentElement.lang = 'en';   // the source head has no lang (WCAG 3.1.1); Watch's own language list changes the text, not this
   window.__mcSetOrder = (p, k) => setOrder(p, k, 'test');   // read by tests (role-clamp.spec.ts)
+  // Broadcast's "Go to it" (and anything else that wants Watch's camera): a player by contract id, or a zone, through Watch's own player mode. Returns true only when the camera moved.
+  const mcSlug = (v) => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';   // the same slug as live.js
+  const MC_ZONES = {   // pitch metres: x along 0 to 105, y across 0 to 68
+    box: (p) => (p.pos2.x < 16.5 || p.pos2.x > 88.5) && p.pos2.y > 13.85 && p.pos2.y < 54.15,
+    midfield: (p) => p.pos2.x > 35 && p.pos2.x < 70 && !p.gk,
+    wide: (p) => (p.pos2.y < 14 || p.pos2.y > 54) && !p.gk,
+  };
+  window.MCWatch = {
+    focus(spec) {
+      if (!spec || !players.length || !S.started || $('load').hidden === false) return false;
+      let who = null;
+      if (spec.player_id) who = players.find((q) => !q.off && mcSlug(q.name) === mcSlug(spec.player_id));
+      else if (spec.zone && MC_ZONES[spec.zone]) { const b = bp2(); who = players.filter((q) => !q.off && MC_ZONES[spec.zone](q)).sort((x, y) => x.pos2.distanceTo(b) - y.pos2.distanceTo(b))[0]; }   // the player in the zone nearest the ball
+      if (!who) return false;
+      fanSet({ mode: 'player', player: who }, 'focus');
+      return true;
+    },
+  };
   window.__mcTalkLog = (p) => (TK.log.get(p) || []).map((m) => m.text);   // read by tests
   // Role bounds for orders (mirrors packages/agents/matchcast_agents/roles/orders.py). Typed lines go to the api, which applies the same table to the position this browser sends. Quick buttons and the rules fallback are checked here only.
   const mcRulesOrder = (p, k, text) => {
