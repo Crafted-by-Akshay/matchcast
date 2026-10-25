@@ -1,11 +1,11 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// UX review pass 6, finding 18: nothing readable in the three views is below 12 px. The pitch name labels (`.lbl`, 3D tags) and SVG axis text stay small on purpose.
+// UX review pass 6, finding 18: nothing readable in the default three views is below 12 px, and the larger text still fits at 390 px. The pitch name labels (`#stage .lbl`, 3D tags) and SVG text stay small on purpose.
 const small = (f: import('@playwright/test').Frame) => f.evaluate(() => {
   const out: string[] = [];
   for (const el of document.querySelectorAll('body *')) {
-    if (el.closest('.lbl') || el instanceof SVGElement) continue;
+    if (el.closest('#stage .lbl') || el instanceof SVGElement) continue;
     const text = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent!.trim()).join('');
     if (!text) continue;
     const cs = getComputedStyle(el), r = el.getBoundingClientRect();
@@ -16,7 +16,8 @@ const small = (f: import('@playwright/test').Frame) => f.evaluate(() => {
   return out;
 });
 
-for (const [view, width] of [['watch', 1440], ['analyst', 1440], ['broadcast', 1440], ['watch', 390]] as const) {
+const HUD = { watch: '#px-head', analyst: '#nav', broadcast: '#bc-state' } as const;   // a control that only exists once the view's panels are up
+for (const [view, width] of [['watch', 1440], ['analyst', 1440], ['broadcast', 1440], ['watch', 390], ['analyst', 390], ['broadcast', 390]] as const) {
   test(`${view} at ${width} px: no readable text below 12 px`, async ({ page }) => {
     test.setTimeout(300_000);
     const errs = collectErrors(page);
@@ -24,8 +25,10 @@ for (const [view, width] of [['watch', 1440], ['analyst', 1440], ['broadcast', 1
     await openShell(page, view);
     await ready(view)(page);
     const f = await viewFrame(page, view);
-    await page.waitForTimeout(4000);   // the HUD panels fill in after the first frames
+    await f.waitForSelector(HUD[view], { state: 'attached', timeout: 60_000 });
+    await page.waitForTimeout(3000);   // the panels fill in after the first frames
     expect(await small(f)).toEqual([]);
+    expect(await f.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'the larger text does not push the view sideways').toBe(true);
     expect(errs).toEqual([]);
   });
 }

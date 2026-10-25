@@ -153,4 +153,4 @@ if (MCS.framed) {
   const pane = $('pane-desk'); if (pane) { new MutationObserver(attachMic).observe(pane, { childList: true, subtree: true }); attachMic(); }
 }
 // type floor: 12 px for the desk text that was 10 to 11 px (UX review pass 6, finding 18)
-{ const st = document.createElement('style'); st.textContent = '.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#fx-keys .k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}'; document.head.appendChild(st); }
+(() => { const st = document.createElement('style'); st.textContent = '.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}'; document.head.appendChild(st); })();
