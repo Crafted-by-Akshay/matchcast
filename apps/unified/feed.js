@@ -5,14 +5,14 @@
 const CM = (() => {
   const KEEP = 120, QUIET_MIN = 2, WINDOW_MIN = 2, CHAIN = ['Producer', 'Analyst', 'Narrator', 'Verifier'];
   const SKIP_UPGRADE = ['summary', 'set_piece', 'period', 'tactics', 'play'];   // lines an api line about a moment must not overwrite
-  const PBP_GAP = 0.2, RUN_MIN = 1, PLAY = new Set(['pass', 'slide_tackle', 'tackle', 'interception', 'foul']);   // the booth calls the play every 0.2 match minutes (about 12 s); a run of passes is within a minute
+  const PBP_GAP = 0.05, RUN_MIN = 1, PLAY = new Set(['pass', 'slide_tackle', 'tackle', 'interception', 'foul']);   // the booth calls the play every 0.05 match minutes (about 3 s) of possession, and at once on a possession change; a run of passes is within a minute
   const LABEL = { rules: 'Rules · recounted', live: 'Live agents · verified' };
   const f2 = (x) => (+x || 0).toFixed(2);
   const trim = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
   const seenApi = new Set();
-  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playFrom = 0, persona = 'casual', changed = () => {}, lastPushAt = 0, fillN = 0, filledAt = -1, over = false;
-  // the booth's dead-air fill: after FILL_MS of real time with no line, a play-by-play line and a colour line drawn from the match state
-  const FILL_MS = 8000, FILL_TICK_MS = 2000;
+  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playTi = -1, playFrom = 0, persona = 'casual', changed = () => {}, lastPushAt = 0, fillN = 0, filledAt = -1, over = false;
+  // the booth's dead-air fill: after FILL_MS (4 s) of real time with no line, a play-by-play line and a colour line drawn from the match state
+  const FILL_MS = 4000, FILL_TICK_MS = 2000;
   // four phrasings a turn, so the exchange does not repeat line for line. Only counts, the score and the named player from the events (s: club, who, score, home, away, at, passes)
   const FILL_PBP = [
     (s) => s.club + ': ' + s.passes + ' passes in the last two minutes.',
@@ -42,7 +42,7 @@ const CM = (() => {
       case 'shot': {
         const outcome = ev.fate === 'save' ? ', and the keeper saves' : ev.fate === 'miss' ? ', off target' : '';
         const big = (+ev.xg || 0) >= 0.25;
-        return { minute: ev.minute, kind: 'shot', tone: big ? 'big' : '', numbers: [{ name: 'xG', value: +ev.xg || 0 }], text: (big ? 'Big chance! ' : '') + who + ' shoots for ' + tc + outcome + '. xG ' + f2(ev.xg) + '.' };
+        return { minute: ev.minute, kind: 'shot', tone: big ? 'big' : 'hot', numbers: [{ name: 'xG', value: +ev.xg || 0 }], text: (big ? 'Big chance! ' : '') + who + ' shoots for ' + tc + outcome + '. xG ' + f2(ev.xg) + '.' };
       }
       case 'yellow_card': return { minute: ev.minute, kind: 'card', text: 'Yellow card for ' + who + ' (' + tc + ')' + (ev.reason ? ': ' + ev.reason : '') + '.' };
       case 'corner': return { minute: ev.minute, kind: 'set_piece', text: 'Corner to ' + tc + '.' };
@@ -69,10 +69,11 @@ const CM = (() => {
   // play-by-play: the booth calls the newest action since its last call, and says how many passes a side made in that stretch.
   // The words come from the events, so the line is checked in page like the rest of the rules lines.
   const callPlay = (at) => {
-    if (playAt >= 0 && at >= playAt && at - playAt < PBP_GAP - 1e-9) return;   // the epsilon keeps a call exactly PBP_GAP later from failing on float error
     const fresh = events.slice(playFrom).filter((e) => e.ti >= 0 && e.player && PLAY.has(e.type));
     if (!fresh.length) return;
     const act = fresh[fresh.length - 1], tc = club(act.ti);
+    const turn = act.ti !== playTi;   // a possession change is called at once; otherwise the gap applies
+    if (!turn && playAt >= 0 && at >= playAt && at - playAt < PBP_GAP - 1e-9) return;   // the epsilon keeps a call exactly PBP_GAP later from failing on float error
     let run = 0;   // the passes this side has made in a row up to the newest action, within RUN_MIN minutes, across earlier calls too; any action by the other side ends it
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i];
@@ -85,8 +86,8 @@ const CM = (() => {
       : act.type === 'foul' ? act.player + ' commits a foul (' + tc + ').'
       : act.type === 'interception' ? act.player + ' reads it and intercepts for ' + tc + '.'
       : act.player + ' challenges for ' + tc + '.';   // a tackle's outcome is not in the batch, so the line makes no claim about it
-    playAt = at; playFrom = events.length;
-    push({ minute: act.minute, kind: 'play', text, numbers: act.type === 'pass' && run >= 3 ? [{ name: 'passes', value: run }] : [] });
+    playAt = at; playTi = act.ti; playFrom = events.length;
+    push({ minute: act.minute, kind: 'play', tone: run >= 3 ? 'hot' : '', text, numbers: act.type === 'pass' && run >= 3 ? [{ name: 'passes', value: run }] : [] });   // a build-up of three or more passes is hot: the booth speaks faster and the crowd lifts
   };
 
   // Watch's batch: the events first (so the score and the window are current), then the moments, then a summary if the feed has gone quiet

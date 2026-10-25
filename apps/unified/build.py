@@ -406,7 +406,21 @@ def national_fixtures(season):
     ]
 
 
+NO_REAL_LEAGUE = [
+    ("FIFA protocol: play restarts", "Stadium rule: play restarts"),
+    ("A FIFA cooling break at WBGT", "A cooling break at WBGT"),
+    ("(8 miles, FIFA)", "(8 miles)"),
+    ("FIFA cooling breaks at 30", "Cooling breaks at 30"),
+    ("FIFA\\'s 32", "the 32"),
+    ("// FIFA heat protocol", "// heat protocol"),
+    ("// FIFA-style dynamic cam", "// broadcast-style dynamic cam"),
+]
+
+
 def write(path, text):
+    # the read-only sources name a real league's rules (lightning, heat); the product is a synthetic world, so those names come out here
+    for old, new in NO_REAL_LEAGUE:
+        text = text.replace(old, new)
     if path.endswith(".html") and not text.lstrip().lower().startswith("<!doctype"):
         text = (
             "<!doctype html>\n" + text

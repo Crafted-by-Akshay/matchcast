@@ -31,7 +31,7 @@ const VC = (() => {
     // Azure Speech (token from the api) when it is there, otherwise the browser voice; one voice per role and language
     if (typeof SPX === 'undefined') { browser(); return; }
     const voice = it.lang === 'es' ? voices.es : it.lang === 'hi' ? voices.hi : it.role === 'analyst' ? voices.analyst : voices.playByPlay;
-    SPX.speak(it.text, voice, lang, it.tone === 'big').then((ok) => { if (my !== gen || !on) return; if (ok) { source = 'azure'; onChange(); done(); } else if (Date.now() - it.at > EXPIRY_MS) done(); else browser(); });   // not spoken late by the browser after a slow Azure try
+    SPX.speak(it.text, voice, lang, it.tone).then((ok) => { if (my !== gen || !on) return; if (ok) { source = 'azure'; onChange(); done(); } else if (Date.now() - it.at > EXPIRY_MS) done(); else browser(); });   // not spoken late by the browser after a slow Azure try
   };
   // a line to show and (if voice is on) speak. at: when it was written, in ms; lang: en, es or hi; audio: an api audio url
   const say = (text, o) => {
@@ -39,28 +39,30 @@ const VC = (() => {
     caption(text);
     source = o.audio ? 'azure' : 'browser'; onChange();
     if (on && !(o.id && spoken.has(o.id))) {
-      if (o.tone === 'big') swell();
+      if (o.tone === 'big') swell(0.8); else if (o.tone === 'hot') swell(0.45);   // a goal erupts; a shot or a build-up lifts the crowd
       if (o.id) spoken.add(o.id); queue.push({ text, at, lang: o.lang || 'en', role: o.role || 'playByPlay', audio: o.audio || null, tone: o.tone || '' }); next(); }
   };
-  // the crowd bed (simulated): low noise under the commentary while Voice is on. It is synthesised here, not a recording, and it swells for a big moment.
+  // the crowd bed (simulated): a murmur under the commentary while Voice is on. It is synthesised here, not a recording. It sits at BED, lifts on an attack
+  // (swell 0.45) and erupts on a goal (0.8), then settles back to BED.
   let crowd = null, swellT = 0;
+  const BED = 0.3;   // gain under the voices: the first version was 0.04, about -40 dBFS, which the commentary covered entirely
   const crowdStart = () => {
     if (crowd || !('AudioContext' in window)) return;
     try {
       const ctx = new AudioContext(), len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
       let last = 0; for (let i = 0; i < len; i++) { last = (last + (Math.random() * 2 - 1) * 0.02) / 1.02; d[i] = last * 3.5; }   // brown noise: a murmur, not hiss
       const src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
-      src.buffer = buf; src.loop = true; lp.type = 'lowpass'; lp.frequency.value = 900; g.gain.value = 0.04;
+      src.buffer = buf; src.loop = true; lp.type = 'lowpass'; lp.frequency.value = 1400; g.gain.value = BED;
       src.connect(lp); lp.connect(g); g.connect(ctx.destination); src.start(); if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       crowd = { ctx, src, g };
     } catch (e) { crowd = null; }   // no audio here: the commentary still plays
   };
   const crowdStop = () => { clearTimeout(swellT); if (crowd) { try { crowd.src.stop(); crowd.ctx.close(); } catch (e) { /* already stopped */ } crowd = null; } };
-  const swell = () => {
+  const swell = (peak) => {
     if (!crowd) return; const t = crowd.ctx.currentTime, g = crowd.g.gain;
-    g.cancelScheduledValues(t); g.setTargetAtTime(0.22, t, 0.3);
-    clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(0.04, crowd.ctx.currentTime, 1.5); }, 3000);
+    g.cancelScheduledValues(t); g.setTargetAtTime(peak, t, 0.3);
+    clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(BED, crowd.ctx.currentTime, 1.5); }, 3000);
   };
   const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
-  return { load, say, set, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
+  return { load, say, set, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get level() { return crowd ? crowd.g.gain.value : 0; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();

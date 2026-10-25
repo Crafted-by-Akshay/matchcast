@@ -61,6 +61,7 @@ The Broadcast Copilot's picks (highlights, focus, plan; ADR-0019) are not transl
 
 ## 6. Built in the browser (22 Oct)
 `apps/unified/speech.js` implements the token fetch (section 3) and both directions: synthesis and push-to-talk recognition in Broadcast. It has only been tested against a fake api and a fake SDK until the Speech resource is deployed. The browser voice remains the labelled fallback.
+- The SSML energy follows the feed line's tone (`speech.js`): calm (a pass, a summary) at -4% rate, `hot` (a shot or a build-up of three passes) at 0% and a higher pitch, `big` (a goal, a red card, a score claim) at +3% with emphasis. The tone is set in `feed.js`. Whether the result sounds right on the live build has not been checked by ear.
 
 ## 6a. Talk replies (EXP-16, 23 Oct)
 The api's `/talk` runs the role agent, then the Verifier's number and name check, then Content Safety on the reply. Only a reply that passes all three is voiced: the response carries `audio_url` (`/v1/audio/{id}.mp3`) and `lang: en`. A refused reply is shown as the fixed refusal text with `audio_url: null`, and nothing is spoken. The browser does not yet play `audio_url`; it still uses the SDK voice. Wiring that is Experience-lane work. Content Safety is Azure when `CONTENT_SAFETY_ENDPOINT` is set, otherwise the local word list (**Simulated**).
