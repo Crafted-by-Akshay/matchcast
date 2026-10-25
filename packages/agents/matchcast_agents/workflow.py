@@ -50,6 +50,8 @@ AUDIT_SKIPPED = ("rate_limited", "duplicate_moment", "model_skip")
 NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 # a line that fails its repair on one of these goes to a person: the event log can settle it
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
+# the rundown ledger keeps this many moments (it is checkpointed with the match)
+RUNDOWN_KEEP = 400
 
 
 class WorkflowError(Exception):
@@ -238,6 +240,7 @@ class MatchWorkflow:
                 "history_on": self.history_on.isoformat(),
             },
         )
+        self.rundown: list[dict[str, Any]] = []  # the Showrunner ledger, see _record_rundown
         self._restore()
         self.stats = {
             "events": 0,
@@ -389,6 +392,7 @@ class MatchWorkflow:
         if row is None:
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
+        self.rundown = list(row.get("rundown", []))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
             restore(row["producer"])
@@ -401,6 +405,7 @@ class MatchWorkflow:
                 "processed_sequence": sequence,
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
+                "rundown": self.rundown,
             },
         )
 
@@ -489,7 +494,22 @@ class MatchWorkflow:
                 )
             return None
         self.stats["moments"] += 1
+        self._record_rundown(decision)
         return decision
+
+    def _record_rundown(self, task: ProducerTask) -> None:
+        """One rundown entry per moment the crew takes: the agents it calls, skips and why."""
+        desk = self._wants_desk(task)
+        self.rundown.append(
+            {
+                "moment_id": task.moment_id,
+                "called": ["analyst", "narrator", "verifier", *(["stats_desk"] if desk else [])],
+                "skipped": [] if desk else ["stats_desk"],
+                "why": task.why or task.reason,
+                "routed_by": task.routed_by,
+            }
+        )
+        del self.rundown[:-RUNDOWN_KEEP]
 
     def _state_json(self, state: MatchState) -> dict[str, Any]:
         return {
