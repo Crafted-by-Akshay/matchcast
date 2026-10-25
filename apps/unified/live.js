@@ -3,7 +3,7 @@
 // With an api, the rules agents keep running beside it, so if the api never answers the viewer still gets lines: status 'fallback'.
 const LV = (() => {
   const WARM_MS = window.MATCHCAST_WARM_MS || 90000, CLAIM_MS = window.MATCHCAST_WARM_MS || 60000, BACKOFF = [1000, 2000, 5000, 10000], BATCH = 50, TENANT_SESSION = 'demo';
-  let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, onBooth = () => {}, timer = null;
+  let badClaim = false, base = '', st = 'offline', persona = 'fan', lang = 'en', run = null, onStatus = () => {}, onClaim = () => {}, onLine = () => {}, onBooth = () => {}, onLatency = () => {}, timer = null;
   const vstats = { passes: 0, reads: 0, readsFailed: 0 };   // what Vision has reached the api with: passes accepted, shirt-number reads answered or refused
   const api = () => base.replace(/\/+$/, '');
   const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'x';
@@ -53,8 +53,8 @@ const LV = (() => {
     vstats.passes = 0; vstats.reads = 0; vstats.readsFailed = 0;   // Vision counts belong to one match
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
-    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, armed: false, sending: false };
-    set('warming', true);   // repaint even if already warming: the shell restarts its seconds counter with the warm-up timer
+    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, armed: false, sending: false, sent: new Map(), lats: [] };
+    set('warming', true); onLatency(latency());   // a new match starts with no latency sample   // repaint even if already warming: the shell restarts its seconds counter with the warm-up timer
     // no warm-up clock yet: it starts at kick-off (the first events) or when the api cannot be reached, so a slow client still loading the pitch never reads 'Rules fallback'
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
       players: roster.players.map((q) => ({ player_id: slug(q.name), team_id: slug(q.team) })) } : null;
@@ -89,7 +89,7 @@ const LV = (() => {
       on('status', (d) => { const s = d && d.status; r.apiFallback = s === 'rules_fallback'; if (s === 'live') set('live'); else if (s === 'rules_fallback') set('fallback'); else if (s === 'warming_up') set('warming'); });
       on('claim', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); onClaim(d, st); });   // a claim after the warm-up timed out means the api is live after all, unless the api itself said it is on rules
       on('line', (d) => onLine(d, st));
-      on('publication', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); onLine(d, st); });
+      on('publication', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); measure(r, d); onLine(d, st); });
       es.onerror = () => { es.close(); if (run !== r || r.es !== es) return; if (r.tries >= 2 && st === 'live') set('fallback');   /* a stream that keeps failing is not live agents; the next status, claim or line brings it back */ const wait = BACKOFF[Math.min(r.tries++, BACKOFF.length - 1)]; setTimeout(() => { if (run === r) open(); }, wait); };
     } catch (e) { set('fallback'); }
   };
@@ -193,7 +193,7 @@ const LV = (() => {
   const events = (batch) => {
     if (!run) return;
     if (batch && batch.length) arm(run);
-    for (const ev of batch || []) { const p = toPacket(ev, run.key, run.seq + 1, new Date().toISOString()); if (p) { run.seq++; run.queue.push(p); } }
+    for (const ev of batch || []) { const p = toPacket(ev, run.key, run.seq + 1, new Date().toISOString()); if (p) { run.seq++; run.queue.push(p); run.sent.set(run.seq, performance.now()); if (run.sent.size > 600) run.sent.delete(run.sent.keys().next().value); } }   // when each event reached this page, by stream sequence, for the on-air latency
     flush();
   };
   // Vision derived events (DAT-11 task 277): the tracker's passes, on their own stream `<session>.vision` so they never mix with engine truth.
@@ -254,9 +254,60 @@ const LV = (() => {
     const r = run; if (!r || !api()) return null;
     try { const res = await fetch(url('/v1/matches/' + r.id + '/vision/summary'), { cache: 'no-store' }); return res.ok ? await res.json() : null; } catch (e) { return null; }
   };
+  // the failure drill (ADR-0014 on camera): cut this match's model calls on the api so the rules twins take over mid-match, or restore them; throws when the api cannot
+  const drill = async (on) => {
+    const r = run; if (!r || !api()) throw Object.assign(new Error('no api'), { status: 0 });
+    if (!r.created) await create(r);
+    const res = await post('/v1/matches/' + r.id + '/drill', { session_id: r.key.session_id, model_cut: !!on });
+    if (!res.ok) throw Object.assign(new Error('drill ' + res.status), { status: res.status });
+    const j = await res.json(); if (run === r) r.cut = !!j.model_cut; return j;
+  };
+  // event to on air: wall time from Watch's event reaching this page to the api's published line arriving, matched by the publication's snapshot
+  // high-watermark (state.max_evidence_sequence, the last event the line rests on). One sample per event, so a replay after a reconnect is not counted again.
+  // Median of the last 30 matched lines. Watch batches events for up to a second before they reach this page; that wait is before the stamp, so it is not in the number.
+  const measure = (r, d) => {
+    const seq = d && d.state && d.state.max_evidence_sequence, t0 = r.sent.get(seq);
+    if (!t0) return;
+    r.sent.delete(seq);
+    r.lats.push(performance.now() - t0); if (r.lats.length > 30) r.lats.shift();
+    onLatency(latency());
+  };
+  const latency = () => {
+    const r = run, l = r ? r.lats.slice().sort((a, b) => a - b) : [];
+    return { n: l.length, median_ms: l.length ? l[Math.floor(l.length / 2)] : null, last_ms: r && r.lats.length ? r.lats[r.lats.length - 1] : null };
+  };
   const stop = () => { clearTimeout(timer); if (run && run.es) run.es.close(); if (run && run.booth) run.booth.close(); run = null; };
-  return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, events, visionEvents, visionSummary, stop, talk, recap, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+  // The voice call's socket (EXP-18, docs/architecture/12-api.md): one WebSocket per call. talk() sends a turn; its reply comes as text,
+  // then one MP3 per sentence; cancel() drops a turn's audio. Null when there is no match on the api; close fires if the socket drops.
+  const openCall = (h) => {
+    const r = run;
+    if (!r || !r.created || !api()) return null;
+    const ws = new WebSocket(url('/v1/matches/' + r.id + '/call', {}).replace(/^http/, 'ws'));
+    ws.binaryType = 'arraybuffer';
+    let header = null;   // the audio header that the next binary frame belongs to (the server sends them in order)
+    ws.onmessage = (e) => {
+      if (typeof e.data !== 'string') { if (header) { h.audio(header.id, new Blob([e.data], { type: 'audio/mpeg' })); header = null; } return; }
+      let d; try { d = JSON.parse(e.data); } catch (err) { return; }
+      if (d.type === 'reply') h.reply(d.id, { text: d.reply, verdict: d.verdict, facts: d.facts || {}, order: d.order || null, api: true, audioUrl: null });
+      else if (d.type === 'audio') header = d;
+      else if (d.type === 'audio_end') h.end(d.id);
+      else if (d.type === 'error') h.error(d.id, d.code);
+    };
+    let opened = false;
+    ws.onopen = () => { opened = true; };
+    ws.onclose = () => h.close(opened);   // a socket that never opened was refused at the handshake (no match, or a bad session)
+    return {
+      talk: (id, target, position, utterance) => {
+        if (ws.readyState !== 1) return false;
+        ws.send(JSON.stringify({ type: 'talk', id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}) }));
+        return true;
+      },
+      cancel: (id) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'cancel', id })); },
+      close: () => ws.close(),
+    };
+  };
+  return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); onLatency = cbs.latency || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
+    begin, events, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

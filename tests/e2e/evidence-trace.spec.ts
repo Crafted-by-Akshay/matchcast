@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { collectErrors } from './helpers';
 
 declare const AG: any; declare const TP: any; declare const MCC: any;
@@ -6,6 +6,8 @@ declare const AG: any; declare const TP: any; declare const MCC: any;
 // CREW-6.2 (AB#444): "How was this made?" can list, for an aired line, the agents, the tool calls, the data rows (match events and history rows) and the audit hashes behind it.
 // It is built behind ?evidence=1 until the api carries claim-level evidence (AB#498); a line from the rules agents has everything in the page.
 async function openEvidence(page: Page, query: string) {
+  // a server left running from before #340 (tests/e2e/serve.mjs builds once, and outside CI an existing server is reused) serves a panel with no Evidence section: say so instead of "element not found"
+  if (query.includes('evidence=1')) expect((await (await page.request.get('/trace-panel.js')).text()).includes('tp-evidence'), 'the served build predates the Evidence section (#340): restart the server on this test port so it rebuilds').toBe(true);
   await page.goto('/index.html' + query + '#agents', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => typeof AG !== 'undefined' && typeof TP !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
   await page.evaluate(() => {

@@ -43,8 +43,8 @@ flowchart LR
 
 Rules:
 1. Only verified English text is ever translated. Agents always work in English.
-2. "Active viewer" means a browser that sent a heartbeat with that language in the last 30 s (SSE query parameter `lang`). Translation also stops after 500,000 characters in total (`TRANSLATOR_MAX_CHARS`, about $5 at the S1 price); after that, lines stay English with the note "Translation paused".
-3. Translator resource `tr-matchcast-dev`, S1, with a custom subdomain so managed identity works (role Cognitive Services User).
+2. "Active viewer" means a browser that sent a heartbeat with that language in the last 30 s (SSE query parameter `lang`). Translation also stops after 500,000 characters in total (`TRANSLATOR_MAX_CHARS`, F0 is free up to 2M characters a month, and past that the service refuses and the line stays English); after that, lines stay English with the note "Translation paused".
+3. Translator resource `tr-matchcast-dev`, F0 (free tier), with a custom subdomain so managed identity works (role Cognitive Services User).
 4. The re-check compares the sets of numbers (digits normalised from Devanagari to ASCII for Hindi) and names between English and the translation. Any difference drops that language for that line.
 5. Captions show in the chosen language. If a line has no variant in that language, the English line shows with a small "EN" tag.
 6. Ask and Talk answers are translated the same way before they are shown.
@@ -61,6 +61,7 @@ The Broadcast Copilot's picks (highlights, focus, plan; ADR-0019) are not transl
 
 ## 6. Built in the browser (22 Oct)
 `apps/unified/speech.js` implements the token fetch (section 3) and both directions: synthesis and push-to-talk recognition in Broadcast. It has only been tested against a fake api and a fake SDK until the Speech resource is deployed. The browser voice remains the labelled fallback.
+- The SSML energy follows the feed line's tone (`speech.js`): calm (a pass, a summary) at -4% rate, `hot` (a shot or a build-up of three passes) at 0% and a higher pitch, `big` (a goal, a red card, a score claim) at +3% with emphasis. The tone is set in `feed.js`. Whether the result sounds right on the live build has not been checked by ear.
 
 ## 6a. Talk replies (EXP-16, 23 Oct)
 The api's `/talk` runs the role agent, then the Verifier's number and name check, then Content Safety on the reply. Only a reply that passes all three is voiced: the response carries `audio_url` (`/v1/audio/{id}.mp3`) and `lang: en`. A refused reply is shown as the fixed refusal text with `audio_url: null`, and nothing is spoken. The browser does not yet play `audio_url`; it still uses the SDK voice. Wiring that is Experience-lane work. Content Safety is Azure when `CONTENT_SAFETY_ENDPOINT` is set, otherwise the local word list (**Simulated**).
