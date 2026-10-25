@@ -185,6 +185,21 @@ test('the pre-match build-up is a play-by-play call and a colour line, each on i
   ]);
 });
 
+test('a quiet stretch gets a booth exchange drawn from the match state, and not again straight away', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('fill', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 1.5, type: 'pass', team: 'H', player: 'Ben' }, { minute: 2, type: 'pass', team: 'H', player: 'Cal' }], []);
+    CM.fill(Date.now() + 9000);   // nine seconds of real time with no line
+    const first = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text }));
+    CM.fill(Date.now());         // straight after: the booth is still talking, so nothing new
+    return { first, after: CM.view().filter((l: any) => l.kind === 'filler').length };
+  });
+  expect(out.first.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out.first[0].text, 'the play-by-play line counts the passes from the events').toContain('Ridgeview have it: 3 passes');
+  expect(out.after).toBe(2);
+});
+
 test('the booth speaks each new feed line once, play-by-play and colour on different voices', async ({ page }) => {
   await openShell(page, 'watch', '?seed=2026');
   await page.evaluate(() => { VC.set(true); });

@@ -10,14 +10,29 @@ const CM = (() => {
   const f2 = (x) => (+x || 0).toFixed(2);
   const trim = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
   const seenApi = new Set();
-  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playFrom = 0, persona = 'casual', changed = () => {};
+  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playFrom = 0, persona = 'casual', changed = () => {}, lastPushAt = 0, fillN = 0;
+  // the booth's dead-air fill: after FILL_MS of real time with no line, a play-by-play line and a colour line drawn from the match state
+  const FILL_MS = 8000, FILL_TICK_MS = 2000;
+  // four phrasings a turn, so the exchange does not repeat line for line (s: club, other, who, score, home, away, at, passes)
+  const FILL_PBP = [
+    (s) => s.club + ' have it: ' + s.passes + ' passes in the last two minutes, with ' + s.who + ' on the ball.',
+    (s) => 'Still ' + s.home + ' ' + s.score + ' ' + s.away + ' at ' + s.at + '.',
+    (s) => s.who + ' with the ball for ' + s.club + '. Nothing forced yet.',
+    (s) => s.club + ' keep the tempo: ' + s.passes + ' passes in the last two minutes.',
+  ];
+  const FILL_COLOUR = [
+    (s) => 'Patience from ' + s.club + ', with ' + s.other + ' content to wait.',
+    (s) => 'That is the shape to watch: who moves first when the ball comes back.',
+    (s) => 'The score is what matters here: ' + s.home + ' ' + s.score + ' ' + s.away + '.',
+    (s) => 'A good spell of possession for ' + s.club + '. The next pass decides whether it goes anywhere.',
+  ];
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
   const club = (ti) => (ti === 0 ? names.home : names.away);
   const push = (o) => {
     const item = { id: 'l' + (++n), t: Date.now(), minute: o.minute, text: trim(o.text, 240), kind: o.kind, tone: o.tone || '', source: o.source || 'rules', chain: o.chain || CHAIN.slice(), persona, numbers: o.numbers || [], speaker: o.speaker || '' };
     items.push(item); if (items.length > KEEP) items.shift();
-    lastLine = o.minute; changed(); return item;
+    lastLine = o.minute; lastPushAt = Date.now(); changed(); return item;
   };
 
   // one Watch event that deserves a line of its own (goals and red cards come as moments, which carry the reason)
@@ -98,6 +113,18 @@ const CM = (() => {
     if (last != null && last - lastLine >= QUIET_MIN && events.length) push(summary(Math.floor(last)));
   };
 
+  // a quiet stretch of real time gets the booth exchange: the newest action and the score give the facts, and the phrasing turns over
+  const fill = (now = Date.now()) => {
+    if (!names || !events.length || now - lastPushAt < FILL_MS) return;
+    const last = events[events.length - 1], ti = last.ti >= 0 ? last.ti : 0;
+    const passes = events.filter((e) => e.ti === ti && e.type === 'pass' && last.minute - e.minute <= 2).length;
+    const s = { club: club(ti), other: club(1 - ti), who: last.player || club(ti), score: score.join('–'), home: names.home, away: names.away, at: Math.floor(last.minute), passes };
+    const k = fillN++ % FILL_PBP.length;
+    push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_PBP[k](s) });
+    push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_COLOUR[k](s) });
+  };
+  setInterval(() => fill(), FILL_TICK_MS);
+
   // a line the agent api wrote (its Verifier checked it): it replaces the rules line for the same minute, or joins the feed
   const api = (text, minute, kind, key) => {
     if (!names || !String(text || '').trim()) return;
@@ -113,5 +140,5 @@ const CM = (() => {
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers, speaker: x.speaker || (x.source === 'live' || x.kind === 'summary' ? 'colour' : 'pbp') }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under
   const setPersona = (p) => { persona = p && p !== 'fan' ? p : 'casual'; };
-  return { fromWatch, api, reset, view, setPersona, onChange: (fn) => { changed = fn; }, get count() { return items.length; } };
+  return { fromWatch, api, reset, view, setPersona, fill, onChange: (fn) => { changed = fn; }, get count() { return items.length; } };
 })();
