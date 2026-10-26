@@ -14,8 +14,9 @@
   const paint = () => { const open = !ctrl.classList.contains('mc-folded'); b.setAttribute('aria-expanded', String(open)); document.body.classList.toggle('mc-demo-open', open); b.textContent = 'Demo controls'; b.title = (open ? 'Hide' : 'Show') + ' player names, speed, match data and the weather chip'; };
   b.onclick = () => { ctrl.classList.toggle('mc-folded'); paint(); };
   if (!demoUrl) ctrl.classList.add('mc-folded');
-  // CREW (?crew=1, CREW-7.8): a judge sees no weather chip and no camera presets unless ?demo=1, so the Demo controls button goes too (Pause, Vision and Copilot stay)
-  let crew = /[?&]crew=1\b/.test(location.search + outer); try { if (localStorage.getItem('mc-crew') === '1') crew = true; } catch (e) { /* storage blocked */ }
+  // CREW (crew UI, on by default, CREW-7.8): a judge sees no weather chip and no camera presets unless ?demo=1, so the Demo controls button goes too (Pause, Vision and Copilot stay)
+  let crew = !/[?&]crew=0(&|$)/.test(location.search + '&' + outer);   // default on; ?crew=0 or localStorage mc-crew=0 turns it off, an explicit crew=1 beats a stored 0
+  try { if (crew && !/[?&]crew=1(&|$)/.test(location.search + '&' + outer) && localStorage.getItem('mc-crew') === '0') crew = false; } catch (e) { /* storage blocked */ }
   if (crew && !demoUrl) { const hide = document.createElement('style'); hide.textContent = '#mc-demo,#wxchip,#cams{display:none!important}'; document.head.appendChild(hide); b.hidden = true; }
   grp.appendChild(b);
   // Pause stays one tap away: it presses the real button in the folded speed group

@@ -1,5 +1,5 @@
 /* Crew spawn tree (CREW-6.1, AB#439, Experience lane). Mounts a "Crew" section at the top of the Agents tab
-   when CREW.enabled (?crew=1). Reads only CREW.state: the latest moment's agents[{id,role,parent,status}].
+   when CREW.enabled (on by default). Reads only CREW.state: the latest moment's agents[{id,role,parent,status}].
    The Showrunner fans out to subagents as they appear; the tree fades when the moment is done.
    Simulated while CREW.state.simulated is true. */
 (function () {

@@ -123,9 +123,18 @@ class NarratorRules:
                     "actions in the run-up to the swing."
                 )
                 analyst = _with_clause(analyst, clause, "analyst")
+            # the storyline's payoff (CREW-3.2): only the goal that cites the opening pays it off
+            payoff = ctx.extra.get("payoff")
+            paid = payoff is not None and payoff["cites"][1] == event["stream_sequence"]
+            pay = f" {who} was the storyline after the stall, and this goal pays it off."
+            pay_casual = " Storyline pays off."  # short: a long name must still leave room for it
+            if paid:
+                analyst = _with_clause(analyst, pay, "analyst")
+            casual = f"Goal for {club}! {who} scores, goal number {n} for them. " + why[
+                "casual"
+            ].format(club=club)
             texts = {
-                "casual": f"Goal for {club}! {who} scores, goal number {n} for them. "
-                + why["casual"].format(club=club),
+                "casual": _with_clause(casual, pay_casual, "casual") if paid else casual,
                 "analyst": analyst,
                 "broadcast": f"{club} score through {who}. {home} {v[f'goals:{hid}']}, "
                 f"{away} {v[f'goals:{aid}']}. " + why["broadcast"].format(club=club),

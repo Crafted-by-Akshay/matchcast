@@ -77,11 +77,16 @@ const LV = (() => {
       es.onerror = () => es.close();
     } catch (e) { /* the rules booth carries on */ }
   };
-  // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed, and its air gate airs nothing from a killed feed. Sent only once the match run exists and an api is configured
+  // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed, and its air gate airs nothing from a killed feed.
+  // deskKilled is the desk's own state per feed, kept across matches as the desk keeps it. A switch made while the match is not created is sent by feedsSent once it is, so a kill is not dropped; a match created later starts with the feeds the desk has killed
+  const deskKilled = {};
+  const feedSend = (r, feed, killed) => post('/v1/matches/' + r.id + '/feeds/' + feed + (killed ? '/kill' : '/resume'), { session_id: r.key.session_id }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
   const feedSwitch = (feed, killed) => {
-    if (!run || !run.created || !api()) return Promise.resolve(null);
-    return post('/v1/matches/' + run.id + '/feeds/' + feed + (killed ? '/kill' : '/resume'), { session_id: run.key.session_id }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
+    deskKilled[feed] = killed;
+    if (!api() || !run || !run.created) return Promise.resolve(null);
+    return feedSend(run, feed, killed);
   };
+  const feedsSent = (r) => { for (const feed of Object.keys(deskKilled)) if (deskKilled[feed]) feedSend(r, feed, true); };
   const open = () => {
     const r = run; if (!r || !r.created) return;
     if (r.es) r.es.close();   // one stream at a time: a pending retry must not add a second
@@ -114,7 +119,7 @@ const LV = (() => {
     try {
       const bad = badClaim;   // the api takes the demo switch at match creation only
       const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; if (res.status === 409) r.attached = true; open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
+      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; if (res.status === 409) r.attached = true; if (run === r) feedsSent(r); open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
     } finally { r.creating = null; }
   })());
 
@@ -169,6 +174,14 @@ const LV = (() => {
     const j = await res.json(); vstats.reads++; return j;
   };
 
+  // the viewer's role for the producer-only routes: the page's configured account (config.js MATCHCAST_ROLE; the shell's simulated producer by default). The api checks the real role (Easy Auth) and answers 403 to anyone else.
+  // The held lines (status review) with their text, from the role-gated lines route; the open stream withholds an unverified line's text. Throws {status} when the api refuses or cannot answer.
+  const lineTexts = async () => {
+    const r = run; if (!r || !r.created || !api()) throw Object.assign(new Error('no match yet'), { status: 0 });
+    const res = await fetch(url('/v1/matches/' + r.id + '/lines', { status: 'review' }), { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw Object.assign(new Error('lines ' + res.status), { status: res.status });
+    const j = await res.json(); return Array.isArray(j.items) ? j.items : [];
+  };
   // the server's audit records for this match (EXP-12), and the same check the server's verifyChain does (packages/contracts/src/audit.ts)
   const GENESIS = '0'.repeat(64);
   const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'
@@ -321,7 +334,7 @@ const LV = (() => {
     };
   };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); onLatency = cbs.latency || (() => {}); onDrop = cbs.drop || (() => {}); onAired = cbs.aired || (() => {}); onFeed = cbs.feed || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, feedSwitch, events, apiEvent: (id) => (run && run.evs.get(String(id))) || null, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, feedSwitch, lineTexts, get role() { return String(window.MATCHCAST_ROLE || 'Producer'); }, events, apiEvent: (id) => (run && run.evs.get(String(id))) || null, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get joinedMidMatch() { return !!(run && (run.attached || run.reconnected)); },   // the page attached to a match that already existed, or its stream dropped and came back: the crew frames sent meanwhile are gone
      get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };

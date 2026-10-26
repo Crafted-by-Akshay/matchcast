@@ -7,8 +7,10 @@ a hash-chained audit record (ADR-0013: lines carry verdicts and approvals).
 
 import asyncio
 import copy
+import logging
 import os
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -32,9 +34,11 @@ from .rules.producer import BOOTH_MOMENTS
 from .safety import LocalSafetyScreen, SafetyScreen
 from .season_clubs import season_code
 from .specialists import SpawnBudget, default_registry, plan_spawns, run_all
+from .stall import StallClock
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
+from .storyline import FALLBACK_PLAN, StorylineBook, pick_plan
 from .tools import InProcessTools, ToolCall, ToolError
 from .verify.checks import recompute
 from .verify.text import extract_numbers
@@ -105,6 +109,18 @@ NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
 # the rundown ledger keeps this many moments (it is checkpointed with the match)
 RUNDOWN_KEEP = 400
+# how often the stall timer looks at the clock: a silent feed replans too, not only on an event
+STALL_CHECK_S = 5.0
+# the final period: its ended boundary is full time, and the stall timer stops there
+FULL_TIME_PERIOD = 2
+logger = logging.getLogger(__name__)
+
+
+def _event_key(event: dict[str, Any]) -> tuple[str, int]:
+    """Which revision of an event: a corrected revision keeps its event id and sequence."""
+    return event["event_id"], int(event.get("revision", 0))
+
+
 # the contract version of the crew frames (crew_ledger, crew_spawn); the audit stays on 1.1.0
 CREW_SCHEMA_VERSION = "1.3.0"
 # a specialist's report status, as the crew_spawn frame names it
@@ -114,6 +130,8 @@ SPAWN_STATUS = {
     "budget_exhausted": "budget_exhausted",
     "failed": "failed",
 }
+# the specialist a replan assigns to its new storyline: it replays the moments of that storyline
+REPLAN_SPECIALIST = "replay"
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
 # the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1)
@@ -303,8 +321,7 @@ def _sentence_recounts(
 ) -> bool:
     """A sentence with figures has them in the order of its metrics, each the recount of that
     metric. A sentence with no figure (a named event) has nothing to recount."""
-    # the request's minute is a time, checked against the events by the cut, not a figure
-    figures = extract_numbers(sentence.replace(f"After {piece.minute} minutes,", ""))
+    figures = extract_numbers(sentence)
     expected = [float(recompute(events, m, piece.cut_sequence, home=home)) for m in metrics]
     return not figures or figures == expected
 
@@ -323,6 +340,7 @@ class MatchWorkflow:
         config: WorkflowConfig | None = None,
         safety: SafetyScreen | None = None,
         clock: Callable[[], datetime] = _utc_now,
+        stall_clock: Callable[[], float] = time.monotonic,
         stats_desk: StatsDesk | None = None,
         answer_model: "ModelClient | None" = None,
         history: dict[str, Any] | None = None,
@@ -339,6 +357,15 @@ class MatchWorkflow:
         # the engine match's Vision passes as pass facts: its one Vision moment counts them
         self._vision_feed = vision_feed
         self._vision_moment_tried = False
+        # wall time since the last verified line; it starts with the first event
+        self._stall = StallClock(clock=stall_clock)
+        self._stall_started = False
+        self._stall_task: asyncio.Task[None] | None = None  # the timer; it pauses at full time
+        self._closed = False
+        self._replans = 0  # numbers the replan moments, so two replans never share an id
+        self._processed_key: tuple[str, int] | None = None  # (event id, revision) last finished
+        self._plan: str | None = None  # the last storyline the stall replan chose
+        self._book = StorylineBook()  # the storylines a replan opened, each waiting for its payoff
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
@@ -544,6 +571,7 @@ class MatchWorkflow:
         """Validate the whole batch first (all or nothing), then process each event in order."""
         self.validate_batch(events)
         async with self._lock:
+            self._start_stall_timer()  # a resumed workflow may see no new event: the timer runs
             await self._catch_up()
             for event in events:
                 if self.store.add_event(self.sk, event):
@@ -563,18 +591,29 @@ class MatchWorkflow:
             # the pools, its ledger and the Producer's memory start at zero: nothing counts twice
             self._set_spent(0, 0)
             self.rundown = []
+            self._book = StorylineBook()  # a replay opens its storylines again
+            self._plan = None
+            self._replans = 0
+            self._stall.replanned = False
+            self._processed_key = None
             reset = getattr(self.agents.producer, "reset", None)
             if reset:
                 reset()
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
+        self._book = StorylineBook.from_rows(row.get("storylines", []))  # open storylines survive
+        self._plan = row.get("plan")
+        self._replans = row.get("replans", 0)  # replan ids continue after a restart
+        self._stall.replanned = row.get("stall_replanned", False)  # the fallback rule survives
+        processed = row.get("processed_event")
+        self._processed_key = (processed[0], processed[1]) if processed else None
         self._set_spent(row.get("spawn_used", 0), row.get("quiet_used", 0))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
             restore(row["producer"])
 
-    def _checkpoint(self, sequence: int) -> None:
+    def _checkpoint(self, sequence: int, key: tuple[str, int]) -> None:
         self._saved_once = True
         snapshot = getattr(self.agents.producer, "snapshot", None)
         self.store.put_checkpoint(
@@ -584,6 +623,11 @@ class MatchWorkflow:
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
                 "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
+                "storylines": self._book.to_rows(),
+                "plan": self._plan,
+                "replans": self._replans,
+                "stall_replanned": self._stall.replanned,
+                "processed_event": list(key),
                 "spawn_used": self._spent["priority_one"],
                 "quiet_used": self._spent["quiet"],
             },
@@ -615,7 +659,8 @@ class MatchWorkflow:
             self._routing = None  # calls after the event (an edit, a talk) are not this moment's
         if ran is not None:  # the moment's run has ended, so its entry is final
             self._publish_ledger(ran)
-        self._checkpoint(event["stream_sequence"])
+        self._processed_key = _event_key(event)
+        self._checkpoint(event["stream_sequence"], self._processed_key)
 
     def add_persona(self, persona: str) -> bool:
         """Write lines for a viewer's watch mode from the next moment on.
@@ -650,14 +695,151 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
+        payoff = self._book.on_goal(event)  # a storyline's player scoring pays it off, once
+        if payoff is not None:
+            ctx.extra["payoff"] = {
+                "cites": list(payoff.cites)
+            }  # the text has minutes: not for lines
+        self._start_stall_timer()
+        self._replan_if_stalled(ctx, event)
         if self.config.orchestrator == "af":
             from .af_graph import run_event  # Agent Framework is imported only when selected
 
             await run_event(self, ctx, event)
+        else:
+            task = await self._decide_moment(ctx, event)
+            if task is not None:
+                await self._run_moment(ctx, task)
+        self._note_aired(event)
+
+    def _note_aired(self, event: dict[str, Any]) -> None:
+        """A verified line of this event's moment aired: the match is quiet no longer."""
+        # the Vision moment's id is per match, so its line counts for any event of the match
+        moments = {f"m-{event['event_id']}", f"v-{self.stream['match_id']}"}
+        if any(
+            ln.moment_id in moments and ln.status in ("verified", "approved", "published")
+            for ln in self.store.lines(self.sk)
+        ):
+            self._stall.note_line()
+
+    def _start_stall_timer(self) -> None:
+        """Starts the stall clock once, with the match, and the timer whenever none is running.
+        The timer pauses at full time and starts again on the next event, so a retraction or an
+        extra-time period picks it up."""
+        if self._closed or (self._stall_task is not None and not self._stall_task.done()):
             return
-        task = await self._decide_moment(ctx, event)
-        if task is not None:
-            await self._run_moment(ctx, task)
+        if not self._stall_started:
+            # the clock starts with the match, not with the workflow; a restored replan flag stays
+            self._stall.last_line = self._stall.clock()
+            self._stall_started = True
+        self._stall_task = asyncio.get_running_loop().create_task(self._stall_watch())
+
+    def _match_over(self) -> bool:
+        """Full time has passed: the last period boundary still standing is an ended one in a
+        period from the second half on. A retraction takes a boundary off the board, a correction
+        puts its replacement there (or takes the boundary off when the replacement is no
+        boundary), and a later boundary (extra time) puts the match back on."""
+        events = sorted(self.store.events(self.sk), key=lambda e: e["stream_sequence"])
+        periods = {e["event_id"]: e["clock"]["period"] for e in events}
+        standing: dict[
+            str, tuple[int, str, int]
+        ] = {}  # boundary's event id -> (sequence, kind, period)
+        for e in events:
+            payload = e["payload"]
+            if payload["type"] == "period_boundary":
+                standing[e["event_id"]] = (
+                    e["stream_sequence"],
+                    payload["boundary"],
+                    periods[e["event_id"]],
+                )
+            elif payload["type"] == "retraction":
+                standing.pop(payload["target_event_id"], None)
+            elif payload["type"] == "correction":
+                target = payload["target_event_id"]
+                replacement = payload["replacement"]
+                if replacement["type"] == "period_boundary":
+                    standing[target] = (
+                        e["stream_sequence"],
+                        replacement["boundary"],
+                        periods.get(target, 0),
+                    )
+                else:
+                    standing.pop(target, None)
+        if not standing:
+            return False
+        _, kind, period = max(standing.values())
+        return kind == "ended" and period >= FULL_TIME_PERIOD
+
+    async def _stall_watch(self) -> None:
+        """The stall timer (CREW-1.2): wall time passes whether or not an event arrives, so a
+        silent feed replans after 60 s too. It stops at full time, and a failed look is logged
+        and the timer goes on."""
+        while True:
+            await asyncio.sleep(STALL_CHECK_S)
+            try:
+                if not await self._stall_tick():
+                    return
+            except Exception:
+                logger.exception("stall timer look failed; the timer keeps running")
+
+    async def _stall_tick(self) -> bool:
+        """One look at the stall clock, under the match lock so a replan never interleaves with a
+        run. Returns False once full time has passed."""
+        async with self._lock:
+            if self._match_over():
+                return False
+            events = self.store.events(self.sk)
+            # only a finished event may be checkpointed: a stored one whose processing failed waits
+            # the stored event with the highest sequence; a later revision of a tie stays last
+            newest = sorted(events, key=lambda e: e["stream_sequence"])[-1] if events else None
+            if newest is not None and _event_key(newest) == self._processed_key:
+                replans = self._replans
+                self._replan_if_stalled(self._ctx(), newest)
+                if self._replans != replans:
+                    # no event is in flight here, so the replan is checkpointed now, or a restart
+                    # before the next event would lose the storyline it opened
+                    self._checkpoint(newest["stream_sequence"], _event_key(newest))
+        return True
+
+    def close(self) -> None:
+        """Stops the stall timer for good. The timer also pauses by itself at full time."""
+        self._closed = True
+        if self._stall_task is not None:
+            self._stall_task.cancel()
+
+    def _replan_if_stalled(self, ctx: MatchContext, event: dict[str, Any]) -> None:
+        """CREW-1.2: after a stall the Showrunner chooses a storyline from shared memory and
+        assigns the replay specialist to it. A replan followed by another stall with no verified
+        line chooses the rules storyline instead. Checked on each event, so a feed with no events
+        does not replan. The specialist is assigned, not run: the rundown entry records it in
+        ``skipped``, and no crew_spawn frame claims a run. The chosen storyline is recorded only;
+        the Narrator does not use it yet (Planned)."""
+        step = self._stall.next_step()
+        if step == "wait":
+            return
+        old = self._plan
+        new = FALLBACK_PLAN if step == "fallback" else pick_plan(ctx.extra.get("storylines", {}))
+        self._plan = new
+        if new.startswith("player:"):
+            self._book.open(
+                new.removeprefix("player:"), event, f"{ctx.player_name(new[7:])} storyline"
+            )
+        self._stall.note_replan()
+        entry = {
+            "moment_id": f"replan-{event['event_id']}-{self._next_replan()}",
+            "called": [],
+            "skipped": [REPLAN_SPECIALIST],
+            "why": f"stall: {old or 'match flow'} -> {new}"
+            + (" (rules storyline)" if new == FALLBACK_PLAN else ""),
+            "routed_by": "rules",
+        }
+        self.rundown.append(entry)
+        del self.rundown[:-RUNDOWN_KEEP]
+        self._publish_ledger(entry)
+
+    def _next_replan(self) -> int:
+        self._replans += 1
+        return self._replans
 
     async def _decide_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
         """The Producer's task for this event, else the one Vision moment if it is due."""
@@ -1527,9 +1709,9 @@ class MatchWorkflow:
                 if target == "analyst":
                     fresh_ctx = self._ctx()
                     # the same specialist reports the first analysis read, not a new fan-out
-                    for key in ("specialists", "rhythm"):
-                        if key in ctx.extra:
-                            fresh_ctx.extra[key] = ctx.extra[key]
+                    for name in ("specialists", "rhythm", "payoff"):
+                        if name in ctx.extra:
+                            fresh_ctx.extra[name] = ctx.extra[name]
                     fresh_claims = await self._analyse(fresh_ctx, task, repair=True)
                 written = (
                     await self._call(

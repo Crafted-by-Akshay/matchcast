@@ -122,3 +122,16 @@ def test_a_correction_to_a_card_holds_it_off_the_ticker(match) -> None:
     }
     items = ticker_items(ctx(match, [*match["events"], correction]))
     assert card["event_id"] not in [i.source_event_id for i in items]
+
+
+def test_a_correction_to_a_goal_leaves_it_off_the_ticker_and_out_of_the_score(match) -> None:
+    correction = {
+        "event_id": "c9",
+        "stream_sequence": 9998,
+        "event_time_ms": 3_000_000,
+        "clock": {"period": 2, "period_elapsed_ms": 0},
+        "payload": {"type": "correction", "target_event_id": "e10"},
+    }
+    items = ticker_items(ctx(match, [*match["events"], correction]))
+    assert "e10" not in [i.source_event_id for i in items]
+    assert item_for(items, "e35").text.endswith("Northgate FC 0-1 Harbour United")

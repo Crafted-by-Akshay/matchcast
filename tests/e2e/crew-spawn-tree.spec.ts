@@ -10,7 +10,7 @@ async function open(page: any, query = '?crew=1') {
 }
 
 test('crew tree: absent without the flag', async ({ page }) => {
-  await open(page, '');
+  await open(page, '?crew=0');
   await expect(page.locator('#crew-tree')).toHaveCount(0);
   // the empty mount must not add a grid gap to the Agents tab
   const m = await page.evaluate(() => { const e = document.getElementById('crew-mount')!; return { display: getComputedStyle(e).display, h: e.getBoundingClientRect().height }; });

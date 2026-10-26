@@ -15,7 +15,7 @@ def test_the_recap_as_of_a_minute_is_published_and_stops_at_that_minute(
     run(flow.ingest(match["events"]))
     piece = flow.catch_me_up(30)
     assert piece is not None
-    assert piece["text"].startswith("After 30 minutes,")
+    assert piece["text"].startswith("Score so far:")
     assert piece["word_count"] <= 280
     by_id = {e["event_id"]: e for e in match["events"]}
     assert all(by_id[i]["event_time_ms"] <= 30 * 60_000 for i in piece["source_event_ids"])
@@ -53,7 +53,7 @@ def test_a_retracted_goal_is_left_out_of_the_recap_and_its_recount(
     monkeypatch.setattr(flow, "_ctx", lambda: ctx)
     piece = flow.catch_me_up(5)
     assert piece is not None
-    assert piece["text"].startswith("After 5 minutes, Northgate FC 1-1 Harbour United.")
+    assert piece["text"].startswith("Score so far: Northgate FC 1-1 Harbour United.")
 
 
 def test_a_headline_with_its_two_scores_swapped_does_not_recount(make_workflow, match) -> None:

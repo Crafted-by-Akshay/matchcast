@@ -14,7 +14,10 @@ test('cold-cache load: Watch does not fetch the Analyst files, then every view b
   marks.watchStarted = Date.now() - t0;
   await page.waitForTimeout(2000);
   expect(seen.analyst, 'requests to analyst/ while only Watch runs').toBe(0);
-  await page.click('#tab-analyst'); await ready('analyst', 120_000)(page); marks.analyst = Date.now() - t0;
+  await page.click('#tab-analyst');
+  await expect(page.locator('#al')).toBeVisible({ timeout: 60_000 });   // the default Analyst is the live view; the console files load only after "Full console"
+  expect(seen.analyst, 'the live view does not fetch the console').toBe(0);
+  await page.click('#al-full'); await ready('analyst', 120_000)(page); marks.analyst = Date.now() - t0;
   await page.click('#tab-broadcast'); await ready('broadcast')(page); marks.broadcast = Date.now() - t0;
   test.info().annotations.push({ type: 'timing (ms)', description: JSON.stringify(marks) });
   expect(marks.picker, 'season picker should appear within 5 s of the shell').toBeLessThan(5000);

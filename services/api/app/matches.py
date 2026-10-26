@@ -33,7 +33,7 @@ from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.feeds import FEED_KEYS
 from matchcast_agents.grading import scoreboard
-from matchcast_agents.grading_live import load_live_run
+from matchcast_agents.grading_live import events_digest, load_live_run
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
@@ -1091,22 +1091,29 @@ def build_router(registry: Registry) -> APIRouter:
         flow = await registry.flow_for(session_id, match_id)
         return {"items": flow.store.audit_records(flow.sk, from_seq, limit)}
 
+    @router.get("/matches/{match_id}/scoreboard/input")
+    async def scoreboard_input(match_id: str, session_id: str) -> dict[str, Any]:
+        """The stored events, roster, names and teams of one match: the input of a live scoreboard
+        recording (scripts/scoreboard_live.py). Read-only, with the scoreboard's session check."""
+        flow = await registry.flow_for(session_id, match_id)
+        return {
+            "events": flow.store.events(flow.sk),
+            "roster": flow.roster,
+            "names": flow.names,
+            "teams": flow.clubs,
+        }
+
     @router.get("/matches/{match_id}/scoreboard")
     async def crew_scoreboard(match_id: str, session_id: str) -> dict[str, Any]:
-        """The three-arm crew scoreboard for this match (CREW-5.2). The arms run on the stored
-        events with rules, so the result is cached per match, event count and run date. A new
-        event or a new day runs them again. When a recorded live run is set
-        (MATCHCAST_SCOREBOARD_LIVE_RUN), its arms replace the rules arms as precomputed, labelled
-        with the run id. The route never calls a model (docs/architecture/16, 4.1)."""
+        """The three-arm crew scoreboard for this match (CREW-5.2). The rules arms run on the
+        stored events, cached per match, event count and run date. When a recorded live run of
+        the fixture is set (MATCHCAST_SCOREBOARD_LIVE_RUN), it is shown beside them under
+        ``recorded``: as the same events when its digest matches this match, else as a benchmark
+        on the fixture, labelled not this match. The route never calls a model."""
         flow = await registry.flow_for(session_id, match_id)
         events = flow.store.events(flow.sk)
         run_date = datetime.now(UTC).date().isoformat()
-        live_path = os.environ.get("MATCHCAST_SCOREBOARD_LIVE_RUN", "")
-        try:
-            live_stamp = os.path.getmtime(live_path) if live_path else 0
-        except OSError:  # no file, or removed since it was set: the rules arms show
-            live_stamp = 0
-        key = (flow.sk, len(events), run_date, live_path, live_stamp)
+        key = (flow.sk, len(events), run_date)
         board = _SCOREBOARDS.get(key)
         if board is None:
             match = {
@@ -1115,14 +1122,37 @@ def build_router(registry: Registry) -> APIRouter:
                 "names": flow.names,
                 "teams": flow.clubs,
             }
-            recorded = load_live_run(live_path, match_id=match_id) if live_path else None
-            board = await asyncio.to_thread(
-                scoreboard, match, run_date=run_date, precomputed=recorded
-            )
+            board = await asyncio.to_thread(scoreboard, match, run_date=run_date)
             if len(_SCOREBOARDS) >= SCOREBOARD_CACHE_SIZE:
                 _SCOREBOARDS.pop(next(iter(_SCOREBOARDS)))  # the oldest one out
             _SCOREBOARDS[key] = board
-        return board
+        live_path = os.environ.get("MATCHCAST_SCOREBOARD_LIVE_RUN", "")
+        recorded = (
+            load_live_run(live_path, teams=sorted(flow.clubs.values())) if live_path else None
+        )
+        if recorded is None:
+            return board
+        same = recorded["events_sha256"] == events_digest(events)
+        if same:
+            label = (
+                f"Recorded live run {recorded['run_id']}, {recorded['run_date']}, "
+                "same events as this match"
+            )
+        else:
+            label = (
+                f"Recorded live benchmark: {recorded['fixture']}, seed {recorded['seed']}, "
+                f"{recorded['run_date']}, not this match"
+            )
+        view = {
+            "run_id": recorded["run_id"],
+            "fixture": recorded["fixture"],
+            "run_date": recorded["run_date"],
+            "seed": recorded["seed"],
+            "same_events": same,
+            "label": label,
+            "arms": recorded["arms"],
+        }
+        return {**board, "recorded": view}
 
     @router.get("/matches/{match_id}/trace/{line_id}")
     async def trace(match_id: str, line_id: str, session_id: str) -> dict[str, Any]:

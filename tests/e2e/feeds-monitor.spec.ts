@@ -20,35 +20,38 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
   await expect(f.locator('#mc-feeds')).toBeVisible({ timeout: 240_000 });
   await expect(f.locator('#mc-feeds')).toContainText('simulated');
   await expect(f.locator('#mc-feed-list li')).toHaveCount(6);
-  await expect(f.locator('[data-feed="casual"]')).toContainText('0 aired');
+  await expect(f.locator('[data-feed="casual"]')).toContainText('Verified 0');
   await expect(f.locator('#mc-drop-list')).toContainText('Nothing dropped yet.');
 
   await post(page, { type: 'feed-air', record: casual('P1', 'Northgate FC press high up the pitch.') });
-  await expect(f.locator('[data-feed="casual"]')).toContainText('1 aired');
+  await expect(f.locator('[data-feed="casual"]')).toContainText('Verified 1');
   await expect(f.locator('[data-feed="casual"]')).toContainText('Northgate FC press high up the pitch.');
   await post(page, { type: 'feed-air', record: casual('P1', 'Northgate FC press high up the pitch.') });   // the same publication twice counts once
   await post(page, { type: 'feed-air', record: { ...casual('S0', 'Sentinel for analyst.'), feed: 'analyst' } });   // a line on another feed proves the handler ran after the duplicate
-  await expect(f.locator('[data-feed="analyst"]')).toContainText('1 aired');
-  await expect(f.locator('[data-feed="casual"]')).toContainText('1 aired');
+  await expect(f.locator('[data-feed="analyst"]')).toContainText('Verified 1');
+  await expect(f.locator('[data-feed="casual"]')).toContainText('Verified 1');
 
   await post(page, { type: 'feed-drop', record: { feed: 'ticker', publication_id: 'P2', source_event_ids: ['E13'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'A9' } });
   await expect(f.locator('#mc-drop-list')).toContainText('Ticker · number_mismatch');
   // a reconnect replays the drop it already showed: the same audit id shows once
   await post(page, { type: 'feed-drop', record: { feed: 'ticker', publication_id: 'P2', source_event_ids: ['E13'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'A9' } });
   await post(page, { type: 'feed-air', record: { ...casual('S2', 'Sentinel after the replayed drop.'), feed: 'analyst' } });
-  await expect(f.locator('[data-feed="analyst"]')).toContainText('2 aired');
+  await expect(f.locator('[data-feed="analyst"]')).toContainText('Verified 2');
   await expect(f.locator('#mc-drop-list li', { hasText: 'Ticker · number_mismatch' })).toHaveCount(1);
 
   await expect(f.locator('#mc-pq')).not.toContainText('Northgate FC press');   // derived lines never reach the producer queue
 
   await f.locator('[data-feed="casual"] [data-kill]').click();
   await expect(f.locator('[data-feed="casual"]')).toContainText('Killed on this desk');
+  await expect(f.locator('[data-feed="casual"] b')).toHaveText('Casual · killed');   // the label carries the kill in the half-width cell
   await post(page, { type: 'feed-air', record: casual('P3', 'A line that must not count while the feed is killed.') });
   await post(page, { type: 'feed-air', record: { ...casual('S1', 'Sentinel for analyst again.'), feed: 'analyst' } });
-  await expect(f.locator('[data-feed="analyst"]')).toContainText('3 aired');
-  await expect(f.locator('[data-feed="casual"]')).toContainText('1 aired');
+  await expect(f.locator('[data-feed="analyst"]')).toContainText('Verified 3');
+  await expect(f.locator('[data-feed="casual"]')).toContainText('Verified 1');
   await f.locator('[data-feed="casual"] [data-kill]').click();
   await expect(f.locator('[data-feed="casual"]')).not.toContainText('Killed');
+  await expect(f.locator('[data-feed="casual"] b')).toHaveText('Casual');
+  await expect(f.locator('[data-feed="casual"]')).toContainText('Northgate FC press high up the pitch.');   // the last line comes back on resume: it was kept while the feed was off
 });
 
 test('the desk keys its dedupe by match: the same ids from another match both count', async ({ page }) => {
@@ -60,7 +63,7 @@ test('the desk keys its dedupe by match: the same ids from another match both co
   const streamB = { session_id: 'match-b', match_id: 'm-b' };
   await post(page, { type: 'feed-air', record: { ...casual('P1', 'Match A line.'), stream: streamA } });
   await post(page, { type: 'feed-air', record: { ...casual('P1', 'Match B line.'), stream: streamB } });
-  await expect(f.locator('[data-feed="casual"]')).toContainText('2 aired');   // audit and publication ids restart per match
+  await expect(f.locator('[data-feed="casual"]')).toContainText('Verified 2');   // audit and publication ids restart per match
   const drop = { feed: 'ticker', publication_id: 'P2', source_event_ids: ['E13'], reason_code: 'number_mismatch', repair_count: 1, audit_id: 'A9' };
   await post(page, { type: 'feed-drop', record: { ...drop, stream: streamA } });
   await post(page, { type: 'feed-drop', record: { ...drop, stream: streamB } });

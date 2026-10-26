@@ -10,7 +10,7 @@ const state = (f: import('@playwright/test').Frame) => f.evaluate(() => { const 
 test('Broadcast and the Analyst follow Watch (same score, minute, events; pause carries over)', async ({ page }) => {
   test.setTimeout(420_000);
   const errs = collectErrors(page);
-  await openShell(page, 'watch');
+  await openShell(page, 'watch', '?crew=0');
   const w = await viewFrame(page, 'watch');
   await expect.poll(() => w.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
   await stepSim(w, 2000);   // a couple of match minutes, so there are events and a clock to compare

@@ -98,3 +98,25 @@ def test_an_own_goal_names_no_player(match) -> None:
 def test_an_event_without_a_position_is_not_described(match) -> None:
     kick_off = next(e for e in match["events"] if e["payload"]["type"] == "period_boundary")
     assert describe(ctx(match), kick_off, [Window(0, 60_000)]) is None
+
+
+def test_a_goal_no_gap_fits_is_not_described_at_all(match) -> None:
+    # a goal with only too-short gaps has no description: it is dropped, and the caller sees None
+    goal = event(match, "e10")
+    assert describe(ctx(match), goal, [Window(0, 500)]) is None
+
+
+def test_a_description_whose_gap_comes_more_than_ten_seconds_late_is_not_written(match) -> None:
+    # a shot at 36.9 s with the first gap only from 47 s on: the line would talk about a play
+    # the audience has moved past, by the time it airs
+    shot = event(match, "e9")
+    late_window = [Window(shot["event_time_ms"] + 10_001, 60_000)]
+    assert describe(ctx(match), shot, late_window) is None
+
+
+def test_a_description_starting_exactly_ten_seconds_after_its_event_is_still_written(match) -> None:
+    shot = event(match, "e9")
+    edge_window = [Window(shot["event_time_ms"] + 10_000, 60_000)]
+    found = describe(ctx(match), shot, edge_window)
+    assert found is not None
+    assert found.speak_at_ms - shot["event_time_ms"] == 10_000

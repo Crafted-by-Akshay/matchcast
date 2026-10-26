@@ -22,13 +22,39 @@ for (const [view, width] of [['watch', 1440], ['analyst', 1440], ['broadcast', 1
     test.setTimeout(300_000);
     const errs = collectErrors(page);
     await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
-    await openShell(page, view);
+    await openShell(page, view, view === 'analyst' ? '?crew=0' : '');   // the Analyst console is the ?crew=0 path (the default is the live view, tested below)
     await ready(view)(page);
     const f = await viewFrame(page, view);
     await f.waitForSelector(HUD[view], { state: 'attached', timeout: 60_000 });
     await page.waitForTimeout(3000);   // the panels fill in after the first frames
     expect(await small(f)).toEqual([]);
     expect(await f.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'the larger text does not push the view sideways').toBe(true);
+    expect(errs).toEqual([]);
+  });
+}
+
+// the Analyst's default is the live view, drawn in the shell page itself (crew-analyst.js)
+for (const width of [1440, 390]) {
+  test(`analyst live view at ${width} px: no readable text below 12 px and no sideways scroll`, async ({ page }) => {
+    test.setTimeout(300_000);
+    const errs = collectErrors(page);
+    await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
+    await openShell(page, 'analyst');
+    await page.locator('#al').waitFor({ state: 'visible', timeout: 60_000 });
+    const out = await page.evaluate(() => {
+      const bad: string[] = [];
+      for (const el of document.querySelectorAll('#al *')) {
+        if (el instanceof SVGElement) continue;
+        const text = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent!.trim()).join('');
+        if (!text) continue;
+        const cs = getComputedStyle(el), r = el.getBoundingClientRect(), fs = parseFloat(cs.fontSize);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || r.width < 1 || r.height < 1 || fs === 0) continue;
+        if (fs < 12) bad.push(`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''} ${fs}px "${text.slice(0, 24)}"`);
+      }
+      return bad;
+    });
+    expect(out).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errs).toEqual([]);
   });
 }

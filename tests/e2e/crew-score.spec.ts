@@ -20,7 +20,7 @@ async function open(page: any, query = '?crew=1') {
 }
 
 test('the scoreboard stays out of the Agents tab without the flag', async ({ page }) => {
-  await open(page, '');
+  await open(page, '?crew=0');
   await expect(page.locator('#crew-score')).toBeAttached();
   await expect(page.locator('#crew-score')).toBeEmpty();
 });

@@ -203,35 +203,66 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
 
 // ---- Six-feed monitor (Broadcast): the six English derived feeds, what each has aired, the lines the Verifier dropped and why, and a kill per feed.
 // Derived lines never enter the producer queue: booth lines keep it. The record fields are the matchcast.onair/1 1.2.0 onair and feed_drop packets (AB#498, merged; docs/contracts.md).
-// The shell forwards the stream's onair and feed_drop records as feed-air and feed-drop (AB#499). A kill is sent to the api, which stops that feed at the air gate, once the match run exists and an api is configured; this desk shows the kill at once either way.
+// The shell forwards the stream's onair and feed_drop records as feed-air and feed-drop (AB#499). A kill is sent to the api, which stops that feed at the air gate, once the match is created and an api is configured (a kill made before that is sent then); this desk shows the kill at once either way.
 (() => {
   if (!framed) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const FEEDS = [['casual', 'Casual'], ['analyst', 'Analyst'], ['audio_description', 'Audio description'], ['catch_me_up', 'Catch-me-up'], ['half_time', 'Half-time'], ['ticker', 'Ticker']];
-  const feeds = Object.fromEntries(FEEDS.map(([k, label]) => [k, { label, on: true, aired: 0, last: '' }]));
+  // The one list of feeds that have a writer today (packages/agents feeds.py: a feed with a persona; casual and analyst). Any other feed is Planned until a record for it arrives. Six-up view, AB#475.
+  const WRITERS = ['casual', 'analyst'];
+  const RATE_MIN = 5;   // lines per minute is the lines aired over the last 5 match minutes, by the onair record's match_time_ms
+  const feeds = Object.fromEntries(FEEDS.map(([k, label]) => [k, { label, on: true, aired: 0, dropped: 0, seenRec: false, times: [], last: '' }]));
+  let latestMs = 0;   // the newest match time any feed has aired: the match clock the rate window ends at
   const seen = new Set(), drops = [], droppedIds = new Set();
   const feedOf = (k) => (Object.hasOwn(feeds, k) ? feeds[k] : null);
   const style = document.createElement('style');
   style.textContent = '#mc-feeds{display:flex;flex-direction:column;gap:4px;padding-bottom:6px;border-bottom:1px solid #22395c}'
     + '#mc-feeds ul{margin:0;padding:0;list-style:none}'
-    + '#mc-feeds li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #22395c}'
-    + '#mc-feeds li>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    + '#mc-feeds li[data-off="true"]{opacity:.6}'
-    + '#mc-feeds .mcp-v{font-size:11px;color:#9fb6d6}';
+    + '#mc-feed-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px}'   // six feeds in two columns, so the drops are nearer the top of the desk; a cell takes the column's width and the label wraps
+    + '#mc-feeds li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 8px;align-items:center;padding:3px 0;border-bottom:1px solid #22395c}'   // a card: the label and the Kill / Resume button share the first line, then the counts, then the last line
+    + '#mc-feeds li>b{grid-row:1;grid-column:1;min-width:0}'
+    + '#mc-feeds li>button{grid-row:1;grid-column:2}'
+    + '#mc-feeds li>span{grid-column:1/-1;min-width:0}'
+    + '#mc-feeds li>.mcp-n{grid-row:2;white-space:normal;overflow-wrap:anywhere}'   // Verified, Dropped and the rate wrap in the half-width cell
+    + '#mc-feeds li>.mcp-l{grid-row:3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'   // the last line stays one line (the full text is its tooltip), so the Dropped list keeps its place
+    + '#mc-feeds li[data-off="true"]{opacity:.85}'   // a killed feed is dimmed; its label reads "killed" and the counts line says so
+    + '#mc-booth{padding:3px 0;border-bottom:1px solid #22395c}'
+    + '#mc-feeds .mcp-v{font-size:12px;color:#c3d4ee}';   // on camera the monitor is read at 1080p: 12 px, not the 11 px of the other notes
   document.head.append(style);
   const box = document.createElement('section');
   box.id = 'mc-feeds'; box.setAttribute('aria-label', 'Six feeds, simulated: what each aired, the drops, and a kill per feed');
   box.innerHTML = '<div class="mcp-row"><b>Feeds</b> <span class="mcp-v">simulated · English · no human approval</span></div>'
-    + '<ul id="mc-feed-list">' + FEEDS.map(([k, label]) => '<li data-feed="' + k + '"><b>' + label + '</b><span class="mcp-v"></span><button type="button" data-kill>Kill</button></li>').join('') + '</ul>'
+    + '<div id="mc-booth" class="mcp-v"></div>'
+    + '<ul id="mc-feed-list">' + FEEDS.map(([k, label]) => '<li data-feed="' + k + '"><b>' + label + '</b><button type="button" data-kill>Kill</button><span class="mcp-v mcp-n"></span><span class="mcp-v mcp-l"></span></li>').join('') + '</ul>'
     + '<div><b>Dropped</b> <ul id="mc-drop-list"></ul></div>';
-  document.getElementById('mc-overlay').before(box);
+  document.getElementById('mc-producer').after(box);   // right under the approval queue: a booth line is approved, then a feed airs, then a kill, read top to bottom
   const render = (k) => {
     const s = feeds[k], row = box.querySelector('[data-feed="' + k + '"]');
     row.dataset.off = String(!s.on);
-    row.querySelector('span').textContent = (s.on ? '' : 'Killed on this desk · ') + s.aired + ' aired' + (s.last ? ' · ' + s.last : '');
+    row.querySelector('b').textContent = s.label + (s.on ? '' : ' · killed');   // the label carries the kill at a glance; the status line below it has the count and the last line
+    const counts = row.querySelector('.mcp-n'), lastEl = row.querySelector('.mcp-l');
+    const planned = !WRITERS.includes(k) && !s.seenRec;   // no writer yet: Planned, not 0 lines as if live
+    const killed = s.on ? '' : 'Killed on this desk · ';
+    if (planned) {
+      counts.textContent = killed + 'Planned · no writer yet';
+      lastEl.textContent = ''; lastEl.hidden = true; lastEl.title = '';
+    } else {
+      const inWindow = s.times.filter((t) => t > latestMs - RATE_MIN * 60000 && t <= latestMs).length;
+      counts.textContent = killed + 'Verified ' + s.aired + ' · Dropped ' + s.dropped + ' · ' + (inWindow / RATE_MIN).toFixed(1) + ' lines/min (last ' + RATE_MIN + ' match min)';
+      lastEl.hidden = false;
+      lastEl.textContent = s.last || 'waiting for a moment';   // never blank; textContent escapes the line
+      lastEl.title = s.last ? s.last : '';   // the full line, when the one-line status is cut
+    }
     row.querySelector('[data-kill]').textContent = s.on ? 'Kill' : 'Resume';
   };
-  FEEDS.forEach(([k]) => render(k));
+  const renderAll = () => FEEDS.forEach(([k]) => render(k));   // the rate window ends at the newest match time, so a new line can move every card's rate
+  renderAll();
+  // the booth row: the producer queue's count of booth lines waiting, from the queue the shell sends the approval queue above
+  const renderBooth = (d) => {
+    const n = Array.isArray(d && d.items) ? d.items.length : 0;
+    box.querySelector('#mc-booth').textContent = 'Booth · ' + n + ' waiting for approval' + (d && d.mode === 'demo' ? ' · Auto-air on' : '');
+  };
+  renderBooth(null);
   const renderDrops = () => {
     box.querySelector('#mc-drop-list').innerHTML = drops.length
       ? drops.map((r) => '<li class="mcp-v">' + esc(feedOf(r.feed).label) + ' · ' + esc(r.reason_code) + (r.repair_count ? ' · repaired ' + esc(r.repair_count) + (r.repair_count === 1 ? ' time' : ' times') : '') + '</li>').join('')
@@ -248,17 +279,22 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     const key = recKey(rec, rec.publication_id);
     if (seen.has(key)) return;
     seen.add(key);
+    if (Number.isFinite(rec.match_time_ms) && rec.match_time_ms > latestMs) { latestMs = rec.match_time_ms; if (!s.on) renderAll(); }   // the match clock moves on even for a killed feed
     if (!s.on) return;
-    s.aired++; s.last = rec.text || ''; render(rec.feed);
+    s.seenRec = true; s.aired++; s.last = rec.text || '';
+    if (Number.isFinite(rec.match_time_ms)) { s.times.push(rec.match_time_ms); if (s.times.length > 600) s.times.shift(); }
+    renderAll();
   };
   // the Verifier's drop shows the reason; the line text stays in the audit chain, so the desk shows no text here.
   // A reconnect replays the drops already shown, so each drop is shown once, by its audit id
   const dropped = (rec) => {
-    if (!feedOf(rec.feed)) return;
+    const s = feedOf(rec.feed);
+    if (!s) return;
     const key = recKey(rec, rec.audit_id);
     if (droppedIds.has(key)) return;
     droppedIds.add(key);
-    drops.unshift(rec); drops.length = Math.min(drops.length, 5); renderDrops();
+    s.seenRec = true; s.dropped++;
+    drops.unshift(rec); drops.length = Math.min(drops.length, 5); renderDrops(); render(rec.feed);
   };
   box.querySelector('#mc-feed-list').onclick = (e) => {
     const b = e.target.closest('[data-kill]'); if (!b) return;
@@ -268,6 +304,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   };
   window.addEventListener('message', (e) => {
     const d = e.data || {};
+    if (e.source === window.parent && d.src === 'matchcast-shell' && d.type === 'queue') renderBooth(d);
     if (e.source !== window.parent || d.src !== 'matchcast-shell' || !d.record) return;
     if (d.type === 'feed-air') aired(d.record);
     if (d.type === 'feed-drop') dropped(d.record);

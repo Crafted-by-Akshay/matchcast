@@ -1,24 +1,25 @@
 # 10 Voice and live translation
 
-Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: EXP-8, EXP-16, EXP-17.
+Status: **Agreed design**. Last reviewed 26 Oct 2026. Backlog: EXP-8, EXP-16, EXP-17.
 
 ## 1. Languages and voices
 
 | Language | Code | Voice (commentary) | Voice (analyst) | Status |
 | --- | --- | --- | --- | --- |
 | English | `en` | `en-GB-RyanNeural` | `en-GB-SoniaNeural` | v1 |
-| Spanish | `es` | `es-ES-ElviraNeural` | `es-ES-ElviraNeural` | v1 |
-| Hindi | `hi` | `hi-IN-SwaraNeural` | `hi-IN-SwaraNeural` | v1 |
-| Portuguese | `pt` | `pt-BR-FranciscaNeural` | `pt-BR-FranciscaNeural` | v1.1 (CREW-7.10): browser voice on checked lines, `apps/unified/voices.json` |
+| Spanish | `es` | `es-ES-ElviraNeural` | `es-ES-ElviraNeural` | v1 (Azure neural voice in `apps/unified/voices.json`, spoken through the browser Speech SDK when the api issues a token, else the browser's own voice; the api voice is Planned, section 2) |
+| Hindi | `hi` | `hi-IN-SwaraNeural` | `hi-IN-SwaraNeural` | v1 (Azure neural voice in `apps/unified/voices.json`, spoken through the browser Speech SDK when the api issues a token, else the browser's own voice; the api voice is Planned, section 2) |
+| Portuguese | `pt` | `pt-BR-FranciscaNeural` | `pt-BR-FranciscaNeural` | v1.1 (CREW-7.10): Azure neural voice in `apps/unified/voices.json` on checked lines, same browser path; the api voice is Planned, section 2 |
+| Arabic | `ar` | none (**Planned**) | none | Captions only. A voice waits on a Platform-lane check that the Speech tier covers `ar-SA` |
 | Tamil | `ta` | none | none | Off until a native speaker reviews it |
 
-Voices are configured only in `services/api/config/voices.json`. Player voices for Talk are assigned there by `player_id`. The contracts' `language` enum becomes `en | es | hi | ta` in v1.1.
+Browser voices for the four spoken languages (en, es, pt, hi) are configured in `apps/unified/voices.json`. The api's voices are configured in `services/api/config/voices.json`, and player voices for Talk are assigned there by `player_id`. The contracts' `language` enum becomes `en | es | hi | ta` in v1.1.
 
 ## 2. Text to speech (commentary)
 
 - Synthesis runs in `api` (`services/api/app/voice.py`), never in the browser. It calls the Speech neural TTS REST endpoint on the custom domain (`SPEECH_ENDPOINT`/tts/cognitiveservices/v1) with the api's managed identity (role Cognitive Services User on `spch-matchcast-dev`, S0, East US 2). No key.
 - Built (23 Oct, EXP-16): English only, output MP3 24 kHz mono. Voices live in `services/api/config/voices.json` (commentary, producer, player default). Each player has his own voice: an explicit override by player id wins; every other player keeps one voice from the `players.pool` list, chosen by a stable hash of his id (so he sounds the same every time). The route `GET /v1/matches/{match_id}/lines/{line_id}/audio.mp3` voices a line on air (any age: the route does not apply the 5 s rule), and `GET /v1/voice/audition.mp3` serves the 30-second audition clip. The browser does not call them yet (see 6a). Clips are cached in process (300 at most), keyed by a hash of voice and text; a clip is made only for approved text, so an audio id names only what the api voiced. Limits: 1,000 characters a clip, 30 new clips a minute per IP (a talk reply that is over the allowance is shown unspoken), and a process-wide character budget (`SPEECH_MAX_CHARS`, default 200,000) as a cost cap.
-- Built (24 Oct, EXP-8 task 201): every new clip is also written to the `audio` container of the storage account as `clips/<key>.mp3` (managed identity, Storage Blob Data Contributor; `STORAGE_BLOB_URL`). A clip is looked up in memory, then in Blob, then synthesised; a clip found in Blob is not charged to the character budget, and an `audio_url` from before a restart still plays. A Blob error only means the clip is made fresh and not kept; it never fails a request. Without `STORAGE_BLOB_URL` (local runs, tests) clips stay in process memory. Lifecycle: the clips are small and keyed by a hash, so there is no expiry yet. **Planned:** es and hi voices (waiting for checked translations). The browser plays the api clip when Voice is on; `audio_url` on a stream publication is an api-only extra field, not part of the contract packet.
+- Built (24 Oct, EXP-8 task 201): every new clip is also written to the `audio` container of the storage account as `clips/<key>.mp3` (managed identity, Storage Blob Data Contributor; `STORAGE_BLOB_URL`). A clip is looked up in memory, then in Blob, then synthesised; a clip found in Blob is not charged to the character budget, and an `audio_url` from before a restart still plays. A Blob error only means the clip is made fresh and not kept; it never fails a request. Without `STORAGE_BLOB_URL` (local runs, tests) clips stay in process memory. Lifecycle: the clips are small and keyed by a hash, so there is no expiry yet. **Planned:** es, hi and pt api voices (waiting for checked translations). The browser plays the api clip when Voice is on; `audio_url` on a stream publication is an api-only extra field, not part of the contract packet.
 - Lines older than 5 s (publication expiry) are captioned but not voiced. At most one line is voiced at a time per view; a priority 1 line interrupts.
 - Every line is synthesised live (Akshay, 21 Oct: no pre-rendered audio counted against the plan).
 
@@ -68,13 +69,13 @@ The Broadcast Copilot's picks (highlights, focus, plan; ADR-0019) are not transl
 The api's `/talk` runs the role agent, then the Verifier's number and name check, then Content Safety on the reply. Only a reply that passes all three is voiced: the response carries `audio_url` (`/v1/audio/{id}.mp3`) and `lang: en`. A refused reply is shown as the fixed refusal text with `audio_url: null`, and nothing is spoken. The browser does not yet play `audio_url`; it still uses the SDK voice. Wiring that is Experience-lane work. Content Safety is Azure when `CONTENT_SAFETY_ENDPOINT` is set, otherwise the local word list (**Simulated**).
 
 ## 7. The console's language selector (22 Oct)
-The top-bar selector (the ten feed languages, ADR-0023) is the single viewer language. It re-opens the api stream with `lang` (section 4), switches Watch and Broadcast, and chooses the voice: the checked translation with its voice where there is one (en, es, pt, hi), else the English line. The desk's rules translations log `translation_rejected` through the shell. Ask answers are translated the same way. Not covered: the Analyst view is English only.
+The top-bar selector (the ten feed languages, ADR-0023) is the single viewer language. It re-opens the api stream with `lang` (section 4), switches Watch and Broadcast, and chooses the voice: a checked translation is voiced when its language has a voice (en, es, pt, hi) and captioned only when it does not; with no checked translation the English line is shown and voiced. The desk's rules translations log `translation_rejected` through the shell. Ask answers are translated the same way. Not covered: the Analyst view is English only.
 
 ## 8. Ten feed languages (25 Oct, CREW-7.9 and 7.10, ADR-0023)
 
 - **Languages.** `en, es, pt, hi, ar, fr, de, id, ja, zh-Hans` (Azure `zh-Hans`). The api list is `LANGUAGES` in `translate.py`, the shell and embedded views read `apps/unified/langs.js` (`MC_LANGS`). Tamil stays off.
 - **Checks.** Same as section 4, plus a neutral-wording check: a translation that names a competition or federation is dropped with reason `neutral_wording`. Arabic-Indic and full-width digits compare as numbers.
 - **Picker.** One select in the shell header (the `#lang-pick` control). The choice is kept in `localStorage` (`mc-lang`) and sent to Watch and the Broadcast desk.
-- **Voice.** Browser voice speaks checked lines in `en, es, pt, hi` only (`voices.json`). A language without a voice shows its caption and is not read in the English voice.
+- **Voice.** Browser voice speaks checked lines in `en, es, pt, hi` only (`VOICED` in `apps/unified/voice.js`; the voice names are in `apps/unified/voices.json`). A language without a voice shows its caption and is not read in the English voice. Arabic is **Planned** for voice: its lines are captions only until the Platform-lane check that the Speech tier covers `ar-SA` is done. The frontend prototype's read-aloud still speaks the English fallback in the picked language's voice, so this rule is not yet followed there (`11-frontend.md`, "Not covered").
 - **Limits.** Watch's own picker lists only some feed languages; a line in another language is shown with its checked translation when there is one, and otherwise the English line with a 'no checked translation' label. The Broadcast desk has rules templates for `es` and `hi` only, so a desk on `pt` shows English with the note. The feed-specific spoken routes (casual, audio description, catch-me-up) wait on the feeds thread. The Speech voice for a line on air (`/lines/{id}/audio.mp3`) is still English.
 - **Cost.** `TRANSLATOR_MAX_CHARS` (default 500,000 per api process) is the cap; the Translator resource is S1 in Bicep. The free tier (F0, 2M characters a month) is a Platform-lane change to make in Azure, not in code.

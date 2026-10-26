@@ -174,7 +174,7 @@ test('frames: a real frame after the fixture drops the fixture data (no Simulate
 });
 
 test('agents tab: flag off, the empty #crew-score mount adds no grid gap', async ({ page }) => {
-  await open(page, '');
+  await open(page, '?crew=0');
   const r = await page.evaluate(() => {
     const sc = document.getElementById('crew-score')!;
     const o = document.getElementById('ag-orch')!, a = document.getElementById('aq')!;
@@ -277,7 +277,7 @@ test('frames: a real frame mid-play clears the pending fixture timers; play afte
 });
 
 test('frames: with the flag off, ingest is inert', async ({ page }) => {
-  await open(page, '');
+  await open(page, '?crew=0');
   await ingest(page, [ledger(), spawn(), onair(), drop(), { kind: 'moment', id: 'a', data: {} }]);
   const s = await state(page);
   expect(s.moments).toEqual([]);

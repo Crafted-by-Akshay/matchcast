@@ -99,10 +99,10 @@ test('stream: onair, crew_ledger and crew_spawn events reach CREW.state', async 
   });
 });
 
-test('stream: without ?crew=1 the stream events leave CREW inert', async ({ page }) => {
+test('stream: with ?crew=0 the stream events leave CREW inert', async ({ page }) => {
   const frames = () => 'event: onair\ndata: ' + JSON.stringify({ publication_id: 'P1', feed: 'casual', lang: 'en', text: 'x', source_event_ids: ['E1'], claim_ids: [], match_time_ms: 1, aired_at: 'z', repair_count: 0 }) + '\n\n';
   await withApi({ streamFrames: frames, board: () => ({ status: 200, body: BOARD }) }, async (api, hits, info) => {
-    await openLive(page, api, '');
+    await openLive(page, api, '?crew=0');
     await expect.poll(() => info.streams, { timeout: 30_000 }).toBeGreaterThan(0);
     await after(page, 10);
     expect(await page.evaluate(() => JSON.stringify([CREW.state.lines, CREW.state.feeds.casual, CREW.state.score]))).toBe('[[],[],null]');
