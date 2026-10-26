@@ -111,6 +111,13 @@ class LiveNarrator:
             "personas": list(task.personas),
             "already_said_about_this_play": already_said(ctx, payload),
         }
+        payoff = ctx.extra.get("payoff")
+        if payoff is not None and payoff["cites"][1] == event.get("stream_sequence"):
+            # CREW-3.2: the goal that pays a storyline off says so, with no figures to recount
+            facts["storyline_payoff"] = (
+                "This goal pays off a storyline: the player was followed earlier in the match, "
+                "after the stall."
+            )
         if attempt:
             facts["note"] = (
                 "A previous draft failed verification; stay closer to the claims "
