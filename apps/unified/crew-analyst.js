@@ -146,7 +146,7 @@ const ALV = (() => {
     hostEl.innerHTML = '<div class="alh"><h2>Analyst live view</h2><span class="sim" title="The match is the browser simulator, not a real fixture">Simulated</span><label>Favourite club <select id="al-fav"></select></label><span class="sp"></span><button type="button" id="al-full" title="Open the 27-page enterprise console">Full console</button></div><div id="al-body" class="grid"></div>';
     sec.insertBefore(hostEl, sec.firstChild);
     hostEl.addEventListener('click', (e) => {   // the Maps section's team and map buttons
-      const t = e.target.closest && e.target.closest('[data-team],[data-map]'); if (!t) return;
+      const t = e.target.closest && e.target.closest('#al-maps [data-team],#al-maps [data-map]'); if (!t) return;   // only the Maps buttons: other panels mark their svgs with data-map too
       if (t.dataset.team) mapTeam = t.dataset.team;
       if (t.dataset.map) mapKind = t.dataset.map;
       bodySig = ''; render(); drawMap(true);

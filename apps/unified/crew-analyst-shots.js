@@ -236,10 +236,12 @@ const ALX = (() => {
 
   // window.MC.analysis: the Ask lane's cards. Unknown kinds are Planned, not drawn
   window.MC = window.MC || {};
+  const prevAnalysis = window.MC.analysis || null;   // the layers loaded before this one (maps.js is loaded after it and chains back here)
   window.MC.analysis = {
     render(kind, params, container) {
       if (!container) return { kind, status: 'empty', citations: [] };
       const fn = kinds[kind];
+      if (!fn && prevAnalysis) return prevAnalysis.render(kind, params, container);
       if (!fn) { container.textContent = 'Planned: this view is not built yet.'; return { kind, status: 'planned', citations: [] }; }
       const r = typeof AG !== 'undefined' ? AG.run : null;
       container.setAttribute('data-mc-analysis', kind);

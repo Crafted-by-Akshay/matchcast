@@ -37,7 +37,8 @@ function wiDots(pref, n, fill) {
 function wiTele(c) {
   if (c.change.kind !== 'move') return '<g id="wi-tele"></g>';   // a formation change has no single player to point at
   const pi = c.change.pi, t0 = c.track.base[0].t, i0 = Math.round(c.change.minute * 60 - t0), i = wiIdx(c, WI.t);
-  const from = c.track.base[i0].p[pi], f = wiFwd(c), to = [from[0] + f * c.change.dx, from[1] + c.change.dy];
+  // the engine moves a player in his own team's frame; an away player's frame is turned round, so his dy points the other way on the pitch
+  const from = c.track.base[i0].p[pi], f = wiFwd(c), dyWorld = pi < 11 ? c.change.dy : -c.change.dy, to = [from[0] + f * c.change.dx, from[1] + dyWorld];
   const run = c.track.what.slice(i0, i + 1).map((s) => s.p[pi]);
   const trail = run.length > 1 ? '<polyline points="' + run.map((q) => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ') + '" fill="none" stroke="' + wiColour(c, wiTeamOf(c)) + '" stroke-width=".9" stroke-opacity=".85"/>' : '';
   const arrow = '<defs><marker id="wi-head" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4z" fill="var(--warn)"/></marker></defs>' +
@@ -52,7 +53,7 @@ function wiStage(c) {
     const inner = wiDots('L', n, () => 'none') + wiDots('R', n, home) + (WI.tele ? wiTele(c) : '');
     return pitch(inner, { title: 'Overlay: untouched run (ring) and what if (solid)' });
   }
-  return '<div class="grid"><div class="s6">' + card('Untouched run', 'The same seed with no change', pitch(wiDots('L', n, home), { title: 'Untouched run' })) + '</div>' +
+  return '<div class="grid"><div class="s6">' + card('Untouched run', 'The simulator\'s own re-run of the same seed with no change. It is not the recorded match.', pitch(wiDots('L', n, home), { title: 'Untouched run' })) + '</div>' +
     '<div class="s6">' + card('What if', 'The same seed, one change at minute ' + c.change.minute, pitch(wiDots('R', n, home) + (WI.tele ? wiTele(c) : ''), { title: 'What if' })) + '</div></div>';
 }
 

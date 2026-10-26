@@ -81,7 +81,7 @@ MC_RENDER.heat = (m) => {
     { k: 'stay', l: 'Stay (m)', r: 1, f: (r) => fmt(r.st.stay, 1) },
     { k: 'att', l: 'Attacking third', r: 1, f: (r) => Math.round(100 * r.st.att) + '%' },
   ];
-  return '<div class="grid" id="hm-teams"><div class="s6">' + card(esc(clubName(m.home)) + ' heatmap', 'Time in each zone, both halves, attacking →. Source: tracking frames every 30 match seconds.', team(m.home)) +
+  return '<div class="grid" id="hm-teams"><div class="s6">' + card(esc(clubName(m.home)) + ' heatmap', 'Time in each zone, both halves, attacking →. Simulated: tracking frames every 30 match seconds from the season run.', team(m.home)) +
     '</div><div class="s6">' + card(esc(clubName(m.away)) + ' heatmap', 'Same orientation as the home club: each side attacks right.', team(m.away)) + '</div></div>' +
     '<div class="s12">' + card('Player heatmap', 'Pick a player. Stay is how far, on average, he strays from his average spot.', '<label class="field">Player<select id="hm-sel">' + opts + '</select></label><div id="hm-player" style="margin-top:10px">' + hmPlayer(m, HM.p) + '</div>') + '</div>' +
     '<div class="s12">' + card('Stay and average spot, every player', 'Average spot in the attacking direction', tbl(cols, rows, { id: 'hm-all' })) + '</div></div>';

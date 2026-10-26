@@ -74,10 +74,11 @@ const MAPS = (() => {
     return pitch(s, 'Pass network, passes between a pair (3 or more)');
   }
 
-  function avgPositions(m) {
+  // one team's average shape in its attacking frame, the same frame as the heatmap and the pass network
+  function avgPositions(m, teamKey) {
     const A = avg(m); let s = '';
-    A.forEach((p, i) => { if (!p) return; const home = i < 11; const x = home ? p.x : 105 - p.x, y = home ? p.y : 68 - p.y; s += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.3" fill="' + colour(m, home ? m.home : m.away) + '" stroke="#fff" stroke-width=".4"><title>' + m.pids[i].name + '</title></circle>'; });
-    return pitch(s, 'Average positions, attacking right');
+    A.forEach((p, i) => { if (!p || m.pids[i].team !== teamKey) return; const x = p.x, y = p.y; s += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.3" fill="' + colour(m, teamKey) + '" stroke="#fff" stroke-width=".4"><title>' + m.pids[i].name + '</title></circle>'; });
+    return pitch(s, 'Average positions for ' + teamKey + ', attacking right');
   }
 
   // draws one kind into a container; returns what was drawn (for the Ask card): kind, team, samples, passes
@@ -85,19 +86,29 @@ const MAPS = (() => {
     const m = match();
     const team = (params && params.team) === 'away' ? 'away' : 'home';
     if (!container) return null;
-    if (!m) { container.innerHTML = '<p class="empty">No live match yet. Start the match in Watch: the maps fill in as it plays.</p>'; return { kind, live: false }; }
+    if (!m) { container.innerHTML = '<p class="empty">No live match yet. Start the match in Watch: the maps fill in as it plays.</p>'; return { kind, status: 'empty', live: false, citations: [] }; }
     const teamKey = team === 'away' ? m.away : m.home;
     let svg, passes = 0;
     if (kind === 'heatmap') svg = params && params.team === 'player' ? heatmap(m, 'player', Math.max(0, +params.player || 0)) : heatmap(m, teamKey);
     else if (kind === 'pass_network') { svg = passNetwork(m, teamKey); passes = m.events.filter((e) => e.type === 'pass' && e.team === teamKey).length; }
-    else if (kind === 'avg_positions') svg = avgPositions(m);
-    else { container.innerHTML = '<p class="empty">Unknown map: ' + kind + '.</p>'; return { kind, live: true, error: 'unknown' }; }
+    else if (kind === 'avg_positions') svg = avgPositions(m, teamKey);
+    else { container.innerHTML = '<p class="empty">Unknown map: ' + kind + '.</p>'; return { kind, status: 'empty', live: true, error: 'unknown', citations: [] }; }
     container.innerHTML = svg + '<p class="note">Live from Watch · simulated · ' + S.frames.length + ' positions sampled, one per match second' + (passes ? ' · ' + passes + ' passes' : '') + '</p>';
-    return { kind, live: true, team: teamKey, samples: S.frames.length, passes };
+    return { kind, status: 'ok', live: true, team: teamKey, samples: S.frames.length, passes, citations: [] };
   }
 
   return { start, frame, events, match, render, get samples() { return S.frames.length; } };
 })();
 window.MAPS = MAPS;
+// window.MC.analysis is shared with the shots and momentum modules (crew-analyst-shots.js): this layer takes its own kinds and hands the rest to the layer before it
 window.MC = window.MC || {};
-window.MC.analysis = { render: (kind, params, container) => MAPS.render(kind, params, container) };
+const MAP_KINDS = ['heatmap', 'pass_network', 'avg_positions'];
+const prevAnalysis = window.MC.analysis || null;
+window.MC.analysis = {
+  render(kind, params, container) {
+    if (MAP_KINDS.includes(kind)) return MAPS.render(kind, params, container);
+    if (prevAnalysis) return prevAnalysis.render(kind, params, container);
+    if (container) container.textContent = 'Planned: this view is not built yet.';
+    return { kind, status: 'planned', citations: [] };
+  },
+};

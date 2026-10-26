@@ -20,7 +20,9 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, all) => {
 }, []));
 const HERE = __dirname;
 const REPO = path.resolve(HERE, '..', '..');
-const half = +(args.half || 45), tune = args.tune ? String(args.tune) : '', dt = +(args.dt || 0.02), workers = +(args.workers || 2);
+// the half length played: --half, else the fixture's own (Watch plays that for a season fixture), else 45
+const seasonFixture = args.season ? JSON.parse(fs.readFileSync(path.join(REPO, 'apps/unified/shared/fixtures.json'), 'utf8')).find((x) => x.id === String(args.season)) : null;
+const half = +(args.half || (seasonFixture ? seasonFixture.setup.half : 45)), tune = args.tune ? String(args.tune) : '', dt = +(args.dt || 0.02), workers = +(args.workers || 2);
 const seeds = [];
 for (const part of String(args.seeds || '1-3').split(',')) {
   const [a, b] = part.split('-').map(Number);
@@ -32,6 +34,7 @@ const outDir = args.out ? path.resolve(String(args.out)) : null;
 const whatif = args.move ? (([pi, minute, dx, dy]) => ({ kind: 'move', pi: +pi, minute: +minute, dx: +dx, dy: +dy }))(String(args.move).split(':'))
   : args.whatif ? (([ti, minute, form]) => ({ kind: 'form', ti: +ti, minute: +minute, form }))(String(args.whatif).split(':')) : null;
 const trackSeed = args.track ? +args.track : null;
+if (trackSeed != null && !seeds.includes(trackSeed)) throw new Error('--track ' + trackSeed + ' is not one of the --seeds run');   // fail before the runs, not after them
 // --season N001: play a fixture from shared/fixtures.json (teams, stadium, month, kick-off, half length, formations); the seeds then vary the match
 const season = args.season ? String(args.season) : null;
 
