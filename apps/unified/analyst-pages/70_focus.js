@@ -6,13 +6,13 @@ ICONS.live = 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7v5l3 2';
 ICONS.ask = 'M4 5h16v11H9l-5 4z';
 ICONS.trace = 'M5 4h14v16H5zM8 9h8M8 13h8M8 17h5';
 NAV.splice(0, NAV.length,
-  ['This match', ['live', 'match', 'ask', 'trace', 'library']],
+  ['This match', ['live', 'live-maps', 'match', 'whatif', 'ask', 'trace', 'library']],
   ['More', ['scouting', 'opposition', 'setpieces', 'board', 'explorer', 'reports', 'audit', 'agents', 'access']],
 );
 
-// Five tabs in the match centre. Patterns puts the pass network and the average shape on one tab.
+// Six tabs in the match centre. Patterns puts the pass network and the average shape on one tab; Heatmaps (75_heatmaps.js) puts the zone maps on another. What if is its own page (76_whatif.js).
 MC_RENDER.pat = (m) => MC_RENDER.pass(m) + '<div style="height:14px"></div>' + MC_RENDER.shape(m);
-MC_TABS.splice(0, MC_TABS.length, ['ov', 'Overview'], ['shots', 'Shots'], ['pat', 'Patterns'], ['ply', 'Players'], ['trust', 'Trust · Verifier']);   // "Trust" names the page judges look for (judge re-test, Oct 25)
+MC_TABS.splice(0, MC_TABS.length, ['ov', 'Overview'], ['shots', 'Shots'], ['pat', 'Patterns'], ['heat', 'Heatmaps'], ['ply', 'Players'], ['trust', 'Trust · Verifier']);   // "Trust" names the page judges look for (judge re-test, Oct 25)
 
 const focusLive = () => (window.MC_FEED && window.MC_FEED.on ? window.MC_FEED : null);
 const focusMatch = (arg) => D.match(arg || (focusLive() || {}).fixture) || D.matches[D.matches.length - 1];

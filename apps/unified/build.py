@@ -490,6 +490,10 @@ def build(out_root):
     write(out_root + "broadcast/index.html", build_broadcast())
     write(out_root + "analyst/index.html", build_analyst())
     copy_data(out_root + "analyst/data/")
+    # what-if clips (whatif/clips, written by services/simulation/run.cjs and whatif/build_index.py)
+    os.makedirs(out_root + "analyst/data/whatif", exist_ok=True)
+    for f in glob.glob(U + "whatif/clips/*.json"):
+        shutil.copy(f, out_root + "analyst/data/whatif/" + os.path.basename(f))
     os.makedirs(out_root + "shared", exist_ok=True)
     shutil.copy(W + "players.json", out_root + "shared/players.json")
     shutil.copy(W + "intl.json", out_root + "shared/intl.json")
