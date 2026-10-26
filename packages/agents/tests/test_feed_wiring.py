@@ -82,3 +82,76 @@ def test_a_description_is_not_aired_when_a_booth_line_speaks_in_its_window(match
     flow._save_line(intruder)
     run(flow._air_held_audio(ends + 1))
     assert not [line for line in flow.store.lines(flow.sk) if line.line_id == draft.line_id]
+
+
+def test_the_colour_line_is_spoken_after_its_play_by_play(match) -> None:
+    from matchcast_agents.messages import LineRecord
+    from matchcast_agents.workflow import commentary_spans
+
+    def booth(persona: str, text: str) -> LineRecord:
+        return LineRecord(
+            line_id=f"line-{persona}",
+            moment_id="m-e1",
+            claim_ids=[],
+            persona=persona,
+            text=text,
+            status="published",
+            created_at="2026-10-26T00:00:00.000Z",
+            snapshot_revision=1,
+        )
+
+    pbp = booth("booth:pbp", "one two three four five six")
+    colour = booth("booth:colour", "seven eight")
+    spans = commentary_spans([colour, pbp], {"e1": 1_000})
+    pbp_span, colour_span = spans[0], spans[1]
+    assert pbp_span[0] == 1_000
+    assert colour_span[0] == pbp_span[1], "the colour line starts when the play-by-play ends"
+
+
+def test_held_descriptions_never_overlap_one_another(match) -> None:
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = ("ticker", "audio_description")
+    run(flow.ingest(match["events"]))
+    drafted = [
+        r["details"]
+        for r in flow.store.audit_records(flow.sk)
+        if r["action"] == "line_drafted" and "speak_at_ms" in r["details"]
+    ]
+    assert len(drafted) >= 2, "the fixture has descriptions close enough to test"
+    spans = sorted((d["speak_at_ms"], d["ends_at_ms"]) for d in drafted)
+    assert all(end <= start for (_, end), (start, _) in zip(spans, spans[1:]))
+
+
+def test_a_retraction_that_arrives_while_a_description_is_held_stops_it(match) -> None:
+    import copy
+
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = ("ticker", "audio_description")
+    run(flow.ingest(match["events"][:12]))
+    held = list(flow._pending_audio)
+    assert held, "the first events leave a description held"
+    draft, _claims, _speak, ends = held[0]
+    eid = draft.line_id.removeprefix("line-audio-")
+    # the engine takes the event back before the description's window ends
+    target = next(e for e in match["events"] if e["event_id"] == eid)
+    shift = ends + 1 - target["event_time_ms"]  # the clock moves with the event time
+    retraction = copy.deepcopy(match["events"][11])
+    retraction["clock"] = {
+        **target["clock"],
+        "period_elapsed_ms": target["clock"]["period_elapsed_ms"] + shift,
+    }
+    retraction.update(
+        event_id="r-held",
+        stream_sequence=match["events"][-1]["stream_sequence"] + 1,
+        event_time_ms=ends + 1,
+    )
+    retraction["payload"] = {
+        "type": "retraction",
+        "target_event_id": eid,
+        "target_stream_sequence": target["stream_sequence"],
+        "target_revision": 1,
+        "new_revision": 2,
+        "reason": "fixture",
+    }
+    run(flow.ingest(match["events"][:12] + [retraction]))
+    assert not [line for line in flow.store.lines(flow.sk) if line.line_id == draft.line_id]

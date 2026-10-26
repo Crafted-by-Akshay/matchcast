@@ -64,6 +64,31 @@ LIVE_FEED_LINES = ("ticker", "audio_description")
 FEED_HORIZON_MS = MAX_LAG_MS + 5_000
 # booth lines that may still be spoken: anything but a rejected, killed or abstained line
 SILENT_STATUSES = ("rejected", "killed", "abstained")
+
+
+def commentary_spans(lines: list[LineRecord], at_by_id: dict[str, int]) -> list[tuple[int, int]]:
+    """Where the booth's lines are or may be spoken, as (start, end) in match milliseconds.
+
+    The play-by-play speaks at its moment's event time. The colour line speaks after it, so it
+    starts when the play-by-play ends (workflow._verify_line's order: colour reacts to the call).
+    """
+    booth = [
+        line
+        for line in lines
+        if line.persona in BOOTH
+        and line.status not in SILENT_STATUSES
+        and line.moment_id.removeprefix("m-") in at_by_id
+    ]
+    spans: list[tuple[int, int]] = []
+    free_at: dict[str, int] = {}
+    for line in sorted(booth, key=lambda ln: (ln.moment_id, BOOTH.index(ln.persona))):
+        start = max(at_by_id[line.moment_id.removeprefix("m-")], free_at.get(line.moment_id, 0))
+        span = spoken_span(start, line.text)
+        free_at[line.moment_id] = span[1]
+        spans.append(span)
+    return spans
+
+
 MINUTE_MENTION = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)  # "minute 12": a log minute
 
 TALK_PHRASES = {
@@ -446,6 +471,8 @@ class MatchWorkflow:
         # audio descriptions held until no booth line can still overlap them: (draft, claims,
         # speak_at_ms, ends_at_ms). Held in memory: a restart drops them, so they do not air.
         self._pending_audio: list[tuple[DraftLine, list[dict[str, Any]], int, int]] = []
+        # every description's (speak, end) span, held or aired: a new one is placed around them
+        self._audio_spans: list[tuple[int, int]] = []
         self._restore_feed_state()
         self.stats = {
             "events": 0,
@@ -770,23 +797,35 @@ class MatchWorkflow:
         draft, claims = next((d, c) for d, c in audio_drafts(ctx, windows) if d.line_id == line_id)
         _, length = spoken_span(0, draft.text)
         speak = placed[eid].speak_at_ms
+        self._audio_spans.append((speak, speak + length))
         self._pending_audio.append((draft, claims, speak, speak + length))
 
     async def _air_held_audio(self, at_ms: int) -> None:
-        """Air each held description whose window has ended, unless a booth line speaks in it."""
+        """Air each held description whose window has ended, unless it no longer may.
+
+        A description is skipped when a booth line speaks in its window, or when the engine took
+        its event back (a retraction or a correction stored by now). Each item leaves the hold only
+        once it is handled, so a failure leaves it to be tried again.
+        """
         due = [p for p in self._pending_audio if p[3] <= at_ms]
         if not due:
             return
-        self._pending_audio = [p for p in self._pending_audio if p[3] > at_ms]
         ctx = self._ctx()
         busy = self._booth_spans(ctx)
-        for draft, claims, speak, ends in due:
-            if [span for span in busy if span[0] < ends and speak < span[1]]:
-                continue  # a booth line speaks in this window: the description is not aired
+        taken_back = {
+            e["payload"]["target_event_id"]
+            for e in ctx.events
+            if e["payload"]["type"] in ("retraction", "correction")
+        }
+        for item in due:
+            draft, claims, speak, ends = item
             eid = draft.line_id.removeprefix("line-audio-")
-            await self._air_feed_line(
-                ctx, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
-            )
+            speaking = [span for span in busy if span[0] < ends and speak < span[1]]
+            if eid not in taken_back and not speaking:
+                await self._air_feed_line(
+                    ctx, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
+                )
+            self._pending_audio.remove(item)
 
     async def _air_feed_line(
         self,
@@ -825,16 +864,9 @@ class MatchWorkflow:
         await self._verify_line(ctx, task, claims, draft, attempt=1, timing=timing)
 
     def _booth_spans(self, ctx: MatchContext) -> list[tuple[int, int]]:
-        """Where the booth's lines are or may be spoken: each from its moment's event time."""
+        """Where the booth's lines are or may be spoken (see commentary_spans)."""
         at_by_id = {e["event_id"]: int(e["event_time_ms"]) for e in ctx.events}
-        spans = []
-        for line in self.store.lines(self.sk):
-            if line.persona not in BOOTH or line.status in SILENT_STATUSES:
-                continue
-            start = at_by_id.get(line.moment_id.removeprefix("m-"))
-            if start is not None:
-                spans.append(spoken_span(start, line.text))
-        return spans
+        return commentary_spans(list(self.store.lines(self.sk)), at_by_id)
 
     def _commentary_windows(self, ctx: MatchContext, event: dict[str, Any]) -> list[Window]:
         """The commentary gaps up to the feed horizon after an event, from the booth's lines so far.
@@ -842,7 +874,8 @@ class MatchWorkflow:
         A later booth line can still land in a gap read here; the check when a description is due
         (_air_held_audio) is what keeps it from talking over the commentary.
         """
-        return gaps(self._booth_spans(ctx), end_ms=int(event["event_time_ms"]) + FEED_HORIZON_MS)
+        spans = [*self._booth_spans(ctx), *self._audio_spans]
+        return gaps(spans, end_ms=int(event["event_time_ms"]) + FEED_HORIZON_MS)
 
     def _note_aired(self, event: dict[str, Any]) -> None:
         """A verified line of this event's moment aired: the match is quiet no longer."""
