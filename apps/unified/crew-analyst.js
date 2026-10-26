@@ -26,10 +26,10 @@ const ALV = (() => {
     + '#al table{width:100%;border-collapse:collapse;font-size:12px}#al th,#al td{text-align:left;padding:4px 6px 4px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}#al th{color:var(--muted);font-weight:600;border-top:0}'
     + '#al svg{display:block;width:100%;height:auto;max-width:100%}'
     + '#al [data-side="0"]{--side:var(--accent)}#al [data-side="1"]{--side:var(--hot)}'
-    + '#al .key{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}#al .key span{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--side);color:var(--text)}#al .key span[data-fav="1"]{background:var(--side);color:#fff;font-weight:700}'
+    + '#al .key{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}#al .key > span{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--side);color:var(--text)}#al .key > span[data-fav="1"]{background:var(--side);color:#fff;font-weight:700}'
     + '#al [data-fav="1"]{font-weight:700}#al tr[data-fav="1"] td:first-child::before,#al li[data-fav="1"] b::before{content:"\\2605  ";color:var(--side)}'
     + '#al .gauge{height:10px;border-radius:6px;background:var(--bg3);overflow:hidden;margin:3px 0 8px}#al .gauge i{display:block;height:100%;background:var(--ok)}#al .gauge.chaos i{background:var(--warn)}'
-    + '#al .share{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:3px 0 4px}#al .share i{display:block;background:var(--side)}'
+    + '#al .share{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:3px 0 4px}#al .share i{display:block;background:var(--side)}#al .share i[data-side="1"]{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.75) 0 2px,transparent 2px 5px)}'
     + '.view.alv .wait{display:none}#al-bar{position:absolute;top:0;left:0;right:0;height:40px;z-index:3;display:flex;align-items:center;padding:0 12px;background:var(--bg2);border-bottom:1px solid var(--line)}#al-bar[hidden]{display:none}#al-back{font:600 12px var(--font,system-ui,sans-serif);min-height:32px;padding:4px 12px;border-radius:999px;background:var(--bg3);color:var(--text);border:1px solid var(--accent);cursor:pointer}';
 
   const run = () => (typeof AG !== 'undefined' && AG.run) || null;
@@ -96,15 +96,20 @@ const ALV = (() => {
     if (!shots.length) return h + '<p class="empty">No shots yet.</p></section>';
     const n = [0, 0], xg = [0, 0]; let goals = 0, saves = 0;
     for (const e of shots) { const s = sideOf(r, e.team); n[s]++; xg[s] += +e.data.xg || 0; if (e.data.fate === 'goal') goals++; else if (e.data.fate === 'save') saves++; }
-    const sum = 'Shot map, simulated match. ' + shots.length + ' shots: ' + cl[0] + ' ' + n[0] + ', ' + cl[1] + ' ' + n[1] + '. Total xG ' + cl[0] + ' ' + f2(xg[0]) + ', ' + cl[1] + ' ' + f2(xg[1]) + '. ' + goals + (goals === 1 ? ' goal' : ' goals') + '. Dot size is the shot\'s xG; filled is a goal, half filled a save, hollow off target.';
+    const sum = 'Shot map, simulated match. ' + shots.length + ' shots: ' + cl[0] + ' ' + n[0] + ', ' + cl[1] + ' ' + n[1] + '. Total xG ' + cl[0] + ' ' + f2(xg[0]) + ', ' + cl[1] + ' ' + f2(xg[1]) + '. ' + goals + (goals === 1 ? ' goal' : ' goals') + '. Dot size is the shot\'s xG; filled is a goal, half filled a save, hollow off target. ' + cl[1] + ' shots carry a cross.';
     const dots = shots.map((e) => {
       const s = sideOf(r, e.team), d = e.data, op = d.fate === 'goal' ? 1 : d.fate === 'save' ? 0.5 : 0.12;
-      return '<circle data-fate="' + esc(d.fate || 'miss') + '"' + (d.fate === 'save' ? ' stroke-dasharray="1 0.7"' : '') + ' data-xg="' + f2(d.xg) + '" data-side="' + s + '"' + fav(s, f) + ' cx="' + Math.max(0, Math.min(105, +d.x)).toFixed(1) + '" cy="' + Math.max(0, Math.min(68, +d.y)).toFixed(1) + '" r="' + (1 + 4.2 * Math.sqrt(Math.max(0, +d.xg || 0))).toFixed(2)
+      const circle = '<circle data-fate="' + esc(d.fate || 'miss') + '"' + (d.fate === 'save' ? ' stroke-dasharray="1 0.7"' : '') + ' data-xg="' + f2(d.xg) + '" data-side="' + s + '"' + fav(s, f) + ' cx="' + Math.max(0, Math.min(105, +d.x)).toFixed(1) + '" cy="' + Math.max(0, Math.min(68, +d.y)).toFixed(1) + '" r="' + (1 + 4.2 * Math.sqrt(Math.max(0, +d.xg || 0))).toFixed(2)
         + '" fill="var(--side)" fill-opacity="' + op + '" stroke="var(--side)" stroke-width="' + (s === f ? 0.9 : 0.4) + '"><title>' + esc(mn(e.minute) + ' ' + (e.player || '') + ' xG ' + f2(d.xg) + ' ' + (d.fate || '')) + '</title></circle>';
+      // second club: a cross at the dot's centre, so the clubs differ by shape as well as colour
+      const cx = Math.max(0, Math.min(105, +d.x)), cy = Math.max(0, Math.min(68, +d.y)), k = 1 + 2.4 * Math.sqrt(Math.max(0, +d.xg || 0));
+      const dd = 'M' + (cx - k).toFixed(1) + ' ' + (cy - k).toFixed(1) + 'L' + (cx + k).toFixed(1) + ' ' + (cy + k).toFixed(1) + 'M' + (cx - k).toFixed(1) + ' ' + (cy + k).toFixed(1) + 'L' + (cx + k).toFixed(1) + ' ' + (cy - k).toFixed(1);
+      // a background halo under a text-coloured cross, so it reads on a solid goal dot, a half-filled save and a hollow miss
+      return circle + (s === 1 ? '<path data-mark="halo" aria-hidden="true" fill="none" stroke="var(--bg)" stroke-width="1.9" stroke-linecap="round" pointer-events="none" d="' + dd + '"/><path data-mark="cross" data-side="1" aria-hidden="true" fill="none" stroke="var(--text)" stroke-width="0.8" stroke-linecap="round" pointer-events="none" d="' + dd + '"/>' : '');
     }).join('');
-    h += '<div class="key"><span data-side="0"' + fav(0, f) + '>' + esc(cl[0]) + ' · ' + n[0] + ' shots · xG ' + f2(xg[0]) + '</span><span data-side="1"' + fav(1, f) + '>' + esc(cl[1]) + ' · ' + n[1] + ' shots · xG ' + f2(xg[1]) + '</span></div>'
+    h += '<div class="key"><span data-side="0"' + fav(0, f) + '><span aria-hidden="true">\u25CF</span> ' + esc(cl[0]) + ' · ' + n[0] + ' shots · xG ' + f2(xg[0]) + '</span><span data-side="1"' + fav(1, f) + '><span aria-hidden="true">\u2715</span> ' + esc(cl[1]) + ' · ' + n[1] + ' shots · xG ' + f2(xg[1]) + '</span></div>'
       + '<svg data-map="shots" viewBox="0 0 105 68" role="img" aria-label="' + esc(sum) + '">' + PITCH + dots + '</svg>'
-      + '<p class="m">Key: ' + goals + ' filled (goal), ' + saves + ' half filled with a dashed edge (save), ' + (shots.length - goals - saves) + ' hollow (off target). Positions are as the match recorded them.</p>';
+      + '<p class="m">Key: ' + goals + ' filled (goal), ' + saves + ' half filled with a dashed edge (save), ' + (shots.length - goals - saves) + ' hollow (off target). ' + esc(cl[0]) + ' is a plain dot, ' + esc(cl[1]) + ' a dot with a cross. Positions are as the match recorded them.</p>';
     return h + '</section>';
   }
 
