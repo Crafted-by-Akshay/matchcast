@@ -16,10 +16,11 @@ const MCRes = (() => {
     if (base > 1 && r.getPixelRatio() !== k) { r.setPixelRatio(k); window.__mc.composer.setPixelRatio(k); }
   };
   const feed = (t) => {   // one animation frame at time t (ms)
-    if (!w0 || document.hidden) { w0 = t; n = 0; return; }   // a hidden tab pauses the frames: start the window again
+    if (!w0 || document.hidden || t - w0 > WIN * 2.5) { w0 = t; n = 0; return; }   // first frame, a hidden tab, or a gap (frames do not fire while hidden or offscreen): start the window again
     n++;
     if (t - w0 < WIN) return;
     const fps = n * 1000 / (t - w0); w0 = t; n = 0; last = Math.round(fps);
+    if (startup) return;   // first-load jank (shader compile) is not a verdict on the machine
     if (base <= 1) return;   // nothing to drop to (or the pass has not started)
     if (fps < LOW) { calm = 0; if (!slow) { slow = true; drops++; apply(); } }
     else if (slow && drops < 2 && fps >= HIGH && ++calm >= CALM) { slow = false; calm = 0; apply(); }
@@ -30,10 +31,12 @@ const MCRes = (() => {
     low() { const r = R(); if (!r || startup) return; if (!base) base = r.getPixelRatio(); if (base <= 1) return; startup = true; apply(); timer = setTimeout(() => MCRes.full(), 20000); if (!raf) raf = requestAnimationFrame(tick); },
     full() { clearTimeout(timer); if (!startup) return; startup = false; apply(); },
     feed, reset() { slow = false; drops = 0; calm = 0; w0 = 0; n = 0; apply(); },   // for tests, which feed their own frame times
+    restart() { w0 = 0; n = 0; },
     stop() { cancelAnimationFrame(raf); raf = 0; }, state: () => ({ base, startup, slow, drops, fps: last })
   };
 })();
 window.__mcRes = MCRes;
+document.addEventListener('visibilitychange', () => MCRes.restart());
 (() => {
   const Q = new URLSearchParams(location.search);
   const ready = setInterval(() => {

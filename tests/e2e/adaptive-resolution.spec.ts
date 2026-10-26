@@ -5,8 +5,9 @@ import { collectErrors } from './helpers';
 // until the first verified card. Below 24 fps over a 2 s window it drops to ratio 1; it returns after three windows at 50 fps
 // or better; a window between 24 and 50 fps does not count towards that; a second drop is kept. The test feeds the sampler
 // frame times by hand (window.__mcRes.feed), so it does not depend on how fast the sandbox renders.
+test.use({ deviceScaleFactor: 2 });   // the 1x test below opens its own context
+
 test.describe('Adaptive 3D resolution', () => {
-  test.use({ deviceScaleFactor: 2 });
 
   test('the 3D pass drops to pixel ratio 1 when fps stays low, and returns only when it recovers comfortably', async ({ page }) => {
     test.setTimeout(240_000);
@@ -46,6 +47,35 @@ test.describe('Adaptive 3D resolution', () => {
     expect(r.state3.drops).toBe(2);
     expect(errs).toEqual([]);
   });
+});
+
+test('a long gap between frames (hidden tab, offscreen frame) restarts the window and does not drop the ratio', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.goto('/watch/index.html?seed=3&half=5&condense=0', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => (window as any).__mcRes?.state().startup === true, null, { timeout: 240_000 });
+  const r = await page.evaluate(() => {
+    const M = (window as any).__mcRes, rend = (window as any).__mc.composer.renderer;
+    M.stop(); M.full(); M.reset();
+    const before = rend.getPixelRatio();
+    M.feed(1000); M.feed(60000);   // one frame after a minute away: not a 0.02 fps window
+    for (let t = 60000; t < 62200; t += 16.7) M.feed(t);   // and then 60 fps
+    return { before, pr: rend.getPixelRatio(), s: M.state() };
+  });
+  expect(r.before).toBeGreaterThan(1);
+  expect(r.pr).toBe(r.before);
+  expect(r.s).toMatchObject({ slow: false, drops: 0 });
+});
+
+test('windows measured during the first-load hold do not count', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.goto('/watch/index.html?seed=3&half=5&condense=0', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => (window as any).__mcRes?.state().startup === true, null, { timeout: 240_000 });
+  const s = await page.evaluate(() => {
+    const M = (window as any).__mcRes; M.stop(); M.reset();
+    let t = 1000; M.feed(t); for (let i = 0; i < 30; i++) { t += 100; M.feed(t); }   // 10 fps while the hold is on
+    return M.state();
+  });
+  expect(s).toMatchObject({ startup: true, slow: false, drops: 0 });
 });
 
 test('a 1x screen never changes ratio, whatever the frame rate', async ({ browser }) => {

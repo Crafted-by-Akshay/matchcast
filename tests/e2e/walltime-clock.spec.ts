@@ -43,6 +43,9 @@ test.describe('Wall-time match clock', () => {
       // many small frames add up to the same play time as the wall time they cover
       let sum = 0; for (let i = 0; i < 10; i++) sum += run(25).t; out.sum = sum;
       out.stall = run(5000);   // a five second stall (tab throttled, software GL)
+      // frame() itself, where the step cap truly binds: a 5 s budget asked of one call
+      const direct = (sp: number) => { S.speed = sp; const t0 = S.t; mc.frame(5, false); return S.t - t0; };
+      out.directCap = direct(1); out.directCap2 = direct(2); S.speed = 1;
       out.after = run(16);     // and the clock carries on
       S.speed = 2; out.fast = run(250); out.fastStall = run(5000); S.speed = 1;
       return out;
@@ -54,7 +57,11 @@ test.describe('Wall-time match clock', () => {
     expect(r.sum, 'ten 25 ms frames').toBeGreaterThan(0.25 - 0.021);
     expect(r.sum).toBeLessThan(0.25 + 0.021);
     expect(r.stall.t, 'a stall does not freeze the clock').toBeGreaterThan(0.2);
-    expect(r.stall.t, 'but one frame spends at most 15 fixed steps (plus the carried remainder)').toBeLessThanOrEqual(0.3 + 0.021);
+    expect(r.stall.t, 'bounded by the loop frame cap of 0.25 s (plus the carried remainder)').toBeLessThanOrEqual(0.3 + 0.021);
+    expect(r.directCap, 'frame(5) at 1x: 15 steps plus the carried remainder').toBeGreaterThan(0.28);
+    expect(r.directCap).toBeLessThanOrEqual(0.3 + 0.021);
+    expect(r.directCap2, 'frame(5) at 2x: 30 steps').toBeGreaterThan(0.58);
+    expect(r.directCap2).toBeLessThanOrEqual(0.6 + 0.021);
     expect(r.after.t, 'the next frame is normal again').toBeLessThan(0.021);
     expect(r.fast.t, '2x: 250 ms of wall time is 0.5 s of play, under the 2x cap of 0.6 s').toBeGreaterThan(0.5 - 0.021);
     expect(r.fast.t).toBeLessThan(0.5 + 0.021);
