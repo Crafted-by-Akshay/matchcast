@@ -127,7 +127,7 @@ class NarratorRules:
             payoff = ctx.extra.get("payoff")
             paid = payoff is not None and payoff["cites"][1] == event["stream_sequence"]
             pay = f" {who} was the storyline after the stall, and this goal pays it off."
-            pay_casual = " The storyline after the stall pays off."
+            pay_casual = " Storyline pays off."  # short: a long name must still leave room for it
             if paid:
                 analyst = _with_clause(analyst, pay, "analyst")
             casual = f"Goal for {club}! {who} scores, goal number {n} for them. " + why[

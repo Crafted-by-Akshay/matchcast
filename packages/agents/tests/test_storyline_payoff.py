@@ -72,5 +72,6 @@ def test_the_casual_line_carries_the_payoff_too(match, monkeypatch) -> None:
         for line in flow.store.lines(flow.sk)
         if line.persona == "casual" and line.moment_id == moment
     )
-    assert "storyline after the stall pays off" in casual.text
+    assert "Storyline pays off." in casual.text
+    assert casual.status == "published" and all(check.passed for check in casual.checks)
     assert len(casual.text) <= 140
