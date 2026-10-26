@@ -13,7 +13,9 @@ a saved export (`--match`, a JSON file with `events`, `roster`, `names` and `tea
 api builds for a match). Each arm has its own budget of --max-calls model calls, one per
 complete() call (the SDK may retry one request inside a call). Calls past a budget are refused and
 fall back to the rules. The record says how many were sent, failed or refused, and how many agent
-calls a fallback answered. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
+calls a fallback answered. Each finished arm is kept in <out>.partial as it completes; an interrupt
+inside an arm loses only that arm's calls, which are not yet kept. Needs FOUNDRY_PROJECT_ENDPOINT,
+FOUNDRY_MODEL_DEPLOYMENT and `az login`.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from matchcast_agents.grading import SEED_RATE
@@ -56,6 +58,25 @@ def _iso_date(text: str) -> str:
         return date.fromisoformat(text).isoformat()
     except ValueError as error:
         raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from error
+
+
+def _stamp() -> str:
+    return datetime.now(UTC).strftime(
+        "%Y%m%dT%H%M%S%fZ"
+    )  # to the microsecond: no two move-asides clash
+
+
+def _replace(path: Path, data: dict) -> None:
+    """Write ``data`` to ``path`` whole or not at all: a temp file, then a rename, so an interrupted
+    write never truncates what was there."""
+    temp = path.with_name(path.name + ".tmp")
+    temp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    os.replace(temp, path)
+
+
+def _replaceable(path: Path) -> bool:
+    """Can ``path`` be written whole now: both the path and its temp file, which _replace uses?"""
+    return _writable(path) and _writable(path.with_name(path.name + ".tmp"))
 
 
 def _writable(out: Path) -> bool:
@@ -122,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     if problem := match_problem(match):
         print(f"{args.match or args.api}: {problem}", file=sys.stderr)
         return 1
-    if not _writable(args.out):
+    if not _replaceable(args.out):
         print(
             f"--out {args.out} must be a plain file path in a folder that can be written",
             file=sys.stderr,
@@ -131,7 +152,36 @@ def main(argv: list[str] | None = None) -> int:
     if not os.environ.get("FOUNDRY_PROJECT_ENDPOINT"):
         print("FOUNDRY_PROJECT_ENDPOINT is not set; the calls would all fail", file=sys.stderr)
         return 2
+    partial = args.out.with_name(args.out.name + ".partial")
+    if not _replaceable(partial):
+        print(
+            f"{partial} cannot be written; the arms kept as they finish go there", file=sys.stderr
+        )
+        return 2
+    if partial.exists():  # a partial from an earlier run holds its paid arms: keep it, aside
+        partial.replace(partial.with_name(f"{partial.name}.{_stamp()}"))
     print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)
+    arms: dict[str, dict] = {}
+
+    def keep_arm(key: str, arm: dict) -> None:
+        # each arm is written as it completes, so a later failure does not lose a paid arm
+        arms[key] = arm
+        kept = True
+        try:
+            _replace(partial, {"kind": "crew_live_partial", "arms": arms})
+        except OSError as error:  # the run goes on; the arm is printed so it is not lost
+            kept = False
+            print(f"could not keep {key} in {partial} ({error}); its arm follows", file=sys.stderr)
+            print(json.dumps({key: arm}, sort_keys=True), file=sys.stderr)
+        cost = arm["cost"]
+        where = f"kept in {partial}" if kept else "NOT kept (printed above)"
+        print(
+            f"{key}: {arm['lines_aired']} lines, {arm['wrong_lines_aired']} wrong, "
+            f"{cost['model_calls']} calls sent, {cost['model_errors']} failed, "
+            f"{cost['budget_refused']} refused; {where}",
+            file=sys.stderr,
+        )
+
     record = live_run(
         match,
         client=FoundryModelClient(),
@@ -140,16 +190,15 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         rate=args.rate,
         run_date=args.run_date,
+        on_arm=keep_arm,
     )
-    args.out.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
-    for key, arm in record["arms"].items():
-        cost = arm["cost"]
-        print(
-            f"{key}: {arm['lines_aired']} lines, {arm['wrong_lines_aired']} wrong, "
-            f"{cost['model_calls']} calls sent, {cost['model_errors']} failed, "
-            f"{cost['budget_refused']} refused",
-            file=sys.stderr,
-        )
+    try:
+        _replace(args.out, record)
+    except OSError as error:  # the paid record is printed, so it is not lost with the run
+        print(f"could not write {args.out} ({error}); the record follows", file=sys.stderr)
+        print(json.dumps(record, sort_keys=True), file=sys.stderr)
+        return 1
+    partial.unlink(missing_ok=True)
     print(f"run {record['run_id']} written to {args.out}", file=sys.stderr)
     return 0
 

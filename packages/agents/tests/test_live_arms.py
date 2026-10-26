@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from conftest import run
-from matchcast_agents.grading import SEED_RATE, _report
+from matchcast_agents.grading import ARMS, SEED_RATE, _report
 from matchcast_agents.grading_live import (
     BudgetedClient,
     CallBudget,
@@ -66,6 +66,20 @@ def test_live_arms_that_always_fail_are_answered_by_the_rules(match) -> None:
         assert arm["cost"]["answered_by_rules"] > 0, key
         assert arm["run_id"], key
     assert client.calls <= 3 * 20
+
+
+def test_each_arm_is_handed_over_as_it_completes(match) -> None:
+    client = CountingClient(error=ModelError("no model in this test"))
+    seen = []
+    live_run(
+        match,
+        client=client,
+        max_calls=3,
+        fixture="M001",
+        run_date="2026-10-25",
+        on_arm=lambda key, arm: seen.append((key, arm["run_id"])),
+    )
+    assert [key for key, _ in seen] == list(ARMS)  # in order, one call per arm, before the next
 
 
 def test_a_live_run_record_names_its_fixture_teams_and_events_and_loads_back(
@@ -175,6 +189,24 @@ def test_a_recording_is_read_for_its_teams_seed_and_rate(tmp_path) -> None:
     assert load_live_run(path, teams=TEAMS, seed=7) is None
     assert load_live_run(path, teams=TEAMS, rate=0.5) is None
     assert load_live_run(str(tmp_path / "missing.json"), teams=TEAMS) is None
+
+
+def test_a_partial_file_of_arms_kept_mid_run_is_never_a_recording(tmp_path) -> None:
+    # the script keeps finished arms in <out>.partial while the run goes on; that is not a run
+    path = tmp_path / "out.json.partial"
+    partial = {
+        "kind": "crew_live_partial",
+        "arms": {"full_crew": {}},
+        "fixture": "N001",
+        "run_id": "abc123",
+        "run_date": "2026-10-25",
+        "teams": sorted(TEAMS),
+        "events_sha256": "abc",
+        "seed": 2026,
+        "seed_rate": SEED_RATE,
+    }
+    path.write_text(json.dumps(partial))  # every field a run has, so only the kind refuses it
+    assert load_live_run(str(path), teams=TEAMS) is None
 
 
 def test_a_file_that_does_not_parse_is_no_run(tmp_path) -> None:

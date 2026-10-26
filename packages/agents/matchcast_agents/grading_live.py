@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, fields
 from datetime import UTC, datetime
 from pathlib import Path
@@ -251,18 +252,21 @@ def live_run(
     seed: int = DEFAULT_SEED,
     rate: float = SEED_RATE,
     run_date: str | None = None,
+    on_arm: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """The three arms on the model, each with its own budget of ``max_calls``. Returns the run
     record the scoreboard route shows beside the rules arms. ``fixture`` names the fixture the
     match is (its id in the fixture list, such as N001); it is required so a recording is never
-    labelled with a fixture it did not run on."""
+    labelled with a fixture it did not run on. ``on_arm`` is called with each arm as it completes,
+    so a caller can keep a paid arm even if a later one fails."""
     if not 1 <= max_calls <= MAX_CALLS_PER_ARM:
         raise ValueError(f"a live run needs 1 to {MAX_CALLS_PER_ARM} model calls per arm")
     as_of = run_date or datetime.now(UTC).date().isoformat()
     clock = _pinned_clock(as_of)
     chosen, seeded_claims = seeded_set(match, seed=seed, rate=rate, clock=clock)
-    arms = {
-        key: _live_arm(
+    arms: dict[str, dict[str, Any]] = {}
+    for key in ARMS:
+        arms[key] = _live_arm(
             match,
             key,
             client=client,
@@ -272,8 +276,8 @@ def live_run(
             seeded_claims=seeded_claims,
             clock=clock,
         )
-        for key in ARMS
-    }
+        if on_arm is not None:
+            on_arm(key, arms[key])
     match_id = match["roster"]["stream"]["match_id"]
     run_id = hashlib.sha256(
         json.dumps(

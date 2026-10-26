@@ -449,3 +449,225 @@ def test_a_call_budget_out_of_range_is_refused_before_any_model_call(
     )
     assert code == 2
     assert "--max-calls must be between 1 and" in capsys.readouterr().err
+
+
+def test_a_late_failure_keeps_the_arms_already_paid_for(monkeypatch, tmp_path) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    out = tmp_path / "out.json"
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+
+    def failing_run(match, *, on_arm, **kwargs):
+        arm = {
+            "run_id": "full_crew-live",
+            "lines_aired": 0,
+            "wrong_lines_aired": 0,
+            "cost": {"model_calls": 4, "model_errors": 0, "budget_refused": 0},
+        }
+        on_arm("full_crew", arm)
+        raise RuntimeError("the third arm failed")
+
+    monkeypatch.setattr(script, "live_run", failing_run)
+    with pytest.raises(RuntimeError):
+        script.main(
+            ["--match", str(match_file), "--fixture", "N001", "--max-calls", "5", "--out", str(out)]
+        )
+    partial = json.loads((tmp_path / "out.json.partial").read_text())
+    assert partial["kind"] == "crew_live_partial"
+    assert list(partial["arms"]) == ["full_crew"]
+    assert not out.exists()  # no record was written, and the kept arm is not a recording
+
+
+def test_a_partial_that_cannot_be_written_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    (tmp_path / "out.json.partial").mkdir()  # a folder where the partial file goes
+
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "out.json"),
+        ]
+    )
+    assert code == 2
+    assert "cannot be written" in capsys.readouterr().err
+
+
+def test_a_finished_run_removes_its_partial_file(monkeypatch, tmp_path) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    (tmp_path / "out.json.partial").write_text("{}")  # a stale one from an earlier run
+    out = tmp_path / "out.json"
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+    monkeypatch.setattr(script, "live_run", lambda match, *, on_arm, **kwargs: {"run_id": "r1"})
+    code = script.main(
+        ["--match", str(match_file), "--fixture", "N001", "--max-calls", "5", "--out", str(out)]
+    )
+    assert code == 0
+    assert json.loads(out.read_text()) == {"run_id": "r1"}
+    assert not (tmp_path / "out.json.partial").exists()
+
+
+def test_a_stale_partial_is_moved_aside_not_deleted_even_when_the_run_fails(
+    monkeypatch, tmp_path
+) -> None:
+    # the arms a dead run paid for are kept under a dated name, so they can be read by hand; a
+    # rerun still pays for its own calls
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    (tmp_path / "out.json.partial").write_text('{"kind": "crew_live_partial", "arms": {}}')
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+
+    def dies(match, **kwargs):
+        raise RuntimeError("the run dies")
+
+    monkeypatch.setattr(script, "live_run", dies)
+    with pytest.raises(RuntimeError):
+        script.main(
+            [
+                "--match",
+                str(match_file),
+                "--fixture",
+                "N001",
+                "--max-calls",
+                "5",
+                "--out",
+                str(tmp_path / "out.json"),
+            ]
+        )
+    assert not (tmp_path / "out.json.partial").exists()
+    kept = list(tmp_path.glob("out.json.partial.*"))
+    assert len(kept) == 1
+    assert json.loads(kept[0].read_text())["kind"] == "crew_live_partial"
+
+
+def test_an_arm_is_printed_when_its_partial_cannot_be_written(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    # disk full or read-only mid-run: the run goes on and the paid arm is printed, not dropped
+    script = load_script()
+    _real_replace = script._replace
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+    arm = {
+        "run_id": "full_crew-live",
+        "lines_aired": 0,
+        "wrong_lines_aired": 0,
+        "cost": {"model_calls": 4, "model_errors": 0, "budget_refused": 0},
+    }
+
+    def one_arm_then_done(match, *, on_arm, **kwargs):
+        on_arm("full_crew", arm)
+        return {"run_id": "r1"}
+
+    def broken_write(path, data):
+        if path.name.endswith(".partial"):
+            raise OSError("no space left on device")
+        _real_replace(path, data)
+
+    monkeypatch.setattr(script, "live_run", one_arm_then_done)
+    monkeypatch.setattr(script, "_replace", broken_write)
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "out.json"),
+        ]
+    )
+    assert code == 0
+    err = capsys.readouterr().err
+    printed = [line for line in err.splitlines() if line.startswith("{")]
+    assert [json.loads(line) for line in printed] == [{"full_crew": arm}]
+    assert "NOT kept (printed above)" in err
+
+
+def test_a_failed_replace_leaves_the_file_that_was_there(monkeypatch, tmp_path) -> None:
+    # written through a temp file, so a failure before the rename cannot truncate the old file
+    script = load_script()
+    path = tmp_path / "out.json.partial"
+    path.write_text("old arms")
+
+    def no_rename(src, dst):
+        raise OSError("the rename failed")
+
+    monkeypatch.setattr(script.os, "replace", no_rename)
+    with pytest.raises(OSError):
+        script._replace(path, {"kind": "crew_live_partial", "arms": {}})
+    assert path.read_text() == "old arms"
+
+
+def test_a_temp_file_that_cannot_be_written_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    (tmp_path / "out.json.partial.tmp").mkdir()  # the temp file the partial is written through
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "out.json"),
+        ]
+    )
+    assert code == 2
+    assert "cannot be written" in capsys.readouterr().err
+
+
+def test_a_record_that_cannot_be_written_is_printed_not_lost(monkeypatch, capsys, tmp_path) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+    monkeypatch.setattr(script, "live_run", lambda match, *, on_arm, **kwargs: {"run_id": "r9"})
+
+    def full_disk(path, data):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(script, "_replace", full_disk)
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "out.json"),
+        ]
+    )
+    assert code == 1
+    assert json.loads(capsys.readouterr().err.splitlines()[-1]) == {"run_id": "r9"}
