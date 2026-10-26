@@ -3,7 +3,6 @@ specialist's crew_spawn frames per replan, and a second stall falls back to the 
 
 from conftest import run
 from matchcast_agents.stall import STALL_S, StallClock
-from matchcast_contracts import validate
 
 
 class Clock:
@@ -38,13 +37,10 @@ def test_a_stall_replans_once_with_one_rundown_entry_and_spawn_frames(make_workf
     assert len(flow.rundown) == before + 1
     entry = flow.rundown[-1]
     assert entry["moment_id"].startswith("replan-")
-    assert entry["called"] == ["replay"] and entry["skipped"] == []
+    assert entry["called"] == [] and entry["skipped"] == ["replay"]
     assert entry["routed_by"] == "rules"
     assert entry["why"].startswith("stall: match flow -> ")
-    frames = replan_frames(flow)
-    assert [f["status"] for f in frames] == ["running", "done"]
-    for frame in frames:
-        validate(frame)
+    assert replan_frames(flow) == []  # assigned, not run: no spawn frame claims a run
 
 
 def test_a_second_stall_with_no_line_falls_back_to_the_rules_storyline(
@@ -57,6 +53,46 @@ def test_a_second_stall_with_no_line_falls_back_to_the_rules_storyline(
     flow._replan_if_stalled(flow._ctx(), match["events"][4])
     assert flow.rundown[-1]["why"].endswith("(rules storyline)")
     assert flow._plan == "fallback:rules"
+
+
+def test_the_stall_check_runs_through_the_event_path(make_workflow, match) -> None:
+    flow, clock = stalled_flow(make_workflow, match)
+    before = len(flow.rundown)
+    clock.now += STALL_S
+    run(flow._process_event(match["events"][5]))
+    assert len(flow.rundown) == before + 1
+    assert flow.rundown[-1]["moment_id"] == f"replan-{match['events'][5]['event_id']}"
+
+
+def test_a_workflow_built_long_before_kick_off_does_not_replan_on_its_first_event(
+    make_workflow, match
+) -> None:
+    clock = Clock()
+    flow = make_workflow(stall_clock=clock)
+    clock.now += 10 * STALL_S  # time passes before any event
+    before = len(flow.rundown)
+    run(flow._process_event(match["events"][0]))
+    assert len(flow.rundown) == before
+
+
+def test_a_verified_line_resets_the_stall_clock(make_workflow, match) -> None:
+    clock = Clock()
+    flow = make_workflow(stall_clock=clock)
+    run(flow.ingest(match["events"]))  # the fixture aires lines, so this is a real run
+    aired = next(
+        e
+        for e in match["events"]
+        if f"m-{e['event_id']}"
+        in {
+            ln.moment_id
+            for ln in flow.store.lines(flow.sk)
+            if ln.status in ("verified", "approved", "published")
+        }
+    )
+    clock.now += STALL_S - 10  # 50 s of quiet
+    flow._note_aired(aired)  # a verified line of this moment aired
+    clock.now += 20  # 70 s after the start, but only 20 s after the line
+    assert flow._stall.next_step() == "wait"
 
 
 def test_no_stall_no_replan(make_workflow, match) -> None:

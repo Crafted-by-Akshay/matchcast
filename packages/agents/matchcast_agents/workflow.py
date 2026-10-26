@@ -299,6 +299,7 @@ class MatchWorkflow:
         config: WorkflowConfig | None = None,
         safety: SafetyScreen | None = None,
         clock: Callable[[], datetime] = _utc_now,
+        stall_clock: Callable[[], float] = time.monotonic,
         stats_desk: StatsDesk | None = None,
         answer_model: "ModelClient | None" = None,
         history: dict[str, Any] | None = None,
@@ -315,8 +316,10 @@ class MatchWorkflow:
         # the engine match's Vision passes as pass facts: its one Vision moment counts them
         self._vision_feed = vision_feed
         self._vision_moment_tried = False
-        self._stall = StallClock(clock=time.monotonic)  # wall time since the last verified line
-        self._plan: str | None = None  # the Showrunner's storyline; None is the match's own flow
+        # wall time since the last verified line; it starts with the first event
+        self._stall = StallClock(clock=stall_clock)
+        self._stall_started = False
+        self._plan: str | None = None  # the last storyline the stall replan chose; recorded only
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
@@ -628,6 +631,9 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
+        if not self._stall_started:
+            self._stall.note_line()  # the clock starts with the match, not with the workflow
+            self._stall_started = True
         self._replan_if_stalled(ctx, event)
         if self.config.orchestrator == "af":
             from .af_graph import run_event  # Agent Framework is imported only when selected
@@ -649,9 +655,12 @@ class MatchWorkflow:
             self._stall.note_line()
 
     def _replan_if_stalled(self, ctx: MatchContext, event: dict[str, Any]) -> None:
-        """CREW-1.2: after a stall the Showrunner picks a storyline from shared memory and assigns
-        one specialist to it. A replan followed by another stall falls back to the rules storyline.
-        Recorded as a rundown entry and as the specialist's crew_spawn frames, nothing else."""
+        """CREW-1.2: after a stall the Showrunner chooses a storyline from shared memory and
+        assigns the replay specialist to it. A replan followed by another stall with no verified
+        line chooses the rules storyline instead. Checked on each event, so a feed with no events
+        does not replan. The specialist is assigned, not run: the rundown entry records it in
+        ``skipped``, and no crew_spawn frame claims a run. The chosen storyline is recorded only;
+        the Narrator does not use it yet (Planned)."""
         step = self._stall.next_step()
         if step == "wait":
             return
@@ -659,19 +668,16 @@ class MatchWorkflow:
         new = FALLBACK_PLAN if step == "fallback" else pick_plan(ctx.extra.get("storylines", {}))
         self._plan = new
         self._stall.note_replan()
-        moment = f"replan-{event['event_id']}"
         entry = {
-            "moment_id": moment,
-            "called": [REPLAN_SPECIALIST],
-            "skipped": [],
+            "moment_id": f"replan-{event['event_id']}",
+            "called": [],
+            "skipped": [REPLAN_SPECIALIST],
             "why": f"stall: {old or 'match flow'} -> {new}"
             + (" (rules storyline)" if new == FALLBACK_PLAN else ""),
             "routed_by": "rules",
         }
         self.rundown.append(entry)
         del self.rundown[:-RUNDOWN_KEEP]
-        self._publish_spawn(moment, REPLAN_SPECIALIST, "running")
-        self._publish_spawn(moment, REPLAN_SPECIALIST, "done", ended=True)
         self._publish_ledger(entry)
 
     async def _decide_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:

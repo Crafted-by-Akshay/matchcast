@@ -36,7 +36,11 @@ def colour_producer(personas):
 @pytest.fixture
 def make_workflow(match):
     def build(
-        *, approval_mode: str = "auto", seed_bad_claim: bool = False, personas=None
+        *,
+        approval_mode: str = "auto",
+        seed_bad_claim: bool = False,
+        personas=None,
+        stall_clock=None,
     ) -> MatchWorkflow:
         config = WorkflowConfig(
             approval_mode=approval_mode, **({"personas": personas} if personas else {})
@@ -51,6 +55,7 @@ def make_workflow(match):
             ),
             config=config,
             clock=fixed_clock(),
+            **({"stall_clock": stall_clock} if stall_clock is not None else {}),
         )
 
     return build
