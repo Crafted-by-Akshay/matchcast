@@ -555,12 +555,16 @@ class MatchWorkflow:
             # the pools, its ledger and the Producer's memory start at zero: nothing counts twice
             self._set_spent(0, 0)
             self.rundown = []
+            self._book = StorylineBook()  # a replay opens its storylines again
+            self._plan = None
             reset = getattr(self.agents.producer, "reset", None)
             if reset:
                 reset()
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
+        self._book = StorylineBook.from_rows(row.get("storylines", []))  # open storylines survive
+        self._plan = row.get("plan")
         self._set_spent(row.get("spawn_used", 0), row.get("quiet_used", 0))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
@@ -576,6 +580,8 @@ class MatchWorkflow:
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
                 "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
+                "storylines": self._book.to_rows(),
+                "plan": self._plan,
                 "spawn_used": self._spent["priority_one"],
                 "quiet_used": self._spent["quiet"],
             },
@@ -736,7 +742,12 @@ class MatchWorkflow:
                 return False
             events = self.store.events(self.sk)
             if events:
+                replans = self._replans
                 self._replan_if_stalled(self._ctx(), events[-1])
+                if self._replans != replans:
+                    # no event is in flight here, so the replan is checkpointed now, or a restart
+                    # before the next event would lose the storyline it opened
+                    self._checkpoint(events[-1]["stream_sequence"])
         return True
 
     def close(self) -> None:

@@ -30,6 +30,22 @@ class StorylineBook:
 
     _stories: list[Storyline] = field(default_factory=list)
 
+    def to_rows(self) -> list[dict[str, Any]]:
+        """The book as plain rows, for the match checkpoint."""
+        return [
+            {
+                "player_id": s.player_id,
+                "opened": s.opened,
+                "opening_text": s.opening_text,
+                "status": s.status,
+            }
+            for s in self._stories
+        ]
+
+    @classmethod
+    def from_rows(cls, rows: list[dict[str, Any]]) -> "StorylineBook":
+        return cls(_stories=[Storyline(**row) for row in rows])
+
     def open(self, player_id: str, event: dict[str, Any], text: str) -> Storyline:
         story = Storyline(player_id=player_id, opened=event, opening_text=text)
         self._stories.append(story)

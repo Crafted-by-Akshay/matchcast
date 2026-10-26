@@ -75,3 +75,32 @@ def test_the_casual_line_carries_the_payoff_too(match, monkeypatch) -> None:
     assert "Storyline pays off." in casual.text
     assert casual.status == "published" and all(check.passed for check in casual.checks)
     assert len(casual.text) <= 140
+
+
+def test_an_open_storyline_survives_a_restart_and_still_pays_off(match, monkeypatch) -> None:
+    # the storyline opened by a stall is checkpointed with the match: a restart on the same store
+    # keeps it open, so the goal after the restart pays it off
+    goal = _first_goal(match)
+    scorer = goal["payload"]["player_id"]
+    monkeypatch.setattr(workflow_mod, "pick_plan", lambda memory: f"player:{scorer}")
+    clock = Clock()
+    before = build(match, MemoryStore())
+    before._stall = StallClock(clock=clock)
+    run(
+        before.ingest(
+            [e for e in match["events"] if e["stream_sequence"] < goal["stream_sequence"]]
+        )
+    )
+
+    async def stall() -> None:
+        clock.now += STALL_S
+        assert await before._stall_tick()
+
+    run(stall())
+    restarted = build(match, before.store)  # the process restarts on the same store
+    run(
+        restarted.ingest(
+            [e for e in match["events"] if e["stream_sequence"] >= goal["stream_sequence"]]
+        )
+    )
+    assert "storyline" in _analyst_line(restarted, goal).text
