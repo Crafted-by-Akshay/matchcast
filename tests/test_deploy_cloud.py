@@ -196,9 +196,31 @@ def test_wait_idle_returns_once_the_deployment_finishes(tmp_path):
     assert run.returncode == 0 and (tmp_path / "sleeps").read_text().count("s") == 1
 
 
-def test_the_api_address_comes_from_the_app_when_azd_has_none():
-    # azd learns API_URI only from its own provision; the az path leaves a new machine without it
+def _run_api_uri(tmp_path, azd_body, az_body):
     script = LOCAL.read_text()
-    line = next(ln for ln in script.splitlines() if ln.startswith("API_URI="))
-    assert "azd env get-value API_URI" in line and "||" in line  # a missing value is not fatal
-    assert "ingress.fqdn" in line and "az containerapp show" in line
+    func = script[script.index("api_uri() {") :].split("\n}\n", 1)[0] + "\n}"
+    for tool, body in (("azd", azd_body), ("az", az_body)):
+        (tmp_path / tool).write_text(f"#!/bin/sh\n{body}\n")
+        (tmp_path / tool).chmod(0o755)
+    return subprocess.run(
+        ["bash", "-c", f"set -euo pipefail\nENV_NAME=dev\n{func}\napi_uri"],
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_api_uri_is_azds_value_when_it_has_one(tmp_path):
+    run = _run_api_uri(tmp_path, "echo https://from-azd", "exit 9")
+    assert run.returncode == 0 and run.stdout.strip() == "https://from-azd"
+
+
+def test_api_uri_comes_from_the_app_when_azd_has_none(tmp_path):
+    run = _run_api_uri(tmp_path, "exit 1", "echo ca-api.example.io")
+    assert run.returncode == 0 and run.stdout.strip() == "https://ca-api.example.io"
+
+
+def test_api_uri_fails_clearly_when_nothing_knows_the_address(tmp_path):
+    assert _run_api_uri(tmp_path, "exit 1", "exit 3").returncode != 0
+    run = _run_api_uri(tmp_path, "exit 1", "true")  # az answers with nothing
+    assert run.returncode != 0 and "cannot find the api address" in run.stderr
