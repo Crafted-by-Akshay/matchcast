@@ -26,14 +26,17 @@ test('One metric: the pre-kick card and the chip both offer only api-followed me
   const errs = collectErrors(page);
   const f = await openWatch(page);
 
-  // before kick-off the intro card has its own picker
-  if (await f.evaluate(() => !!document.querySelector('#fan-intro .fm-b[data-m="metric"]'))) {
-    await f.click('#fan-intro .fm-b[data-m="metric"]');
-    await expectPicker(f, '#fan-intro');
-  }
+  // before kick-off the intro card has its own picker: Continue opens it, and it must offer the same metrics
+  await f.evaluate(() => (document.getElementById('su-go') as HTMLElement).click());   // the button sits under the load veil; its handler opens the intro card
+  await expect(f.locator('#fan-intro .fm-b[data-m="metric"]')).toBeAttached({ timeout: 30_000 });
+  await f.evaluate(() => (document.querySelector('#fan-intro .fm-b[data-m="metric"]') as HTMLElement).click());
+  await expectPicker(f, '#fan-intro');
 
+  // the mode chip sits in the match HUD, which shows at kick-off
+  await f.evaluate(() => (document.getElementById('kick') as HTMLElement).click());
+  await expect(f.locator('#fan-chip')).toBeVisible({ timeout: 60_000 });
   if (await f.evaluate(() => (document.getElementById('fan-pop') as HTMLElement).hidden)) await f.click('#fan-chip');
-  await f.click('.fm-b[data-m="metric"]');
+  await f.click('#fan-pop .fm-b[data-m="metric"]');
   await expectPicker(f, '#fan-pop');
 
   // the stored choice is one the api follows, so the persona reaches the stream (the default metric is not)
@@ -51,6 +54,7 @@ test('One metric: a saved choice of an unfollowed metric is restored as xG', asy
   });
   const f = await openWatch(page);
   // the restore sets Watch's own state, which the strip shows (the persona reads the same state); the stored copy is rewritten on the next change
-  await expect.poll(() => f.evaluate(() => document.querySelector('#fan-metric .mk')?.textContent ?? ''), { timeout: 20_000, message: 'the restored One metric choice falls back to xG' }).toMatch(/^xG/);
   await expect(f.locator('#fan-chip')).toContainText(/One metric/);
+  await expect(f.locator('#fan-metric .mk')).toBeVisible();
+  await expect.poll(() => f.evaluate(() => document.querySelector('#fan-metric .mk')?.textContent ?? ''), { timeout: 20_000, message: 'the restored One metric choice falls back to xG' }).toMatch(/^xG/);
 });

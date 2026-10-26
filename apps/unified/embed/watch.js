@@ -240,8 +240,8 @@ MCS.progress('Loading the stadium and players');
   window.__mcxCards = { kept, redraw: () => { for (const c of kept) { const el = cards.get(c.id + 'mcx-log'); if (el) { el.innerHTML = html(c); el.querySelector('[data-why]').onclick = () => why(el, c); el.querySelector('[data-how]').onclick = () => MCS.send({ type: 'trace', id: c.id }); el.classList.toggle('mine', mine(c)); } } } };
 })();
 
-// the picker's One metric keys that personas.WATCH_METRICS also names (today only xg). Any other picker key is Watch's own stat and sends no persona the api accepts.
-// Keep in step with WATCH_METRICS: a new api metric needs a picker key here too.
+// the One metric picker keys that personas.WATCH_METRICS also names (today only xg). Any other picker key is Watch's own stat and sends no persona the api accepts.
+// Nothing enforces this list against WATCH_METRICS yet: a key may be added here only if the api follows it.
 const MC_API_METRICS = ['xg'];
 
 // ---- EXP-4: personalisation. The last watch mode is kept in localStorage and restored; the mode goes to the shell, and so to the api, as the viewer's persona.
