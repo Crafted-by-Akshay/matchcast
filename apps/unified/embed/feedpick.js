@@ -1,5 +1,5 @@
 // ---- Watch: the crew feed picker (AB#450, default on, ?crew=0 turns it off). Runs in the Watch module after twofans.js. ----
-// A radiogroup in the commentary card chooses which crew feed to read. Casual and Analyst are live; the other four are Planned and say so.
+// A radiogroup in the commentary card chooses which crew feed to read. Casual, Analyst and Catch me up are live; the other three are Planned and say so.
 // Watch is an iframe, so the lines come from the shell's CREW data layer over postMessage: the shell posts {src:'matchcast-shell', type:'crew-feeds', lang, simulated, feeds, defs}
 // and this module posts {src:'matchcast', type:'crew-feed-pick', key, lang}. Honesty: while simulated is true the lines are the fixture, labelled Simulated and carrying NO Verifier tick.
 // A tick shows only on a line that carries verdict 'verified' from a real frame. English only today.
@@ -19,7 +19,7 @@
   const KEY = 'mc-feedpick';
   let DEFS = [
     { key: 'casual', label: 'Casual', live: true }, { key: 'analyst', label: 'Analyst', live: true },
-    { key: 'audio_description', label: 'Audio description', live: false }, { key: 'catch_me_up', label: 'Catch me up', live: false },
+    { key: 'audio_description', label: 'Audio description', live: false }, { key: 'catch_me_up', label: 'Catch me up', live: true },
     { key: 'half_time', label: 'Half-time explainer', live: false }, { key: 'ticker', label: 'News ticker', live: false },
   ];
   let feeds = {}, lang = 'en', pick = 'casual', simulated = true, first = true;

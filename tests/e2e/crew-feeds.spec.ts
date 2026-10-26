@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// AB#450: the Watch feed picker (flag ?crew=1). Casual and Analyst are live; the other four are Planned. Lines come from CREW.state.feeds
+// AB#450: the Watch feed picker (flag ?crew=1). Casual, Analyst and Catch me up are live; the other three are Planned. Lines come from CREW.state.feeds
 // (the Simulated fixture until the orchestration frames land) through the shell's postMessage bus. Wall-clock timing is meaningless under
 // software GL, so every wait polls for state, never for a duration. Honesty: fixture lines are labelled Simulated and carry no Verifier tick.
 const LABELS = ['Casual', 'Analyst', 'Audio description', 'Catch me up', 'Half-time explainer', 'News ticker'];
@@ -39,7 +39,7 @@ test('feed picker: six labelled choices, Planned tags, planned copy, waiting cop
   const radios = group.getByRole('radio');
   expect(await radios.count()).toBe(6);
   for (let i = 0; i < 6; i++) await expect(radios.nth(i)).toContainText(LABELS[i]);
-  expect(await group.locator('.fp-tag:visible').count()).toBe(4);
+  expect(await group.locator('.fp-tag:visible').count()).toBe(3);
   await expect(radios.nth(0).locator('.fp-tag')).toHaveCount(0);
   await expect(radios.nth(1).locator('.fp-tag')).toHaveCount(0);
   await expect(radios.nth(2).locator('.fp-tag')).toHaveText('Planned');
@@ -47,8 +47,9 @@ test('feed picker: six labelled choices, Planned tags, planned copy, waiting cop
   const card = f.locator('#mc-feedlines');
   await expect(card).toContainText('waiting for a moment');
   expect(await f.locator('#mc-trust').count(), 'the Verifier chip stays').toBe(1);
-  await radios.nth(3).click();
-  await expect(radios.nth(3)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(3).locator('.fp-tag')).toHaveCount(0);
+  await radios.nth(2).click();
+  await expect(radios.nth(2)).toHaveAttribute('aria-checked', 'true');
   await expect(card).toContainText('Planned: this feed is not built yet');
   expect(await card.locator('li').count()).toBe(0);
   await radios.nth(0).click();
