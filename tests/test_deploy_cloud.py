@@ -194,3 +194,11 @@ def test_wait_idle_returns_once_the_deployment_finishes(tmp_path):
     body = f'case "$*" in *"group list"*) {first};; esac; exit 0'
     run = _run_wait_idle(tmp_path, body)
     assert run.returncode == 0 and (tmp_path / "sleeps").read_text().count("s") == 1
+
+
+def test_the_api_address_comes_from_the_app_when_azd_has_none():
+    # azd learns API_URI only from its own provision; the az path leaves a new machine without it
+    script = LOCAL.read_text()
+    line = next(ln for ln in script.splitlines() if ln.startswith("API_URI="))
+    assert "azd env get-value API_URI" in line and "||" in line  # a missing value is not fatal
+    assert "ingress.fqdn" in line and "az containerapp show" in line

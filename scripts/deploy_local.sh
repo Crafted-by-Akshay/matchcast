@@ -125,7 +125,8 @@ done
 retry provision
 azd deploy recap -e "$ENV_NAME" --no-prompt || echo "warning: azd deploy recap failed; the recap function keeps its previous code"
 
-API_URI=$(azd env get-value API_URI -e "$ENV_NAME")
+# azd learns API_URI only from its own provision; the az path leaves a new machine without it
+API_URI=$(azd env get-value API_URI -e "$ENV_NAME" 2>/dev/null || echo "https://$(az containerapp show -g rg-matchcast -n "ca-api-matchcast-$ENV_NAME" --query properties.configuration.ingress.fqdn -o tsv)")
 curl -fsS --retry 12 --retry-delay 15 --retry-all-errors "$API_URI/ready" >/dev/null
 python3 scripts/smoke_pipeline.py --base "$API_URI"
 echo "deployed $SHA"
