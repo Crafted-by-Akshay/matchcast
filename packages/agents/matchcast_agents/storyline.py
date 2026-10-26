@@ -1,7 +1,7 @@
 """Storylines and the Showrunner's stall watch (CREW-3.2 and CREW-1.2).
 
 Pure state: the Showrunner feeds it the verified events. The stall clock is ``stall.py``. The
-payoff line into the Narrator is Planned.
+replan opens a storyline, and the goal that pays it off reaches the rules Narrator's line.
 """
 
 from dataclasses import dataclass, field
