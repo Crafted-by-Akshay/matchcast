@@ -10,12 +10,12 @@ declare const AG: any; declare const LV: any; declare const CM: any;
 const NOT_SHOWN = '[not shown: did not pass its checks]', AWAITING = '[awaiting checks]', WITHHELD = '[withheld: refused by Content Safety]';
 const TEXT = `Thames Rovers lead 3-0 at 20'. <img src=x onerror="window.__xss=1">`;
 
-type Mode = { lines?: 'ok' | 'fail' | 'forbidden'; frames: (frame: (ev: string, d: object) => void) => void };
-type Mock = { server: Server; url: string; seen: { linesReqs: string[]; linesHeaders: Record<string, any>[]; events: number } };
+type Mode = { lines?: 'ok' | 'fail' | 'forbidden' | 'unauth'; items?: object[]; frames: (frame: (ev: string, d: object) => void) => void };
+type Mock = { server: Server; url: string; seen: { linesReqs: string[]; linesHeaders: Record<string, any>[]; linesAt: number[]; events: number } };
 const mock = (mode: Mode) => new Promise<Mock>((resolve) => {
-  const seen: Mock['seen'] = { linesReqs: [], linesHeaders: [], events: 0 };
+  const seen: Mock['seen'] = { linesReqs: [], linesHeaders: [], linesAt: [], events: 0 };
   const server = createServer((q, r) => {
-    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, X-MatchCast-Role', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
     if (q.method === 'OPTIONS') { r.writeHead(204, cors); return r.end(); }
     if (q.method === 'POST') {
       let b = ''; q.on('data', (c) => (b += c));
@@ -23,15 +23,19 @@ const mock = (mode: Mode) => new Promise<Mock>((resolve) => {
       return;
     }
     if (/\/lines\?/.test(q.url!)) {
-      seen.linesReqs.push(q.url!); seen.linesHeaders.push(q.headers);
+      seen.linesReqs.push(q.url!); seen.linesHeaders.push(q.headers); seen.linesAt.push(Date.now());
       if (mode.lines === 'fail') { r.writeHead(500, cors); return r.end('{}'); }
+      if (mode.lines === 'unauth') { r.writeHead(401, cors); return r.end('{"code":"unauthenticated"}'); }
       if (mode.lines === 'forbidden') { r.writeHead(403, cors); return r.end('{"code":"forbidden_role"}'); }
       r.writeHead(200, { 'Content-Type': 'application/json', ...cors });
-      return r.end(JSON.stringify({ items: [
+      const status = new URL(q.url!, 'http://x').searchParams.get('status');   // the route filters by status like the api's
+      const all = mode.items || [
         { line_id: 'L1', status: 'review', escalated: true, reason_code: 'number_mismatch', text: TEXT, claim_ids: [] },
         { line_id: 'L2', status: 'review', escalated: true, reason_code: 'unknown_player', text: 'Second held line.', claim_ids: [] },
+        { line_id: 'L3', status: 'review', escalated: true, reason_code: 'number_mismatch', text: 'Third held line.', claim_ids: [] },
         { line_id: 'LS', status: 'rejected', escalated: false, reason_code: 'unsafe_content', text: WITHHELD, claim_ids: [] },
-      ] }));
+      ];
+      return r.end(JSON.stringify({ items: all.filter((x: any) => !status || x.status === status) }));
     }
     if (!/\/stream/.test(q.url!)) { r.writeHead(404, cors); return r.end('{}'); }
     r.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...cors });
@@ -59,55 +63,90 @@ const held = (id: string, extra: object = {}) => ({ line_id: id, status: 'review
 const escalatedFrames: Mode['frames'] = (frame) => { frame('line', held('L1')); frame('line', held('L1')); frame('line', held('L2', { reason_code: 'unknown_player' })); };
 const card = (page: Page, id: string) => page.locator(`#aq-list li[data-id="pub-${id}"]`);
 
-test('a producer: the escalated card loads its text from GET lines, once, escaped', async ({ page }) => {
-  const api = await mock({ lines: 'ok', frames: escalatedFrames }); const errs = collectErrors(page);
+const escalatedLater: Mode['frames'] = (frame) => { escalatedFrames(frame); setTimeout(() => { frame('line', held('L1')); frame('line', held('L3')); }, 600); };
+
+test('a producer: the escalated card loads its text from GET lines, escaped; a replay adds no call and a later card is a second, throttled batch', async ({ page }) => {
+  const api = await mock({ lines: 'ok', frames: escalatedLater }); const errs = collectErrors(page);
   await drive(page, api.url);
   await expect(card(page, 'L1').locator('.aq-text')).toContainText(`Thames Rovers lead 3-0 at 20'.`, { timeout: 20_000 });
   await expect(card(page, 'L2').locator('.aq-text')).toHaveText('Second held line.');
+  await expect(card(page, 'L3').locator('.aq-text')).toHaveText('Third held line.', { timeout: 20_000 });
   await expect(card(page, 'L1')).toContainText('Escalated');
   await expect(card(page, 'L1').locator('[data-act="kill"]')).toHaveCount(1);
   await expect(card(page, 'L1').locator('[data-act="approve"]')).toHaveCount(0);
   await expect(card(page, 'L1').locator('.aq-text')).not.toContainText('[not shown');
   expect(await page.locator('#aq-list img').count(), 'the text is escaped, not parsed').toBe(0);
   expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
-  await page.waitForTimeout(2500);   // the replayed line event and the second card must not add requests per card
-  expect(api.seen.linesReqs.length, 'one request serves the batch, one per escalated card at most').toBeLessThanOrEqual(1);
-  expect(api.seen.linesReqs[0]).toMatch(/\/v1\/matches\/m-k1\/lines\?/);
-  expect(api.seen.linesReqs[0]).toContain('session_id=');
+  expect(api.seen.linesReqs.length, 'L1 and L2 in one call, L3 in a second; the replayed L1 added none').toBe(2);
+  expect(api.seen.linesAt[1] - api.seen.linesAt[0], 'throttled to one call every 2 s').toBeGreaterThanOrEqual(1800);
+  for (const u of api.seen.linesReqs) {
+    const sp = new URL(u, 'http://x').searchParams;
+    expect(u).toMatch(/^\/v1\/matches\/m-k1\/lines\?/);
+    expect(sp.get('status')).toBe('review'); expect(sp.get('session_id')).toBeTruthy();
+  }
   expect(errs).toEqual([]); api.server.close();
 });
 
 test('a viewer who is not a producer sees the hidden message and no request is made', async ({ page }) => {
-  const api = await mock({ lines: 'ok', frames: escalatedFrames }); const errs = collectErrors(page);
+  const api = await mock({ lines: 'ok', frames: escalatedLater }); const errs = collectErrors(page);
   await drive(page, api.url, 'Viewer');
   await expect(card(page, 'L1').locator('.aq-text')).toHaveText('Text hidden: producer role needed', { timeout: 20_000 });
-  await page.waitForTimeout(2500);
+  await expect(card(page, 'L3').locator('.aq-text'), 'a card that arrives later is hidden too').toHaveText('Text hidden: producer role needed', { timeout: 20_000 });
   expect(api.seen.linesReqs).toEqual([]);
   await expect(card(page, 'L1')).not.toContainText('Thames Rovers lead 3-0');
   expect(errs).toEqual([]); api.server.close();
 });
 
-test('a role the api refuses (403) shows the hidden message', async ({ page }) => {
-  const api = await mock({ lines: 'forbidden', frames: escalatedFrames });
-  await drive(page, api.url);
-  await expect(card(page, 'L1').locator('.aq-text')).toHaveText('Text hidden: producer role needed', { timeout: 20_000 });
-  api.server.close();
-});
+for (const [lines, name] of [['forbidden', '403'], ['unauth', '401']] as const) {
+  test(`a ${name} from the api shows the hidden message, and later cards make no further call`, async ({ page }) => {
+    const api = await mock({ lines, frames: escalatedLater });
+    await drive(page, api.url);
+    await expect(card(page, 'L1').locator('.aq-text')).toHaveText('Text hidden: producer role needed', { timeout: 20_000 });
+    await expect(card(page, 'L3').locator('.aq-text')).toHaveText('Text hidden: producer role needed', { timeout: 20_000 });
+    expect(api.seen.linesReqs.length, 'the first refusal ends the calls for this match').toBe(1);
+    api.server.close();
+  });
+}
 
 test('a safety-refused line shows it was withheld, never its text', async ({ page }) => {
   const api = await mock({ lines: 'ok', frames: (frame) => frame('line', held('LS', { reason_code: 'unsafe_content', text: WITHHELD })) }); const errs = collectErrors(page);
   await drive(page, api.url);
   await expect(card(page, 'LS').locator('.aq-text')).toHaveText('withheld: refused by Content Safety', { timeout: 20_000 });
-  await page.waitForTimeout(2500);
   await expect(card(page, 'LS')).not.toContainText('[');
+  expect(api.seen.linesReqs, 'a refused line is not requested').toEqual([]);
   expect(errs).toEqual([]); api.server.close();
 });
 
-test('a safety-refused line is not shown even if the lines route sends its text', async ({ page }) => {
-  // the api never does this; the page must not depend on it. The line arrives as an ordinary placeholder with no reason code.
+test('a line the stream shows only as not-shown but the lines route says was safety-refused is withheld, with its text from neither', async ({ page }) => {
+  // reaches the lines path: the stream gives no hint, the route reports reason unsafe_content with the withheld placeholder (it never sends the text)
+  const api = await mock({ lines: 'ok', frames: (frame) => { frame('line', held('LS')); frame('line', held('L2')); },
+    items: [{ line_id: 'LS', status: 'review', escalated: true, reason_code: 'unsafe_content', text: WITHHELD, claim_ids: [] }, { line_id: 'L2', status: 'review', escalated: true, text: 'Second held line.', claim_ids: [] }] });
+  await drive(page, api.url);
+  await expect(card(page, 'L2').locator('.aq-text')).toHaveText('Second held line.', { timeout: 20_000 });
+  await expect(card(page, 'LS').locator('.aq-text')).toHaveText('withheld: refused by Content Safety');
+  expect(api.seen.linesReqs.length).toBe(1);
+  api.server.close();
+});
+
+test('a safety-refused line is not shown even if the placeholder arrives with no reason code', async ({ page }) => {
   const api = await mock({ lines: 'ok', frames: (frame) => frame('line', held('LS', { reason_code: undefined, text: WITHHELD })) });
   await drive(page, api.url);
   await expect(card(page, 'LS').locator('.aq-text')).toHaveText('withheld: refused by Content Safety', { timeout: 20_000 });
+  api.server.close();
+});
+
+const names = { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' };
+test('a card of a match that was replaced, or killed before its turn, is not fetched; the live card still is', async ({ page }) => {
+  const api = await mock({ lines: 'ok', frames: () => {} });
+  await drive(page, api.url);
+  await page.evaluate(([n, a, b, c]) => {
+    AG.reset('k-old', n); AG.ingest(a, 'live'); AG.ingest(b, 'live'); (window as any).__old = AG.run;
+    AG.kill('pub-L1', 'Test', 'killed'); AG.reset('k-new', n); AG.ingest(c, 'live');
+  }, [names, held('L1'), held('L2'), held('L3')] as const);
+  await expect(card(page, 'L3').locator('.aq-text')).toHaveText('Third held line.', { timeout: 20_000 });
+  expect(api.seen.linesReqs.length).toBe(1);
+  const old = await page.evaluate(() => (window as any).__old.claims.map((c: any) => [c.id, c.textState || '', c.text || '']));
+  expect(old.every(([, st, t]: string[]) => st !== 'unavailable' && st !== 'text' && !t), 'the old match\'s cards were never filled or marked unavailable').toBe(true);
   api.server.close();
 });
 
@@ -134,7 +173,6 @@ test('no placeholder is drawn as line text anywhere in the shell', async ({ page
   } }); const errs = collectErrors(page);
   await drive(page, api.url);
   await expect.poll(() => page.evaluate(() => AG.run.claims.some((c: any) => c.id === 'pub-H1')), { timeout: 20_000 }).toBe(true);
-  await page.waitForTimeout(1500);
   const bad = /\[(awaiting|not shown|withheld)/;
   const dump = await page.evaluate(() => JSON.stringify({
     claims: AG.run.claims.map((c: any) => [c.id, c.text, c.airText]), feed: AG.run.feed, queue: AG.queue(), cm: CM.view(80),

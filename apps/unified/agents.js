@@ -306,7 +306,7 @@ const AG = (() => {
   // a claim or line from the live api (live.js): shown beside the rules claims, tagged with where it came from ('model' when the api says live, else 'rules')
   // The open stream puts a placeholder where a line's text is withheld ('[awaiting checks]', '[not shown: ...]', '[withheld: ...]'). It is a state, never text:
   // it is dropped here, so no card, feed line, booth line or queue item carries it. A producer's GET /lines has an escalated line's text (loadText below).
-  const placeholderOf = (t) => (typeof t !== 'string' ? '' : /^\[withheld/.test(t) ? 'withheld' : /^\[awaiting/.test(t) ? 'checking' : /^\[not shown/.test(t) ? 'not_shown' : '');
+  const placeholderOf = (t) => { const m = typeof t === 'string' ? /^\s*\[(withheld: refused by content safety|awaiting checks|not shown: did not pass its checks)\]\s*$/i.exec(t) : null; return m ? { w: 'withheld', a: 'checking', n: 'not_shown' }[m[1][0].toLowerCase()] : ''; };   // the api's three exact forms only: "[awaiting VAR]" is a line
   const isProducer = () => typeof LV !== 'undefined' && /^(Producer|Admin)$/.test(LV.role);
   const TEXT_NOTE = { withheld: 'withheld: refused by Content Safety', hidden: 'Text hidden: producer role needed', unavailable: 'Text not shown: could not be loaded', loading: 'Loading the text…' };
   const textNote = (c) => (c.safetyRefused ? TEXT_NOTE.withheld : TEXT_NOTE[c.textState] || TEXT_NOTE.loading);
@@ -314,19 +314,19 @@ const AG = (() => {
   const tx = { want: [], timer: null, last: 0 };
   const loadText = (c) => {
     if (c.safetyRefused || c.textState) return;
-    if (!isProducer()) { c.textState = 'hidden'; return; }   // no request for a viewer who may not read it
+    if (!isProducer() || run.textDenied) { c.textState = 'hidden'; return; }   // a 401 or 403 earlier in this match: the role is not there, so no more calls   // no request for a viewer who may not read it
     c.textState = 'loading'; tx.want.push({ run, c });
     if (tx.timer) return;
     tx.timer = setTimeout(async () => {
       tx.timer = null; tx.last = Date.now();
-      const batch = tx.want.splice(0).filter((w) => w.run === run);
+      const batch = tx.want.splice(0).filter((w) => w.run === run && w.c.approval === 'pending');   // a card killed before its turn needs no text
       if (!batch.length) return;
       let items = null, err = null;
       try { items = await LV.lineTexts(); } catch (e) { err = e; }
       for (const { run: r, c: card } of batch) {
         if (r !== run) continue;
         const it = items && items.find((x) => x && 'pub-' + x.line_id === card.id);
-        if (err && err.status === 403) card.textState = 'hidden';
+        if (err && (err.status === 403 || err.status === 401)) { card.textState = 'hidden'; run.textDenied = true; }   // unauthenticated (separate origins send no credentials) reads as no role
         else if (it && (it.reason_code === 'unsafe_content' || placeholderOf(it.text) === 'withheld')) card.safetyRefused = true;
         else if (it && typeof it.text === 'string' && it.text && !placeholderOf(it.text)) { card.text = it.text; card.textState = 'text'; }
         else card.textState = 'unavailable';
