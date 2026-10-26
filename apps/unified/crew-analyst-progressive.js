@@ -47,7 +47,8 @@ const ALG = (() => {
       const d = e.data;
       if (!num(d.attack_x) || !num(d.x0) || !num(d.x1) || !num(d.y0) || !num(d.y1)) continue;
       const dir = +d.attack_x === 105 ? 1 : -1;
-      out.push({ id: e.id, minute: e.minute, side: s, x0: +d.x0, y0: +d.y0, x1: +d.x1, y1: +d.y1, gain: (+d.x1 - +d.x0) * dir });
+      // rounded to a tenth of a metre, so a true 10 m gain on one-decimal positions is not 9.999999 and missed
+      out.push({ id: e.id, minute: e.minute, side: s, x0: +d.x0, y0: +d.y0, x1: +d.x1, y1: +d.y1, gain: Math.round((+d.x1 - +d.x0) * dir * 10) / 10 });
     }
     return out;
   }
@@ -83,7 +84,7 @@ const ALG = (() => {
       + '<p class="m" data-progressive-status role="status">' + esc(status) + '</p>'
       + '<div class="pg-controls"><button type="button" data-focus-id="progressive-play" data-progressive-play>Play the match</button>'
       + '<label>Minute <input type="range" data-focus-id="progressive-scrub" data-progressive-scrub min="0" max="' + top + '" step="1" value="' + m + '" aria-valuetext="' + esc(status) + '"></label></div>'
-      + '<p class="m">A pass counts as progressive when it moves the ball 10 m or more toward the opponent\'s goal. Carries, the ball moving on foot, are not in the event log, so they are not drawn. Passes count only when Watch gives their attack direction.</p>'
+      + '<p class="m">A pass counts as progressive when it moves the ball 10 m or more toward the opponent\'s goal. Carries, the ball moving on foot, are not in the event log, so they are not drawn. Passes count only when Watch gives their attack direction and positions.</p>'
       + '</section>';
   }
 
@@ -121,7 +122,8 @@ const ALG = (() => {
     if (!t.hasAttribute || !t.hasAttribute('data-progressive-scrub')) return;
     const root = rootOf(t);
     if (!root) return;
-    stateFor(root).minute = +t.value;
+    // a scrub ends a running Play, so the animation does not overwrite the thumb on its next frame
+    const st = stateFor(root); st.token++; st.minute = +t.value;
     place(root, +t.value);
   });
   document.addEventListener('click', (e) => {

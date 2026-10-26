@@ -11,6 +11,7 @@ const block3d = (page: Page) => page.route(/\/(watch|broadcast)\/index\.html/, (
 // e1 h at 2: x 40 to 55, gain 15, progressive.       e2 h at 3: x 40 to 46, gain 6, not.
 // e3 a at 4: x 60 to 40, gain 20 toward 0, progressive. e4 a at 6: x 50 to 52, gain -2, not.
 // e5 h at 8: x 70 to 80, gain exactly 10, progressive.  e6 h at 9: attack_x null, so it is left out of every count.
+// e7 h at 9: no end position, so it is left out too.
 // At minute 9: Harbor City 2 progressive of 3 passes (e1, e2, e5), Thames Rovers 1 progressive of 2 (e3, e4).
 async function seedMatch(page: Page) {
   await page.evaluate(() => {
@@ -20,10 +21,10 @@ async function seedMatch(page: Page) {
     });
     AG.onWatch('k', [
       pass(2, 'h', 105, 40, 55), pass(3, 'h', 105, 40, 46), pass(4, 'a', 0, 60, 40),
-      pass(6, 'a', 0, 50, 52), pass(8, 'h', 105, 70, 80), pass(9, 'h', null, 50, 90),
+      pass(6, 'a', 0, 50, 52), pass(8, 'h', 105, 70, 80), pass(9, 'h', null, 50, 90), pass(9, 'h', 105, 50, null),
     ], []);
   });
-  await expect.poll(() => page.evaluate(() => AG.run.events.length), { timeout: 15_000 }).toBe(6);
+  await expect.poll(() => page.evaluate(() => AG.run.events.length), { timeout: 15_000 }).toBe(7);
 }
 
 test('progressive passes are drawn at the latest minute, counted per side, and labelled Simulated', async ({ page }) => {
@@ -94,4 +95,27 @@ test('window.MC.analysis draws progressive passes into a card and cites the ones
   expect(out.citations).toEqual(['e1', 'e3', 'e5']);
   await expect(page.locator('#prog-card [data-progressive-status]')).toContainText("Up to 9'");
   await expect(page.locator('#prog-card svg[data-map="progressive"]')).toHaveCount(1);
+});
+
+test('before a match, the card says it needs the live match', async ({ page }) => {
+  await block3d(page);
+  await openShell(page, 'analyst', '?crew=1');
+  const out = await page.evaluate(() => {
+    const div = document.createElement('div'); div.id = 'prog-none'; document.body.appendChild(div);
+    return (window as any).MC.analysis.render('progressive', {}, div);
+  });
+  expect(out.citations).toEqual([]);
+  await expect(page.locator('#prog-none')).toContainText('Needs the live match first.');
+});
+
+test('a match with no events yet: the panel says so and cites nothing', async ({ page }) => {
+  await block3d(page);
+  await openShell(page, 'analyst', '?crew=1');
+  const out = await page.evaluate(() => {
+    AG.reset('k', { hk: 'h', ak: 'a', home: 'Harbor City', away: 'Thames Rovers' });
+    const div = document.createElement('div'); div.id = 'prog-empty'; document.body.appendChild(div);
+    return (window as any).MC.analysis.render('progressive', {}, div);
+  });
+  expect(out.citations).toEqual([]);
+  await expect(page.locator('#prog-empty [data-panel="progressive"]')).toContainText('No match events yet.');
 });
