@@ -61,6 +61,20 @@ def gaps(spans: list[tuple[int, int]], end_ms: int, min_gap_ms: int = MIN_GAP_MS
     return windows
 
 
+def take(windows: list[Window], start_ms: int, end_ms: int) -> list[Window]:
+    """The windows with [start_ms, end_ms) used up, so a placed line is never talked over."""
+    left: list[Window] = []
+    for window in windows:
+        if window.end_ms <= start_ms or window.start_ms >= end_ms:
+            left.append(window)
+            continue
+        if window.start_ms < start_ms:
+            left.append(Window(window.start_ms, start_ms))
+        if window.end_ms > end_ms:
+            left.append(Window(end_ms, window.end_ms))
+    return left
+
+
 def x_third(x: float, length: float = PITCH_LENGTH_M) -> str:
     return ("first", "middle", "last")[min(2, max(0, int(3 * x // length)))]
 

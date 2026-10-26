@@ -2,12 +2,14 @@
 
 import asyncio
 
-from matchcast_agents.audio_description import Window
+from matchcast_agents.audio_description import Window, spoken_span
 from matchcast_agents.context import MatchContext
 from matchcast_agents.feed_lines import (
     AUDIO,
     TICKER,
     audio_drafts,
+    audio_placements,
+    ctx_at,
     metric_claim,
     state_at,
     ticker_drafts,
@@ -29,7 +31,9 @@ def ctx(match, events=None) -> MatchContext:
 
 
 def verdict(context: MatchContext, line: DraftLine, claims: list[dict]):
-    return asyncio.run(VerifierRules().check(context, line, claims))
+    """The Verifier's verdict, judged at the line's own cut, as the workflow judges it on air."""
+    upto = claims[0]["max_evidence_sequence"]
+    return asyncio.run(VerifierRules().check(ctx_at(context, upto), line, claims))
 
 
 def test_every_ticker_line_passes_the_verifier_with_its_score_claims(match) -> None:
@@ -88,3 +92,37 @@ def test_every_audio_line_passes_the_verifier_and_is_backed_by_its_counter(match
 
 def test_an_audio_line_with_no_gap_is_not_written(match) -> None:
     assert audio_drafts(ctx(match), []) == []
+
+
+def test_two_described_events_in_one_gap_never_talk_over_each_other(match) -> None:
+    # e9 (a shot at 36.9 s) and e10 (the goal at 37.8 s) fall in one long gap: e10 waits its turn
+    placed = sorted(
+        audio_placements(ctx(match), [Window(0, 3_000_000)]), key=lambda d: d.speak_at_ms
+    )
+    assert {d.source_event_id for d in placed} >= {"e9", "e10"}
+    spans = [(d.speak_at_ms, d.speak_at_ms + spoken_span(0, d.text)[1]) for d in placed]
+    assert all(end <= start for (_, end), (start, _) in zip(spans, spans[1:]))
+
+
+def test_checked_against_the_end_of_the_match_an_early_line_is_stale(match) -> None:
+    # the freshness rule: a line must be judged at its own cut, or its claims are old
+    line, claims = next(
+        (line, c) for line, c in ticker_drafts(ctx(match)) if line.line_id == "line-ticker-e10"
+    )
+    last = max(e["stream_sequence"] for e in match["events"])
+    result = asyncio.run(VerifierRules().check(ctx_at(ctx(match), last), line, claims))
+    assert result.verdict == "rejected" and result.reason_code == "stale_state"
+
+
+def test_goal_lines_wait_while_a_goal_is_retracted_but_card_lines_still_air(match) -> None:
+    retraction = {
+        "event_id": "r1",
+        "stream_sequence": 9998,
+        "event_time_ms": 240_000,
+        "clock": {"period": 1, "period_elapsed_ms": 240_000},
+        "payload": {"type": "retraction", "target_event_id": "e10"},
+    }
+    drafts = ticker_drafts(ctx(match, [*match["events"], retraction]))
+    ids = [line.line_id for line, _ in drafts]
+    assert not any(line.text.startswith(("Goal:", "Own goal")) for line, _ in drafts)
+    assert "line-ticker-e109" in ids  # the red card is not affected by the goal retraction

@@ -7,9 +7,10 @@ and it cannot decide a line with no claim. A ticker goal also quotes the score, 
 two score claims. Catch-me-up (AB#460) is a whole-feed piece and goes through the recap path.
 """
 
+from dataclasses import replace
 from typing import Any
 
-from .audio_description import Window, describe
+from .audio_description import Description, Window, describe, spoken_span, take
 from .context import MatchContext
 from .messages import DraftLine
 from .metrics_spec import METRIC_UNITS, derivation_version
@@ -28,13 +29,20 @@ Claim = dict[str, Any]
 def state_at(ctx: MatchContext, upto: int) -> MatchState:
     """The match state after the events up to a stream sequence.
 
-    A claim's freshness is judged on this state, so a line about an early event is not stale.
+    The Verifier judges a claim's freshness against the context's state, so a line is checked
+    against the state at its own cut (see ``ctx_at``), the way the workflow checks it when it
+    airs. Checked against the end of the match, an early line is stale.
     """
     state = MatchState()
     for event in sorted(ctx.events, key=lambda e: e["stream_sequence"]):
         if event["stream_sequence"] <= upto:
             state = apply(state, event)
     return state
+
+
+def ctx_at(ctx: MatchContext, upto: int) -> MatchContext:
+    """The context as it stood at a stream sequence: the state and nothing later."""
+    return replace(ctx, state=state_at(ctx, upto))
 
 
 def metric_claim(
@@ -79,9 +87,28 @@ def _claims(ctx: MatchContext, line_id: str, metrics: list[str], upto: int) -> l
     ]
 
 
+def _goal_retracted(ctx: MatchContext) -> bool:
+    """Whether any goal in the match is retracted. The Verifier's recount still counts a retracted
+    goal (quality lane: verify/checks.py recompute), so a score line after one would be refused
+    as a number mismatch. The line is not written instead, and it stays unwritten until the
+    recount skips retracted events."""
+    targets = {
+        e["payload"]["target_event_id"] for e in ctx.events if e["payload"]["type"] == "retraction"
+    }
+    return any(e["event_id"] in targets and e["payload"]["type"] == "goal" for e in ctx.events)
+
+
 def ticker_drafts(ctx: MatchContext) -> list[tuple[DraftLine, list[Claim]]]:
-    """One DraftLine per ticker item, backed by its event's counters and, on a goal, the score."""
-    return [_ticker_line(ctx, item) for item in ticker_items(ctx)]
+    """One DraftLine per ticker item, backed by its event's counters and, on a goal, the score.
+
+    Goal lines are not written while a goal is retracted (see _goal_retracted). Card lines are.
+    """
+    retracted = _goal_retracted(ctx)
+    return [
+        _ticker_line(ctx, item)
+        for item in ticker_items(ctx)
+        if not (retracted and item.kind in ("goal", "own_goal"))
+    ]
 
 
 def _ticker_line(ctx: MatchContext, item: TickerItem) -> tuple[DraftLine, list[Claim]]:
@@ -103,17 +130,34 @@ def _ticker_line(ctx: MatchContext, item: TickerItem) -> tuple[DraftLine, list[C
     return line, claims
 
 
-def audio_drafts(ctx: MatchContext, windows: list[Window]) -> list[tuple[DraftLine, list[Claim]]]:
-    """One DraftLine per described event that fits a gap in the commentary, backed by counters."""
-    drafts = []
+def audio_placements(ctx: MatchContext, windows: list[Window]) -> list[Description]:
+    """The described events, placed in the gaps left after the lines before each one.
+
+    A placed line uses its time, so a later line cannot be talked over. An event that moves no
+    counter is not placed: no claim would back its line.
+    """
+    free = list(windows)
+    placed = []
     for event in sorted(ctx.events, key=lambda e: e["stream_sequence"]):
-        described = describe(ctx, event, windows)
+        if not event_metrics(event["payload"]):
+            continue
+        described = describe(ctx, event, free)
         if described is None:
             continue
+        _, length = spoken_span(0, described.text)
+        free = take(free, described.speak_at_ms, described.speak_at_ms + length)
+        placed.append(described)
+    return placed
+
+
+def audio_drafts(ctx: MatchContext, windows: list[Window]) -> list[tuple[DraftLine, list[Claim]]]:
+    """One DraftLine per placed description, backed by the counters of its event."""
+    events = {e["event_id"]: e for e in ctx.events}
+    drafts = []
+    for described in audio_placements(ctx, windows):
+        event = events[described.source_event_id]
         line_id = f"line-audio-{event['event_id']}"
         claims = _claims(ctx, line_id, event_metrics(event["payload"]), event["stream_sequence"])
-        if not claims:
-            continue  # nothing counted, so no claim backs the line and the Verifier would refuse it
         line = DraftLine(
             line_id=line_id,
             claim_ids=tuple(c["claim_id"] for c in claims),

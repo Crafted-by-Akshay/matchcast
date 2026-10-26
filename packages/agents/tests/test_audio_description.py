@@ -98,3 +98,9 @@ def test_an_own_goal_names_no_player(match) -> None:
 def test_an_event_without_a_position_is_not_described(match) -> None:
     kick_off = next(e for e in match["events"] if e["payload"]["type"] == "period_boundary")
     assert describe(ctx(match), kick_off, [Window(0, 60_000)]) is None
+
+
+def test_a_goal_no_gap_fits_is_not_described_at_all(match) -> None:
+    # a goal with only too-short gaps has no description: it is dropped, and the caller sees None
+    goal = event(match, "e10")
+    assert describe(ctx(match), goal, [Window(0, 500)]) is None

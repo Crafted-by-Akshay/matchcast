@@ -7,7 +7,15 @@ limits of a base voice; the argument decides what the line is about.
 import re
 
 BASE = ("casual", "analyst", "broadcast")
+# the personas a viewer may ask for on a stream
 PATTERN = (
+    r"^(casual|analyst|broadcast|my-club:[A-Za-z0-9._-]{1,64}|"
+    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour))$"
+)
+# the feed-only personas (the ticker and the describer) have no viewer voice: a viewer cannot
+# ask for them, but their draft lines (messages.Persona) carry them
+FEED_ONLY = ("ticker", "audio_description")
+PACKET_PATTERN = (
     r"^(casual|analyst|broadcast|my-club:[A-Za-z0-9._-]{1,64}|"
     r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour)|"
     r"ticker|audio_description)$"
