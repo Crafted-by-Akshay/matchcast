@@ -208,6 +208,7 @@ test('the recap text scrolls inside a capped box on desktop and phone, and a key
 const ES = 'Tras 37 minutos, Northgate FC gana 1-0 a Coastal Rovers.';
 const setLang = (page: any, l: string) => page.evaluate((x: string) => (window as any).setLang(x, null), l);
 const settle = (page: any) => page.evaluate(() => new Promise((res) => requestAnimationFrame(() => res(1))));
+const until = (ms: number) => { const t0 = Date.now(); return expect.poll(() => Date.now() - t0, { timeout: ms + 30_000, intervals: [200] }).toBeGreaterThan(ms); };   // a poll on elapsed time, for "nothing more was read" checks
 const withVariant = ({ lang }: { lang: string | null }) => ({ status: 200, body: lang && lang !== 'en' ? { ...RECAP, variants: { [lang]: lang === 'es' ? ES : 'Nach 37 Minuten führt Northgate FC 1-0.' } } : RECAP });
 
 test('lang: the shell language goes on the request, a returned variant is shown as text with a Translated tag', async ({ page }) => {
@@ -390,7 +391,7 @@ test('lang: back to the cached language while another is waiting for the gap: th
     const card = f.locator('#mc-feedlines');
     await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
     await setLang(page, 'es'); await setLang(page, 'en');
-    await page.waitForTimeout(2800);
+    await until(2800);
     expect(hits.length, 'no stale read for Spanish').toBe(1);
     await expect(card).toContainText('After 37 minutes');
     await expect(card).not.toContainText(/Translated|Catching you up/);
@@ -406,7 +407,7 @@ test('lang: leaving Catch me up drops a read that was waiting for the gap', asyn
     await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
     await setLang(page, "es");
     await f.evaluate(() => window.parent.postMessage({ src: "matchcast", type: "crew-feed-pick", key: "casual", lang: "en" }, "*"));   // what the picker posts for Casual, without the slow click
-    await page.waitForTimeout(7500);
+    await until(7500);
     expect(hits.length, "no read for Spanish").toBe(1);
   });
 });
@@ -420,7 +421,7 @@ test('lang: a Watch reload (feed-ready) forgets the open pick: a language change
     await f.evaluate(() => window.parent.postMessage({ src: 'matchcast', type: 'feed-ready' }, '*'));
     await settle(page);
     await setLang(page, 'es');
-    await page.waitForTimeout(500);
+    await until(500);
     expect(hits.length).toBe(1);
   });
 });
@@ -484,13 +485,43 @@ test('lang: a new match during a read drops the old match\'s reply; the next ask
     await expect.poll(() => hits.length, { timeout: 30_000 }).toBe(1);
     await page.evaluate(() => LV.begin('k2', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }));
     await expect.poll(() => page.evaluate(() => (LV.key && LV.key.match_id) || ''), { timeout: 30_000 }).toBe('m-k2');
-    await page.waitForTimeout(3500);
+    await expect(card).toContainText('New match recap.', { timeout: 30_000 });   // no Update press: the block re-asks once for the new match
+    await expect(card).not.toContainText('Catching you up');
+    await until(3500);   // past the old read's delay: it must never show
     await expect(card).not.toContainText('Old match recap');
-    await card.getByRole('button', { name: /Update/ }).click();
-    await expect(card).toContainText('New match recap.', { timeout: 30_000 });
     expect(hits[1]).toMatch(/\/matches\/m-k2\//);
   });
 });
+
+test('lang: es then back to en during one slow read: one read, and the block ends on the English recap', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi((q) => ({ ...withVariant(q), delay: q.n === 1 ? 3000 : 0 }), async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect.poll(() => hits.length, { timeout: 30_000 }).toBe(1);
+    await setLang(page, 'es'); await setLang(page, 'en');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await expect(card).not.toContainText(/Catching you up|Translated/);
+    await until(1500);
+    expect(hits.length).toBe(1);
+  });
+});
+
+for (const leave of ['casual', 'feed-ready']) {
+  test('lang: ' + leave + ' during an in-flight read: nothing more is read, and the next language change reads nothing', async ({ page }) => {
+    test.setTimeout(300_000);
+    await withApi((q) => ({ ...withVariant(q), delay: q.n === 1 ? 2500 : 0 }), async (api, hits) => {
+      const f = await open(page, api);
+      await f.getByRole('radio', { name: /Catch me up/ }).click();
+      await expect.poll(() => hits.length, { timeout: 30_000 }).toBe(1);
+      if (leave === 'casual') await pickPost(f, 'casual'); else await f.evaluate(() => window.parent.postMessage({ src: 'matchcast', type: 'feed-ready' }, '*'));
+      await setLang(page, 'es');
+      await until(3500);
+      expect(hits.length, leave).toBe(1);
+    });
+  });
+}
 
 test('lang: two rapid Update presses while a read is in flight are one read', async ({ page }) => {
   test.setTimeout(300_000);

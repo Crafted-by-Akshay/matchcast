@@ -872,7 +872,8 @@ function askCatchUp() {
   const mine = ++catchSeq, key = LV.key ? LV.key.session_id + '/' + LV.key.match_id : '';
   CREW.catchUp(minute, lang).then((rec) => {
     // only the latest ask answers, and only for the match and language still current: an older ask, another match's reply or a feed the viewer left posts nothing
-    if (mine !== catchSeq || !catchPicked || key !== (LV.key ? LV.key.session_id + '/' + LV.key.match_id : '')) return;
+    if (mine !== catchSeq || !catchPicked) return;
+    if (key !== (LV.key ? LV.key.session_id + '/' + LV.key.match_id : '')) { askCatchUp(); return; }   // the match changed while this was in flight: the old reply is not shown, and the block asks once for the new match (it would stay on "Catching you up" otherwise)
     if (rec.lang && rec.lang !== lang) return;
     post('watch', Object.assign({ src: 'matchcast-shell', type: 'crew-catchup' }, rec));
   });
