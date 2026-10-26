@@ -55,7 +55,8 @@ def make_workflow(match):
             ),
             config=config,
             clock=fixed_clock(),
-            **({"stall_clock": stall_clock} if stall_clock is not None else {}),
+            # a fixed clock: no test replans on real wall time (tests that want a stall pass one)
+            stall_clock=stall_clock or (lambda: 0.0),
         )
 
     return build

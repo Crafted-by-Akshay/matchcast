@@ -647,9 +647,10 @@ class MatchWorkflow:
 
     def _note_aired(self, event: dict[str, Any]) -> None:
         """A verified line of this event's moment aired: the match is quiet no longer."""
-        moment = f"m-{event['event_id']}"
+        # the Vision moment's id is per match, so its line counts for any event of the match
+        moments = {f"m-{event['event_id']}", f"v-{self.stream['match_id']}"}
         if any(
-            ln.moment_id == moment and ln.status in ("verified", "approved", "published")
+            ln.moment_id in moments and ln.status in ("verified", "approved", "published")
             for ln in self.store.lines(self.sk)
         ):
             self._stall.note_line()
