@@ -137,3 +137,14 @@ def test_ask_answer_is_translated_and_checked():
     assert reply["lang"] == "en" and reply["variants"]["es"].startswith("[es] ")
     assert "variants" not in ask(client, "What is offside?").json()
     assert ask(client, "What is offside?", lang="ta").status_code == 422
+
+
+def test_catch_me_up_is_translated_and_checked():
+    client = make(Echo())
+    create(client)
+    post_all(client)
+    url = "/v1/matches/match-short/catch-me-up"
+    body = client.get(url, params={**Q, "minute": 30, "lang": "es"}).json()
+    assert body["text"].startswith("Score so far:")
+    assert body["variants"]["es"].startswith("[es] Score so far:")
+    assert "variants" not in client.get(url, params={**Q, "minute": 30}).json()
