@@ -55,7 +55,6 @@ WATCH_METRICS = frozenset(
         "fouls",
         "xg",
         "possession_share",
-        "pass_accuracy",
     }
 )
 MAX_WATCH_MODES = 8  # extra personas one match writes lines for

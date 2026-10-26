@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..context import MatchContext
-from ..match_shares import PASS_ACCURACY, POSSESSION, SHARE_METRICS
+from ..match_shares import POSSESSION, SHARE_METRICS
 from ..messages import ProducerTask
 from ..metrics_spec import derivation_version
 from ..specialists.rhythm import share_percent
@@ -53,9 +53,9 @@ def metrics_for(ctx: MatchContext, task: ProducerTask, event: dict[str, Any]) ->
         if task.reason == "colour"
         else counts.get(task.reason, ())
     )
-    # a priority-1 moment also carries each team's match-to-date possession and pass accuracy
-    # (AB#373); they come last, so they yield to the moment's own counts
-    shares = [f"{m}:{t}" for t in (ctx.home, ctx.away) for m in (POSSESSION, PASS_ACCURACY)]
+    # a priority-1 moment also carries each team's match-to-date possession (AB#373); it comes
+    # last, so it yields to the moment's own counts
+    shares = [f"{POSSESSION}:{t}" for t in (ctx.home, ctx.away)]
     return [m.format(t=team, h=ctx.home, a=ctx.away) for m in names] + (
         shares if task.priority == 1 else []
     )
@@ -167,8 +167,9 @@ class AnalystRules:
         for extra in (self._meetings, self._rhythm):
             if len(claims) < MAX_CLAIMS and (claim := extra(ctx, task, len(claims) + 1)):
                 claims.append(claim)
-        for metric in shares:
-            add(metric)
+        for metric in shares:  # a share of nothing (no on-ball action yet) is not a claim
+            if result["values"][metric]["value"]:
+                add(metric)
         return claims
 
     @staticmethod

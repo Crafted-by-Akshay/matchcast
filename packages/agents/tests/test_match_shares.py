@@ -1,6 +1,6 @@
-"""Match-to-date shares the Analyst cites and the Verifier recounts (AB#373)."""
+"""Match-to-date possession share the Analyst cites and the Verifier recounts (AB#373)."""
 
-from matchcast_agents.match_shares import pass_accuracy, possession_share, recount
+from matchcast_agents.match_shares import possession_share, recount
 
 
 def ev(seq: int, payload: dict) -> dict:
@@ -25,12 +25,6 @@ PASS_AWAY = {
     "recipient_player_id": "away2",
 }
 CARRY_HOME = {"type": "carry", "team_id": "home", "player_id": "home2"}
-LOSS_HOME = {
-    "type": "possession_change",
-    "from_team_id": "home",
-    "to_team_id": "away",
-    "cause": "loose_ball",
-}
 TACKLE_WIN = {
     "type": "possession_change",
     "from_team_id": "home",
@@ -39,31 +33,22 @@ TACKLE_WIN = {
 }
 
 
-def test_pass_accuracy_is_completed_passes_over_completed_plus_lost_on_a_pass() -> None:
-    events = [
-        ev(1, PASS_HOME),
-        ev(2, PASS_HOME),
-        ev(3, LOSS_HOME),
-        ev(4, PASS_AWAY),
-        ev(5, TACKLE_WIN),  # a tackle is not a failed pass, so it does not count against home
-    ]
-    assert pass_accuracy(events, "home", 10) == 67  # 2 completed, 1 lost
-    assert pass_accuracy(events, "away", 10) == 100
-
-
 def test_possession_share_is_the_team_s_percent_of_the_on_ball_actions_to_date() -> None:
     events = [ev(1, PASS_HOME), ev(2, CARRY_HOME), ev(3, PASS_HOME), ev(4, PASS_AWAY)]
     assert possession_share(events, "home", 10) == 75
     assert possession_share(events, "away", 10) == 25
 
 
+def test_a_tackle_is_not_an_on_ball_action() -> None:
+    events = [ev(1, PASS_HOME), ev(2, TACKLE_WIN), ev(3, PASS_AWAY)]
+    assert possession_share(events, "home", 10) == 50
+
+
 def test_recount_only_sees_events_up_to_the_claim() -> None:
-    events = [ev(1, PASS_HOME), ev(2, PASS_HOME), ev(3, LOSS_HOME)]
-    assert pass_accuracy(events, "home", 2) == 100
-    assert recount("pass_accuracy:home", events, 3) == 67
-    assert recount("possession_share:home", events, 2) == 100
+    events = [ev(1, PASS_HOME), ev(2, PASS_AWAY), ev(3, PASS_HOME)]
+    assert possession_share(events, "home", 2) == 50
+    assert recount("possession_share:home", events, 3) == 67
 
 
-def test_no_passes_means_no_share_rather_than_a_division_error() -> None:
-    assert pass_accuracy([], "home", 10) == 0
+def test_no_on_ball_action_means_no_share_rather_than_a_division_error() -> None:
     assert possession_share([], "home", 10) == 0

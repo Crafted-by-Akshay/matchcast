@@ -16,10 +16,9 @@ LABELS = {
     "fouls": "Fouls",
     "xg": "xG",
     "possession_share": "Possession",
-    "pass_accuracy": "Pass accuracy",
 }
 # the share metrics read as a percent of the team's total, so the line shows a % sign
-PERCENT_METRICS = frozenset({"possession_share", "pass_accuracy"})
+PERCENT_METRICS = frozenset({"possession_share"})
 
 
 # The colour voice in rules mode: a stock reading with no number, so there is nothing to verify.
