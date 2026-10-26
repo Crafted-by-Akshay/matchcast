@@ -77,11 +77,16 @@ const LV = (() => {
       es.onerror = () => es.close();
     } catch (e) { /* the rules booth carries on */ }
   };
-  // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed; the air gate reads it once the feeds wiring lands
+  // the desk's per-feed kill or resume (AB#499): the api audits it as feed_killed or feed_resumed, and its air gate airs nothing from a killed feed.
+  // deskKilled is the desk's own state per feed, kept across matches as the desk keeps it. A switch made while the match is not created is sent by feedsSent once it is, so a kill is not dropped; a match created later starts with the feeds the desk has killed
+  const deskKilled = {};
+  const feedSend = (r, feed, killed) => post('/v1/matches/' + r.id + '/feeds/' + feed + (killed ? '/kill' : '/resume'), { session_id: r.key.session_id }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
   const feedSwitch = (feed, killed) => {
-    if (!run || !run.created || !api()) return Promise.resolve(null);
-    return post('/v1/matches/' + run.id + '/feeds/' + feed + (killed ? '/kill' : '/resume'), { session_id: run.key.session_id }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
+    deskKilled[feed] = killed;
+    if (!api() || !run || !run.created) return Promise.resolve(null);
+    return feedSend(run, feed, killed);
   };
+  const feedsSent = (r) => { for (const feed of Object.keys(deskKilled)) if (deskKilled[feed]) feedSend(r, feed, true); };
   const open = () => {
     const r = run; if (!r || !r.created) return;
     if (r.es) r.es.close();   // one stream at a time: a pending retry must not add a second
@@ -94,7 +99,7 @@ const LV = (() => {
       on('status', (d) => { const s = d && d.status; r.apiFallback = s === 'rules_fallback'; if (s === 'live') set('live'); else if (s === 'rules_fallback') set('fallback'); else if (s === 'warming_up') set('warming'); });
       on('claim', (d) => { r.claimed = true; if (st === 'warming' || (st === 'fallback' && !r.apiFallback)) set('live'); onClaim(d, st); });   // a claim after the warm-up timed out means the api is live after all, unless the api itself said it is on rules
       on('line', (d) => onLine(d, st));
-      // contract 1.2.0 records for derived feeds (docs/contracts.md): the stream's event names are assumed to be the record kinds until the overlay stream (AB#499) fixes them
+      // contract 1.2.0 records for derived feeds (docs/contracts.md): the stream sends each record under its kind, onair or feed_drop (AB#499)
       const crew = (kind, d) => { if (window.CREW && CREW.enabled) CREW.ingest(Object.assign({}, d, { kind })); };   // the crew data layer validates; a bad frame is skipped there
       on('onair', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'onair' }, d)); onAired(d && d.publication_id); crew('onair', d); });
       on('feed_drop', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'feed_drop' }, d)); onDrop(d, st); crew('feed_drop', d); });
@@ -114,7 +119,7 @@ const LV = (() => {
     try {
       const bad = badClaim;   // the api takes the demo switch at match creation only
       const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; if (res.status === 409) r.attached = true; open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
+      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; if (res.status === 409) r.attached = true; if (run === r) feedsSent(r); open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
     } finally { r.creating = null; }
   })());
 
