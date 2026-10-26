@@ -4,8 +4,7 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // CREW-7.3: the Watch feed picker's Catch me up feed. Picking it asks the shell, the shell reads GET /v1/matches/{id}/catch-me-up?session_id&minute
 // (PR #413, 200 / 404 held / 429 / 422) and Watch draws the whole recap. The api is a local fixture server here; no live Azure or Foundry call.
-// The feed is Planned in the picker until the end-to-end check passes, so these tests mark it live in the page (the shell's CREW.FEEDS), as the
-// shell's own flag will. No timers are waited on: every wait polls for state.
+// The feed is live in the picker (live: true in CREW.FEEDS), so the tests set nothing by hand. No timers are waited on: every wait polls for state.
 declare const CREW: any;
 declare const LV: any;
 declare const FR: any;
@@ -45,7 +44,6 @@ async function open(page: any, api: string, gapMs = 0) {
   await ready('watch')(page);
   const f = await viewFrame(page, 'watch');
   await expect(f.getByRole('radiogroup', { name: 'Feed' })).toBeVisible({ timeout: 60_000 });
-  await page.evaluate(() => { CREW.FEEDS.find((d: any) => d.key === 'catch_me_up').live = true; CREW.reset(); });   // reset re-sends the defs to Watch
   await page.evaluate(() => LV.begin('k1', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }));
   await expect.poll(() => page.evaluate(() => !!(LV.key && LV.base)), { timeout: 30_000 }).toBe(true);
   await expect(f.getByRole('radio', { name: /Catch me up/ }).locator('.fp-tag')).toHaveCount(0, { timeout: 30_000 });
@@ -180,4 +178,26 @@ test('the recap text is set as text: markup in it stays literal and nothing runs
     expect(await f.evaluate(() => (window as any).__xss)).toBeUndefined();
   });
   expect(errs).toEqual([]);
+});
+
+test('the recap text scrolls inside a capped box on desktop and phone, and a keyboard can reach it (tabindex 0, named region)', async ({ page }) => {
+  test.setTimeout(300_000);
+  const long = Array.from({ length: 280 }, (_, i) => 'word' + i).join(' ') + '.';
+  await withApi(() => ({ status: 200, body: { ...RECAP, text: long, word_count: 280 } }), async (api) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('word279.', { timeout: 30_000 });
+    const text = card.locator('.fp-cu-text');
+    await expect(text).toHaveAttribute('tabindex', '0');
+    await expect(card.getByRole('region', { name: 'Catch me up recap' })).toHaveCount(1);
+    const box = () => text.evaluate((e) => { const c = getComputedStyle(e); return { max: c.maxHeight, oy: c.overflowY, scrolls: e.scrollHeight > e.clientHeight }; });
+    for (const w of [1280, 390]) {
+      await page.setViewportSize({ width: w, height: 800 });
+      await expect.poll(async () => (await box()).max, { timeout: 30_000 }).not.toBe('none');
+      const b = await box();
+      expect(['auto', 'scroll'], 'overflow at ' + w).toContain(b.oy);
+      expect(b.scrolls, 'a 280-word recap scrolls inside its box at ' + w).toBe(true);
+    }
+  });
 });

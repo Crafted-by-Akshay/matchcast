@@ -23,7 +23,6 @@ test('the real route: 200 with the shape the block reads, 404-free path, the min
   await ready('watch')(page);
   const f = await viewFrame(page, 'watch');
   await expect(f.getByRole('radiogroup', { name: 'Feed' })).toBeVisible({ timeout: 60_000 });
-  await page.evaluate(() => { CREW.FEEDS.find((d: any) => d.key === 'catch_me_up').live = true; CREW.reset(); });
   const players = Object.entries(FIXTURE.names as Record<string, string>).map(([id, name]) => ({ id, name, team: id.startsWith('home') ? 'home' : 'away' }));
   await page.evaluate((ps) => LV.begin('real1', { teams: ['home', 'away'], players: ps.map((p: any) => ({ name: p.name, team: p.team })) }), players);
   await expect.poll(() => page.evaluate(() => !!(LV.key && LV.base)), { timeout: 30_000 }).toBe(true);

@@ -24,7 +24,7 @@ Option 2. The languages are `en, es, pt, hi, ar, fr, de, id, ja, zh-Hans`. A lin
 - One verification path for every language; a translation cannot add a number or a name.
 - Spoken output is limited to the languages with a voice in `voices.json` (en, es, pt, hi). Other languages show captions only.
 - The Broadcast desk still writes its own rules templates in es and hi, so its other languages show English with a note.
-- Character use is capped per api process by `TRANSLATOR_MAX_CHARS`. The free tier (2M characters a month) is for the demo and judging; the Azure change to F0 is a Platform-lane step.
+- Character use is capped per api process by `TRANSLATOR_MAX_CHARS`. The resource stays on S1: Azure policy blocks an in-place change to the free tier (F0), so the cap above is the cost control.
 
 ## Affects
 

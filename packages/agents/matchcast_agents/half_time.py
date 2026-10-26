@@ -6,9 +6,11 @@ that cut are folded, so no second-half event can reach the piece. A retraction l
 target out, wherever it sits in the stream. A correction to a first-half event holds the
 piece (None): nothing folds corrections yet, so such a piece stays held until a fold exists.
 
-Each sentence lists the metrics it quotes, for the Verifier to recount. feeds.py sets the
-feed's 90 seconds; WORDS_PER_SECOND here turns that into a word limit. Own goals are counted
-in the score but not named.
+Each sentence lists the metrics it quotes. claims() turns those metrics into claim packets
+counted from the first-half events only, and drafts() turns the sentences into DraftLines
+that cite those claims, so the Verifier recounts each number from the same events. feeds.py
+sets the feed's 90 seconds; WORDS_PER_SECOND here turns that into a word limit. Own goals are
+counted in the score but not named.
 """
 
 from dataclasses import dataclass
@@ -16,11 +18,14 @@ from typing import Any
 
 from .context import MatchContext
 from .feeds import FEEDS
+from .messages import DraftLine
+from .metrics_spec import METRIC_UNITS, derivation_version
 from .state import MatchState, apply
 
 WORDS_PER_SECOND = 2.5  # spoken pace for the explainer's length check
 MAX_SECONDS = next(feed.max_seconds for feed in FEEDS if feed.key == "half_time")
 WORD_LIMIT = int(MAX_SECONDS * WORDS_PER_SECOND)
+HALF_TIME_MAX_CHARS = 280  # one sentence of the piece, as the analyst voice's limit
 MAX_GOALS_NAMED = 3
 CONTROLS = ("correction", "retraction")
 
@@ -35,6 +40,8 @@ class HalfTime:
     source_event_ids: tuple[str, ...]  # the goals and shots counted, then the half-time event
     word_count: int
     seconds: float
+    events: tuple[dict[str, Any], ...]  # the first-half events the piece is counted from
+    state: MatchState  # the state those events give; the claims' snapshot
 
 
 def half_time_event(events: tuple[dict[str, Any], ...]) -> dict[str, Any] | None:
@@ -147,4 +154,53 @@ def build(ctx: MatchContext) -> HalfTime | None:
         source_event_ids=(*counted, ended["event_id"]),
         word_count=words,
         seconds=round(words / WORDS_PER_SECOND, 1),
+        events=first,
+        state=state,
     )
+
+
+def claims(piece: HalfTime, stream: dict[str, str]) -> list[dict[str, Any]]:
+    """One claim per metric the piece quotes, counted from the first-half state."""
+    snapshot = piece.state.snapshot()
+    metrics = list(dict.fromkeys(m for _, quoted in piece.sentences for m in quoted))
+    packets = []
+    for index, metric in enumerate(metrics, start=1):
+        name, _, team = metric.partition(":")
+        packets.append(
+            {
+                "kind": "claim",
+                "schema_version": "1.1.0",
+                "stream": stream,
+                "claim_id": f"claim-halftime-{index}",
+                "source": {
+                    "type": "interval",
+                    "from_event_time_ms": 0,
+                    "to_event_time_ms": snapshot["event_time_ms"],
+                    "from_stream_sequence": 1,
+                    "to_stream_sequence": snapshot["max_evidence_sequence"],
+                },
+                "metric": metric,
+                "value": piece.state.count(name, team),
+                "units": METRIC_UNITS[name],
+                "derivation_version": derivation_version(name),
+                "snapshot": snapshot,
+                "max_evidence_sequence": snapshot["max_evidence_sequence"],
+                "approval_status": "pending",
+            }
+        )
+    return packets
+
+
+def drafts(piece: HalfTime, packets: list[dict[str, Any]]) -> list[DraftLine]:
+    """One DraftLine per sentence, citing the claim for each metric it quotes."""
+    claim_for = {packet["metric"]: packet["claim_id"] for packet in packets}
+    return [
+        DraftLine(
+            line_id=f"line-halftime-{index}",
+            claim_ids=tuple(claim_for[metric] for metric in quoted),
+            persona="half_time",
+            text=text,
+            max_chars=HALF_TIME_MAX_CHARS,
+        )
+        for index, (text, quoted) in enumerate(piece.sentences, start=1)
+    ]

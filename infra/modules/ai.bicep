@@ -14,7 +14,7 @@ var suffix = take(uniqueString(resourceGroup().id), 5)
 param accounts array = [
   { key: 'contentSafety', kind: 'ContentSafety', prefix: 'cs', sku: 'S0' }
   { key: 'speech', kind: 'SpeechServices', prefix: 'sp', sku: 'S0' }
-  { key: 'translator', kind: 'TextTranslation', prefix: 'tr', sku: 'F0' } // free: 2M characters a month; over it the feeds keep English
+  { key: 'translator', kind: 'TextTranslation', prefix: 'tr', sku: 'S1' }
   { key: 'vision', kind: 'ComputerVision', prefix: 'cv', sku: 'S1' }
 ]
 

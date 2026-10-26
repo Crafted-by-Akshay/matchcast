@@ -13,16 +13,18 @@ _BODY = (
     r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour)"
 )
 PATTERN = rf"^({_BODY})$"
-# the feed-only personas (the ticker and the describer) have no viewer voice: a viewer cannot ask
-# for them, but their draft lines (messages.Persona) carry them
-FEED_ONLY = ("ticker", "audio_description")
+# the feed-only personas (the ticker, the describer and the half-time explainer) have no viewer
+# voice: a viewer cannot ask for them, but their draft lines (messages.Persona) carry them
+FEED_ONLY = ("ticker", "audio_description", "half_time")
 PACKET_PATTERN = rf"^({_BODY}|{'|'.join(FEED_ONLY)})$"
 _VALID = re.compile(PATTERN)
+_PACKET = re.compile(PACKET_PATTERN)
 # the base voice whose character limit a persona uses
 VOICE = {
     "my-club": "casual",
     "player-focus": "casual",
     "one-metric": "analyst",
+    "half_time": "analyst",  # the explainer's sentences use the analyst's 280 (half_time.py)
     "booth": "broadcast",
     "ticker": "broadcast",  # the news ticker's one-line templates (AB#471)
     "audio_description": "casual",  # the describer's sentences (AB#454)
@@ -31,7 +33,14 @@ BOOTH = ("booth:pbp", "booth:colour")  # the two voices of the commentary booth,
 MAX_CHARS = {"casual": 140, "analyst": 280, "broadcast": 180}
 MAX_NUMBERS = {"casual": 1, "analyst": 6, "broadcast": 2}
 # watch modes keep their own number limits (one-metric may quote both teams)
-NUMBER_LIMIT = {"one-metric": 2, "player-focus": 1, "my-club": 1, "booth": 2, "ticker": 2}
+NUMBER_LIMIT = {
+    "one-metric": 2,
+    "player-focus": 1,
+    "my-club": 1,
+    "booth": 2,
+    "ticker": 2,
+    "half_time": 6,
+}
 
 
 # the metrics a one-metric watch mode can follow (the Narrator's LABELS has the same keys)
@@ -43,6 +52,11 @@ MAX_WATCH_MODES = 8  # extra personas one match writes lines for
 
 def valid(persona: str) -> bool:
     return bool(_VALID.match(persona))
+
+
+def packet_valid(persona: str) -> bool:
+    """A persona a DraftLine may carry: a viewer's persona or a feed-only one."""
+    return bool(_PACKET.match(persona))
 
 
 def known(persona: str, clubs: dict[str, str], names: dict[str, str]) -> bool:

@@ -36,7 +36,7 @@
     + '#mc-feedlines{font:12px/1.35 system-ui,sans-serif;color:#e8eefc;min-height:1.35em}#mc-feedlines .fp-sim{color:#F5B942;margin-right:6px}#mc-feedlines ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}'
     + '#mc-feedlines li{display:flex;gap:6px;align-items:baseline;overflow-wrap:anywhere}#mc-feedlines .fp-min{font-weight:700;color:#8CC2FF;flex:none}'
     + '#mc-feedlines .fp-tick{color:#5BD19A;font-weight:700;flex:none}#mc-feedlines .fp-note{margin:4px 0 0;color:#c9d6f0}#mc-feedlines .fp-empty{margin:0;color:#c9d6f0}'
-    + '#mc-feedlines .fp-cu-text{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}#mc-feedlines .fp-cu-meta{margin:4px 0 0;color:#c9d6f0;display:flex;flex-wrap:wrap;gap:2px 10px}#mc-feedlines .fp-verified{color:#5BD19A;font-weight:700}'
+    + '#mc-feedlines .fp-cu-text{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:12em;overflow-y:auto}#mc-feedlines .fp-cu-text:focus-visible{outline:2px solid #F5B942;outline-offset:2px}#mc-feedlines .fp-cu-meta{margin:4px 0 0;color:#c9d6f0;display:flex;flex-wrap:wrap;gap:2px 10px}#mc-feedlines .fp-verified{color:#5BD19A;font-weight:700}'
     + '#mc-feedlines .fp-cu-btn{margin-top:6px;min-height:32px;padding:2px 10px;border-radius:999px;border:1px solid rgba(140,194,255,.35);background:transparent;color:#c9d6f0;font:600 12px system-ui,sans-serif;cursor:pointer}#mc-feedlines .fp-cu-btn:focus-visible{outline:2px solid #F5B942;outline-offset:2px}'
     + '#mc-feedsr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}'
     + 'body.mc-feedlive #mc-two{display:none}'   // the two-voice panel steps aside only while a live feed has lines to show
@@ -66,6 +66,7 @@
   const cuBox = document.createElement('div'); cuBox.className = 'fp-cu';
   const cuNote = document.createElement('p'); cuNote.className = 'fp-empty fp-cu-note';
   const cuText = document.createElement('p'); cuText.className = 'fp-cu-text';
+  cuText.tabIndex = 0; cuText.setAttribute('role', 'region'); cuText.setAttribute('aria-label', 'Catch me up recap');   // a scrollable region must be reachable and named for keyboard users
   const cuMeta = document.createElement('p'); cuMeta.className = 'fp-cu-meta';
   const cuBtn = document.createElement('button'); cuBtn.type = 'button'; cuBtn.className = 'fp-cu-btn'; cuBtn.textContent = 'Update to now';
   cuBox.append(cuNote, cuText, cuMeta, cuBtn);
