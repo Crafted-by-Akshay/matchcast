@@ -22,7 +22,7 @@ def test_ticker_lines_air_with_an_onair_record_that_names_their_event(match) -> 
 
 def test_audio_descriptions_do_not_air_until_the_speak_time_check_lands(match) -> None:
     # a later booth line can land inside a description placed in the gap before it (the fixture
-    # has 11 of 24 overlapping), so the description is not aired on a live match yet
+    # so the description is not aired on a live match yet
     flow = flow_with(match, personas=BOOTH_PERSONAS)
     flow.config.feed_lines = ("ticker", "audio_description")
     run(flow.ingest(match["events"]))

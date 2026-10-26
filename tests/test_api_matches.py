@@ -607,8 +607,8 @@ def test_live_mode_uses_the_model_client_and_audits_its_lines(
     create(client)
     post_all(client)
     lines = client.get("/v1/matches/match-short/lines", params=Q).json()["items"]
-    # the model writes the booth and analyst lines; the template feeds (ticker, audio) are written
-    # by the rules and carry no model origin
+    # the model writes the booth and analyst lines; the ticker is written by the rules and carries
+    # no model origin
     feed = {"ticker", "audio_description"}
     assert lines and {ln["origin"] for ln in lines if ln["persona"] not in feed} == {"model"}
     assert {ln["origin"] for ln in lines if ln["persona"] in feed} <= {"template"}

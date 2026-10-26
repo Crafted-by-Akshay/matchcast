@@ -739,7 +739,7 @@ class MatchWorkflow:
         eid = event["event_id"]
         ticker = f"line-ticker-{eid}"
         written = {ln.line_id for ln in self.store.lines(self.sk)}
-        drafts = [pair for pair in ticker_drafts(ctx) if pair[0].line_id == ticker]
+        drafts = [pair for pair in ticker_drafts(ctx, eid) if pair[0].line_id == ticker]
         for draft, claims in drafts:
             if draft.line_id in written or not claims:
                 continue
