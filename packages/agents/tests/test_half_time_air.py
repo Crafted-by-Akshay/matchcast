@@ -3,8 +3,10 @@ reaches a model: the rules agents write and verify the piece."""
 
 import dataclasses
 
+import pytest
 from conftest import run
-from matchcast_agents.workflow import LIVE_FEED_LINES
+from matchcast_agents import half_time as half_time_mod
+from matchcast_agents.workflow import LIVE_FEED_LINES, WorkflowError
 from matchcast_contracts import validate
 from test_feed_air import events_of, flow_with
 
@@ -139,7 +141,7 @@ def test_the_claims_of_dropped_lines_are_neither_approved_nor_aired(match) -> No
     kept = [
         line
         for line in flow.store.lines(flow.sk)
-        if line.moment_id == "half_time" and line.status == "verified"
+        if line.moment_id == "half_time" and line.status in ("verified", "published")
     ]
     assert [line.line_id for line in kept] == ["line-halftime-6"]
     kept_claims = {claim for line in kept for claim in line.claim_ids}
@@ -172,11 +174,47 @@ def test_a_piece_with_no_line_left_airs_nothing(match) -> None:
     assert run(flow.half_time()) is None
 
 
-def test_a_desk_killed_line_holds_the_piece_when_it_is_written_again(match) -> None:
+def test_a_desk_killed_line_holds_the_piece_before_it_airs(match) -> None:
+    flow = flow_with(
+        match, personas=("casual", "analyst")
+    )  # the feed is off: the boundary airs nothing
+    run(flow.ingest(match["events"]))
+    run(flow.half_time())  # the piece is verified and its lines stored, not aired
+    run(flow.kill("line-halftime-1", "checked by the desk"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    run(flow._air_half_time(first_half_end(match)))
+    assert halves(flow) == []
+    assert half_time_publications(flow) == []
+
+
+def test_a_half_time_line_on_air_cannot_be_killed(match) -> None:
     flow = flow_with(match, personas=("casual", "analyst"))
     flow.config.feed_lines = LIVE_FEED_LINES
     run(flow.ingest(match["events"]))
-    run(flow.kill("line-halftime-1", "checked by the desk"))
-    flow._half_times.clear()  # what a restart starts with: the piece is verified again
-    assert run(flow.half_time()) is None
-    assert flow.store.get_line(flow.sk, "line-halftime-1").status == "killed"
+    with pytest.raises(WorkflowError) as error:
+        run(flow.kill("line-halftime-1", "too late"))
+    assert error.value.code == "not_approvable"
+
+
+def test_a_fresh_process_reads_the_aired_piece_back_and_keeps_it_approved(match) -> None:
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    run(flow.ingest(match["events"]))
+    [record] = halves(flow)
+    flow._half_times.clear()  # what a restart starts with
+    assert run(flow.half_time())["text"] == record["text"]
+    for claim_id in record["claim_ids"]:
+        assert flow.store.get_claim(flow.sk, claim_id)["packet"]["approval_status"] == "approved"
+    statuses = {line.status for line in flow.store.lines(flow.sk) if line.moment_id == "half_time"}
+    assert statuses <= {"published", "rejected"}
+
+
+def test_no_piece_means_nothing_airs(match, monkeypatch) -> None:
+    monkeypatch.setattr(
+        half_time_mod, "build", lambda ctx: None
+    )  # a retracted boundary gives no piece
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    run(flow.ingest(match["events"]))
+    assert halves(flow) == []
+    assert half_time_publications(flow) == []

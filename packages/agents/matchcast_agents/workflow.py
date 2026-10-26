@@ -1397,6 +1397,19 @@ class MatchWorkflow:
         if key in self._half_times:  # a repeat call writes nothing new, so no new audit rows
             cached = self._half_times[key]
             return copy.deepcopy(cached) if cached is not None else None
+        aired_id = f"pub-half-time-{piece.cut_sequence}"
+        aired = [p for p in self.store.publications(self.sk) if p["publication_id"] == aired_id]
+        if aired:  # aired already, and a fresh process asks again: read it back, write nothing, so
+            # the aired claims keep their approval and the aired lines stay published
+            return {
+                "match_id": self.stream["match_id"],
+                "persona": "half_time",
+                "cut_sequence": piece.cut_sequence,
+                "text": aired[0]["text"],
+                "claim_ids": list(aired[0]["claim_ids"]),
+                "source_event_ids": list(piece.source_event_ids),
+                "created_at": stamp,
+            }
         by_id = {c["claim_id"]: c for c in packets}
         for packet in packets:
             validate(packet)
@@ -1563,6 +1576,12 @@ class MatchWorkflow:
         }
         validate(publication)
         self.store.put_publication(self.sk, publication)
+        for line in self.store.lines(
+            self.sk
+        ):  # on air, a kept line is published, as a ticker line is
+            if line.moment_id == "half_time" and line.status == "verified":
+                line.status = "published"
+                self._save_line(line)
         self.stats["published"] += 1
         self.hub.publish("publication", f"pub:{publication_id}", publication)
         onair = {
