@@ -23,7 +23,13 @@ from . import catch_me_up
 from . import half_time as half_time_mod
 from . import recap as recap_mod
 from .context import MatchContext
-from .feeds import drops_on_failed_repair, feed_for, waits_for_producer
+from .feed_lines import ticker_drafts
+from .feeds import (
+    TICKER_PERSONA,
+    drops_on_failed_repair,
+    feed_for,
+    waits_for_producer,
+)
 from .history import history_for_roster
 from .hub import StreamHub
 from .memory import storylines
@@ -50,6 +56,9 @@ if TYPE_CHECKING:
     from .live.knowledge import TalkKnowledge
 
 STATS_DESK_BUDGET_S = 2.0
+# the template feeds a live match airs. The audio description is written (feed_lines.py) but not
+# aired: a later booth line can land inside it, so it waits for the speak-time check (Planned)
+LIVE_FEED_LINES = ("ticker",)
 MINUTE_MENTION = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)  # "minute 12": a log minute
 
 TALK_PHRASES = {
@@ -249,6 +258,9 @@ class WorkflowConfig:
     personas: tuple[Persona, ...] = ("casual", "analyst")
     # the engine clock at which the one Vision moment is due (ADR-0022); 0 turns it off
     vision_moment_ms: int = 900_000
+    # the template feeds aired on this match: () by default; the match service turns on
+    # LIVE_FEED_LINES (AB#471), so the library and its evals keep their lines as they were
+    feed_lines: tuple[str, ...] = ()
     # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
     orchestrator: str = field(
         default_factory=lambda: os.environ.get("MATCHCAST_ORCHESTRATOR", "af")
@@ -711,7 +723,49 @@ class MatchWorkflow:
             task = await self._decide_moment(ctx, event)
             if task is not None:
                 await self._run_moment(ctx, task)
+        await self._write_feed_lines(event)
         self._note_aired(event)
+
+    async def _write_feed_lines(self, event: dict[str, Any]) -> None:
+        """This event's ticker line (AB#471), backed by claims the Verifier recounts.
+
+        It goes through the same Verifier and air gate as every line. A refusal is dropped at once:
+        a template line has no repair. The audio description is not aired here (see
+        LIVE_FEED_LINES).
+        """
+        if TICKER_PERSONA not in self.config.feed_lines:
+            return
+        ctx = self._ctx()
+        eid = event["event_id"]
+        ticker = f"line-ticker-{eid}"
+        written = {ln.line_id for ln in self.store.lines(self.sk)}
+        drafts = [pair for pair in ticker_drafts(ctx, eid) if pair[0].line_id == ticker]
+        for draft, claims in drafts:
+            if draft.line_id in written or not claims:
+                continue
+            task = ProducerTask(
+                moment_id=f"f-{eid}",
+                match_id=self.stream["match_id"],
+                event_ids=(eid,),
+                up_to_sequence=event["stream_sequence"],
+                priority=3,
+                personas=(draft.persona,),
+                reason="feed",
+            )
+            for claim in claims:
+                validate(claim)
+                self.store.put_claim(
+                    self.sk,
+                    claim,
+                    {
+                        "moment_id": task.moment_id,
+                        "agent": self.agents.narrator.agent_id,
+                        "created_at": _stamp(self._clock()),
+                        "tool_call_ids": [],
+                        "formula_inputs": {},
+                    },
+                )
+            await self._verify_line(ctx, task, claims, draft, attempt=1)
 
     def _note_aired(self, event: dict[str, Any]) -> None:
         """A verified line of this event's moment aired: the match is quiet no longer."""

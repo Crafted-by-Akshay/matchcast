@@ -103,16 +103,20 @@ def _goal_retracted(ctx: MatchContext) -> bool:
     return any(e["event_id"] in targets and e["payload"]["type"] == "goal" for e in ctx.events)
 
 
-def ticker_drafts(ctx: MatchContext) -> list[tuple[DraftLine, list[Claim]]]:
+def ticker_drafts(
+    ctx: MatchContext, event_id: str | None = None
+) -> list[tuple[DraftLine, list[Claim]]]:
     """One DraftLine per ticker item, backed by its event's counters and, on a goal, the score.
 
     Goal lines are not written while a goal is retracted (see _goal_retracted). Card lines are.
+    With event_id, only that event's item is built, so its claims are not built for the rest.
     """
     retracted = _goal_retracted(ctx)
     return [
         _ticker_line(ctx, item)
         for item in ticker_items(ctx)
         if not (retracted and item.kind in ("goal", "own_goal"))
+        and (event_id is None or item.source_event_id == event_id)
     ]
 
 
