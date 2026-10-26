@@ -86,28 +86,6 @@ const ALV = (() => {
     return h + '</section>';
   }
 
-  const PITCH = '<rect x="0.5" y="0.5" width="104" height="67" fill="none" stroke="var(--line)" stroke-width="0.5"/><line x1="52.5" y1="0.5" x2="52.5" y2="67.5" stroke="var(--line)" stroke-width="0.5"/>'
-    + '<circle cx="52.5" cy="34" r="9.15" fill="none" stroke="var(--line)" stroke-width="0.5"/>'
-    + '<rect x="0.5" y="13.85" width="16.5" height="40.3" fill="none" stroke="var(--line)" stroke-width="0.5"/><rect x="88" y="13.85" width="16.5" height="40.3" fill="none" stroke="var(--line)" stroke-width="0.5"/>'
-    + '<rect x="0.5" y="24.85" width="5.5" height="18.3" fill="none" stroke="var(--line)" stroke-width="0.5"/><rect x="99" y="24.85" width="5.5" height="18.3" fill="none" stroke="var(--line)" stroke-width="0.5"/>';
-  function shotPanel(r, cl, f) {
-    const shots = r ? r.events.filter((e) => e.type === 'shot' && sideOf(r, e.team) >= 0 && e.data && num(e.data.x) && num(e.data.y)) : [];
-    let h = '<section data-panel="shots"><h3>Shot map <small>Simulated · dot size is xG</small></h3>';
-    if (!shots.length) return h + '<p class="empty">No shots yet.</p></section>';
-    const n = [0, 0], xg = [0, 0]; let goals = 0, saves = 0;
-    for (const e of shots) { const s = sideOf(r, e.team); n[s]++; xg[s] += +e.data.xg || 0; if (e.data.fate === 'goal') goals++; else if (e.data.fate === 'save') saves++; }
-    const sum = 'Shot map, simulated match. ' + shots.length + ' shots: ' + cl[0] + ' ' + n[0] + ', ' + cl[1] + ' ' + n[1] + '. Total xG ' + cl[0] + ' ' + f2(xg[0]) + ', ' + cl[1] + ' ' + f2(xg[1]) + '. ' + goals + (goals === 1 ? ' goal' : ' goals') + '. Dot size is the shot\'s xG; filled is a goal, half filled a save, hollow off target.';
-    const dots = shots.map((e) => {
-      const s = sideOf(r, e.team), d = e.data, op = d.fate === 'goal' ? 1 : d.fate === 'save' ? 0.5 : 0.12;
-      return '<circle data-fate="' + esc(d.fate || 'miss') + '"' + (d.fate === 'save' ? ' stroke-dasharray="1 0.7"' : '') + ' data-xg="' + f2(d.xg) + '" data-side="' + s + '"' + fav(s, f) + ' cx="' + Math.max(0, Math.min(105, +d.x)).toFixed(1) + '" cy="' + Math.max(0, Math.min(68, +d.y)).toFixed(1) + '" r="' + (1 + 4.2 * Math.sqrt(Math.max(0, +d.xg || 0))).toFixed(2)
-        + '" fill="var(--side)" fill-opacity="' + op + '" stroke="var(--side)" stroke-width="' + (s === f ? 0.9 : 0.4) + '"><title>' + esc(mn(e.minute) + ' ' + (e.player || '') + ' xG ' + f2(d.xg) + ' ' + (d.fate || '')) + '</title></circle>';
-    }).join('');
-    h += '<div class="key"><span data-side="0"' + fav(0, f) + '>' + esc(cl[0]) + ' · ' + n[0] + ' shots · xG ' + f2(xg[0]) + '</span><span data-side="1"' + fav(1, f) + '>' + esc(cl[1]) + ' · ' + n[1] + ' shots · xG ' + f2(xg[1]) + '</span></div>'
-      + '<svg data-map="shots" viewBox="0 0 105 68" role="img" aria-label="' + esc(sum) + '">' + PITCH + dots + '</svg>'
-      + '<p class="m">Key: ' + goals + ' filled (goal), ' + saves + ' half filled with a dashed edge (save), ' + (shots.length - goals - saves) + ' hollow (off target). Positions are as the match recorded them.</p>';
-    return h + '</section>';
-  }
-
   function passPanel(r, cl, f) {
     let h = '<section data-panel="passes"><h3>Pass quality <small>Simulated · counted from the pass events</small></h3>';
     const ps = r ? r.events.filter((e) => e.type === 'pass' && sideOf(r, e.team) >= 0) : [];
@@ -173,8 +151,9 @@ const ALV = (() => {
     if (hs !== headSig) { headSig = hs; sel.innerHTML = cl ? cl.map((c, i) => '<option value="' + i + '"' + (i === f ? ' selected' : '') + '>' + esc(c) + '</option>').join('') : ''; sel.disabled = !cl; }
     let body;
     if (!cl) body = '<section class="wide"><p class="empty">Pick a fixture to see its live view.</p></section>';
-    else body = feedPanel(r) + controlPanel(r, cl, f) + shotPanel(r, cl, f) + passPanel(r, cl, f) + storyPanel(r, cl, f);
+    else body = feedPanel(r) + controlPanel(r, cl, f) + ALX.panel(r, cl, f) + passPanel(r, cl, f) + storyPanel(r, cl, f);
     if (body !== bodySig) { bodySig = body; hostEl.querySelector('#al-body').innerHTML = body; }
+    ALX.mounted(hostEl);   // the shot replay (crew-analyst-shots.js) draws into the fresh svg, or starts after a tap
   }
   // which of the live view and the console shows; the console iframe is created only when asked for
   function sync() {
