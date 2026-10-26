@@ -856,6 +856,16 @@ function pushCards() {
 // ---------------------------------------------------------------- crew feeds to Watch (AB#450, ?crew=1)
 function postCrew() { if (window.CREW && CREW.enabled && FR.watch) post('watch', { src: 'matchcast-shell', type: 'crew-feeds', lang: 'en', simulated: !!CREW.state.simulated, feeds: CREW.state.feeds, defs: CREW.FEEDS }); }
 if (window.CREW && CREW.enabled) CREW.subscribe(postCrew);
+// CREW-7.3: Watch's picker chose (or re-chose, or pressed Update on) Catch me up. Only a live feed is asked for; the match minute is the one Watch last reported (0 before kick-off).
+// The reply goes back to Watch as {type:'crew-catchup', state, ...} (state: loading, ok, held, limited, error, none); crew.js throttles the GET.
+function askCatchUp() {
+  if (!window.CREW || !CREW.enabled || !FR.watch) return;
+  const def = CREW.FEEDS.find((x) => x.key === 'catch_me_up');
+  if (!def || !def.live) return;
+  const minute = Math.max(0, Math.min(200, Math.floor(+(FR.watch.live && FR.watch.live.minute) || 0)));
+  post('watch', { src: 'matchcast-shell', type: 'crew-catchup', state: 'loading', minute });
+  CREW.catchUp(minute).then((rec) => post('watch', Object.assign({ src: 'matchcast-shell', type: 'crew-catchup' }, rec)));
+}
 // ---------------------------------------------------------------- messages from the views
 // ---- EXP-18: the voice call. Watch shows the Call button; the shell owns the call: one socket to the api (LV.openCall), the fan's
 // voice (Azure Speech, or the browser's recogniser labelled Simulated), and the player's checked reply in his own voice, sentence by
@@ -939,7 +949,7 @@ window.addEventListener('message', (e) => {
   if (d.src !== 'matchcast') return;
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
-  if (d.type === 'crew-feed-pick') { postCrew(); return; }   // AB#450: Watch's feed picker opened or changed; it only needs the lines, the pick stays in Watch
+  if (d.type === 'crew-feed-pick') { postCrew(); if (d.key === 'catch_me_up') askCatchUp(); return; }   // AB#450: Watch's feed picker opened or changed; it only needs the lines, the pick stays in Watch
   if (d.type === 'feed-ready') {
     post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on });
     if (boothLast) post(view, boothLast);
