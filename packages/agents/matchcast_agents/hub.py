@@ -10,9 +10,13 @@ PUBLICATION_REPLAYED = ("publication", "audit")
 # onair and feed_drop are records, not speech: a desk that opens late rebuilds its feed monitor
 # from them. They are kept past the buffer, so a long match still has its feed records
 FEED_REPLAYED = ("onair", "feed_drop")
-REPLAYED = (*PUBLICATION_REPLAYED, *FEED_REPLAYED)
+# the crew's frames (contract 1.3.0): one ledger and the spawn starts and ends of each moment. A
+# viewer who opens the stream late rebuilds the crew tree and ledger from them
+CREW_REPLAYED = ("crew_ledger", "crew_spawn")
+REPLAYED = (*PUBLICATION_REPLAYED, *FEED_REPLAYED, *CREW_REPLAYED)
 REPLAY_LIMIT = 500
 FEED_REPLAY_LIMIT = 2000
+CREW_REPLAY_LIMIT = 2000
 
 
 @dataclass(frozen=True)
@@ -78,7 +82,13 @@ class StreamHub:
         ]
         publications = [pair for pair in candidates if pair[1].event in PUBLICATION_REPLAYED]
         feeds = [pair for pair in candidates if pair[1].event in FEED_REPLAYED]
-        chosen = {index for index, _ in publications[:REPLAY_LIMIT] + feeds[-FEED_REPLAY_LIMIT:]}
+        crew = [pair for pair in candidates if pair[1].event in CREW_REPLAYED]
+        chosen = {
+            index
+            for index, _ in publications[:REPLAY_LIMIT]
+            + feeds[-FEED_REPLAY_LIMIT:]
+            + crew[-CREW_REPLAY_LIMIT:]
+        }
         return [item for index, item in candidates if index in chosen]
 
     async def subscribe(self, replay: list[StreamEvent]) -> AsyncIterator[StreamEvent]:

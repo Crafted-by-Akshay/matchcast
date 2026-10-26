@@ -11,12 +11,12 @@
   var on = !/[?&]crew=0(&|$)/.test(qs);
   try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked: the default stands */ }
 
-  // feed keys and labels from the Feeds lane registry (feeds/450); only casual and analyst are live
+  // feed keys and labels from the Feeds lane registry (feeds/450); casual, analyst and catch_me_up (CREW-7.3, read on demand) are live
   var FEEDS = [
     { key: 'casual', label: 'Casual', live: true },
     { key: 'analyst', label: 'Analyst', live: true },
     { key: 'audio_description', label: 'Audio description', live: false },
-    { key: 'catch_me_up', label: 'Catch me up', live: false },
+    { key: 'catch_me_up', label: 'Catch me up', live: true },
     { key: 'half_time', label: 'Half-time explainer', live: false },
     { key: 'ticker', label: 'News ticker', live: false }
   ];
@@ -293,6 +293,31 @@
   }
   if (on) setInterval(pollScore, 1000);
 
+  /* CREW-7.3 catch-me-up. Asked only when the viewer picks the feed or presses Update (never polled). One GET at a time; a second ask inside the gap
+     (MATCHCAST_CATCHUP_MS, default 5 s) gets the last answer; after a 429 nothing is sent until the api's Retry-After has passed. LV.catchMeUp does the GET. */
+  var cu = { key: '', rec: null, at: 0, until: 0, busy: null };
+  function catchUp(minute) {
+    var lv = typeof LV !== 'undefined' ? LV : null, k = keyOf(lv), m = Math.max(0, Math.min(200, Math.floor(+minute) || 0));
+    if (!on || !lv || typeof lv.catchMeUp !== 'function') return Promise.resolve({ state: 'none', minute: m });
+    if (cu.key !== k) cu = { key: k, rec: null, at: 0, until: 0, busy: null };   // another match or session: the old recap is not this one's
+    if (cu.busy) return cu.busy;
+    var now = Date.now();
+    if (cu.until > now) return Promise.resolve({ state: 'limited', minute: m, wait_s: Math.ceil((cu.until - now) / 1000) });
+    var gap = typeof window.MATCHCAST_CATCHUP_MS === 'number' ? window.MATCHCAST_CATCHUP_MS : 5000;
+    if (cu.rec && now - cu.at < gap) return Promise.resolve(cu.rec);
+    var mine = cu;
+    cu.at = now;
+    cu.busy = lv.catchMeUp(m).then(function (rec) {
+      if (mine !== cu) return rec;   // the match changed while it was in flight: do not keep it
+      cu.busy = null;
+      if (rec.state === 'none') { cu.at = 0; return rec; }   // no api or no match yet: ask again freely
+      cu.rec = rec;
+      if (rec.state === 'limited') cu.until = Date.now() + rec.wait_s * 1000;
+      return rec;
+    }, function () { if (mine === cu) cu.busy = null; return { state: 'error', minute: m }; });
+    return cu.busy;
+  }
+
   var timers = [];
   function play(minute) {
     stop();
@@ -307,6 +332,6 @@
   window.CREW = {
     enabled: on, FEEDS: FEEDS, ARMS: ARMS, state: S,
     subscribe: function (fn) { subs.push(fn); fn(S); return function () { subs = subs.filter(function (x) { return x !== fn; }); }; },
-    ingest: ingest, fetchScore: fetchScore, get playing() { return fixtureLoaded; }, play: play, stop: stop, reset: reset
+    ingest: ingest, fetchScore: fetchScore, catchUp: catchUp, get playing() { return fixtureLoaded; }, play: play, stop: stop, reset: reset
   };
 })();
