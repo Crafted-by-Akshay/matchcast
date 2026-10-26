@@ -12,7 +12,7 @@ const CM = (() => {
   const seenApi = new Set();
   let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playTi = -1, playFrom = 0, persona = 'casual', changed = () => {}, lastPushAt = 0, fillN = 0, over = false;
   // the booth's dead-air fill: after FILL_MS (4 s) of real time with no line, a play-by-play line and a colour line drawn from the match state,
-  // and again every FILL_MS while the silence lasts (the counts only change with a new action, so each exchange is worded afresh)
+  // and again once FILL_MS has passed since the last line while the silence lasts (the tick is FILL_TICK_MS, so the gap is 4 to 6 s)
   const FILL_MS = 4000, FILL_TICK_MS = 2000;
   // four phrasings a turn, so the exchange does not repeat line for line. Only counts, the score and the named player from the events (s: club, who, score, home, away, at, passes)
   const FILL_PBP = [
@@ -30,11 +30,11 @@ const CM = (() => {
   // before any action: the kick-off score and the shape are the only facts, so no player is named
   const FILL_START_PBP = [
     (s) => 'Still ' + s.home + ' ' + s.score + ' ' + s.away + '.',
-    (s) => 'Both sides are settling in at ' + s.home + ' and ' + s.away + '.',
+    (s) => 'Both sides are settling in: ' + s.home + ' and ' + s.away + '.',
   ];
   const FILL_START_COLOUR = [
     (s) => 'The shape is all we can read so far.',
-    (s) => 'Plenty of time left, and the first possession will show who wants the ball.',
+    (s) => 'Watch who takes the first possession and how they play it.',
   ];
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
@@ -131,7 +131,7 @@ const CM = (() => {
   const fill = (now = Date.now()) => {
     if (!names || over || now - lastPushAt < FILL_MS) return;
     const k = fillN++ % FILL_PBP.length;
-    const last = events[events.length - 1];
+    const last = [...events].reverse().find((e) => e.type !== 'kickoff');   // the kick-off is not an action: the fill has no play to count yet
     if (!last) {   // no action yet: the kick-off score is the whole fact
       const s = { home: names.home, away: names.away, score: score.join('–') };
       push({ minute: 0, kind: 'filler', speaker: 'pbp', text: FILL_START_PBP[k % FILL_START_PBP.length](s) });
