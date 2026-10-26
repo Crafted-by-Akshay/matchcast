@@ -191,6 +191,13 @@ def test_a_recording_is_read_for_its_teams_seed_and_rate(tmp_path) -> None:
     assert load_live_run(str(tmp_path / "missing.json"), teams=TEAMS) is None
 
 
+def test_a_partial_file_of_arms_kept_mid_run_is_never_a_recording(tmp_path) -> None:
+    # the script keeps finished arms in <out>.partial while the run goes on; that is not a run
+    path = tmp_path / "out.json.partial"
+    path.write_text(json.dumps({"kind": "crew_live_partial", "arms": {"full_crew": {}}}))
+    assert load_live_run(str(path), teams=TEAMS) is None
+
+
 def test_a_file_that_does_not_parse_is_no_run(tmp_path) -> None:
     path = tmp_path / "run.json"
     path.write_text("{not json")

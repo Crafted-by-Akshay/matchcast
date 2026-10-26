@@ -58,6 +58,14 @@ def _iso_date(text: str) -> str:
         raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from error
 
 
+def _replace(path: Path, data: dict) -> None:
+    """Write ``data`` to ``path`` whole or not at all: a temp file, then a rename, so an interrupted
+    write never truncates what was there."""
+    temp = path.with_name(path.name + ".tmp")
+    temp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    os.replace(temp, path)
+
+
 def _writable(out: Path) -> bool:
     """Can the record be written to ``out`` now, so a paid run is not lost at the write?"""
     if out.is_symlink() or out.is_dir():
@@ -131,16 +139,20 @@ def main(argv: list[str] | None = None) -> int:
     if not os.environ.get("FOUNDRY_PROJECT_ENDPOINT"):
         print("FOUNDRY_PROJECT_ENDPOINT is not set; the calls would all fail", file=sys.stderr)
         return 2
-    print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)
     partial = args.out.with_name(args.out.name + ".partial")
+    if not _writable(partial):
+        print(
+            f"{partial} cannot be written; the arms kept as they finish go there", file=sys.stderr
+        )
+        return 2
+    partial.unlink(missing_ok=True)  # a stale partial from an earlier run is not this run's arms
+    print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)
     arms: dict[str, dict] = {}
 
     def keep_arm(key: str, arm: dict) -> None:
         # each arm is written as it completes, so a later failure does not lose a paid arm
         arms[key] = arm
-        partial.write_text(
-            json.dumps({"kind": "crew_live_partial", "arms": arms}, indent=2, sort_keys=True) + "\n"
-        )
+        _replace(partial, {"kind": "crew_live_partial", "arms": arms})
         cost = arm["cost"]
         print(
             f"{key}: {arm['lines_aired']} lines, {arm['wrong_lines_aired']} wrong, "
@@ -159,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
         run_date=args.run_date,
         on_arm=keep_arm,
     )
-    args.out.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+    _replace(args.out, record)
     partial.unlink(missing_ok=True)
     print(f"run {record['run_id']} written to {args.out}", file=sys.stderr)
     return 0
