@@ -105,7 +105,7 @@ const AG = (() => {
   // wild moments are deterministic triggers; the Producer makes them priority 1 and the line still goes through the Verifier
   const ALERTS = { red_card: 'Red card', turning_point: 'Turning point' };
   // the steps are the agents' own trace (who did what, and whether by a model or the rules): the Broadcast desk shows them as the orchestration strip
-  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text, was: c.wasText || null, aired_ms: Math.round(clock() - (c.born || clock())), alert: c.alert || null, verdict: c.verdict, repaired: !!c.repaired, tr: c.airText ? null : (c.tr || null), steps: (c.trace || []).map((s) => ({ agent: s.agent, step: s.step, mode: s.mode })), numbers: Object.entries(c.inputs || {}).filter(([, v]) => typeof v === 'number').slice(0, 4).map(([name, value]) => ({ name, value })) });   // an edited line has no checked translation
+  const air = (c) => ({ id: c.id, minute: c.minute, text: c.airText || c.text || (c.escalated ? textNote(c) : c.text), was: c.wasText || null, aired_ms: Math.round(clock() - (c.born || clock())), alert: c.alert || null, verdict: c.verdict, repaired: !!c.repaired, tr: c.airText ? null : (c.tr || null), steps: (c.trace || []).map((s) => ({ agent: s.agent, step: s.step, mode: s.mode })), numbers: Object.entries(c.inputs || {}).filter(([, v]) => typeof v === 'number').slice(0, 4).map(([name, value]) => ({ name, value })) });   // an edited line has no checked translation
   const nums = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
   // a person's action on a queued line; every one lands in the audit chain with the person's name
   const act = (id, who, action, detail, fn) => {
@@ -304,8 +304,40 @@ const AG = (() => {
   const ESCALATION = { number_mismatch: 'a number does not match the event log', unknown_player: 'a player is not in the event log', unknown_source: 'it cites a source the event log does not have', stale_state: 'the match moved on before it was checked' };
   // a new match from Watch (its start, or a fixture change) starts a new run, and the audit chain starts again with it
   // a claim or line from the live api (live.js): shown beside the rules claims, tagged with where it came from ('model' when the api says live, else 'rules')
+  // The open stream puts a placeholder where a line's text is withheld ('[awaiting checks]', '[not shown: ...]', '[withheld: ...]'). It is a state, never text:
+  // it is dropped here, so no card, feed line, booth line or queue item carries it. A producer's GET /lines has an escalated line's text (loadText below).
+  const placeholderOf = (t) => (typeof t !== 'string' ? '' : /^\[withheld/.test(t) ? 'withheld' : /^\[awaiting/.test(t) ? 'checking' : /^\[not shown/.test(t) ? 'not_shown' : '');
+  const isProducer = () => typeof LV !== 'undefined' && /^(Producer|Admin)$/.test(LV.role);
+  const TEXT_NOTE = { withheld: 'withheld: refused by Content Safety', hidden: 'Text hidden: producer role needed', unavailable: 'Text not shown: could not be loaded', loading: 'Loading the text…' };
+  const textNote = (c) => (c.safetyRefused ? TEXT_NOTE.withheld : TEXT_NOTE[c.textState] || TEXT_NOTE.loading);
+  // an escalated card with no text asks the api for it once (cached on the card, so a replayed event adds no request), batched and throttled to one call every 2 s
+  const tx = { want: [], timer: null, last: 0 };
+  const loadText = (c) => {
+    if (c.safetyRefused || c.textState) return;
+    if (!isProducer()) { c.textState = 'hidden'; return; }   // no request for a viewer who may not read it
+    c.textState = 'loading'; tx.want.push({ run, c });
+    if (tx.timer) return;
+    tx.timer = setTimeout(async () => {
+      tx.timer = null; tx.last = Date.now();
+      const batch = tx.want.splice(0).filter((w) => w.run === run);
+      if (!batch.length) return;
+      let items = null, err = null;
+      try { items = await LV.lineTexts(); } catch (e) { err = e; }
+      for (const { run: r, c: card } of batch) {
+        if (r !== run) continue;
+        const it = items && items.find((x) => x && 'pub-' + x.line_id === card.id);
+        if (err && err.status === 403) card.textState = 'hidden';
+        else if (it && (it.reason_code === 'unsafe_content' || placeholderOf(it.text) === 'withheld')) card.safetyRefused = true;
+        else if (it && typeof it.text === 'string' && it.text && !placeholderOf(it.text)) { card.text = it.text; card.textState = 'text'; }
+        else card.textState = 'unavailable';
+      }
+      changed();
+    }, Math.max(250, tx.last + 2000 - Date.now()));
+  };
   const ingest = (d, status) => {
     if (!run || !d) return;
+    const ph = placeholderOf(d.text);
+    if (ph) d = Object.assign({}, d, { text: '', __ph: ph });
     const src = status === 'live' ? 'model' : 'rules', last = run.events.length ? run.events[run.events.length - 1].minute : 0;
     // The api's stream (docs/architecture/12-api.md): `claim` events are the evidence (metric, value, approval_status);
     // `line` events walk one drafted line through drafted, verified, approved, published (or rejected, killed) for every audience;
@@ -352,8 +384,9 @@ const AG = (() => {
       if (escalated) {   // the Verifier could not check it, so it is held: a person may kill it, but nothing airs it (approve and edit refuse it)
         const wasEscalated = !!c.escalated;
         c.escalated = true; c.escalation = ESCALATION[d.reason_code] || 'the Verifier could not repair it';
-        c.born = c.born || clock(); c.trace = c.trace || []; c.text = (/^\[(not shown|awaiting|withheld)/.test(d.text || '') ? '' : d.text) || c.text; c.verdict = 'abstained'; c.reason = 'api: could not repair';   /* the open stream withholds an unverified line's text (a placeholder starts with '['); the producer's GET /lines has it */
+        c.born = c.born || clock(); c.trace = c.trace || []; c.text = d.text || c.text; c.lineId = String(d.line_id).slice(0, 200); if (d.reason_code === 'unsafe_content' || d.__ph === 'withheld') c.safetyRefused = true; c.verdict = 'abstained'; c.reason = 'api: could not repair';   /* the open stream withholds an unverified line's text (a placeholder starts with '['); the producer's GET /lines has it */
         if (!c.approval) c.approval = 'pending';
+        if (!c.text) loadText(c);
         if (!wasEscalated) trace(c, 'verifier', 'escalated', clock(), { detail: c.escalation + ': a person decides' });   // a replayed event does not add a second step
       }
       if (Array.isArray(d.checks) && d.checks.length) c.apiChecks = d.checks;
@@ -378,5 +411,5 @@ const AG = (() => {
     c.hops.push({ agent, step, mode: c.source === 'model' ? 'model' : 'rules', ms: c.seenAt != null ? +(clock() - c.seenAt).toFixed(0) : null });
   };
   const queue = () => (run ? run.claims.filter((c) => c.approval === 'pending').map((c) => Object.assign(air(c), { approval: 'pending', waiting_ms: Math.round(clock() - c.born), escalated: !!c.escalated, escalation: c.escalation || null })) : []);
-  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending' && !x.escalated)) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, ingestDrop, noteAired, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
+  return { ask, approve, kill, edit, checkTranslation, note: (agent, action, id, detail, minute) => MCC.append(agent, action, id, detail, minute), ...(window.MC_TEST ? { setTranslator: (fn) => { translator = fn || translator; } } : {}), queue, textNote, get mode() { return mode; }, setMode: (m) => { mode = m; if (mode === 'demo' && run) for (const c of run.claims.filter((x) => x.approval === 'pending' && !x.escalated)) approve(c.id, 'Auto-air'); changed(); }, onAir: (fn) => { onAir = fn; }, reset, onWatch, ingest, ingestDrop, noteAired, seedBad: (on) => { seedBad = !!on; }, get seeding() { return seedBad; }, PICK, get run() { return run; }, onChange: (fn) => { changed = fn; } };
 })();

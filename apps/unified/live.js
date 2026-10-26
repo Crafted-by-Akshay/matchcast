@@ -165,6 +165,14 @@ const LV = (() => {
     const j = await res.json(); vstats.reads++; return j;
   };
 
+  // the viewer's role for the producer-only routes: the page's configured account (config.js MATCHCAST_ROLE; the shell's simulated producer by default). The api checks the real role (Easy Auth) and answers 403 to anyone else.
+  // The held lines (status review) with their text, from the role-gated lines route; the open stream withholds an unverified line's text. Throws {status} when the api refuses or cannot answer.
+  const lineTexts = async () => {
+    const r = run; if (!r || !r.created || !api()) throw Object.assign(new Error('no match yet'), { status: 0 });
+    const res = await fetch(url('/v1/matches/' + r.id + '/lines', { status: 'review' }), { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw Object.assign(new Error('lines ' + res.status), { status: res.status });
+    const j = await res.json(); return Array.isArray(j.items) ? j.items : [];
+  };
   // the server's audit records for this match (EXP-12), and the same check the server's verifyChain does (packages/contracts/src/audit.ts)
   const GENESIS = '0'.repeat(64);
   const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'
@@ -317,7 +325,7 @@ const LV = (() => {
     };
   };
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); onLatency = cbs.latency || (() => {}); onDrop = cbs.drop || (() => {}); onAired = cbs.aired || (() => {}); onFeed = cbs.feed || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
-    begin, feedSwitch, events, apiEvent: (id) => (run && run.evs.get(String(id))) || null, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
+    begin, feedSwitch, lineTexts, get role() { return String(window.MATCHCAST_ROLE || 'Producer'); }, events, apiEvent: (id) => (run && run.evs.get(String(id))) || null, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
      toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();
