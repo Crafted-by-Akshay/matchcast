@@ -3,7 +3,7 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // EXP-13: Data platform page in the Analyst view. Fabric and Databricks are not connected, so the page must say Planned.
 async function openPage(page: Page, route = 'data-platform') {
-  await openShell(page, 'analyst');
+  await openShell(page, 'analyst', '?crew=0');
   const f = await viewFrame(page, 'analyst');
   await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
   await f.evaluate((r) => (window as any).go(r), route);
@@ -237,7 +237,7 @@ test('tracking lab: shows the vision report from Watch and shows the OCR row hon
 // DAT-11 task 278, end to end: Vision switched on in Watch reaches the Analyst's Tracking lab through the shell.
 test('vision on in Watch reaches the Tracking lab', async ({ page }) => {
   test.setTimeout(300_000);
-  await openShell(page, 'watch');
+  await openShell(page, 'watch', '?crew=0');
   const watch = await viewFrame(page, 'watch');
   await ready('watch')(page);
   await watch.evaluate(() => { const b = document.getElementById('visb') as HTMLElement; if (b.getAttribute('aria-pressed') !== 'true') b.click(); });

@@ -29,7 +29,7 @@ test('indices: an empty window is bounded and does not throw', () => {
 test('indices: Watch in Analyst mode draws the sparkline and the Analyst match page shows the indices', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
-  await openShell(page, 'watch');
+  await openShell(page, 'watch', '?crew=0');
   await ready('watch')(page);
   const w = await viewFrame(page, 'watch');
   await stepSim(w, 6000);   // 5 simulated minutes

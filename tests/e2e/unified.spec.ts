@@ -33,6 +33,9 @@ test('Watch kicks off with the shared setup and plays the fixture clubs', async 
 
 test('Analyst opens the season and routes to the shared fixture', async () => {
   await page.click('#tab-analyst');
+  await expect(page.locator('#al'), 'the Analyst opens on its live view by default, with no spinner').toBeVisible();
+  await expect(page.locator('#v-analyst .wait')).toBeHidden();
+  await page.click('#al-full');   // the console (the 28-match season) is one click behind "Full console"
   await ready('analyst', 60_000)(page);
   analyst = await viewFrame(page, 'analyst');
   await expect.poll(() => analyst.evaluate(() => D?.matches.length)).toBe(28);

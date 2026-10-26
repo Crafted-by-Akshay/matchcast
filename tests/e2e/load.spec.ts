@@ -8,7 +8,7 @@ test('cold-cache load: Watch does not fetch the Analyst files, then every view b
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Network.enable'); await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
   const t0 = Date.now(); const marks: Record<string, number> = {};
-  await openShell(page, 'watch'); marks.picker = Date.now() - t0;
+  await openShell(page, 'watch', '?crew=0'); marks.picker = Date.now() - t0;
   const f = await viewFrame(page, 'watch');
   await expect.poll(() => f.evaluate(() => !!(window as any).__mc?.S.started).catch(() => false), { timeout: 300_000, intervals: [250] }).toBe(true);
   marks.watchStarted = Date.now() - t0;

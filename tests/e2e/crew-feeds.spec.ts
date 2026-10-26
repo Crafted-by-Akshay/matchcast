@@ -18,14 +18,14 @@ async function open(page: any, width = 1280, height = 800, query = '?crew=1') {
 const realFrame = (page: any, lang = 'en') => page.evaluate((l: string) => post('watch', { src: 'matchcast-shell', type: 'crew-feeds', lang: l, simulated: false, defs: CREW.FEEDS,
   feeds: { casual: [{ publication_id: 'r1', text: 'A real checked line.', match_time_ms: 41 * 60000, source_event_ids: ['e1'], verdict: 'verified' }, { publication_id: 'r2', text: 'A line with no verdict.', match_time_ms: 42 * 60000, source_event_ids: ['e2'] }], analyst: [] } }), lang);
 
-test('without ?crew=1 nothing is added: no picker, style, body class or iframe parameter, and the two-voice panel is not touched', async ({ page }) => {
+test('with ?crew=0 nothing is added: no picker, style, body class or iframe parameter, and the two-voice panel is not touched', async ({ page }) => {
   test.setTimeout(300_000);
-  const f = await open(page, 1280, 800, '');
+  const f = await open(page, 1280, 800, '?crew=0');
   await f.waitForSelector('#mc-two', { state: 'attached', timeout: 60_000 });
   expect(await f.locator('#mc-feedpick').count()).toBe(0);
   expect(await f.locator('#mc-feedpick-css').count()).toBe(0);
   expect(await f.evaluate(() => document.body.className)).not.toMatch(/mc-feed/);
-  expect(await page.evaluate(() => [...document.querySelectorAll('iframe')].map((i) => i.src).join(' '))).not.toContain('crew=');
+  expect(await page.evaluate(() => [...document.querySelectorAll('iframe')].map((i) => i.src).join(' '))).not.toContain('crew=1');
   // the two-voice panel shows as it always did (twofans un-hides it once a line has two wordings; force that here)
   expect(await f.evaluate(() => { const b = document.getElementById('mc-two')!; b.hidden = false; return getComputedStyle(b).display; })).not.toBe('none');
 });
@@ -150,6 +150,7 @@ for (const [name, w, h] of [['phone', 390, 844], ['small phone', 320, 640]] as c
     test.setTimeout(300_000);
     const f = await open(page, w, h);
     await expect(f.getByRole('radiogroup', { name: 'Feed' })).toBeVisible({ timeout: 60_000 });
+    await f.getByRole('radio', { name: /^Analyst/ }).click();   // on a phone the one-line replacement only follows a feed the viewer picks; Casual keeps the commentary line (crew-default.spec)
     await page.evaluate(() => CREW.play(23));
     await expect(f.locator('#mc-feedlines li').first()).toBeVisible({ timeout: 60_000 });
     await page.evaluate(() => post('watch', { src: 'matchcast-shell', type: 'lang', lang: 'es' }));

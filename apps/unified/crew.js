@@ -1,13 +1,14 @@
 /* Crew data layer (Experience lane). Everything the crew panels draw comes through CREW.
-   Flag: ?crew=1 (or localStorage mc-crew=1). Off by default until the orchestration frames merge.
+   Flag: ON by default. Off with ?crew=0 (or localStorage mc-crew=0); the shell forwards crew=1 or crew=0 to the Watch iframe.
    CREW.play() feeds a Simulated fixture. CREW.ingest(frame) is the single place a real SSE adapter plugs in.
    crew_ledger / crew_spawn follow contract 1.3.0 (PR #379), onair / feed_drop contract 1.2.0; the scoreboard is a GET (fetchScore). Change the shapes here only. */
 (function () {
   'use strict';
   var qs = '';
   try { qs = location.search + '&' + ((window.parent !== window && window.parent.location.search) || ''); } catch (e) { /* cross-origin */ }
-  var on = /[?&]crew=1/.test(qs);
-  try { if (!on && localStorage.getItem('mc-crew') === '1') on = true; } catch (e) { /* storage blocked */ }
+  // default ON (judges add no query flag): ?crew=0 on the page or its parent, or localStorage mc-crew=0, turns it off; an explicit ?crew=1 beats a stored 0
+  var on = !/[?&]crew=0(&|$)/.test(qs);
+  try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked: the default stands */ }
 
   // feed keys and labels from the Feeds lane registry (feeds/450); only casual and analyst are live
   var FEEDS = [
