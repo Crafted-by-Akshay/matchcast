@@ -1,6 +1,6 @@
 from conftest import run
 from matchcast_agents.context import MatchContext
-from matchcast_agents.hub import StreamHub
+from matchcast_agents.hub import CREW_REPLAY_LIMIT, StreamHub
 from matchcast_agents.messages import ProducerTask, Skip
 from matchcast_agents.rules import ProducerRules
 from matchcast_agents.state import MatchState
@@ -174,3 +174,13 @@ def test_colour_needs_the_analyst_persona_and_a_won_tackle(match) -> None:
     foul = dict(event(match, "foul"), event_id="f9")
     no_analyst = ProducerRules(("casual",), colour_every_s=45, clock=lambda: 0.0)
     assert isinstance(run(no_analyst.decide(ctx(match), foul)), Skip)
+
+
+def test_crew_frames_replay_the_newest_two_thousand_only() -> None:
+    # AB#375: a late viewer gets the crew frames, capped to the newest CREW_REPLAY_LIMIT
+    hub = StreamHub()
+    for i in range(CREW_REPLAY_LIMIT + 100):
+        hub.publish("crew_spawn", f"spawn:{i}", {"moment_id": f"m{i}"})
+    replay = [e.id for e in hub.replay_after(None)]
+    assert len(replay) == CREW_REPLAY_LIMIT
+    assert replay[0] == "spawn:100" and replay[-1] == f"spawn:{CREW_REPLAY_LIMIT + 99}"
