@@ -178,7 +178,9 @@ REPLAN_SPECIALIST = "replay"
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
 # the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1)
 SPAWN_POOL = ("replay", "tactics", "stats", "rhythm", "history")
-QUIET_SPAWNS_PER_MATCH = 40  # the quiet moments' own allowance, apart from the priority-1 pool
+# the quiet moments' own allowance, apart from the priority-1 pool; a full match calls about 100
+# moments, so the pool covers the back half too (AB#384: at 40 the crew tree was empty after 37')
+QUIET_SPAWNS_PER_MATCH = 120
 
 
 @dataclass
