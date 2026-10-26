@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from conftest import run
-from matchcast_agents.grading import SEED_RATE, _report
+from matchcast_agents.grading import ARMS, SEED_RATE, _report
 from matchcast_agents.grading_live import (
     BudgetedClient,
     CallBudget,
@@ -66,6 +66,20 @@ def test_live_arms_that_always_fail_are_answered_by_the_rules(match) -> None:
         assert arm["cost"]["answered_by_rules"] > 0, key
         assert arm["run_id"], key
     assert client.calls <= 3 * 20
+
+
+def test_each_arm_is_handed_over_as_it_completes(match) -> None:
+    client = CountingClient(error=ModelError("no model in this test"))
+    seen = []
+    live_run(
+        match,
+        client=client,
+        max_calls=3,
+        fixture="M001",
+        run_date="2026-10-25",
+        on_arm=lambda key, arm: seen.append((key, arm["run_id"])),
+    )
+    assert [key for key, _ in seen] == list(ARMS)  # in order, one call per arm, before the next
 
 
 def test_a_live_run_record_names_its_fixture_teams_and_events_and_loads_back(

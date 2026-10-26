@@ -132,6 +132,23 @@ def main(argv: list[str] | None = None) -> int:
         print("FOUNDRY_PROJECT_ENDPOINT is not set; the calls would all fail", file=sys.stderr)
         return 2
     print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)
+    partial = args.out.with_name(args.out.name + ".partial")
+    arms: dict[str, dict] = {}
+
+    def keep_arm(key: str, arm: dict) -> None:
+        # each arm is written as it completes, so a later failure does not lose a paid arm
+        arms[key] = arm
+        partial.write_text(
+            json.dumps({"kind": "crew_live_partial", "arms": arms}, indent=2, sort_keys=True) + "\n"
+        )
+        cost = arm["cost"]
+        print(
+            f"{key}: {arm['lines_aired']} lines, {arm['wrong_lines_aired']} wrong, "
+            f"{cost['model_calls']} calls sent, {cost['model_errors']} failed, "
+            f"{cost['budget_refused']} refused; kept in {partial}",
+            file=sys.stderr,
+        )
+
     record = live_run(
         match,
         client=FoundryModelClient(),
@@ -140,16 +157,10 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         rate=args.rate,
         run_date=args.run_date,
+        on_arm=keep_arm,
     )
     args.out.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
-    for key, arm in record["arms"].items():
-        cost = arm["cost"]
-        print(
-            f"{key}: {arm['lines_aired']} lines, {arm['wrong_lines_aired']} wrong, "
-            f"{cost['model_calls']} calls sent, {cost['model_errors']} failed, "
-            f"{cost['budget_refused']} refused",
-            file=sys.stderr,
-        )
+    partial.unlink(missing_ok=True)
     print(f"run {record['run_id']} written to {args.out}", file=sys.stderr)
     return 0
 

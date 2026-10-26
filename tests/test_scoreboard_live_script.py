@@ -449,3 +449,32 @@ def test_a_call_budget_out_of_range_is_refused_before_any_model_call(
     )
     assert code == 2
     assert "--max-calls must be between 1 and" in capsys.readouterr().err
+
+
+def test_a_late_failure_keeps_the_arms_already_paid_for(monkeypatch, tmp_path) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    out = tmp_path / "out.json"
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+
+    def failing_run(match, *, on_arm, **kwargs):
+        arm = {
+            "run_id": "full_crew-live",
+            "lines_aired": 0,
+            "wrong_lines_aired": 0,
+            "cost": {"model_calls": 4, "model_errors": 0, "budget_refused": 0},
+        }
+        on_arm("full_crew", arm)
+        raise RuntimeError("the third arm failed")
+
+    monkeypatch.setattr(script, "live_run", failing_run)
+    with pytest.raises(RuntimeError):
+        script.main(
+            ["--match", str(match_file), "--fixture", "N001", "--max-calls", "5", "--out", str(out)]
+        )
+    partial = json.loads((tmp_path / "out.json.partial").read_text())
+    assert partial["kind"] == "crew_live_partial"
+    assert list(partial["arms"]) == ["full_crew"]
+    assert not out.exists()  # no record was written, and the kept arm is not a recording
