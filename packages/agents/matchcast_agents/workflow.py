@@ -24,7 +24,7 @@ from . import half_time as half_time_mod
 from . import recap as recap_mod
 from .audio_description import MAX_LAG_MS, Window, gaps, spoken_span
 from .context import MatchContext
-from .feed_lines import audio_drafts, audio_placements, ticker_drafts
+from .feed_lines import audio_line, audio_placements, ticker_drafts
 from .feeds import (
     AUDIO_PERSONA,
     TICKER_PERSONA,
@@ -473,6 +473,9 @@ class MatchWorkflow:
         self._pending_audio: list[tuple[DraftLine, list[dict[str, Any]], int, int]] = []
         # every description's (speak, end) span, held or aired: a new one is placed around them
         self._audio_spans: list[tuple[int, int]] = []
+        # the events whose description holds a span (held or aired): placing a new description
+        # leaves them where they are, so a re-placed one cannot push the new one out of its gap
+        self._described: set[str] = set()
         self._restore_feed_state()
         self.stats = {
             "events": 0,
@@ -791,12 +794,16 @@ class MatchWorkflow:
         if line_id in written or line_id in held:
             return
         windows = self._commentary_windows(ctx, event)
-        placed = {d.source_event_id: d for d in audio_placements(ctx, windows)}
+        placing = replace(
+            ctx, events=tuple(e for e in ctx.events if e["event_id"] not in self._described)
+        )
+        placed = {d.source_event_id: d for d in audio_placements(placing, windows)}
         if eid not in placed:
             return
-        draft, claims = next((d, c) for d, c in audio_drafts(ctx, windows) if d.line_id == line_id)
+        draft, claims = audio_line(ctx, placed[eid])
         _, length = spoken_span(0, draft.text)
         speak = placed[eid].speak_at_ms
+        self._described.add(eid)
         self._audio_spans.append((speak, speak + length))
         self._pending_audio.append((draft, claims, speak, speak + length))
 

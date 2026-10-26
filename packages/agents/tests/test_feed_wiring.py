@@ -155,3 +155,17 @@ def test_a_retraction_that_arrives_while_a_description_is_held_stops_it(match) -
     }
     run(flow.ingest(match["events"][:12] + [retraction]))
     assert not [line for line in flow.store.lines(flow.sk) if line.line_id == draft.line_id]
+
+
+def test_a_described_shot_is_not_dropped_when_the_descriptions_before_it_are_placed_again(
+    match,
+) -> None:
+    # e16 (a shot at 59.1 s) falls in the gap just after e15's description, which holds its own
+    # span. Placing e15 again as later events arrive must not take e16's gap: e16 is described
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = ("ticker", "audio_description")
+    for count in range(4, 41, 2):
+        run(flow.ingest(match["events"][:count]))
+    written = {ln.line_id for ln in flow.store.lines(flow.sk)}
+    held = {draft.line_id for draft, *_ in flow._pending_audio}
+    assert "line-audio-e16" in written | held
