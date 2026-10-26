@@ -47,6 +47,10 @@ class StorylineBook:
         return cls(_stories=[Storyline(**row) for row in rows])
 
     def open(self, player_id: str, event: dict[str, Any], text: str) -> Storyline:
+        """Opens the player's storyline, or returns the open one: a player has one at a time."""
+        for story in self._stories:
+            if story.status == "open" and story.player_id == player_id:
+                return story
         story = Storyline(player_id=player_id, opened=event, opening_text=text)
         self._stories.append(story)
         return story

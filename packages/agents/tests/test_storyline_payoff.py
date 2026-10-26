@@ -104,3 +104,13 @@ def test_an_open_storyline_survives_a_restart_and_still_pays_off(match, monkeypa
         )
     )
     assert "storyline" in _analyst_line(restarted, goal).text
+
+
+def test_a_restart_does_not_open_a_second_storyline_for_the_same_player(match, monkeypatch) -> None:
+    from matchcast_agents.storyline import StorylineBook
+
+    book = StorylineBook()
+    opening = {"stream_sequence": 1, "event_time_ms": 60_000}
+    book.open("home9", opening, "first")
+    book.open("home9", opening, "second")  # the same player again: still one open storyline
+    assert len(book.to_rows()) == 1

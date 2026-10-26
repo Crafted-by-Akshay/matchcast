@@ -328,6 +328,7 @@ class MatchWorkflow:
         self._stall_task: asyncio.Task[None] | None = None  # the timer; it pauses at full time
         self._closed = False
         self._replans = 0  # numbers the replan moments, so two replans never share an id
+        self._processed_sequence: int | None = None  # the last event this workflow finished
         self._plan: str | None = None  # the last storyline the stall replan chose
         self._book = StorylineBook()  # the storylines a replan opened, each waiting for its payoff
         self._vision_lines = 0
@@ -557,6 +558,8 @@ class MatchWorkflow:
             self.rundown = []
             self._book = StorylineBook()  # a replay opens its storylines again
             self._plan = None
+            self._replans = 0
+            self._processed_sequence = None
             reset = getattr(self.agents.producer, "reset", None)
             if reset:
                 reset()
@@ -565,6 +568,8 @@ class MatchWorkflow:
         self.rundown = copy.deepcopy(row.get("rundown", []))
         self._book = StorylineBook.from_rows(row.get("storylines", []))  # open storylines survive
         self._plan = row.get("plan")
+        self._replans = row.get("replans", 0)  # replan ids continue after a restart
+        self._processed_sequence = row["processed_sequence"]
         self._set_spent(row.get("spawn_used", 0), row.get("quiet_used", 0))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
@@ -582,6 +587,7 @@ class MatchWorkflow:
                 "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
                 "storylines": self._book.to_rows(),
                 "plan": self._plan,
+                "replans": self._replans,
                 "spawn_used": self._spent["priority_one"],
                 "quiet_used": self._spent["quiet"],
             },
@@ -613,6 +619,7 @@ class MatchWorkflow:
             self._routing = None  # calls after the event (an edit, a talk) are not this moment's
         if ran is not None:  # the moment's run has ended, so its entry is final
             self._publish_ledger(ran)
+        self._processed_sequence = event["stream_sequence"]
         self._checkpoint(event["stream_sequence"])
 
     def add_persona(self, persona: str) -> bool:
@@ -741,7 +748,8 @@ class MatchWorkflow:
             if self._match_over():
                 return False
             events = self.store.events(self.sk)
-            if events:
+            # only a finished event may be checkpointed: a stored one whose processing failed waits
+            if events and events[-1]["stream_sequence"] == self._processed_sequence:
                 replans = self._replans
                 self._replan_if_stalled(self._ctx(), events[-1])
                 if self._replans != replans:
