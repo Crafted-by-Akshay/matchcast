@@ -94,13 +94,13 @@
   };
   setInterval(window.mcVisThrottle, 2000);
 })();
-// Vision -> Agents on Watch (ADR-0022): a "From pixels" chip with the latest line the agents wrote from Vision's passes, and how far Vision agrees with the engine. The shell polls the api and sends the summary here; the chip stays hidden until Vision has sent passes.
+// Vision -> Agents on Watch (ADR-0022): a "Camera mode" chip with the latest line the agents wrote from Vision's passes, and how far Vision agrees with the engine. The shell polls the api and sends the summary here; the chip stays hidden until Vision has sent passes.
 (() => {
   const chip = document.createElement('div');
   chip.className = 'hud'; chip.id = 'frompx'; chip.hidden = true; chip.setAttribute('role', 'status'); chip.setAttribute('aria-live', 'polite');
   chip.style.cssText = 'left:50%;transform:translateX(-50%);top:10px;max-width:min(620px,calc(100% - 24px));background:var(--panel,#0b1624);border:1px solid var(--line,#23364d);border-radius:999px;padding:4px 12px;font:500 11px system-ui,sans-serif;color:var(--muted,#9fb3c8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
   const tag = document.createElement('b'), text = document.createElement('span');
-  tag.textContent = 'Camera mode '; chip.append(tag, text);
+  tag.textContent = 'Camera mode · simulated pitch '; chip.append(tag, text);
   document.body.appendChild(chip);
   window.addEventListener('message', (e) => {
     const d = e.data || {};
@@ -117,5 +117,4 @@
 (() => {
   const b = $('visb');
   if (b) { b.textContent = 'Camera mode (experimental)'; b.title = 'Camera mode: the tracker reads the rendered simulated pitch, not a real camera. Its passes go to the agents and are checked against the engine.'; }
-  const s = $('visp-s'); if (s) s.textContent = 'camera mode · simulated pitch · experimental';
 })();

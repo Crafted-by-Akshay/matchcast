@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// ADR-0022 (Vision -> Agents): the Vision stream's summary from the api shows in the Agents strip and as a "From pixels" chip on Watch.
+// ADR-0022 (Vision -> Agents): the Vision stream's summary from the api shows in the Agents strip and as a "Camera mode" chip on Watch.
 declare const LV: any;
 
 const summary = {
