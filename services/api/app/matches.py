@@ -46,7 +46,7 @@ from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
 from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
-from matchcast_agents.workflow import WorkflowError, feed_kills_in, public_line
+from matchcast_agents.workflow import LIVE_FEED_LINES, WorkflowError, feed_kills_in, public_line
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
@@ -472,6 +472,7 @@ class Registry:
             config = WorkflowConfig(
                 approval_mode=info.get("approval_mode", "auto"),
                 hold_booth=bool(info.get("hold_booth", True)),
+                feed_lines=LIVE_FEED_LINES,
             )
             live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
@@ -727,7 +728,11 @@ def build_router(registry: Registry) -> APIRouter:
                 raise Problem(
                     422, "contract_invalid", "roster stream must match this match", "/roster/stream"
                 )
-            config = WorkflowConfig(approval_mode=body.approval_mode, hold_booth=body.hold_booth)
+            config = WorkflowConfig(
+                approval_mode=body.approval_mode,
+                hold_booth=body.hold_booth,
+                feed_lines=LIVE_FEED_LINES,
+            )
             cut = ModelCut()
             players = body.roster.get("players")
             teams = body.roster.get("team_ids")

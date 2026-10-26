@@ -22,8 +22,16 @@ from opentelemetry import trace
 from . import catch_me_up
 from . import half_time as half_time_mod
 from . import recap as recap_mod
+from .audio_description import MAX_LAG_MS, Window, gaps, spoken_span
 from .context import MatchContext
-from .feeds import drops_on_failed_repair, feed_for, waits_for_producer
+from .feed_lines import audio_drafts, ticker_drafts
+from .feeds import (
+    AUDIO_PERSONA,
+    TICKER_PERSONA,
+    drops_on_failed_repair,
+    feed_for,
+    waits_for_producer,
+)
 from .history import history_for_roster
 from .hub import StreamHub
 from .memory import storylines
@@ -50,6 +58,10 @@ if TYPE_CHECKING:
     from .live.knowledge import TalkKnowledge
 
 STATS_DESK_BUDGET_S = 2.0
+LIVE_FEED_LINES = ("ticker", "audio_description")  # the template feeds a live match writes
+# a commentary gap is known up to this long after its event: the booth lines for later events
+# are not written yet, so the gap stops here (see _commentary_windows)
+FEED_HORIZON_MS = MAX_LAG_MS + 5_000
 MINUTE_MENTION = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)  # "minute 12": a log minute
 
 TALK_PHRASES = {
@@ -249,6 +261,9 @@ class WorkflowConfig:
     personas: tuple[Persona, ...] = ("casual", "analyst")
     # the engine clock at which the one Vision moment is due (ADR-0022); 0 turns it off
     vision_moment_ms: int = 900_000
+    # the template feeds written on this match: () by default; the match service turns on
+    # LIVE_FEED_LINES (AB#471, AB#454), so the library and its evals keep their lines as they were
+    feed_lines: tuple[str, ...] = ()
     # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
     orchestrator: str = field(
         default_factory=lambda: os.environ.get("MATCHCAST_ORCHESTRATOR", "af")
@@ -711,7 +726,76 @@ class MatchWorkflow:
             task = await self._decide_moment(ctx, event)
             if task is not None:
                 await self._run_moment(ctx, task)
+        await self._write_feed_lines(event)
         self._note_aired(event)
+
+    async def _write_feed_lines(self, event: dict[str, Any]) -> None:
+        """The ticker and audio description lines of this event (AB#471, AB#454).
+
+        Template lines, each backed by claims the Verifier recounts, through the same Verifier and
+        air gate as every line. They run after the moment, so this event's commentary has aired
+        and the audio description can use the gaps it leaves. A refusal is dropped at once: a
+        template line has no repair.
+        """
+        if not self.config.feed_lines:
+            return
+        ctx = self._ctx()
+        eid = event["event_id"]
+        ticker = f"line-ticker-{eid}"
+        audio = f"line-audio-{eid}"
+        written = {ln.line_id for ln in self.store.lines(self.sk)}
+        drafts = []
+        if TICKER_PERSONA in self.config.feed_lines:
+            drafts += [pair for pair in ticker_drafts(ctx) if pair[0].line_id == ticker]
+        if AUDIO_PERSONA in self.config.feed_lines:
+            drafts += [
+                pair
+                for pair in audio_drafts(ctx, self._commentary_windows(ctx, event))
+                if pair[0].line_id == audio
+            ]
+        for draft, claims in drafts:
+            if draft.line_id in written or not claims:
+                continue
+            task = ProducerTask(
+                moment_id=f"f-{eid}",
+                match_id=self.stream["match_id"],
+                event_ids=(eid,),
+                up_to_sequence=event["stream_sequence"],
+                priority=3,
+                personas=(draft.persona,),
+                reason="feed",
+            )
+            for claim in claims:
+                validate(claim)
+                self.store.put_claim(
+                    self.sk,
+                    claim,
+                    {
+                        "moment_id": task.moment_id,
+                        "agent": self.agents.narrator.agent_id,
+                        "created_at": _stamp(self._clock()),
+                        "tool_call_ids": [],
+                        "formula_inputs": {},
+                    },
+                )
+            await self._verify_line(ctx, task, claims, draft, attempt=1)
+
+    def _commentary_windows(self, ctx: MatchContext, event: dict[str, Any]) -> list[Window]:
+        """The commentary gaps up to the feed horizon after an event: the booth lines already aired.
+
+        A booth line is spoken at its moment's event time, at the booth pace. A booth line for a
+        later event is not known yet, so a description placed near the horizon can be overlapped
+        by it; the live speak-time check closes that (Planned, see 04-agents.md).
+        """
+        at_by_id = {e["event_id"]: e["event_time_ms"] for e in ctx.events}
+        spans = []
+        for line in self.store.lines(self.sk):
+            if line.persona not in BOOTH or line.status != "published":
+                continue
+            start = at_by_id.get(line.moment_id.removeprefix("m-"))
+            if start is not None:
+                spans.append(spoken_span(start, line.text))
+        return gaps(spans, end_ms=int(event["event_time_ms"]) + FEED_HORIZON_MS)
 
     def _note_aired(self, event: dict[str, Any]) -> None:
         """A verified line of this event's moment aired: the match is quiet no longer."""
