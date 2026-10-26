@@ -12,11 +12,12 @@ const AG = (() => {
   let mode = 'producer', onAir = () => {};   // producer (the default): a person approves each line first; demo: verified lines air at once
 
   const fresh = (key, names) => ({ key, names, events: [], moments: [], claims: [], feed: [], n: 0,
-    roll: { score: [0, 0], xg: [0, 0], nextXg: 1 },
+    roll: { score: [0, 0], xg: [0, 0], nextXg: 0.25 },
     stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0, dropped: 0 }, aired: new Set() });
   const teamIx = (k) => (!run || k == null) ? -1 : k === run.names.hk ? 0 : k === run.names.ak ? 1 : -1;
   const teamName = (t) => (t === 0 ? run.names.home : run.names.away);
-  const min = (m) => Math.floor(m) + "'";
+  const clockOf = (m) => '0:' + String(Math.floor(m * 60)).padStart(2, '0');   // before minute 1 the match time reads as a clock (0:15), never as minute 0
+  const min = (m) => (m < 1 ? clockOf(m) : Math.floor(m) + "'");
   const f2 = (x) => (+x).toFixed(2);
   const say = (who, minute, text, tone) => { run.feed.push({ minute, who, text, tone: tone || '' }); if (run.feed.length > 200) run.feed.shift(); };
   // every agent action goes to the audit chain; the claim keeps the sequence number and a short hash of each record
@@ -46,7 +47,7 @@ const AG = (() => {
       xg_total: (i, m) => m + ' मिनट के बाद: ' + i.H + ' ' + f2(i.xg[0]) + ' xG, ' + i.A + ' ' + f2(i.xg[1]) + ' xG।'
     }
   };
-  let translator = (c, lang) => { const f = TPL[lang] && TPL[lang][c.kind]; return f ? f(Object.assign({ H: run.names.home, A: run.names.away }, c.inputs), Math.floor(c.minute)) : null; };
+  let translator = (c, lang) => { const f = TPL[lang] && TPL[lang][c.kind]; return f ? f(Object.assign({ H: run.names.home, A: run.names.away }, c.inputs), c.minute < 1 ? clockOf(c.minute) : Math.floor(c.minute)) : null; };
   const numbers = (t) => String(t).match(/\d+(?:\.\d+)?/g) || [];
   // every name the run knows: the clubs, the players in the event log and in this claim
   const knownNames = (c) => [...new Set([run.names.home, run.names.away, c.inputs.scorer, c.inputs.player, c.inputs.teamName].concat(run.events.map((e) => e.player)).filter(Boolean))].sort((x, y) => y.length - x.length);
@@ -269,7 +270,7 @@ const AG = (() => {
     const last = rows.length ? rows[rows.length - 1].minute : null;
     if (last != null && last >= run.roll.nextXg) {
       pipeline(claim('xg_total', last, [], { xg: run.roll.xg.slice() }, { basis: 'every shot up to ' + min(last) }));
-      run.roll.nextXg = Math.max(5, Math.floor(last / 5) * 5 + 5);   // the first running total comes at minute 1 so the pipeline shows a checked line early, then every five minutes
+      run.roll.nextXg = Math.max(5, Math.floor(last / 5) * 5 + 5);   // the first running total comes after 15 match seconds (0:15) so the first checked line is early (first-load budget); the Verifier still recounts it from the event log. Then every five minutes
     }
     changed();
   };

@@ -9,7 +9,9 @@
 <title>MatchCast Console</title>
 <meta name="description" content="One console for MatchCast: the fan Watch view, the Analyst workspace and the Broadcast desk, on one shared season match.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- the web font must not block first paint: print media loads it without blocking, onload turns it on (display=swap keeps the fallback face meanwhile) -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 <style>
 :root{
   --bg:#0A1320; --bg2:#101D30; --bg3:#17283F; --line:#22375A; --text:#E8EEF7; --muted:#8CA0BC;
@@ -650,7 +652,7 @@ function pushFeed() {
   post('broadcast', msg); post('analyst', msg);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const mins = (m) => Math.floor(m) + "'";
+const mins = (m) => (m < 1 ? '0:' + String(Math.floor(m * 60)).padStart(2, '0') : Math.floor(m) + "'");   // before minute 1 the match time reads as a clock
 const nameOf = (k) => { const f = FX.find((x) => x.home.key === k || x.away.key === k); return f ? (f.home.key === k ? f.home.club : f.away.club) : k; };
 const teamsOf = (s) => ({ hk: s.h, ak: s.a, home: nameOf(s.h), away: nameOf(s.a) });
 // the claims ledger (EXP-10): one row per claim, newest first, filtered by verdict, agent and metric; the export is the same rows
@@ -843,7 +845,8 @@ function pushCards() {
   const r = AG.run; if (!r) return;
   for (const c of r.claims) {
     if (c.approval === 'pending' || c.approval === 'killed') continue;   // a line waiting for a person, or killed, reaches no view
-    if (!c.text || c.route === 'analyst' || c.kind === 'xg_total') continue;
+    const firstTotal = c.kind === 'xg_total' && r.claims.find((x) => x.kind === 'xg_total') === c;   // first-load: the early kick-off running total (recounted like any claim) is Watch's first checked line; later totals stay in the Agents and Analyst views
+    if (!c.text || ((c.route === 'analyst' || c.kind === 'xg_total') && !firstTotal)) continue;
     const sig = c.verdict + '|' + c.source + '|' + c.text + '|' + JSON.stringify(c.tr || null);
     if (sentCards.get(c.id) === sig) continue;
     sentCards.set(c.id, sig);
