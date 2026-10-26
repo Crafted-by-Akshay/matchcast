@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from matchcast_contracts import ContractError, validate
 from opentelemetry import trace
 
+from . import catch_me_up
 from . import recap as recap_mod
 from .context import MatchContext
 from .feeds import drops_on_failed_repair, feed_for, waits_for_producer
@@ -35,6 +36,8 @@ from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .tools import InProcessTools, ToolCall, ToolError
+from .verify.checks import recompute
+from .verify.text import extract_numbers
 from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
 if TYPE_CHECKING:
@@ -1012,6 +1015,36 @@ class MatchWorkflow:
             )
 
         return len(named) == len(numbers) and all(from_the_log(n, k) for n, k in named)
+
+    # ---- catch-me-up on demand (CREW-7.3) ----------------------------------------------------
+
+    def catch_me_up(self, minute: int) -> dict[str, Any] | None:
+        """The recap as of a match minute. Every number it states is recounted from the stored
+        events up to the cut; a recap that does not recount is not published (None)."""
+        ctx = self._ctx()
+        piece = catch_me_up.build(ctx, minute)
+        if piece is None:
+            return None  # held (a correction before the cut) or over the word limit
+        events = tuple(ctx.events)
+        for sentence, metrics in piece.sentences:
+            recounted = {
+                float(recompute(events, metric, piece.cut_sequence, home=ctx.home))
+                for metric in metrics
+            }
+            # the request's minute is a time, checked against the events by the cut, not a figure
+            figures = sentence.replace(f"After {piece.minute} minutes,", "")
+            if any(number not in recounted for number in extract_numbers(figures)):
+                return None  # a number that no quoted metric recounts: nothing airs
+        data = {
+            "feed": "catch_me_up",
+            "minute": piece.minute,
+            "text": piece.text,
+            "word_count": piece.word_count,
+            "cut_sequence": piece.cut_sequence,
+            "source_event_ids": list(piece.source_event_ids),
+        }
+        self.hub.publish("catch_me_up", f"catch-me-up:{minute}", data)
+        return data
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
