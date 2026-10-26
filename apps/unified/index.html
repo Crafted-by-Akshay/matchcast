@@ -1063,7 +1063,7 @@ function prefetchOthers() {
     const add = (href) => { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = href; document.head.appendChild(l); };
     add(VIEWS.broadcast); add(VIEWS.analyst); add('shared/players.json'); add('shared/intl.json');
     add('analyst/data/league.json');
-    for (const fx of FX) add('analyst/data/' + fx.id + '.json');
+    for (const fx of FX) if (!fx.national) add('analyst/data/' + fx.id + '.json'); // national fixtures have no recorded match file
   };
   // wait a few seconds after kick-off so the first view gets the machine; then idle time
   setTimeout(() => { if ('requestIdleCallback' in window) requestIdleCallback(go, { timeout: 15000 }); else go(); }, 8000);
