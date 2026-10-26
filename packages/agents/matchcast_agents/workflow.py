@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from matchcast_contracts import ContractError, validate
 from opentelemetry import trace
 
+from . import catch_me_up
 from . import half_time as half_time_mod
 from . import recap as recap_mod
 from .context import MatchContext
@@ -40,6 +41,8 @@ from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .storyline import FALLBACK_PLAN, StorylineBook, pick_plan
 from .tools import InProcessTools, ToolCall, ToolError
+from .verify.checks import recompute
+from .verify.text import extract_numbers
 from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
 if TYPE_CHECKING:
@@ -112,6 +115,13 @@ STALL_CHECK_S = 5.0
 # the final period: its ended boundary is full time, and the stall timer stops there
 FULL_TIME_PERIOD = 2
 logger = logging.getLogger(__name__)
+
+
+def _event_key(event: dict[str, Any]) -> tuple[str, int]:
+    """Which revision of an event: a corrected revision keeps its event id and sequence."""
+    return event["event_id"], int(event.get("revision", 0))
+
+
 # the contract version of the crew frames (crew_ledger, crew_spawn); the audit stays on 1.1.0
 CREW_SCHEMA_VERSION = "1.3.0"
 # a specialist's report status, as the crew_spawn frame names it
@@ -292,6 +302,31 @@ def _live_details(details: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in details.items() if k not in MODEL_TEXT_DETAILS}
 
 
+def _counted_events(events: Any, minute: int) -> tuple[dict[str, Any], ...]:
+    """The stored events a recap at a minute counts from. A retraction counts only if its event
+    time is at or before that minute: a later one does not change the recap."""
+    retracted = {
+        e["payload"]["target_event_id"]
+        for e in events
+        if e["payload"]["type"] == "retraction" and e["event_time_ms"] <= minute * 60_000
+    }
+    return tuple(e for e in events if e["event_id"] not in retracted)
+
+
+def _sentence_recounts(
+    events: tuple[dict[str, Any], ...],
+    piece: catch_me_up.CatchMeUp,
+    home: str,
+    sentence: str,
+    metrics: tuple[str, ...],
+) -> bool:
+    """A sentence with figures has them in the order of its metrics, each the recount of that
+    metric. A sentence with no figure (a named event) has nothing to recount."""
+    figures = extract_numbers(sentence)
+    expected = [float(recompute(events, m, piece.cut_sequence, home=home)) for m in metrics]
+    return not figures or figures == expected
+
+
 class MatchWorkflow:
     def __init__(
         self,
@@ -329,6 +364,7 @@ class MatchWorkflow:
         self._stall_task: asyncio.Task[None] | None = None  # the timer; it pauses at full time
         self._closed = False
         self._replans = 0  # numbers the replan moments, so two replans never share an id
+        self._processed_key: tuple[str, int] | None = None  # (event id, revision) last finished
         self._plan: str | None = None  # the last storyline the stall replan chose
         self._book = StorylineBook()  # the storylines a replan opened, each waiting for its payoff
         self._vision_lines = 0
@@ -556,18 +592,29 @@ class MatchWorkflow:
             # the pools, its ledger and the Producer's memory start at zero: nothing counts twice
             self._set_spent(0, 0)
             self.rundown = []
+            self._book = StorylineBook()  # a replay opens its storylines again
+            self._plan = None
+            self._replans = 0
+            self._stall.replanned = False
+            self._processed_key = None
             reset = getattr(self.agents.producer, "reset", None)
             if reset:
                 reset()
             return
         self.store.put_state(self.sk, MatchState.model_validate(row["state"]))
         self.rundown = copy.deepcopy(row.get("rundown", []))
+        self._book = StorylineBook.from_rows(row.get("storylines", []))  # open storylines survive
+        self._plan = row.get("plan")
+        self._replans = row.get("replans", 0)  # replan ids continue after a restart
+        self._stall.replanned = row.get("stall_replanned", False)  # the fallback rule survives
+        processed = row.get("processed_event")
+        self._processed_key = (processed[0], processed[1]) if processed else None
         self._set_spent(row.get("spawn_used", 0), row.get("quiet_used", 0))
         restore = getattr(self.agents.producer, "restore", None)
         if restore and row.get("producer") is not None:
             restore(row["producer"])
 
-    def _checkpoint(self, sequence: int) -> None:
+    def _checkpoint(self, sequence: int, key: tuple[str, int]) -> None:
         self._saved_once = True
         snapshot = getattr(self.agents.producer, "snapshot", None)
         self.store.put_checkpoint(
@@ -577,6 +624,11 @@ class MatchWorkflow:
                 "state": self.store.get_state(self.sk).model_dump(),
                 "producer": snapshot() if snapshot else None,
                 "rundown": copy.deepcopy(self.rundown),  # a copy: later entries must not reach it
+                "storylines": self._book.to_rows(),
+                "plan": self._plan,
+                "replans": self._replans,
+                "stall_replanned": self._stall.replanned,
+                "processed_event": list(key),
                 "spawn_used": self._spent["priority_one"],
                 "quiet_used": self._spent["quiet"],
             },
@@ -608,7 +660,8 @@ class MatchWorkflow:
             self._routing = None  # calls after the event (an edit, a talk) are not this moment's
         if ran is not None:  # the moment's run has ended, so its entry is final
             self._publish_ledger(ran)
-        self._checkpoint(event["stream_sequence"])
+        self._processed_key = _event_key(event)
+        self._checkpoint(event["stream_sequence"], self._processed_key)
 
     def add_persona(self, persona: str) -> bool:
         """Write lines for a viewer's watch mode from the next moment on.
@@ -677,7 +730,8 @@ class MatchWorkflow:
         if self._closed or (self._stall_task is not None and not self._stall_task.done()):
             return
         if not self._stall_started:
-            self._stall.note_line()  # the clock starts with the match, not with the workflow
+            # the clock starts with the match, not with the workflow; a restored replan flag stays
+            self._stall.last_line = self._stall.clock()
             self._stall_started = True
         self._stall_task = asyncio.get_running_loop().create_task(self._stall_watch())
 
@@ -736,8 +790,16 @@ class MatchWorkflow:
             if self._match_over():
                 return False
             events = self.store.events(self.sk)
-            if events:
-                self._replan_if_stalled(self._ctx(), events[-1])
+            # only a finished event may be checkpointed: a stored one whose processing failed waits
+            # the stored event with the highest sequence; a later revision of a tie stays last
+            newest = sorted(events, key=lambda e: e["stream_sequence"])[-1] if events else None
+            if newest is not None and _event_key(newest) == self._processed_key:
+                replans = self._replans
+                self._replan_if_stalled(self._ctx(), newest)
+                if self._replans != replans:
+                    # no event is in flight here, so the replan is checkpointed now, or a restart
+                    # before the next event would lose the storyline it opened
+                    self._checkpoint(newest["stream_sequence"], _event_key(newest))
         return True
 
     def close(self) -> None:
@@ -1162,6 +1224,34 @@ class MatchWorkflow:
             )
 
         return len(named) == len(numbers) and all(from_the_log(n, k) for n, k in named)
+
+    # ---- catch-me-up on demand (CREW-7.3) ----------------------------------------------------
+
+    def catch_me_up(self, minute: int, *, publish: bool = True) -> dict[str, Any] | None:
+        """The recap as of a match minute. Every number it states is recounted from the stored
+        events up to the cut; a recap that does not recount is not published (None). A read
+        passes publish=False: the recap goes to the reader, not to every stream."""
+        ctx = self._ctx()
+        if "catch_me_up" in self.killed_feeds:
+            return None  # the desk has killed this feed on the match
+        piece = catch_me_up.build(ctx, minute)
+        if piece is None:
+            return None  # held (a correction before the cut) or over the word limit
+        events = _counted_events(ctx.events, minute)
+        for sentence, metrics in piece.sentences:
+            if not _sentence_recounts(events, piece, ctx.home, sentence, metrics):
+                return None  # a figure that the quoted metrics do not recount: nothing airs
+        data = {
+            "feed": "catch_me_up",
+            "minute": piece.minute,
+            "text": piece.text,
+            "word_count": piece.word_count,
+            "cut_sequence": piece.cut_sequence,
+            "source_event_ids": list(piece.source_event_ids),
+        }
+        if publish:
+            self.hub.publish("catch_me_up", f"catch-me-up:{minute}", data)
+        return data
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 

@@ -78,6 +78,7 @@ ASK_PER_MINUTE = 20  # Copilot questions per browser session; a judge's quick ru
 TALK_PER_MINUTE = 20  # player and producer replies per browser session, a budget of their own
 ASK_PER_IP_MINUTE = 60  # asks and talks from one address, whatever session ids it sends
 DS_PER_MINUTE = 5
+CATCH_ME_UP_PER_MINUTE = 30  # catch-me-up reads per browser session per rolling minute
 ID = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 STATUS = {
     "not_found": 404,
@@ -279,6 +280,7 @@ class Registry:
         self._model_client: ModelClient | None = None
         self.asked: dict[str, deque[float]] = {}
         self.talked: dict[str, deque[float]] = {}
+        self.catch_me_up_reads: dict[str, deque[float]] = {}
         self.ip_questions: dict[str, deque[float]] = {}
         # every model call asks a budget first (cost guard): match agents, and Ask/Talk answers
         self.budgets = {
@@ -299,6 +301,10 @@ class Registry:
         self.pipeline: Pipeline | None = None  # set by install() when MATCHCAST_PIPELINE says so
         self.translation = TranslationService()
         self.safety = safety_from_env()  # Azure Content Safety when CONTENT_SAFETY_ENDPOINT is set
+
+    def allow_catch_me_up(self, session_id: str, now: float | None = None) -> bool:
+        """At most CATCH_ME_UP_PER_MINUTE reads per browser session per rolling minute."""
+        return _within(self.catch_me_up_reads, session_id, CATCH_ME_UP_PER_MINUTE, now)
 
     def allow_ask(self, session_id: str, now: float | None = None) -> bool:
         """At most ASK_PER_MINUTE questions per browser session per rolling minute."""
@@ -1384,6 +1390,24 @@ def build_router(registry: Registry) -> APIRouter:
         if not parts:
             raise Problem(404, "not_found", f"the {persona} recap is not ready")
         return await _audio_parts(request, registry, parts, registry.voice.voice_for("commentary"))
+
+    @router.get("/matches/{match_id}/catch-me-up")
+    async def get_catch_me_up(
+        match_id: str, session_id: str, minute: int = Query(ge=0, le=200)
+    ) -> dict[str, Any]:
+        """The catch-me-up recap as of a minute (CREW-7.3): the score and the most important
+        events up to that minute, every figure recounted from the stored events. A read: it is
+        not sent to the streams. Held (404) when a correction before the cut holds it, the desk
+        has killed the feed, or the recap does not recount."""
+        if not registry.allow_catch_me_up(session_id):
+            raise Problem(
+                429, "rate_limited", "too many catch-me-up reads a minute", retry_after=60
+            )
+        flow = await registry.flow_for(session_id, match_id)
+        recap = await asyncio.to_thread(flow.catch_me_up, minute, publish=False)
+        if recap is None:
+            raise Problem(404, "not_found", f"the catch-me-up is held at minute {minute}")
+        return recap
 
     @router.post("/matches/{match_id}/ask")
     async def ask(match_id: str, body: AskBody, request: Request) -> dict[str, Any]:

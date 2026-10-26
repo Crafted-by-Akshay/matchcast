@@ -296,3 +296,60 @@ def test_a_resumed_workflow_starts_the_timer_without_a_new_event(
 
     run(resumed_feed())
     assert replans() == before + 1
+
+
+def test_replan_ids_do_not_repeat_after_a_restart(make_workflow, match) -> None:
+    clock = Clock()
+    first = make_workflow(stall_clock=clock)
+    run(first.ingest(match["events"][:5]))
+    clock.now += STALL_S
+
+    async def stall(flow) -> None:
+        assert await flow._stall_tick()  # the timer's look checkpoints the replan
+
+    run(stall(first))
+    restarted = make_workflow(stall_clock=clock, store=first.store)
+    run(restarted.ingest(match["events"][:5]))  # already stored: the restart reads the checkpoint
+    clock.now += STALL_S * 3
+    run(stall(restarted))
+    ids = [e["moment_id"] for e in restarted.rundown if e["moment_id"].startswith("replan-")]
+    assert len(ids) == len(set(ids)) == 2, ids
+
+
+def test_the_timer_does_not_checkpoint_an_event_that_was_never_processed(
+    make_workflow, match
+) -> None:
+    clock = Clock()
+    flow = make_workflow(stall_clock=clock)
+    run(flow.ingest(match["events"][:5]))
+    # a stored event whose processing failed: it is in the store, not in the checkpoint
+    flow.store.add_event(flow.sk, match["events"][5])
+    before = flow.store.get_checkpoint(flow.sk)["processed_sequence"]
+    clock.now += STALL_S * 3
+
+    async def look() -> bool:
+        return await flow._stall_tick()
+
+    assert run(look())
+    assert flow.store.get_checkpoint(flow.sk)["processed_sequence"] == before
+    assert not [e for e in flow.rundown if e["moment_id"].startswith("replan-")]
+
+
+def test_a_stored_revision_of_the_last_event_does_not_pass_the_timer_guard(
+    make_workflow, match
+) -> None:
+    # a corrected revision keeps its sequence, so the guard compares the revision too
+    clock = Clock()
+    flow = make_workflow(stall_clock=clock)
+    run(flow.ingest(match["events"][:5]))
+    revised = {**match["events"][4], "revision": 1}
+    assert flow.store.add_event(flow.sk, revised)
+    before = flow.store.get_checkpoint(flow.sk)["processed_sequence"]
+    clock.now += STALL_S * 3
+
+    async def look() -> bool:
+        return await flow._stall_tick()
+
+    assert run(look())
+    assert not [e for e in flow.rundown if e["moment_id"].startswith("replan-")]
+    assert flow.store.get_checkpoint(flow.sk)["processed_sequence"] == before
