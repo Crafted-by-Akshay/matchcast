@@ -138,9 +138,10 @@ def _ticker_line(ctx: MatchContext, item: TickerItem) -> tuple[DraftLine, list[C
 def audio_placements(ctx: MatchContext, windows: list[Window]) -> list[Description]:
     """The described events, placed in the gaps left after the lines before each one.
 
-    A placed line uses its time, so a later line cannot be talked over. An event that moves no
-    counter is not placed (no claim would back its line), and neither is an event a retraction or
-    a correction holds: the describer must not announce what the engine has taken back.
+    A placed line uses its time, so a later line cannot be talked over. Goals are placed first, so
+    an earlier shot or pass cannot take a goal's gap. An event that moves no counter is not placed
+    (no claim would back its line), and neither is an event a retraction or a correction holds: the
+    describer must not announce what the engine has taken back.
     """
     held = {
         e["payload"]["target_event_id"]
@@ -149,7 +150,8 @@ def audio_placements(ctx: MatchContext, windows: list[Window]) -> list[Descripti
     }
     free = list(windows)
     placed = []
-    for event in sorted(ctx.events, key=lambda e: e["stream_sequence"]):
+    order = sorted(ctx.events, key=lambda e: (e["payload"]["type"] != "goal", e["stream_sequence"]))
+    for event in order:
         if event["event_id"] in held or not event_metrics(event["payload"]):
             continue
         described = describe(ctx, event, free)
@@ -158,7 +160,7 @@ def audio_placements(ctx: MatchContext, windows: list[Window]) -> list[Descripti
         _, length = spoken_span(0, described.text)
         free = take(free, described.speak_at_ms, described.speak_at_ms + length)
         placed.append(described)
-    return placed
+    return sorted(placed, key=lambda d: d.speak_at_ms)
 
 
 def audio_drafts(ctx: MatchContext, windows: list[Window]) -> list[tuple[DraftLine, list[Claim]]]:

@@ -160,9 +160,9 @@ def test_the_describer_does_not_announce_a_goal_the_engine_has_corrected(match) 
 
 
 def test_a_late_goal_reserves_no_gap_so_the_lines_after_it_keep_their_times(match) -> None:
-    # e10 is placed late, so it must not move the lines after it: their times match a match
-    # without e10 at all
-    window = [Window(36_000, 3_000_000)]
+    # e10 (37.8 s) is placed late, its only gap starting at 41 s, so it must not move the lines
+    # after it: their times match a match without e10 at all
+    window = [Window(41_000, 3_000_000)]
     with_goal = audio_placements(ctx(match), window)
     assert "e10" not in {d.source_event_id for d in with_goal}
     without = [e for e in match["events"] if e["event_id"] != "e10"]
@@ -182,3 +182,23 @@ def test_a_goal_correction_holds_every_score_line_while_the_recount_counts_it(ma
     drafts = ticker_drafts(ctx(match, [*match["events"], correction]))
     assert not any(line.text.startswith(("Goal:", "Own goal")) for line, _ in drafts)
     assert "line-ticker-e109" in [line.line_id for line, _ in drafts]
+
+
+def test_a_goal_is_not_displaced_by_an_earlier_shot_in_the_same_gap(match) -> None:
+    # e9 (a shot at 36.9 s) comes before the goal e10 (37.8 s) in the stream: the goal goes first,
+    # so it is spoken on time and the shot is placed after it or not at all
+    window = [Window(36_000, 3_000_000)]
+    placed = {d.source_event_id: d for d in audio_placements(ctx(match), window)}
+    assert "e10" in placed
+    assert placed["e10"].late is False
+    assert placed["e10"].speak_at_ms == match_event_time(match, "e10")
+
+
+def test_a_non_goal_more_than_ten_seconds_late_is_not_written(match) -> None:
+    # e4 is a tackle at 17.9 s; the only gap starts at 36 s, 18 s later: it is not described
+    placed = audio_placements(ctx(match), [Window(36_000, 3_000_000)])
+    assert "e4" not in {d.source_event_id for d in placed}
+
+
+def match_event_time(match, event_id: str) -> int:
+    return next(e for e in match["events"] if e["event_id"] == event_id)["event_time_ms"]

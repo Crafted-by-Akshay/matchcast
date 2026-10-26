@@ -104,3 +104,11 @@ def test_a_goal_no_gap_fits_is_not_described_at_all(match) -> None:
     # a goal with only too-short gaps has no description: it is dropped, and the caller sees None
     goal = event(match, "e10")
     assert describe(ctx(match), goal, [Window(0, 500)]) is None
+
+
+def test_a_description_whose_gap_comes_more_than_ten_seconds_late_is_not_written(match) -> None:
+    # a shot at 36.9 s with the first gap only from 47 s on: the line would talk about a play
+    # the audience has moved past, and freshness would refuse it at airing
+    shot = event(match, "e9")
+    late_window = [Window(shot["event_time_ms"] + 10_001, 60_000)]
+    assert describe(ctx(match), shot, late_window) is None

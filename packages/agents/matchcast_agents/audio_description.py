@@ -5,6 +5,7 @@ and club the engine reports, and it places the action by thirds of the pitch len
 x = 0, as the engine reports it) and by the side of the pitch. A description is written only when
 a gap of at least the feed's minimum (2 s) is long enough to speak it, so it never talks over
 the commentary. A goal's description has a 3 s deadline: the caller is told when it is late.
+No description starts more than MAX_LAG_MS after its event.
 
 Commentary busy-time comes from the booth lines' word counts at the booth pace, so a gap is an
 estimate of what a listener hears, not of the audio itself.
@@ -19,6 +20,7 @@ from .feeds import FEEDS
 MIN_GAP_MS = next(feed.min_gap_ms for feed in FEEDS if feed.key == "audio_description")
 WORDS_PER_SECOND = 2.5  # the booth pace, the same as the half-time explainer's
 GOAL_DEADLINE_MS = 3_000
+MAX_LAG_MS = 10_000  # later than this, the line talks about a moment already gone
 DESCRIBED = ("pass", "carry", "shot", "tackle", "foul", "goal")
 PITCH_LENGTH_M, PITCH_WIDTH_M = 105.0, 68.0  # the pitch the engine reports; see the roster
 
@@ -119,6 +121,8 @@ def describe(ctx: MatchContext, event: dict[str, Any], windows: list[Window]) ->
     at = event["event_time_ms"]
     for window in windows:
         start = max(window.start_ms, at)
+        if start - at > MAX_LAG_MS:
+            continue
         if start + length <= window.end_ms:
             late = payload["type"] == "goal" and start - at > GOAL_DEADLINE_MS
             return Description(text, event["event_id"], start, late)

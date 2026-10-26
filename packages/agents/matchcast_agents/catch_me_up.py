@@ -33,7 +33,7 @@ class CatchMeUp:
     sentences: tuple[Sentence, ...]
     minute: int
     cut_sequence: int  # the last stream sequence the recap may use
-    source_event_ids: tuple[str, ...]  # the goals up to the cut, then the events named
+    source_event_ids: tuple[str, ...]  # the goals and the named events, in match order
     word_count: int
 
 
@@ -88,7 +88,7 @@ def build(ctx: MatchContext, minute: int) -> CatchMeUp | None:
         state = apply(state, event)
     home, away = ctx.home, ctx.away
     headline: Sentence = (
-        f"After {minute} minutes, {ctx.club_name(home)} {state.count('goals', home)}-"
+        f"Score so far: {ctx.club_name(home)} {state.count('goals', home)}-"
         f"{state.count('goals', away)} {ctx.club_name(away)}.",
         (f"goals:{home}", f"goals:{away}"),
     )
