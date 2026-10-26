@@ -10,7 +10,17 @@ async function openWhatIf(page: Page) {
   return f;
 }
 
-test('analyst what-if: a paired re-run plays on the pitch and says it is a simulated estimate', async ({ page }) => {
+// No clips are published in this PR: the N001 base has to replay the 2-0 Watch shows before a clip can be shown next to it.
+test('analyst what-if: with no published runs it says so and offers no clip', async ({ page }) => {
+  const errs = collectErrors(page);
+  const f = await openWhatIf(page);
+  await expect(f.locator('#pg')).toContainText('No what-if runs are published yet');
+  await expect(f.locator('#wi-clip')).toHaveCount(0);
+  expect(errs).toEqual([]);
+});
+
+// Runs once clips are published again (apps/unified/whatif/build_index.py), after the base replays like Watch.
+test.skip('analyst what-if: a paired re-run plays on the pitch and says it is a simulated estimate', async ({ page }) => {
   const errs = collectErrors(page);
   const f = await openWhatIf(page);
   await expect(f.locator('#wi-clip option').first()).toBeAttached({ timeout: 60_000 });
