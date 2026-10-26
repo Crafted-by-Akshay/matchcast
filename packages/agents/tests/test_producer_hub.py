@@ -194,3 +194,23 @@ def test_crew_frames_survive_the_buffer_so_a_late_viewer_at_full_time_has_the_tr
     for i in range(5100):
         hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
     assert "spawn:early" in [e.id for e in hub.replay_after(None)]
+
+
+def test_a_resume_from_a_kept_crew_frame_keeps_the_feed_records_after_it() -> None:
+    # the kept records are in publish order: a viewer who resumes from a crew frame gets the feed
+    # record published after it, which a crew-first list would drop
+    hub = StreamHub()
+    hub.publish("crew_spawn", "spawn:c", {"moment_id": "m1"})
+    hub.publish("onair", "onair:f", {"feed": "casual"})
+    for i in range(5100):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    assert [e.id for e in hub.replay_after("spawn:c")][:1] == ["onair:f"]
+
+
+def test_a_resume_from_a_kept_feed_record_does_not_resend_older_crew_frames() -> None:
+    hub = StreamHub()
+    hub.publish("crew_spawn", "spawn:c", {"moment_id": "m1"})
+    hub.publish("onair", "onair:f", {"feed": "casual"})
+    for i in range(5100):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    assert "spawn:c" not in [e.id for e in hub.replay_after("onair:f")]
