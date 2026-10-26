@@ -25,16 +25,17 @@ retry() {
 
 # A deploy that was cancelled or cut off can leave a nested module deployment Running, and the next
 # one then fails with DeploymentActive. Wait up to 20 minutes for the group to go quiet; if one is
-# still running, cancel it (a cancel never deletes a resource) and wait up to 5 more.
+# still running, cancel it (the group has one deployer; a cancel never deletes a resource) and wait up to 5 more.
 wait_idle() {
-  local running waited=0 cancelled=0
+  local running name waited=0 cancelled=0
   while :; do
-    running=$(az deployment group list -g rg-matchcast --query "[?properties.provisioningState=='Running'].name" -o tsv)
+    # a failed query must not read as "nothing is running": that is the case this guards
+    running=$(az deployment group list -g rg-matchcast --query "[?properties.provisioningState=='Running' || properties.provisioningState=='Accepted' || properties.provisioningState=='Canceling'].name" -o tsv) || return 1
     [ -z "$running" ] && return 0
     if [ "$waited" -ge 1200 ] && [ "$cancelled" = 0 ]; then
       for name in $running; do
         echo "cancelling deployment still running after 20 minutes: $name" >&2
-        az deployment group cancel -g rg-matchcast -n "$name" --only-show-errors || true
+        az deployment group cancel -g rg-matchcast -n "$name" --only-show-errors >&2 || echo "could not cancel $name" >&2
       done
       cancelled=1
     fi
