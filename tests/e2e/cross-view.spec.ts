@@ -10,7 +10,7 @@ const state = (f: import('@playwright/test').Frame) => f.evaluate(() => { const 
 test('Broadcast and the Analyst follow Watch (same score, minute, events; pause carries over)', async ({ page }) => {
   test.setTimeout(420_000);
   const errs = collectErrors(page);
-  await openShell(page, 'watch');
+  await openShell(page, 'watch', '?crew=0');
   const w = await viewFrame(page, 'watch');
   await expect.poll(() => w.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
   await stepSim(w, 2000);   // a couple of match minutes, so there are events and a clock to compare
@@ -44,6 +44,7 @@ test('Broadcast and the Analyst follow Watch (same score, minute, events; pause 
   await w.evaluate(() => { (window as any).__mc.S.paused = false; });
   await stepSim(w, 400);
   await tab(page, 'broadcast');
-  await expect.poll(async () => { const x = await state(b), y = await state(w); return !x.paused && x.mclock >= ws.mclock && Math.abs(x.mclock - y.mclock) < 5 && JSON.stringify(x.score) === JSON.stringify(y.score); }, { timeout: 60_000 }).toBe(true);
+  // Broadcast's clock moves in its own frame loop (consumerStep from stepSim); software GL starves that loop, so step it the way Watch is stepped above
+  await expect.poll(async () => { await stepSim(b, 40); const x = await state(b), y = await state(w); return !x.paused && x.mclock >= ws.mclock && Math.abs(x.mclock - y.mclock) < 5 && JSON.stringify(x.score) === JSON.stringify(y.score); }, { timeout: 60_000 }).toBe(true);
   expect(errs).toEqual([]);
 });

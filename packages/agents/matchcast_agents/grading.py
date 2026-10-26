@@ -262,9 +262,23 @@ class _Counted:
         return call
 
 
+def corrupt_first(
+    results: list[ClaimResult], task: ProducerTask, seeded: frozenset[str], repair: bool
+) -> list[ClaimResult]:
+    """The seeded wrong claim: the first claim of a seeded moment is one too high. A repair is
+    never corrupted, so the Verifier's repair can fix it."""
+    if repair or task.moment_id not in seeded or not results:
+        return results
+    first = results[0]
+    wrong = {**first.packet, "value": first.packet["value"] + 1}
+    seeded_claim = ClaimResult(
+        packet=wrong, tool_call_ids=first.tool_call_ids, formula_inputs=first.formula_inputs
+    )
+    return [seeded_claim, *results[1:]]
+
+
 class SeededAnalyst:
-    """AnalystRules with seeded wrong claims: the first claim of each seeded moment is one too
-    high. A repair (``repair=True``) is not corrupted, so the Verifier's repair can fix it."""
+    """AnalystRules with seeded wrong claims (see ``corrupt_first``)."""
 
     def __init__(self, seeded: frozenset[str]) -> None:
         self._inner = AnalystRules()
@@ -287,14 +301,7 @@ class SeededAnalyst:
         metrics: list[str] | None = None,
     ) -> list[ClaimResult]:
         results = await self._inner.analyse(ctx, task, repair=repair, metrics=metrics)
-        if repair or task.moment_id not in self._seeded or not results:
-            return results
-        first = results[0]
-        wrong = {**first.packet, "value": first.packet["value"] + 1}
-        seeded = ClaimResult(
-            packet=wrong, tool_call_ids=first.tool_call_ids, formula_inputs=first.formula_inputs
-        )
-        return [seeded, *results[1:]]
+        return corrupt_first(results, task, self._seeded, repair)
 
 
 class UncheckedVerifier:
@@ -331,15 +338,18 @@ async def _crew(
     unchecked: bool,
     ledger: _Ledger,
     clock: Callable[[], datetime],
+    agents: AgentSet | None = None,
 ) -> dict[str, Any]:
-    """The workflow over every event, timed per shot or goal. Lines are the aired ones."""
+    """The workflow over every event, timed per shot or goal. Lines are the aired ones. ``agents``
+    replaces the rules set (a live arm); ``unchecked`` bypasses the Verifier either way."""
     verifier = UncheckedVerifier() if unchecked else VerifierRules()
     flow = MatchWorkflow(
         stream=match["roster"]["stream"],
         roster=match["roster"],
         names=match["names"],
         clubs=match["teams"],
-        agents=AgentSet(
+        agents=agents
+        or AgentSet(
             producer=_Counted(ProducerRules(PERSONAS), ledger),
             analyst=_Counted(SeededAnalyst(seeded), ledger),
             narrator=_Counted(NarratorRules(), ledger),
@@ -359,15 +369,29 @@ async def _crew(
         if line.status in AIRED:
             claims = [flow.store.get_claim(flow.sk, c)["packet"] for c in line.claim_ids]
             lines.append((line.text, line.line_id, line.moment_id, claims))
-    return {"lines": lines, "latency_ms": latencies, "model_calls": ledger.calls}
+    made = {c["packet"]["claim_id"] for c in flow.store.claims(flow.sk)}
+    produced = frozenset(f"claim-{m}-1" for m in seeded if f"claim-{m}-1" in made)
+    return {
+        "lines": lines,
+        "latency_ms": latencies,
+        "model_calls": ledger.calls,
+        "produced": produced,
+    }
 
 
 async def _single(
-    match: Mapping[str, Any], seeded: frozenset[str], *, ledger: _Ledger
+    match: Mapping[str, Any],
+    seeded: frozenset[str],
+    *,
+    ledger: _Ledger,
+    analyst: Any = None,
+    narrator: Any = None,
 ) -> dict[str, Any]:
-    """One pass per shot or goal: the rules Analyst's claims, then the line written from them."""
-    analyst = _Counted(SeededAnalyst(seeded), ledger)
-    narrator = _Counted(NarratorRules(), ledger)
+    """One pass per shot or goal: the Analyst's claims, then the line written from them. The
+    rules Analyst and Narrator unless a live pair is given."""
+    analyst = analyst or _Counted(SeededAnalyst(seeded), ledger)
+    narrator = narrator or _Counted(NarratorRules(), ledger)
+    made: set[str] = set()
     stream = match["roster"]["stream"]
     state, prefix = MatchState(), []
     lines, latencies = [], []
@@ -402,12 +426,19 @@ async def _single(
             reason=reason,
         )
         results = await analyst.analyse(ctx, task)
+        made |= {r.packet["claim_id"] for r in results}
         claims = [r.packet for r in results]
         if claims:
             drafts = await narrator.write(ctx, task, claims)
             lines.extend((d.text, d.line_id, task.moment_id, claims) for d in drafts)
         latencies.append((time.perf_counter() - start) * 1000)
-    return {"lines": lines, "latency_ms": latencies, "model_calls": ledger.calls}
+    produced = frozenset(f"claim-{m}-1" for m in seeded if f"claim-{m}-1" in made)
+    return {
+        "lines": lines,
+        "latency_ms": latencies,
+        "model_calls": ledger.calls,
+        "produced": produced,
+    }
 
 
 def _allowed(match: Mapping[str, Any]) -> set[str]:
@@ -431,6 +462,8 @@ def _report(
     match: Mapping[str, Any],
     seed: int,
     seeded_claims: frozenset[str],
+    *,
+    mode: str = "rules",
 ) -> dict[str, Any]:
     events, allowed = match["events"], _allowed(match)
     grades = [
@@ -452,7 +485,9 @@ def _report(
             for c in g["claims"]
             if c["verdict"] == "incorrect" and c["claim_value"] in wrong_here
         }
-    caught = len(seeded_claims - set(stated))
+    # a seeded moment the crew skipped made no claim, so it is not a claim the arm missed
+    produced = frozenset(run["produced"]) if "produced" in run else seeded_claims
+    caught = len(produced - set(stated))
     lines = len(grades)
     calls = run["model_calls"]
     run_id = hashlib.sha256(
@@ -469,7 +504,7 @@ def _report(
     latency = run["latency_ms"]
     return {
         "label": LABELS[key],
-        "mode": "rules",
+        "mode": mode,
         "run_id": run_id,
         "lines_aired": lines,
         "wrong_lines_aired": sum(g["verdict"] == "incorrect" for g in grades),
@@ -481,7 +516,8 @@ def _report(
         "catch_rate": {
             "caught": caught,
             "seeded": len(seeded_claims),
-            "rate": _rate(caught, len(seeded_claims)),
+            "produced": len(produced),
+            "rate": _rate(caught, len(produced)),
         },
         "latency_ms": {
             "p50": _percentile(latency, 0.5),
@@ -499,10 +535,26 @@ def _report(
     }
 
 
+def seeded_set(
+    match: Mapping[str, Any], *, seed: int, rate: float, clock: Callable[[], datetime]
+) -> tuple[frozenset[str], frozenset[str]]:
+    """The moments whose first claim is seeded wrong, and the claim ids they make. The seeds go
+    only into shot and goal moments the clean crew aired, so every arm has the same population."""
+    shot_goal = {_moment_id(e) for e in match["events"] if _is_moment(e)}
+    clean = asyncio.run(_crew(match, frozenset(), unchecked=False, ledger=_Ledger(), clock=clock))
+    aired = sorted({m for _t, _l, m, _c in clean["lines"] if m in shot_goal})
+    rng = random.Random(f"{seed}:seeded-claims")
+    chosen = frozenset(rng.sample(aired, max(1, round(len(aired) * rate)) if aired else 0))
+    return chosen, frozenset(f"claim-{m}-1" for m in chosen)
+
+
+DEFAULT_SEED = 2026  # the scoreboard's seed; a recorded live run must match it to be shown
+
+
 def scoreboard(
     match: Mapping[str, Any],
     *,
-    seed: int = 2026,
+    seed: int = DEFAULT_SEED,
     rate: float = SEED_RATE,
     run_date: str | None = None,
     precomputed: Mapping[str, Mapping[str, Any]] | None = None,
@@ -516,13 +568,7 @@ def scoreboard(
     shot_goal = {_moment_id(e): e for e in match["events"] if _is_moment(e)}
     as_of = run_date or datetime.now(UTC).date().isoformat()
     clock = _pinned_clock(as_of)
-    # the seeds go only into shot and goal moments the clean crew aired, so every arm has the
-    # same population of seeded claims to catch
-    clean = asyncio.run(_crew(match, frozenset(), unchecked=False, ledger=_Ledger(), clock=clock))
-    aired = sorted({m for _t, _l, m, _c in clean["lines"] if m in shot_goal})
-    rng = random.Random(f"{seed}:seeded-claims")
-    chosen = frozenset(rng.sample(aired, max(1, round(len(aired) * rate)) if aired else 0))
-    seeded_claims = frozenset(f"claim-{m}-1" for m in chosen)
+    chosen, seeded_claims = seeded_set(match, seed=seed, rate=rate, clock=clock)
 
     arms: dict[str, Any] = {}
     for key in ARMS:

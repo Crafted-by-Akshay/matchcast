@@ -5,7 +5,7 @@ import { collectErrors, openShell, viewFrame } from './helpers';
 // a stacked indices table on a phone, and a named Copilot button on a phone.
 declare const post: (v: string, m: object) => void; declare const M: any;
 async function openPage(page: Page, route: string) {
-  await openShell(page, 'analyst');
+  await openShell(page, 'analyst', '?crew=0');
   const f = await viewFrame(page, 'analyst');
   await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
   await f.evaluate((r) => (window as any).go(r), route);

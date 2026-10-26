@@ -184,3 +184,13 @@ def test_a_why_line_names_a_club_whose_team_id_is_not_home_or_away() -> None:
     )
     report = _run(ctx)
     assert report.why is not None and report.why.startswith("The rhythm swung to Brazil")
+
+
+def test_the_specialist_hands_the_swing_it_cites_to_the_analyst() -> None:
+    """The Analyst reads the cited swing from ctx.extra, so the real specialist must set it."""
+    events = _dominance(["home"] * 6 + ["away"] * 6)
+    ctx = _context(events, now_ms=12 * 60_000)
+    report = _run(ctx)
+    assert report.why is not None
+    cited = ctx.extra["rhythm"]["swings"][-1]
+    assert ctx.extra["rhythm"]["swing"] == {"team": "away", "end_ms": cited["minute"] * 60_000}

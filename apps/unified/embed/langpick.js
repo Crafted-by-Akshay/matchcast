@@ -1,10 +1,13 @@
-// ---- CREW-7.9 (AB#506), the picker half: Watch's language row offers the ten feed languages, behind ?crew=1. Runs in the Watch module before watch.js.
+// ---- CREW-7.9 (AB#506), the picker half: Watch's language row offers the ten feed languages, on by default (?crew=0 turns it off). Runs in the Watch module before watch.js.
 // The list is the Languages lane's (apps/unified/langs.js: MC_LANGS, MC_LANG_NAMES, MC_SPEECH_LOCALE, ADR-0023) when the page has it; until it lands, a fixture of the same ten.
 // Watch's picker is the prototype's (fanPicker) and its language list is a const array, so the entries are replaced in place: the row, the saved settings, the shell's persona message and the
 // "Planned" tags (build.py) all follow the one list. A line with no checked translation stays English, and the row says so. Nothing is translated here.
 (() => {
-  const flag = (w) => { try { return /[?&]crew=1(&|$)/.test(w.location.search); } catch (e) { return false; } };
-  if (!flag(window) && !(window.parent !== window && flag(window.parent))) return;
+  let qs = location.search;   // the page's own query first; the parent's is appended in its own try (same lines as crew.js)
+  try { if (window.parent !== window) qs += '&' + window.parent.location.search; } catch (e) { /* cross-origin parent */ }
+  let on = !/[?&]crew=0(&|$)/.test(qs);   // default on; ?crew=0 or localStorage mc-crew=0 turns it off, an explicit crew=1 beats a stored 0
+  try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked */ }
+  if (!on) return;
   if (typeof FAN_LANGS === 'undefined' || typeof fanPicker === 'undefined' || typeof fanApply === 'undefined' || typeof fanPop === 'undefined') return;
 
   const FIXTURE = ['en', 'es', 'pt', 'hi', 'ar', 'fr', 'de', 'id', 'ja', 'zh-Hans'];

@@ -1,5 +1,5 @@
 /* Crew spawn tree (CREW-6.1, AB#439, Experience lane). Mounts a "Crew" section at the top of the Agents tab
-   when CREW.enabled (?crew=1). Reads only CREW.state: the latest moment's agents[{id,role,parent,status}].
+   when CREW.enabled (on by default). Reads only CREW.state: the latest moment's agents[{id,role,parent,status}].
    The Showrunner fans out to subagents as they appear; the tree fades when the moment is done.
    Simulated while CREW.state.simulated is true. */
 (function () {
@@ -41,6 +41,7 @@
     '<button type="button" class="pill" id="crew-play">Play Simulated goal</button></div>' +
     '<p class="ct-meta"><span id="ct-label"></span><span id="ct-routed"></span><span id="ct-state"></span></p>' +
     '<p class="ct-empty" id="ct-empty">No moment yet. Play a Simulated goal to watch the Showrunner spawn its crew.</p>' +
+    '<p class="ct-empty" id="ct-spawn-why" hidden></p>' +
     '<div id="ct-tree" role="group" aria-label="Spawn tree for the latest moment"><ul id="ct-root" role="list" aria-label="Showrunner and subagents"></ul>' +
     '<button type="button" class="pill" id="ct-more" hidden aria-expanded="false"></button></div>' +
     '<p id="ct-announce" aria-live="polite" class="muted"></p>' +
@@ -71,6 +72,17 @@
     return { li: li, d: d, kids: null };
   }
 
+  // Crew frames are not replayed on reconnect (contract 1.3.0). This says so only to a viewer who really missed some: the page attached to a
+  // match that already existed, or its stream dropped and came back. Never to the viewer who started the match, and never while a Simulated goal plays.
+  function midMatch() { try { return !C.playing && typeof LV !== 'undefined' && !!LV.base && !!LV.key && !!LV.joinedMidMatch && (LV.status === 'live' || LV.status === 'warming'); } catch (e) { return false; } }
+  function idleText() {
+    var e = $('ct-empty'), mid = midMatch();
+    e.setAttribute('data-state', mid ? 'next-moment' : 'idle');
+    var t = mid ? 'The crew starts at the next moment. Crew frames are not replayed, so the tree fills from the next moment of this match. Play a Simulated goal to preview it.'
+      : 'No moment yet. Play a Simulated goal to watch the Showrunner spawn its crew.';
+    if (e.textContent !== t) e.textContent = t;
+  }
+
   function clearAll() {
     $('ct-root').textContent = ''; nodes = {}; lastStatus = {}; doneSaid = {}; expanded = false; shownMoment = null;
     pending = []; if (flushT) { clearTimeout(flushT); flushT = null; }
@@ -99,14 +111,18 @@
 
   function render(S) {
     var m = S.moments.length ? S.moments[S.moments.length - 1] : null;
-    $('ct-sim').hidden = !S.simulated;
+    $('ct-sim').hidden = !(S.simulated && (C.playing || S.moments.length));   // Simulated only while there is fixture data to label; nothing from the api is labelled so
     $('ct-empty').hidden = !!m;
+    if (!m) idleText();
     $('ct-tree').hidden = !m;
-    if (!m) { clearAll(); $('ct-label').textContent = ''; $('ct-routed').textContent = ''; $('ct-state').textContent = ''; $('ct-more').hidden = true; return; }
+    if (!m) { $('ct-spawn-why').hidden = true; clearAll(); $('ct-label').textContent = ''; $('ct-routed').textContent = ''; $('ct-state').textContent = ''; $('ct-more').hidden = true; return; }
     if (shownMoment !== m.id) { clearAll(); shownMoment = m.id; }   // a newer moment replaces the old tree
     $('ct-label').textContent = (m.why || 'moment') + ', ' + m.minute + "'";
     $('ct-routed').textContent = 'routed by ' + (m.routed_by || 'rules');
     $('ct-state').textContent = m.status === 'done' ? 'Moment done' : '';
+    var why = $('ct-spawn-why'), only = m.agents.length <= 1;   // just the Showrunner: say why no specialist was spawned
+    why.hidden = !(only && m.spawn_reason);
+    why.textContent = only && m.spawn_reason ? 'No specialists spawned: ' + m.spawn_reason : '';
     var byId = {}, fresh = [], failed = [];
     m.agents.forEach(function (a) { byId[a.id] = a; });
     Object.keys(nodes).forEach(function (id) {      // prune nodes the state no longer has
@@ -145,4 +161,5 @@
   }
 
   C.subscribe(render);
+  setInterval(function () { if (!C.state.moments.length) idleText(); }, 1000);   // the api status changes without a CREW emit
 })();

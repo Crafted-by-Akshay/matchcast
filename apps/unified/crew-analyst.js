@@ -1,4 +1,4 @@
-/* Analyst live view (CREW-7.8, AB#501). Behind CREW.enabled (?crew=1) the Analyst tab is a compact view drawn from the shell's own data:
+/* Analyst live view (CREW-7.8, AB#501). With CREW.enabled (on by default, ?crew=0 turns it off) the Analyst tab is a compact view drawn from the shell's own data:
    AG.run (events, verified claims), CREW.state.feeds.analyst (the crew fixture) and M.indices (Watch's control/chaos/tempo).
    The 27-page console stays one click away behind "Full console" (same iframe, same routing as before, see routeAnalyst in index.html).
    The match is the browser simulator, so every panel says Simulated. Nothing here is estimated: a panel with no honest source says so. */

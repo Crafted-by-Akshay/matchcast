@@ -1,9 +1,9 @@
 import { test, expect, type Frame, type Page } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// CREW-7.9 (AB#506), the picker half: behind ?crew=1 Watch's language row offers the ten feed languages, remembers the choice,
+// CREW-7.9 (AB#506), the picker half: by default (?crew=0 turns it off) Watch's language row offers the ten feed languages, remembers the choice,
 // puts Arabic lines right-to-left, and says plainly that a line with no checked translation stays English.
-// Without the flag the row is the one it always was (English, Tamil, Spanish, Hindi, French, Arabic).
+// With ?crew=0 the row is the one it always was (English, Tamil, Spanish, Hindi, French, Arabic).
 const TEN = ['en', 'es', 'pt', 'hi', 'ar', 'fr', 'de', 'id', 'ja', 'zh-Hans'];
 const NAMES: Record<string, string> = { en: 'English', es: 'Español', pt: 'Português', hi: 'हिन्दी', ar: 'العربية', fr: 'Français', de: 'Deutsch', id: 'Bahasa Indonesia', ja: '日本語', 'zh-Hans': '简体中文' };
 
@@ -116,9 +116,16 @@ test('Watch language picker on a phone: the panel stays inside the frame and the
   expect(await reachable(f, '#fan-pop .fm-v'), 'the voice switch next to the row is still there').toEqual({ onTop: true, inside: true });
 });
 
-test('Watch language picker: without ?crew=1 the row is the old one', async ({ page }) => {
+test('Watch language picker: on by default with no flag, the row is the ten feed languages', async ({ page }) => {
   test.setTimeout(420_000);
   const f = await openWatch(page, '');
+  await openPicker(f);
+  expect(await f.evaluate(() => document.querySelectorAll('#fan-pop .fm-l').length)).toBe(10);
+});
+
+test('Watch language picker: with ?crew=0 the row is the old one', async ({ page }) => {
+  test.setTimeout(420_000);
+  const f = await openWatch(page, '?crew=0');
   await openPicker(f);
   expect(await f.evaluate(() => [...document.querySelectorAll<HTMLElement>('#fan-pop .fm-l')].map((b) => b.dataset.l))).toEqual(['en', 'ta', 'es', 'hi', 'fr', 'ar']);
   await expect(f.locator('#mc-lang-note')).toHaveCount(0);

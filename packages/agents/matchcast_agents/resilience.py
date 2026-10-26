@@ -114,6 +114,14 @@ class ResilientAgent:
         taken, self._fallbacks = self._fallbacks, []
         return taken
 
+    def keep_fallbacks(self, reasons: list[str]) -> None:
+        """Put back fallbacks taken only to be counted, so the next take still sees them."""
+        call = self._call.get()
+        if call is not None:
+            call["fallbacks"][:0] = reasons
+        else:
+            self._fallbacks[:0] = reasons
+
     async def _live_call(self, method: str, args: tuple, kwargs: dict) -> Any:
         call = getattr(self.live, method)
         for attempt in (0, 1):

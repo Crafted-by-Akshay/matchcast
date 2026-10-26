@@ -65,6 +65,22 @@ def fit(text: str, limit: int) -> str:
     return cut
 
 
+def _player_club(ctx: MatchContext, payload: dict[str, Any]) -> str | None:
+    """The club the moment's player plays for: the model must not place the player itself (a goal
+    by one side's player credited to the other was the Verifier's commonest meaning rejection)."""
+    team = payload.get("team_id")
+    if not team and "player_id" in payload:
+        team = next(
+            (
+                p["team_id"]
+                for p in ctx.roster.get("players", [])
+                if p["player_id"] == payload["player_id"]
+            ),
+            None,
+        )
+    return ctx.club_name(team) if team else None
+
+
 class LiveNarrator:
     mode = "live"
     agent_id = "narrator"
@@ -90,10 +106,18 @@ class LiveNarrator:
                 {"metric": c["metric"], "value": c["value"], "units": c["units"]} for c in claims
             ],
             "player": ctx.player_name(payload["player_id"]) if "player_id" in payload else None,
+            "player_club": _player_club(ctx, payload),
             "clubs": {t: ctx.club_name(t) for t in (ctx.home, ctx.away)},
             "personas": list(task.personas),
             "already_said_about_this_play": already_said(ctx, payload),
         }
+        payoff = ctx.extra.get("payoff")
+        if payoff is not None and payoff["cites"][1] == event.get("stream_sequence"):
+            # CREW-3.2: the goal that pays a storyline off says so, with no figures to recount
+            facts["storyline_payoff"] = (
+                "This goal pays off a storyline: the player was followed earlier in the match, "
+                "after the stall."
+            )
         if attempt:
             facts["note"] = (
                 "A previous draft failed verification; stay closer to the claims "

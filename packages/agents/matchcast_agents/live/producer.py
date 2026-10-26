@@ -63,6 +63,10 @@ class LiveProducer:
         taken, self._fallbacks = self._fallbacks, []
         return taken
 
+    def keep_fallbacks(self, reasons: list[str]) -> None:
+        """Put back fallbacks taken only to be counted, so the next take still sees them."""
+        self._fallbacks[:0] = reasons
+
     def snapshot(self) -> dict[str, Any]:
         # the rules keys stay at the top level, so a rules-only build restores this checkpoint too
         return {**self._rules.snapshot(), "aired": list(self._aired)}

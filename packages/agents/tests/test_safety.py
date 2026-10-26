@@ -303,3 +303,28 @@ def test_model_written_check_reasons_are_blanked_with_the_text(match) -> None:
     )
     assert public_line(line, stream=True)["checks"][0]["detail"] == ""
     assert public_line(line)["checks"][0]["detail"] == "unsupported: quotes the line"
+
+
+def test_a_line_waiting_for_approval_shows_its_text_on_the_stream(match) -> None:
+    """The producer's one human gate: a verified line awaiting approval (booth lines included
+    when held) must carry its real text, never a placeholder."""
+    config = WorkflowConfig(
+        personas=("casual", "booth:pbp", "booth:colour"), approval_mode="producer", hold_booth=True
+    )
+    flow = MatchWorkflow(
+        stream=match["roster"]["stream"],
+        roster=match["roster"],
+        names=match["names"],
+        clubs=match["teams"],
+        agents=rules_agents(config.personas),
+        config=config,
+        clock=fixed_clock(),
+    )
+    run(flow.ingest(match["events"]))
+    waiting = [
+        e.data for e in flow.hub.history() if e.event == "line" and e.data["status"] == "verified"
+    ]
+    booth = [d for d in waiting if d["persona"].startswith("booth:")]
+    assert booth and all(
+        d["text"] not in (UNCHECKED, NOT_SHOWN, WITHHELD) and d["text"] for d in waiting
+    )

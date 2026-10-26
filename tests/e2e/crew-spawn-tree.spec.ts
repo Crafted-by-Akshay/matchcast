@@ -10,7 +10,7 @@ async function open(page: any, query = '?crew=1') {
 }
 
 test('crew tree: absent without the flag', async ({ page }) => {
-  await open(page, '');
+  await open(page, '?crew=0');
   await expect(page.locator('#crew-tree')).toHaveCount(0);
   // the empty mount must not add a grid gap to the Agents tab
   const m = await page.evaluate(() => { const e = document.getElementById('crew-mount')!; return { display: getComputedStyle(e).display, h: e.getBoundingClientRect().height }; });
@@ -26,7 +26,7 @@ test('crew tree: Showrunner fans out, labelled goal 23\' and routed by rules, th
   const sec = page.locator('#crew-tree');
   await expect(sec).toBeVisible();
   await expect(sec.getByRole('heading', { name: 'Crew' })).toBeVisible();
-  await expect(sec.locator('#ct-sim')).toHaveText('Simulated');
+  await expect(sec.locator('#ct-sim')).toBeHidden();   // nothing to label yet: the badge belongs to fixture data only
   await expect(sec).toContainText('No moment yet');
   await page.evaluate(() => {
     CREW.ingest({ kind: 'moment', id: 'm-23', data: { minute: 23, why: 'goal', routed_by: 'rules', status: 'open' } });

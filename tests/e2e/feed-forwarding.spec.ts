@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { createServer } from 'node:http';
 
 // AB#499: the shell forwards the api's onair and feed_drop records to the desk, and the desk's per-feed kill calls the feed route.
-// The records are the docs/contracts.md "Derived feed lines" fields; the api is a fixture here, so no feed line is made by the shell.
+// The records are the docs/contracts.md "Derived feed lines" fields. The api is a mock server here: it streams the two records and takes the kill.
 declare const LV: any;
 
 const ONAIR = {
@@ -23,7 +23,7 @@ test('the desk shows the api feed records, and its kill calls the feed route', a
         q.on('end', () => {
           if (/\/feeds\/[a-z_]+\/(kill|resume)/.test(q.url!)) kills.push({ url: q.url!, body: JSON.parse(b || '{}') });
           r.writeHead(/\/feeds\//.test(q.url!) ? 200 : /\/events/.test(q.url!) ? 202 : 201, { 'Content-Type': 'application/json', ...cors });
-          r.end(/\/feeds\//.test(q.url!) ? JSON.stringify({ feed: 'casual', state: 'killed', audit_id: 'audit-1', enforced: false }) : '{}');
+          r.end(/\/feeds\//.test(q.url!) ? JSON.stringify({ feed: 'casual', state: 'killed', audit_id: 'audit-1', enforced: true }) : '{}');
         });
         return;
       }
@@ -52,7 +52,7 @@ test('the desk shows the api feed records, and its kill calls the feed route', a
     await expect.poll(() => kills.length, { timeout: 15_000 }).toBe(1);
     expect(kills[0].url).toMatch(/^\/v1\/matches\/[^/]+\/feeds\/casual\/kill/);
     expect(kills[0].body.session_id).toBeTruthy();
-    await expect(desk.locator('[data-feed="casual"]')).toContainText('Killed');
+    await expect(desk.locator('[data-feed="casual"]')).toContainText('Killed on this desk');
   } finally {
     server.close();
   }

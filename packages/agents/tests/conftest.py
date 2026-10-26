@@ -36,7 +36,12 @@ def colour_producer(personas):
 @pytest.fixture
 def make_workflow(match):
     def build(
-        *, approval_mode: str = "auto", seed_bad_claim: bool = False, personas=None
+        *,
+        approval_mode: str = "auto",
+        seed_bad_claim: bool = False,
+        personas=None,
+        stall_clock=None,
+        store=None,
     ) -> MatchWorkflow:
         config = WorkflowConfig(
             approval_mode=approval_mode, **({"personas": personas} if personas else {})
@@ -51,6 +56,9 @@ def make_workflow(match):
             ),
             config=config,
             clock=fixed_clock(),
+            # a fixed clock: no test replans on real wall time (tests that want a stall pass one)
+            stall_clock=stall_clock or (lambda: 0.0),
+            store=store,
         )
 
     return build
