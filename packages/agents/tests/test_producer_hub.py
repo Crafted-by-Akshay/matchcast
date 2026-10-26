@@ -184,3 +184,33 @@ def test_crew_frames_replay_the_newest_two_thousand_only() -> None:
     replay = [e.id for e in hub.replay_after(None)]
     assert len(replay) == CREW_REPLAY_LIMIT
     assert replay[0] == "spawn:100" and replay[-1] == f"spawn:{CREW_REPLAY_LIMIT + 99}"
+
+
+def test_crew_frames_survive_the_buffer_so_a_late_viewer_at_full_time_has_the_tree() -> None:
+    # a full match overflows the buffer: the spawn frames of early moments must still replay,
+    # as the feed records do, or the tree shows ledgers with no specialists
+    hub = StreamHub()
+    hub.publish("crew_spawn", "spawn:early", {"moment_id": "m1"})
+    for i in range(5100):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    assert "spawn:early" in [e.id for e in hub.replay_after(None)]
+
+
+def test_a_resume_from_a_kept_crew_frame_keeps_the_feed_records_after_it() -> None:
+    # the kept records are in publish order: a viewer who resumes from a crew frame gets the feed
+    # record published after it, which a crew-first list would drop
+    hub = StreamHub()
+    hub.publish("crew_spawn", "spawn:c", {"moment_id": "m1"})
+    hub.publish("onair", "onair:f", {"feed": "casual"})
+    for i in range(5100):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    assert [e.id for e in hub.replay_after("spawn:c")][:1] == ["onair:f"]
+
+
+def test_a_resume_from_a_kept_feed_record_does_not_resend_older_crew_frames() -> None:
+    hub = StreamHub()
+    hub.publish("crew_spawn", "spawn:c", {"moment_id": "m1"})
+    hub.publish("onair", "onair:f", {"feed": "casual"})
+    for i in range(5100):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    assert "spawn:c" not in [e.id for e in hub.replay_after("onair:f")]
