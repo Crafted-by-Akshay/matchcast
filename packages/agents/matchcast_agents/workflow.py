@@ -9,6 +9,7 @@ import asyncio
 import copy
 import os
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -31,9 +32,11 @@ from .rules.producer import BOOTH_MOMENTS
 from .safety import LocalSafetyScreen, SafetyScreen
 from .season_clubs import season_code
 from .specialists import SpawnBudget, default_registry, plan_spawns, run_all
+from .stall import StallClock
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
+from .storyline import FALLBACK_PLAN, pick_plan
 from .tools import InProcessTools, ToolCall, ToolError
 from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
@@ -111,6 +114,8 @@ SPAWN_STATUS = {
     "budget_exhausted": "budget_exhausted",
     "failed": "failed",
 }
+# the specialist a replan assigns to its new storyline: it replays the moments of that storyline
+REPLAN_SPECIALIST = "replay"
 # the agents a moment's rundown entry records as called (the producer decides, it is not routed)
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
 # the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1)
@@ -310,6 +315,8 @@ class MatchWorkflow:
         # the engine match's Vision passes as pass facts: its one Vision moment counts them
         self._vision_feed = vision_feed
         self._vision_moment_tried = False
+        self._stall = StallClock(clock=time.monotonic)  # wall time since the last verified line
+        self._plan: str | None = None  # the Showrunner's storyline; None is the match's own flow
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
@@ -621,14 +628,51 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
+        self._replan_if_stalled(ctx, event)
         if self.config.orchestrator == "af":
             from .af_graph import run_event  # Agent Framework is imported only when selected
 
             await run_event(self, ctx, event)
+        else:
+            task = await self._decide_moment(ctx, event)
+            if task is not None:
+                await self._run_moment(ctx, task)
+        self._note_aired(event)
+
+    def _note_aired(self, event: dict[str, Any]) -> None:
+        """A verified line of this event's moment aired: the match is quiet no longer."""
+        moment = f"m-{event['event_id']}"
+        if any(
+            ln.moment_id == moment and ln.status in ("verified", "approved", "published")
+            for ln in self.store.lines(self.sk)
+        ):
+            self._stall.note_line()
+
+    def _replan_if_stalled(self, ctx: MatchContext, event: dict[str, Any]) -> None:
+        """CREW-1.2: after a stall the Showrunner picks a storyline from shared memory and assigns
+        one specialist to it. A replan followed by another stall falls back to the rules storyline.
+        Recorded as a rundown entry and as the specialist's crew_spawn frames, nothing else."""
+        step = self._stall.next_step()
+        if step == "wait":
             return
-        task = await self._decide_moment(ctx, event)
-        if task is not None:
-            await self._run_moment(ctx, task)
+        old = self._plan
+        new = FALLBACK_PLAN if step == "fallback" else pick_plan(ctx.extra.get("storylines", {}))
+        self._plan = new
+        self._stall.note_replan()
+        moment = f"replan-{event['event_id']}"
+        entry = {
+            "moment_id": moment,
+            "called": [REPLAN_SPECIALIST],
+            "skipped": [],
+            "why": f"stall: {old or 'match flow'} -> {new}"
+            + (" (rules storyline)" if new == FALLBACK_PLAN else ""),
+            "routed_by": "rules",
+        }
+        self.rundown.append(entry)
+        del self.rundown[:-RUNDOWN_KEEP]
+        self._publish_spawn(moment, REPLAN_SPECIALIST, "running")
+        self._publish_spawn(moment, REPLAN_SPECIALIST, "done", ended=True)
+        self._publish_ledger(entry)
 
     async def _decide_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
         """The Producer's task for this event, else the one Vision moment if it is due."""

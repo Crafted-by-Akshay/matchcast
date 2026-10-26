@@ -2,7 +2,6 @@
 
 from matchcast_agents.storyline import (
     FALLBACK_PLAN,
-    StallWatch,
     StorylineBook,
     pick_plan,
 )
@@ -26,17 +25,6 @@ def shot(seq: int, minute: int, player: str) -> dict:
     }
 
 
-MEMORY = {"player:home9": ({}, {})}
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 1000.0
-
-    def __call__(self) -> float:
-        return self.now
-
-
 def test_a_payoff_airs_once_and_cites_both_events() -> None:
     book = StorylineBook()
     book.open("home9", shot(4, 12, "home9"), "shoots wide")
@@ -54,31 +42,6 @@ def test_a_payoff_that_never_happens_closes_at_full_time_with_a_summary() -> Non
     summary = book.close_at_full_time()
     assert [entry["status"] for entry in summary] == ["closed"]
     assert book.close_at_full_time() == []  # closing again adds nothing
-
-
-def test_stall_replans_once_and_records_the_old_and_new_plan() -> None:
-    clock = Clock()
-    watch = StallWatch(clock=clock, stall_s=60)
-    assert watch.check(MEMORY) is None  # just started, no stall yet
-    clock.now += 61
-    replan = watch.check(MEMORY)
-    assert replan is not None
-    assert replan.old_plan is None and replan.new_plan == "player:home9"
-    assert replan.specialist == "analyst" and not replan.fallback
-    watch.aired()  # a verified line aired: the stall is over
-    clock.now += 30
-    assert watch.check(MEMORY) is None
-
-
-def test_a_replan_with_no_line_falls_back_to_the_rules_twin_on_the_next_stall() -> None:
-    clock = Clock()
-    watch = StallWatch(clock=clock, stall_s=60)
-    clock.now += 61
-    watch.check(MEMORY)
-    clock.now += 61
-    replan = watch.check(MEMORY)
-    assert replan is not None and replan.fallback
-    assert replan.new_plan == FALLBACK_PLAN
 
 
 def test_pick_plan_prefers_the_player_with_most_remembered_beats() -> None:
