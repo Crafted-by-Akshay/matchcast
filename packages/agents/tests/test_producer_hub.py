@@ -66,8 +66,9 @@ def test_hub_replays_feed_records_so_a_reconnect_rebuilds_the_monitor() -> None:
     hub.publish("onair", "onair:pub-a", {"feed": "casual"})
     hub.publish("feed_drop", "drop:line-b", {"feed": "analyst"})
     hub.publish("crew_ledger", "ledger:m1", {"called": True})
-    assert [e.id for e in hub.replay_after(None)] == ["onair:pub-a", "drop:line-b"]
-    assert [e.id for e in hub.replay_after("onair:pub-a")] == ["drop:line-b"]
+    # the crew's ledger replays too (contract 1.3.0), so a late desk rebuilds the crew tree
+    assert [e.id for e in hub.replay_after(None)] == ["onair:pub-a", "drop:line-b", "ledger:m1"]
+    assert [e.id for e in hub.replay_after("onair:pub-a")] == ["drop:line-b", "ledger:m1"]
 
 
 def test_a_desk_that_opens_late_still_gets_every_feed_record_in_the_replay() -> None:

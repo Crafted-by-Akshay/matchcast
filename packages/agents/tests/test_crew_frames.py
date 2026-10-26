@@ -114,3 +114,13 @@ def test_the_vision_moment_sends_a_ledger_and_spawn_frames(match) -> None:
         "failed",
         "budget_exhausted",
     }
+
+
+def test_crew_frames_reach_a_stream_that_replays_from_the_start(make_workflow, match) -> None:
+    """A viewer who opens the stream late gets the crew's ledger and spawn frames too, so the
+    crew tree and ledger are not empty on a live page (the stream replays only what the hub lets
+    through)."""
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    replayed = [e.event for e in flow.hub.replay_after(None)]
+    assert "crew_ledger" in replayed and "crew_spawn" in replayed
