@@ -127,13 +127,14 @@ class NarratorRules:
             payoff = ctx.extra.get("payoff")
             paid = payoff is not None and payoff["cites"][1] == event["stream_sequence"]
             pay = f" {who} was the storyline after the stall, and this goal pays it off."
+            pay_casual = " The storyline after the stall pays off."
             if paid:
                 analyst = _with_clause(analyst, pay, "analyst")
             casual = f"Goal for {club}! {who} scores, goal number {n} for them. " + why[
                 "casual"
             ].format(club=club)
             texts = {
-                "casual": _with_clause(casual, pay, "casual") if paid else casual,
+                "casual": _with_clause(casual, pay_casual, "casual") if paid else casual,
                 "analyst": analyst,
                 "broadcast": f"{club} score through {who}. {home} {v[f'goals:{hid}']}, "
                 f"{away} {v[f'goals:{aid}']}. " + why["broadcast"].format(club=club),

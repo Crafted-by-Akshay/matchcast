@@ -644,7 +644,9 @@ class MatchWorkflow:
         ctx = self._ctx()
         payoff = self._book.on_goal(event)  # a storyline's player scoring pays it off, once
         if payoff is not None:
-            ctx.extra["payoff"] = {"text": payoff.text, "cites": list(payoff.cites)}
+            ctx.extra["payoff"] = {
+                "cites": list(payoff.cites)
+            }  # the text has minutes: not for lines
         self._start_stall_timer()
         self._replan_if_stalled(ctx, event)
         if self.config.orchestrator == "af":
@@ -1617,7 +1619,7 @@ class MatchWorkflow:
                 if target == "analyst":
                     fresh_ctx = self._ctx()
                     # the same specialist reports the first analysis read, not a new fan-out
-                    for key in ("specialists", "rhythm"):
+                    for key in ("specialists", "rhythm", "payoff"):
                         if key in ctx.extra:
                             fresh_ctx.extra[key] = ctx.extra[key]
                     fresh_claims = await self._analyse(fresh_ctx, task, repair=True)

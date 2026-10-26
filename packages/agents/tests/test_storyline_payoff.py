@@ -26,9 +26,7 @@ def _analyst_line(flow, goal):
     return next(line for line in analyst if line.moment_id == moment)
 
 
-def test_a_goal_by_the_storyline_player_pays_it_off_in_the_analyst_line(
-    match, monkeypatch
-) -> None:
+def test_a_goal_by_the_storyline_player_pays_it_off_in_the_analyst_line(match, monkeypatch) -> None:
     goal = _first_goal(match)
     scorer = goal["payload"]["player_id"]
     monkeypatch.setattr(workflow_mod, "pick_plan", lambda memory: f"player:{scorer}")
@@ -49,3 +47,30 @@ def test_a_goal_by_the_storyline_player_pays_it_off_in_the_analyst_line(
     assert "storyline" in line.text
     assert line.checks and all(check.passed for check in line.checks)
     assert len(line.text) <= 280
+
+
+def test_the_casual_line_carries_the_payoff_too(match, monkeypatch) -> None:
+    goal = _first_goal(match)
+    scorer = goal["payload"]["player_id"]
+    monkeypatch.setattr(workflow_mod, "pick_plan", lambda memory: f"player:{scorer}")
+    clock = Clock()
+    flow = build(match, MemoryStore())
+    flow._stall = StallClock(clock=clock)
+    run(flow.ingest([e for e in match["events"] if e["stream_sequence"] < goal["stream_sequence"]]))
+
+    async def stall_then_goal() -> None:
+        clock.now += STALL_S
+        assert await flow._stall_tick()
+        await flow.ingest(
+            [e for e in match["events"] if e["stream_sequence"] >= goal["stream_sequence"]]
+        )
+
+    run(stall_then_goal())
+    moment = f"m-{goal['event_id']}"
+    casual = next(
+        line
+        for line in flow.store.lines(flow.sk)
+        if line.persona == "casual" and line.moment_id == moment
+    )
+    assert "storyline after the stall pays off" in casual.text
+    assert len(casual.text) <= 140
