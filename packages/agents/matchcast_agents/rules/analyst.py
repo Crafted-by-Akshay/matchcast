@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..context import MatchContext
+from ..match_shares import PASS_ACCURACY, POSSESSION
 from ..messages import ProducerTask
 from ..metrics_spec import derivation_version
 from ..specialists.rhythm import share_percent
@@ -52,7 +53,11 @@ def metrics_for(ctx: MatchContext, task: ProducerTask, event: dict[str, Any]) ->
         if task.reason == "colour"
         else counts.get(task.reason, ())
     )
-    return [m.format(t=team, h=ctx.home, a=ctx.away) for m in names]
+    # a priority-1 moment also carries each team's match-to-date possession and pass accuracy (AB#373); they come last, so they yield to the moment's own counts
+    shares = [f"{m}:{t}" for t in (ctx.home, ctx.away) for m in (POSSESSION, PASS_ACCURACY)]
+    return [m.format(t=team, h=ctx.home, a=ctx.away) for m in names] + (
+        shares if task.priority == 1 else []
+    )
 
 
 class ClaimResult(BaseModel):

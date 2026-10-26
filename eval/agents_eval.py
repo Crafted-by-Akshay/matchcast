@@ -150,10 +150,32 @@ def rate(num: int, den: int) -> float | None:
 # ---- independent counter -------------------------------------------------------------------
 
 
+def _independent_share(events: list[dict[str, Any]], metric: str, team: str, upto: int) -> int:
+    """A match-to-date share from raw events, written apart from match_shares.py: the team's percent
+    of on-ball actions (possession), or of its passes that completed (pass accuracy)."""
+    done = [
+        ev["payload"]
+        for ev in events
+        if ev["stream_sequence"] <= upto and ev["payload"]["type"] not in ("correction", "retraction")
+    ]
+    if metric == "possession_share":
+        on_ball = Counter(p["team_id"] for p in done if p["type"] in ("pass", "carry"))
+        total = sum(on_ball.values())
+        return round(100 * on_ball[team] / total) if total else 0
+    completed = sum(p["type"] == "pass" and p["team_id"] == team for p in done)
+    lost = sum(
+        p["type"] == "possession_change" and p["from_team_id"] == team and p["cause"] == "loose_ball"
+        for p in done
+    )
+    return round(100 * completed / (completed + lost)) if completed + lost else 0
+
+
 def independent_count(
     events: list[dict[str, Any]], metric: str, team: str, upto: int
 ) -> int | None:
     """Count from raw events with its own rules; None for metrics this eval does not recount."""
+    if metric in ("possession_share", "pass_accuracy"):
+        return _independent_share(events, metric, team, upto)
     total = 0
     for ev in events:
         if ev["stream_sequence"] > upto:
