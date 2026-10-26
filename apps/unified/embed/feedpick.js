@@ -83,15 +83,17 @@
     cuNote.textContent = ok ? '' : CU_NOTE[cu.state] || CU_NOTE.error; cuNote.hidden = ok;
     cuText.hidden = cuMeta.hidden = !shown;
     if (shown) {
-      cuText.textContent = shown.text;
+      // the translation only when the route returned a checked one for the language the viewer asked in (shown.translated); the English recap otherwise
+      cuText.textContent = shown.translated || shown.text; cuText.lang = shown.translated ? shown.lang : 'en';
       const parts = [span('fp-cu-min', 'As of ' + shown.minute + "'")];
-      if (shown.word_count != null) parts.push(span('', shown.word_count + (shown.word_count === 1 ? ' word' : ' words')));
+      if (shown.translated) parts.push(span('fp-cu-lang', 'Translated: ' + ((window.MC_LANG_NAMES && window.MC_LANG_NAMES[shown.lang]) || shown.lang)));
+      else if (shown.word_count != null) parts.push(span('', shown.word_count + (shown.word_count === 1 ? ' word' : ' words')));
       if (shown.events > 0) parts.push(span('fp-verified', 'Verified: recounted from ' + shown.events + (shown.events === 1 ? ' event' : ' events')));   // real: the route returned its source_event_ids
       cuMeta.replaceChildren(...parts);
     }
     cuBtn.hidden = cu.state === 'none';
     cuBtn.setAttribute('aria-busy', String(cu.state === 'loading'));
-    if (lang !== 'en') { cuNote.hidden = false; if (ok) cuNote.textContent = 'Showing English: no translated line yet'; }
+    if (ok && cu.lang !== 'en' && !cu.translated) { cuNote.hidden = false; cuNote.textContent = 'Showing English: no checked translation of this recap'; }   // the route sent no variants[lang]: say so, claim nothing
   };
 
   // build the buttons once per defs; later changes update attributes in place so keyboard focus stays on the button
@@ -173,7 +175,8 @@
       const st = String(d.state);
       if (!CU_NOTE[st] && st !== 'ok') return;
       if (st === 'ok' && typeof d.text === 'string' && d.text) {
-        cu = { state: 'ok', text: d.text, minute: Math.max(0, Math.min(200, Math.floor(+d.minute) || 0)), word_count: Number.isFinite(+d.word_count) && d.word_count != null ? Math.max(0, Math.floor(+d.word_count)) : null, events: Number.isFinite(+d.events) && d.events != null ? Math.max(0, Math.floor(+d.events)) : null };
+        const rl = typeof d.lang === 'string' && d.lang ? d.lang : 'en';
+        cu = { state: 'ok', text: d.text, lang: rl, translated: rl !== 'en' && typeof d.translated === 'string' && d.translated ? d.translated : null, minute: Math.max(0, Math.min(200, Math.floor(+d.minute) || 0)), word_count: Number.isFinite(+d.word_count) && d.word_count != null ? Math.max(0, Math.floor(+d.word_count)) : null, events: Number.isFinite(+d.events) && d.events != null ? Math.max(0, Math.floor(+d.events)) : null };
         cuLast = cu;
       } else cu = { state: st === 'ok' ? 'error' : st };
       drawLines();

@@ -14,7 +14,7 @@ const RECAP = { feed: 'catch_me_up', minute: 37, text: 'After 37 minutes, Northg
   source_event_ids: ['E3', 'E9', 'E12'] };
 type Reply = { status: number; body?: any; headers?: Record<string, string> };
 
-async function withApi(cmu: (q: { minute: string | null; session: string | null; n: number }) => Reply, body: (api: string, hits: string[], posts: { n: number }) => Promise<void>) {
+async function withApi(cmu: (q: { minute: string | null; session: string | null; lang: string | null; n: number }) => Reply, body: (api: string, hits: string[], posts: { n: number }) => Promise<void>) {
   const hits: string[] = [], posts = { n: 0 }, sockets = new Set<any>();
   const server = await new Promise<ReturnType<typeof createServer>>((resolve) => {
     const s = createServer((q, r) => {
@@ -23,7 +23,7 @@ async function withApi(cmu: (q: { minute: string | null; session: string | null;
       if (q.method === 'POST') { q.resume(); q.on('end', () => { if (!/\/events/.test(q.url!)) posts.n++; r.writeHead(/\/events/.test(q.url!) ? 202 : 201, { 'Content-Type': 'application/json', ...cors }); r.end('{}'); }); return; }
       if (/\/catch-me-up/.test(q.url!)) {
         hits.push(q.url!);
-        const u = new URL(q.url!, 'http://x'), a = cmu({ minute: u.searchParams.get('minute'), session: u.searchParams.get('session_id'), n: hits.length });
+        const u = new URL(q.url!, 'http://x'), a = cmu({ minute: u.searchParams.get('minute'), session: u.searchParams.get('session_id'), lang: u.searchParams.get('lang'), n: hits.length });
         r.writeHead(a.status, { 'Content-Type': a.status >= 400 ? 'application/problem+json' : 'application/json', ...cors, ...(a.headers || {}) }); return r.end(JSON.stringify(a.body || {}));
       }
       if (/\/stream/.test(q.url!)) { r.writeHead(200, { 'Content-Type': 'text/event-stream', ...cors }); r.write('event: status\ndata: {"status":"live"}\n\n'); return; }
@@ -199,5 +199,166 @@ test('the recap text scrolls inside a capped box on desktop and phone, and a key
       expect(['auto', 'scroll'], 'overflow at ' + w).toContain(b.oy);
       expect(b.scrolls, 'a 280-word recap scrolls inside its box at ' + w).toBe(true);
     }
+  });
+});
+
+// AB#465 / PR #424: GET .../catch-me-up takes lang (the ten feed languages, ADR-0023). A checked translation rides along as variants[lang]; with none, the English text is all
+// there is. 422 for a language outside the ten. The page asks in the shell's language (window.setLang) and claims a translation only when variants[lang] came back.
+const ES = 'Tras 37 minutos, Northgate FC gana 1-0 a Coastal Rovers.';
+const setLang = (page: any, l: string) => page.evaluate((x: string) => (window as any).setLang(x, null), l);
+const settle = (page: any) => page.evaluate(() => new Promise((res) => requestAnimationFrame(() => res(1))));
+const withVariant = ({ lang }: { lang: string | null }) => ({ status: 200, body: lang && lang !== 'en' ? { ...RECAP, variants: { [lang]: lang === 'es' ? ES : 'Nach 37 Minuten führt Northgate FC 1-0.' } } : RECAP });
+
+test('lang: the shell language goes on the request, a returned variant is shown as text with a Translated tag', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errs = collectErrors(page);
+  await withApi(withVariant, async (api, hits) => {
+    const f = await open(page, api);
+    await setLang(page, 'es');
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText(ES, { timeout: 30_000 });
+    await expect(card).toContainText(/Translated/);
+    await expect(card).not.toContainText('Showing English');
+    await expect(card).not.toContainText('After 37 minutes');
+    await expect(card).toContainText('Verified: recounted from 3 events');
+    expect(hits.length).toBe(1);
+    expect(new URL(hits[0], 'http://x').searchParams.get('lang')).toBe('es');
+    expect(await card.locator('.fp-cu-text').getAttribute('lang')).toBe('es');
+  });
+  expect(errs).toEqual([]);
+});
+
+test('lang: English sends no lang param and shows no Translated tag', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(withVariant, async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    expect(new URL(hits[0], 'http://x').searchParams.get('lang')).toBeNull();
+    await expect(card).not.toContainText(/Translated|Showing English/);
+  });
+});
+
+test('lang: no variant came back (the re-check dropped it): the English recap and "Showing English", no Translated claim', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(() => ({ status: 200, body: RECAP }), async (api, hits) => {
+    const f = await open(page, api);
+    await setLang(page, 'fr');
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes, Northgate FC lead', { timeout: 30_000 });
+    await expect(card).toContainText('Showing English');
+    await expect(card).not.toContainText('Translated');
+    expect(new URL(hits[0], 'http://x').searchParams.get('lang')).toBe('fr');
+    expect(await card.locator('.fp-cu-text').getAttribute('lang')).toBe('en');
+  });
+});
+
+test('lang: a variant for a different language than the one asked is not shown as a translation', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(() => ({ status: 200, body: { ...RECAP, variants: { de: 'Nach 37 Minuten.' } } }), async (api) => {
+    const f = await open(page, api);
+    await setLang(page, 'es');
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await expect(card).toContainText('Showing English');
+    await expect(card).not.toContainText('Nach 37');
+  });
+});
+
+test('lang: changing language after the recap is shown asks once more, in the new language; the same language again asks nothing', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(withVariant, async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    expect(hits.length).toBe(1);
+    await setLang(page, 'es');
+    await expect(card).toContainText(ES, { timeout: 30_000 });
+    expect(hits.length).toBe(2);
+    expect(new URL(hits[1], 'http://x').searchParams.get('lang')).toBe('es');
+    await setLang(page, 'es');
+    await settle(page);
+    expect(hits.length, 'the same language asks nothing').toBe(2);
+    await setLang(page, 'en');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await expect(card).not.toContainText('Translated');
+    expect(hits.length).toBe(3);
+  });
+});
+
+test('lang: a language change inside the gap waits for it and asks once, in the latest language (no storm)', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(withVariant, async (api, hits) => {
+    const f = await open(page, api, 2000);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await setLang(page, 'es'); await setLang(page, 'de'); await setLang(page, 'es');
+    await expect(card).toContainText(ES, { timeout: 30_000 });
+    await settle(page);
+    expect(hits.length, 'one more read, not one per change').toBe(2);
+    expect(new URL(hits[1], 'http://x').searchParams.get('lang')).toBe('es');
+  });
+});
+
+test('lang: 429 keeps the busy note and a language change sends nothing more', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(() => ({ status: 429, body: { code: 'rate_limited' }, headers: { 'Retry-After': '60' } }), async (api, hits) => {
+    const f = await open(page, api);
+    await setLang(page, 'es');
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('Catch me up is busy. Try again in a minute.', { timeout: 30_000 });
+    await setLang(page, 'de');
+    await settle(page);
+    await expect(card).toContainText('Try again in a minute');
+    expect(hits.length).toBe(1);
+  });
+});
+
+test('lang: 404 held under a language is the neutral held state', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(() => ({ status: 404, body: { code: 'not_found' } }), async (api) => {
+    const f = await open(page, api);
+    await setLang(page, 'es');
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('No catch-me-up for this moment yet', { timeout: 30_000 });
+    await expect(card).not.toContainText(/error|failed|404|Translated/i);
+  });
+});
+
+test('lang: a 422 on a language is a neutral error note, the last good recap stays, nothing is called a translation', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(({ lang }) => (lang ? { status: 422, body: { code: 'invalid' } } : { status: 200, body: RECAP }), async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await setLang(page, 'ja');
+    await expect(card).toContainText("Couldn't load the recap", { timeout: 30_000 });
+    await expect(card).toContainText('After 37 minutes');
+    await expect(card).not.toContainText(/Translated|422/);
+    expect(await card.locator('[role=alert]').count()).toBe(0);
+    expect(hits.length).toBe(2);
+  });
+});
+
+test('lang: the translated text is set as text; markup in it stays literal', async ({ page }) => {
+  test.setTimeout(300_000);
+  const evil = '<img src=x onerror="window.__xss=1"> Tras 5 minutos, 1-0 & "x".';
+  await withApi(() => ({ status: 200, body: { ...RECAP, variants: { es: evil } } }), async (api) => {
+    const f = await open(page, api);
+    await setLang(page, 'es');
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('Tras 5 minutos, 1-0 & "x".', { timeout: 30_000 });
+    expect(await card.locator('img').count()).toBe(0);
+    expect(await f.evaluate(() => (window as any).__xss)).toBeUndefined();
   });
 });

@@ -295,26 +295,37 @@
 
   /* CREW-7.3 catch-me-up. Asked only when the viewer picks the feed or presses Update (never polled). One GET at a time; a second ask inside the gap
      (MATCHCAST_CATCHUP_MS, default 5 s) gets the last answer; after a 429 nothing is sent until the api's Retry-After has passed. LV.catchMeUp does the GET. */
-  var cu = { key: '', rec: null, at: 0, until: 0, busy: null };
-  function catchUp(minute) {
-    var lv = typeof LV !== 'undefined' ? LV : null, k = keyOf(lv), m = Math.max(0, Math.min(200, Math.floor(+minute) || 0));
-    if (!on || !lv || typeof lv.catchMeUp !== 'function') return Promise.resolve({ state: 'none', minute: m });
-    if (cu.key !== k) cu = { key: k, rec: null, at: 0, until: 0, busy: null };   // another match or session: the old recap is not this one's
+  var cu = { key: '', rec: null, at: 0, until: 0, busy: null, wait: null, want: null };
+  function catchUp(minute, lng) {
+    var lv = typeof LV !== 'undefined' ? LV : null, k = keyOf(lv), m = Math.max(0, Math.min(200, Math.floor(+minute) || 0)), l = lng || 'en';
+    if (!on || !lv || typeof lv.catchMeUp !== 'function') return Promise.resolve({ state: 'none', minute: m, lang: l });
+    if (cu.key !== k) cu = { key: k, rec: null, at: 0, until: 0, busy: null, wait: null, want: null };   // another match or session: the old recap is not this one's
     if (cu.busy) return cu.busy;
     var now = Date.now();
-    if (cu.until > now) return Promise.resolve({ state: 'limited', minute: m, wait_s: Math.ceil((cu.until - now) / 1000) });
+    if (cu.until > now) return Promise.resolve({ state: 'limited', minute: m, lang: l, wait_s: Math.ceil((cu.until - now) / 1000) });
     var gap = typeof window.MATCHCAST_CATCHUP_MS === 'number' ? window.MATCHCAST_CATCHUP_MS : 5000;
-    if (cu.rec && now - cu.at < gap) return Promise.resolve(cu.rec);
+    if (cu.rec && now - cu.at < gap) {
+      if ((cu.rec.lang || 'en') === l) return Promise.resolve(cu.rec);
+      // another language inside the gap: wait for the gap to end, then ask once, in the latest language and minute (a burst of changes is one read)
+      cu.want = { minute: m, lang: l };
+      if (!cu.wait) {
+        var held = cu;
+        cu.wait = new Promise(function (res) {
+          setTimeout(function () { var w = held.want; held.wait = null; held.want = null; res(held === cu && w ? catchUp(w.minute, w.lang) : { state: 'error', minute: m, lang: l }); }, gap - (now - cu.at) + 1);
+        });
+      }
+      return cu.wait;
+    }
     var mine = cu;
     cu.at = now;
-    cu.busy = lv.catchMeUp(m).then(function (rec) {
+    cu.busy = lv.catchMeUp(m, l).then(function (rec) {
       if (mine !== cu) return rec;   // the match changed while it was in flight: do not keep it
       cu.busy = null;
       if (rec.state === 'none') { cu.at = 0; return rec; }   // no api or no match yet: ask again freely
       cu.rec = rec;
       if (rec.state === 'limited') cu.until = Date.now() + rec.wait_s * 1000;
       return rec;
-    }, function () { if (mine === cu) cu.busy = null; return { state: 'error', minute: m }; });
+    }, function () { if (mine === cu) cu.busy = null; return { state: 'error', minute: m, lang: l }; });
     return cu.busy;
   }
 
