@@ -61,7 +61,7 @@ def test_the_stall_check_runs_through_the_event_path(make_workflow, match) -> No
     clock.now += STALL_S
     run(flow._process_event(match["events"][5]))
     assert len(flow.rundown) == before + 1
-    assert flow.rundown[-1]["moment_id"] == f"replan-{match['events'][5]['event_id']}"
+    assert flow.rundown[-1]["moment_id"].startswith(f"replan-{match['events'][5]['event_id']}-")
 
 
 def test_a_workflow_built_long_before_kick_off_does_not_replan_on_its_first_event(
@@ -101,3 +101,24 @@ def test_no_stall_no_replan(make_workflow, match) -> None:
     before = len(flow.rundown)
     flow._replan_if_stalled(flow._ctx(), match["events"][4])
     assert len(flow.rundown) == before and replan_frames(flow) == []
+
+
+def test_the_stall_timer_replans_a_silent_feed(make_workflow, match, monkeypatch) -> None:
+    import asyncio
+
+    import matchcast_agents.workflow as workflow_mod
+
+    monkeypatch.setattr(workflow_mod, "STALL_CHECK_S", 0.01)
+    clock = Clock()
+    flow = make_workflow(stall_clock=clock)
+
+    async def silent_feed() -> None:
+        await flow.ingest(match["events"][:5])  # the feed then goes quiet
+        clock.now += STALL_S + 1  # wall time passes with no event at all
+        await asyncio.sleep(0.1)  # the timer looks at the clock
+        flow._stall_task.cancel()
+
+    before = len(flow.rundown)
+    run(silent_feed())
+    assert len(flow.rundown) > before
+    assert flow.rundown[-1]["moment_id"].startswith("replan-")

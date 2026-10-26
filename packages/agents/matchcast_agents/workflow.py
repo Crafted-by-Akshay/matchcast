@@ -105,6 +105,8 @@ NUMBER_OR_SOURCE = ("number_mismatch", "unknown_source", "stale_state")
 ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale_state")
 # the rundown ledger keeps this many moments (it is checkpointed with the match)
 RUNDOWN_KEEP = 400
+# how often the stall timer looks at the clock: a silent feed replans too, not only on an event
+STALL_CHECK_S = 5.0
 # the contract version of the crew frames (crew_ledger, crew_spawn); the audit stays on 1.1.0
 CREW_SCHEMA_VERSION = "1.3.0"
 # a specialist's report status, as the crew_spawn frame names it
@@ -319,6 +321,8 @@ class MatchWorkflow:
         # wall time since the last verified line; it starts with the first event
         self._stall = StallClock(clock=stall_clock)
         self._stall_started = False
+        self._stall_task: asyncio.Task[None] | None = None
+        self._replans = 0  # numbers the replan moments, so two replans never share an id
         self._plan: str | None = None  # the last storyline the stall replan chose; recorded only
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
@@ -634,6 +638,7 @@ class MatchWorkflow:
         if not self._stall_started:
             self._stall.note_line()  # the clock starts with the match, not with the workflow
             self._stall_started = True
+            self._stall_task = asyncio.get_running_loop().create_task(self._stall_watch())
         self._replan_if_stalled(ctx, event)
         if self.config.orchestrator == "af":
             from .af_graph import run_event  # Agent Framework is imported only when selected
@@ -655,6 +660,17 @@ class MatchWorkflow:
         ):
             self._stall.note_line()
 
+    async def _stall_watch(self) -> None:
+        """The stall timer (CREW-1.2): wall time passes whether or not an event arrives, so a
+        silent feed replans after 60 s too. It takes the same lock as an event, so a replan never
+        interleaves with a run."""
+        while True:
+            await asyncio.sleep(STALL_CHECK_S)
+            async with self._lock:
+                events = self.store.events(self.sk)
+                if events:
+                    self._replan_if_stalled(self._ctx(), events[-1])
+
     def _replan_if_stalled(self, ctx: MatchContext, event: dict[str, Any]) -> None:
         """CREW-1.2: after a stall the Showrunner chooses a storyline from shared memory and
         assigns the replay specialist to it. A replan followed by another stall with no verified
@@ -670,7 +686,7 @@ class MatchWorkflow:
         self._plan = new
         self._stall.note_replan()
         entry = {
-            "moment_id": f"replan-{event['event_id']}",
+            "moment_id": f"replan-{event['event_id']}-{self._next_replan()}",
             "called": [],
             "skipped": [REPLAN_SPECIALIST],
             "why": f"stall: {old or 'match flow'} -> {new}"
@@ -680,6 +696,10 @@ class MatchWorkflow:
         self.rundown.append(entry)
         del self.rundown[:-RUNDOWN_KEEP]
         self._publish_ledger(entry)
+
+    def _next_replan(self) -> int:
+        self._replans += 1
+        return self._replans
 
     async def _decide_moment(self, ctx: MatchContext, event: dict[str, Any]) -> ProducerTask | None:
         """The Producer's task for this event, else the one Vision moment if it is due."""
