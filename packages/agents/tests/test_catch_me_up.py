@@ -65,7 +65,7 @@ def test_a_retracted_goal_is_left_out_of_the_score_and_the_named_events(match) -
     retraction = {
         "event_id": "r1",
         "stream_sequence": 9998,
-        "event_time_ms": 3_000_000,
+        "event_time_ms": 240_000,  # 4:00, before the minute-5 cut
         "clock": {"period": 2, "period_elapsed_ms": 0},
         "payload": {"type": "retraction", "target_event_id": "e10"},
     }
@@ -80,7 +80,7 @@ def test_a_correction_to_an_event_before_the_cut_holds_the_recap(match) -> None:
     correction = {
         "event_id": "c1",
         "stream_sequence": 9998,
-        "event_time_ms": 3_000_000,
+        "event_time_ms": 240_000,
         "clock": {"period": 2, "period_elapsed_ms": 0},
         "payload": {"type": "correction", "target_event_id": "e10"},
     }
@@ -106,3 +106,30 @@ def test_the_source_list_holds_the_goals_and_named_events_in_match_order(match) 
     assert recap is not None
     assert "Arlo Ito had a shot on target" in recap.text
     assert recap.source_event_ids == ("e10", "e34", "e35")
+
+
+def test_a_retraction_after_the_cut_does_not_change_the_recap_at_that_minute(match) -> None:
+    # the recap at minute 5 is fixed: a goal retracted at 50:00 still counts there
+    late = {
+        "event_id": "r2",
+        "stream_sequence": 9998,
+        "event_time_ms": 3_000_000,
+        "clock": {"period": 2, "period_elapsed_ms": 0},
+        "payload": {"type": "retraction", "target_event_id": "e10"},
+    }
+    plain = build(ctx(match), minute=5)
+    with_late = build(ctx(match, [*match["events"], late]), minute=5)
+    assert plain is not None and with_late is not None
+    assert with_late.text == plain.text
+    assert with_late.text.startswith("After 5 minutes, Northgate FC 1-2 Harbour United.")
+
+
+def test_a_correction_after_the_cut_does_not_hold_the_recap_at_that_minute(match) -> None:
+    late = {
+        "event_id": "c2",
+        "stream_sequence": 9998,
+        "event_time_ms": 3_000_000,
+        "clock": {"period": 2, "period_elapsed_ms": 0},
+        "payload": {"type": "correction", "target_event_id": "e10"},
+    }
+    assert build(ctx(match, [*match["events"], late]), minute=5) is not None

@@ -6,8 +6,9 @@ Each sentence lists the metrics it quotes, for the Verifier to recount. feeds.py
 280-word limit, about two minutes spoken.
 
 Open storylines are not in the recap yet: the shared memory keeps wording with every number
-replaced by #, so it cannot be quoted as a fact. A retracted event is left out. A correction to
-an event before the cut holds the recap (None) until corrections are folded, as half-time does.
+replaced by #, so it cannot be quoted as a fact. A retraction or correction counts only if it is
+at or before the cut, so a recap at minute m never changes later. A correction at or before the
+cut holds the recap (None) until corrections are folded.
 Own goals count in the score but are not named.
 """
 
@@ -67,14 +68,18 @@ def _words(rows: list[Sentence]) -> int:
 def build(ctx: MatchContext, minute: int) -> CatchMeUp | None:
     """The recap as of a match minute, or None when it is held or does not fit the limit."""
     ordered = sorted(ctx.events, key=lambda e: e["stream_sequence"])
-    retracted = _targets(ordered, "retraction")
-    corrected = _targets(ordered, "correction")
+    cut_ms = minute * 60_000
+    # a retraction or correction counts only if it happened at or before the cut, so a recap at
+    # minute m never changes when a later control arrives
+    controls = [e for e in ordered if e["event_time_ms"] <= cut_ms]
+    retracted = _targets(controls, "retraction")
+    corrected = _targets(controls, "correction")
     live = [
         e
         for e in ordered
         if e["event_id"] not in retracted
         and e["payload"]["type"] not in CONTROLS
-        and e["event_time_ms"] <= minute * 60_000
+        and e["event_time_ms"] <= cut_ms
     ]
     if corrected & {e["event_id"] for e in live}:
         return None  # a corrected event before the cut: nothing folds corrections yet
