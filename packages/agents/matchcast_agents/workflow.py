@@ -283,10 +283,13 @@ def _live_details(details: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in details.items() if k not in MODEL_TEXT_DETAILS}
 
 
-def _counted_events(events: Any) -> tuple[dict[str, Any], ...]:
-    """The stored events a recap counts from: a retracted event is not a fact, as in the recap."""
+def _counted_events(events: Any, minute: int) -> tuple[dict[str, Any], ...]:
+    """The stored events a recap at a minute counts from. A retraction counts only if its event
+    time is at or before that minute: a later one does not change the recap."""
     retracted = {
-        e["payload"]["target_event_id"] for e in events if e["payload"]["type"] == "retraction"
+        e["payload"]["target_event_id"]
+        for e in events
+        if e["payload"]["type"] == "retraction" and e["event_time_ms"] <= minute * 60_000
     }
     return tuple(e for e in events if e["event_id"] not in retracted)
 
@@ -1048,7 +1051,7 @@ class MatchWorkflow:
         piece = catch_me_up.build(ctx, minute)
         if piece is None:
             return None  # held (a correction before the cut) or over the word limit
-        events = _counted_events(ctx.events)
+        events = _counted_events(ctx.events, minute)
         for sentence, metrics in piece.sentences:
             if not _sentence_recounts(events, piece, ctx.home, sentence, metrics):
                 return None  # a figure that the quoted metrics do not recount: nothing airs

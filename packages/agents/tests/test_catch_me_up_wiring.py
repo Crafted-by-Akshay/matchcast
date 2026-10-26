@@ -43,7 +43,7 @@ def test_a_retracted_goal_is_left_out_of_the_recap_and_its_recount(
     retraction = {
         "event_id": "r1",
         "stream_sequence": 9998,
-        "event_time_ms": 3_000_000,
+        "event_time_ms": 60_000,
         "clock": {"period": 2, "period_elapsed_ms": 0},
         "payload": {"type": "retraction", "target_event_id": "e10"},
     }
@@ -65,7 +65,7 @@ def test_a_headline_with_its_two_scores_swapped_does_not_recount(make_workflow, 
     piece = workflow_mod.catch_me_up.build(ctx, 30)
     assert piece is not None
     sentence, metrics = piece.sentences[0]
-    events = workflow_mod._counted_events(ctx.events)
+    events = workflow_mod._counted_events(ctx.events, 30)
     assert workflow_mod._sentence_recounts(events, piece, ctx.home, sentence, metrics)
     home, away = (
         int(workflow_mod.recompute(events, metric, piece.cut_sequence, home=ctx.home))
@@ -75,3 +75,18 @@ def test_a_headline_with_its_two_scores_swapped_does_not_recount(make_workflow, 
     match_scores = re.search(r"(\d+)-(\d+)", sentence)
     swapped = sentence[: match_scores.start()] + f"{away}-{home}" + sentence[match_scores.end() :]
     assert not workflow_mod._sentence_recounts(events, piece, ctx.home, swapped, metrics)
+
+
+def test_a_retraction_after_the_minute_does_not_change_the_recount(match) -> None:
+    """The recount at minute 5 still counts a goal that is retracted at minute 50."""
+    goal = next(e for e in match["events"] if e["event_id"] == "e10")
+    late = {
+        "event_id": "r-late",
+        "stream_sequence": 9998,
+        "event_time_ms": 50 * 60_000,
+        "clock": {"period": 2, "period_elapsed_ms": 0},
+        "payload": {"type": "retraction", "target_event_id": "e10"},
+    }
+    events = [*match["events"], late]
+    assert goal in workflow_mod._counted_events(events, 5)
+    assert goal not in workflow_mod._counted_events(events, 50)
