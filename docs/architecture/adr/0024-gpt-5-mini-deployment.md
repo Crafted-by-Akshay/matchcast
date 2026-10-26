@@ -7,7 +7,7 @@
 
 ## Context
 
-ADR-0002 named the model `gpt-6-luna` on 21 Oct, while the quota was requested (risk R1). The Foundry project `matchcast-foundry` runs `gpt-5-mini` (Global Standard, 10K TPM, East US 2), and the live agents have run on it since 24 Oct (see [docs/infra.md](../../infra.md)). Docs and the default `FOUNDRY_MODEL_DEPLOYMENT` still named `gpt-6-luna`, so they described a model the app does not call.
+ADR-0002 named the model `gpt-6-luna` on 21 Oct, while the quota was requested (risk R1). The Foundry project `matchcast-foundry` runs `gpt-5-mini` (Global Standard, 10K TPM, East US 2), and the live agents have run on it since 24 Oct (see [docs/infra.md](../../infra.md)). The env-var list in [13-deployment-and-operations.md](13-deployment-and-operations.md) still named `gpt-6-luna`, although the code and Bicep defaults were already `gpt-5-mini`, so the docs described a model the app does not call by default.
 
 ## Options
 
@@ -16,7 +16,7 @@ ADR-0002 named the model `gpt-6-luna` on 21 Oct, while the quota was requested (
 
 ## Decision
 
-The agents call the Foundry deployment `gpt-5-mini` (Global Standard, East US 2) with managed identity. The default `FOUNDRY_MODEL_DEPLOYMENT` is `gpt-5-mini`. A future model is a new ADR, and the deployment name matches the model it runs.
+The agents call the Foundry deployment `gpt-5-mini` (Global Standard, East US 2) with managed identity. The default `FOUNDRY_MODEL_DEPLOYMENT` is `gpt-5-mini` in the code and in the Bicep parameters. A future model is a new ADR, and the deployment name matches the model it runs.
 
 ## Consequences
 
