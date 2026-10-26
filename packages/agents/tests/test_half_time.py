@@ -1,9 +1,13 @@
 """Half-time explainer (CREW-7.4, AB#465): cut at the first half, quote only first-half numbers."""
 
-from matchcast_agents import half_time
+from dataclasses import replace
+
+from matchcast_agents import half_time, personas
 from matchcast_agents.context import MatchContext
 from matchcast_agents.feeds import FEEDS
 from matchcast_agents.state import MatchState
+from matchcast_agents.verify.checks import run_checks
+from matchcast_contracts import validate
 
 HOME, AWAY = "northgate", "southfield"
 MAX_SECONDS = next(f.max_seconds for f in FEEDS if f.key == "half_time")
@@ -46,7 +50,7 @@ HALF_END = boundary(90, 45 * 60_000, period=1)
 
 def ctx(events, names=None, clubs=None):
     return MatchContext(
-        stream={"stream_id": "demo"},
+        stream={"tenant_id": "t1", "session_id": "s1", "match_id": "m1"},
         roster={"team_ids": [HOME, AWAY]},
         names=names or {"h9": "Tom Hale", "r4": "Ruben Ortiz"},
         clubs=clubs or {HOME: "Northgate", AWAY: "Southfield"},
@@ -259,3 +263,65 @@ def test_a_goalless_scoreless_half_still_cites_the_half_time_event() -> None:
     piece = half_time.build(ctx([HALF_END]))
     assert piece.source_event_ids == ("e90",)
     assert piece.text.startswith("At half-time, Northgate 0, Southfield 0.")
+
+
+STREAM = {"tenant_id": "t1", "session_id": "s1", "match_id": "m1"}
+
+
+def _half_time_piece(events=None):
+    piece = half_time.build(ctx(events or first_half()))
+    assert piece is not None
+    return piece
+
+
+def test_each_quoted_metric_has_one_claim_that_matches_the_contract() -> None:
+    piece = _half_time_piece()
+    packets = half_time.claims(piece, STREAM)
+    assert [p["metric"] for p in packets] == [
+        f"goals:{HOME}",
+        f"goals:{AWAY}",
+        f"shots:{HOME}",
+        f"shots:{AWAY}",
+        f"shots_on_target:{HOME}",
+        f"shots_on_target:{AWAY}",
+    ]
+    for packet in packets:
+        validate(packet)
+        assert packet["max_evidence_sequence"] == piece.cut_sequence
+
+
+def test_each_line_cites_the_claims_for_the_metrics_it_quotes() -> None:
+    piece = _half_time_piece()
+    packets = half_time.claims(piece, STREAM)
+    lines = half_time.drafts(piece, packets)
+    by_metric = {p["metric"]: p["claim_id"] for p in packets}
+    for line, (_, quoted) in zip(lines, piece.sentences):
+        assert line.persona == "half_time"
+        assert line.claim_ids == tuple(by_metric[m] for m in quoted)
+
+
+def test_the_verifier_passes_every_line_against_the_first_half() -> None:
+    piece = _half_time_piece(first_half() + second_half())
+    packets = half_time.claims(piece, STREAM)
+    half = replace(ctx(first_half() + second_half()), events=piece.events, state=piece.state)
+    by_id = {p["claim_id"]: p for p in packets}
+    for line in half_time.drafts(piece, packets):
+        checks = run_checks(half, line, [by_id[c] for c in line.claim_ids])
+        assert all(check.passed for check in checks), (line.text, checks)
+
+
+def test_a_wrong_count_on_a_claim_fails_the_numbers_check() -> None:
+    piece = _half_time_piece()
+    packets = half_time.claims(piece, STREAM)
+    packets[0] = {**packets[0], "value": packets[0]["value"] + 1}  # goals:home is one too many
+    line = half_time.drafts(piece, packets)[0]
+    half = replace(ctx(first_half()), events=piece.events, state=piece.state)
+    checks = run_checks(half, line, [packets[0]])
+    assert not next(c for c in checks if c.name == "numbers").passed
+
+
+def test_the_half_time_persona_is_written_but_never_asked_for() -> None:
+    assert "half_time" in personas.FEED_ONLY
+    assert personas.packet_valid("half_time")  # a DraftLine may carry it
+    assert not personas.valid("half_time")  # a viewer may not ask for it
+    assert not personas.known("half_time", {}, {})

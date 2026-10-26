@@ -45,7 +45,7 @@ def test_only_feed_personas_map_to_a_feed(persona: str) -> None:
     assert feed_for(persona) is None
 
 
-@pytest.mark.parametrize("key", ["catch_me_up", "half_time"])
+@pytest.mark.parametrize("key", ["catch_me_up"])
 def test_feeds_without_a_writer_have_no_persona(key: str) -> None:
     feed = next(f for f in FEEDS if f.key == key)
     assert feed.persona is None
@@ -79,6 +79,7 @@ def test_the_persona_backed_feeds_are_the_derived_lanes() -> None:
         "analyst",
         "audio_description",
         "ticker",
+        "half_time",
     }
 
 
