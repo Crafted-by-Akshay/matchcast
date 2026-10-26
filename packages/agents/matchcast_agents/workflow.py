@@ -325,7 +325,8 @@ class MatchWorkflow:
         # wall time since the last verified line; it starts with the first event
         self._stall = StallClock(clock=stall_clock)
         self._stall_started = False
-        self._stall_task: asyncio.Task[None] | None = None  # the timer; it stops at full time
+        self._stall_task: asyncio.Task[None] | None = None  # the timer; it pauses at full time
+        self._closed = False
         self._replans = 0  # numbers the replan moments, so two replans never share an id
         self._plan: str | None = None  # the last storyline the stall replan chose; recorded only
         self._vision_lines = 0
@@ -663,20 +664,35 @@ class MatchWorkflow:
             self._stall.note_line()
 
     def _start_stall_timer(self) -> None:
-        """Starts the stall clock and its timer once: the clock starts with the match."""
-        if self._stall_started:
+        """Starts the stall clock once, with the match, and the timer whenever none is running.
+        The timer pauses at full time and starts again on the next event, so a retraction or an
+        extra-time period picks it up."""
+        if self._closed or (self._stall_task is not None and not self._stall_task.done()):
             return
-        self._stall.note_line()
-        self._stall_started = True
+        if not self._stall_started:
+            self._stall.note_line()  # the clock starts with the match, not with the workflow
+            self._stall_started = True
         self._stall_task = asyncio.get_running_loop().create_task(self._stall_watch())
 
     def _match_over(self) -> bool:
-        """Full time has passed: the final period's ended boundary is stored."""
-        return any(
-            e["payload"]["type"] == "period_boundary"
-            and e["payload"].get("boundary") == "ended"
-            and e["clock"]["period"] >= FULL_TIME_PERIOD
-            for e in self.store.events(self.sk)
+        """Full time has passed: the last period boundary still standing is an ended one in a
+        period from the second half on. A retracted boundary does not count, and a later
+        boundary (extra time) puts the match back on."""
+        events = self.store.events(self.sk)
+        retracted = {
+            e["payload"]["target_event_id"] for e in events if e["payload"]["type"] == "retraction"
+        }
+        boundaries = [
+            e
+            for e in events
+            if e["payload"]["type"] == "period_boundary" and e["event_id"] not in retracted
+        ]
+        if not boundaries:
+            return False
+        last = max(boundaries, key=lambda e: e["stream_sequence"])
+        return (
+            last["payload"].get("boundary") == "ended"
+            and last["clock"]["period"] >= FULL_TIME_PERIOD
         )
 
     async def _stall_watch(self) -> None:
@@ -703,7 +719,8 @@ class MatchWorkflow:
         return True
 
     def close(self) -> None:
-        """Stops the stall timer. The timer also stops by itself at full time."""
+        """Stops the stall timer for good. The timer also pauses by itself at full time."""
+        self._closed = True
         if self._stall_task is not None:
             self._stall_task.cancel()
 

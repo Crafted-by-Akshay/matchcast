@@ -133,18 +133,23 @@ def test_the_stall_timer_replans_a_silent_feed(make_workflow, match, monkeypatch
     assert flow.rundown[-1]["moment_id"].startswith("replan-")
 
 
-def full_time(match) -> dict:
-    """The final period's end: the match is over, and the stall timer stops."""
+def after_match(match, offset: int, payload: dict, period: int = 2) -> dict:
+    """A stored-style event `offset` sequences after the fixture's last event."""
     last = match["events"][-1]
-    seq = last["stream_sequence"] + 1
+    seq = last["stream_sequence"] + offset
     return {
         **last,
         "stream_sequence": seq,
-        "event_id": f"full-time-{seq}",
-        "event_time_ms": last["event_time_ms"] + 1,
-        "clock": {"period": 2, "period_elapsed_ms": last["event_time_ms"] + 1},
-        "payload": {"type": "period_boundary", "boundary": "ended"},
+        "event_id": f"x-{seq}",
+        "event_time_ms": last["event_time_ms"] + offset,
+        "clock": {"period": period, "period_elapsed_ms": last["event_time_ms"] + offset},
+        "payload": payload,
     }
+
+
+def full_time(match) -> dict:
+    """The second half's end: the match is over, and the stall timer stops."""
+    return after_match(match, 1, {"type": "period_boundary", "boundary": "ended"})
 
 
 def test_the_timer_stops_at_full_time(make_workflow, match, monkeypatch) -> None:
@@ -156,6 +161,52 @@ def test_the_timer_stops_at_full_time(make_workflow, match, monkeypatch) -> None
     before = len(flow.rundown)
     run(asyncio.wait_for(flow._stall_watch(), 2))  # returns; it does not run on forever
     assert len(flow.rundown) == before
+
+
+def test_extra_time_after_the_regulation_end_replans_again(make_workflow, match) -> None:
+    # regulation's end is not the end of the match when extra time follows: the timer picks up
+    # again with the period-3 start, and a silent extra-time feed replans
+    flow = make_workflow(stall_clock=(clock := Clock()))
+    extra = after_match(match, 2, {"type": "period_boundary", "boundary": "started"}, period=3)
+    run(flow.ingest([*match["events"], full_time(match), extra]))
+    clock.now += STALL_S * 3
+
+    async def look() -> bool:
+        return await flow._stall_tick()
+
+    before = len(flow.rundown)
+    assert run(look()) is True
+    assert len(flow.rundown) == before + 1
+
+
+def test_a_retracted_full_time_does_not_stop_the_timer(make_workflow, match) -> None:
+    flow = make_workflow(stall_clock=(clock := Clock()))
+    ft = full_time(match)
+    payload = {
+        "type": "retraction",
+        "target_event_id": ft["event_id"],
+        "target_stream_sequence": ft["stream_sequence"],
+        "target_revision": 1,
+        "new_revision": 2,
+        "reason": "Synthetic test: full time disallowed",
+    }
+    retract = after_match(match, 2, payload)
+    run(flow.ingest([*match["events"], ft, retract]))
+    clock.now += STALL_S * 3
+
+    async def look() -> bool:
+        return await flow._stall_tick()
+
+    before = len(flow.rundown)
+    assert run(look()) is True
+    assert len(flow.rundown) == before + 1
+
+
+def test_a_closed_workflow_does_not_restart_its_timer(make_workflow, match) -> None:
+    flow = make_workflow()
+    flow.close()
+    run(flow.ingest(match["events"][:5]))
+    assert flow._stall_task is None
 
 
 def test_a_failing_tick_keeps_the_timer_running(make_workflow, match, monkeypatch) -> None:
@@ -179,21 +230,29 @@ def test_a_failing_tick_keeps_the_timer_running(make_workflow, match, monkeypatc
     assert len(flow.rundown) == before + 1
 
 
-def test_a_resumed_workflow_starts_the_timer_without_a_new_event(make_workflow, match) -> None:
+def test_a_resumed_workflow_starts_the_timer_without_a_new_event(
+    make_workflow, match, monkeypatch
+) -> None:
+    monkeypatch.setattr(workflow_mod, "STALL_CHECK_S", 0.01)
     first = make_workflow()
     run(first.ingest(match["events"][:5]))
     clock = Clock()
     resumed = make_workflow(stall_clock=clock, store=first.store)
 
-    async def resumed_feed() -> None:
-        await resumed.ingest(match["events"][:5])  # already stored: no event is processed
-        assert resumed._stall_task is not None
-        clock.now += STALL_S
-        assert await resumed._stall_tick()
-
     def replans() -> int:
         return sum(e["moment_id"].startswith("replan-") for e in resumed.rundown)
 
     before = replans()
+
+    async def resumed_feed() -> None:
+        await resumed.ingest(match["events"][:5])  # already stored: no event is processed
+        assert resumed._stall_task is not None
+        clock.now += STALL_S
+        for _ in range(400):  # the timer's own loop looks at the clock; wait up to 2 s
+            await asyncio.sleep(0.005)
+            if replans() > before:
+                break
+        resumed._stall_task.cancel()
+
     run(resumed_feed())
     assert replans() == before + 1
