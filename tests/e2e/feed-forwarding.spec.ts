@@ -43,7 +43,7 @@ test('the desk shows the api feed records, and its kill calls the feed route', a
     await page.evaluate(() => { LV.persona('club:thr', 'en'); LV.begin('k1', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }); });
 
     const desk = page.frameLocator('#v-broadcast iframe');
-    await expect(desk.locator('[data-feed="casual"]')).toContainText('1 aired', { timeout: 120_000 });
+    await expect(desk.locator('[data-feed="casual"]')).toContainText('Verified 1', { timeout: 120_000 });
     await expect(desk.locator('[data-feed="casual"]')).toContainText('Northgate FC press high up the pitch.');
     await expect(desk.locator('#mc-drop-list')).toContainText('Ticker · number_mismatch');
     await expect(desk.locator('#mc-pq')).not.toContainText('Northgate FC press');   // derived lines never reach the producer queue
