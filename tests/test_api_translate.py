@@ -148,3 +148,14 @@ def test_catch_me_up_is_translated_and_checked():
     assert body["text"].startswith("Score so far:")
     assert body["variants"]["es"].startswith("[es] Score so far:")
     assert "variants" not in client.get(url, params={**Q, "minute": 30}).json()
+
+
+def test_catch_me_up_that_changes_a_number_is_dropped_and_audited():
+    client = make(Echo(mangle=True))
+    create(client)
+    post_all(client)
+    url = "/v1/matches/match-short/catch-me-up"
+    body = client.get(url, params={**Q, "minute": 30, "lang": "hi"}).json()
+    assert "variants" not in body and body["text"].startswith("Score so far:")
+    rejected = [r for r in audit(client) if r["action"] == "translation_rejected"]
+    assert rejected and rejected[0]["details"]["language"] == "hi"

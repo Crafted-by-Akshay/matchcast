@@ -1418,12 +1418,14 @@ def build_router(registry: Registry) -> APIRouter:
         if recap is None:
             raise Problem(404, "not_found", f"the catch-me-up is held at minute {minute}")
         if lang != "en":
+            key = f"catch-me-up:{minute}"
             variant = await registry.translation.variant(
                 f"{session_id}/{match_id}",
-                f"catch-me-up:{minute}",
+                key,
                 recap["text"],
                 lang,
                 _names(flow),
+                lambda reason: flow.record_translation_rejected(key, lang, reason),
             )
             if variant.text is not None:
                 recap = {**recap, "variants": {lang: variant.text}}
