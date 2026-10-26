@@ -79,6 +79,11 @@ Service states are what the deployed api reports in `/v1/status` on 24 Oct, exce
 | Copilot Agent Mode opening a PR against this repo | **Planned**, not recorded yet (board task 63) |
 | 10-second Copilot clip for the video | **Planned**, recorded by hand once the cloud route is checked |
 
+## Production crew: what is Planned
+
+- **CREW-4.4 model adversary** (board AB#422): **Planned**. The story sends claims the rules cannot recount to a model adversary, but every metric the code emits already has a deterministic recount (`verify/checks.py`), so no claim reaches it yet. Which claims go to the model, and which tools it gets, is a decision still open.
+- **Storylines**: the payoff covers goals only, and the specialist a replan assigns is recorded, not run ([`docs/architecture/04-agents.md`](docs/architecture/04-agents.md)).
+
 ## Responsible AI
 
 Every published line passes the Verifier and, in Producer mode, a human approval. A local screen checks text (Azure Content Safety screens lines when its endpoint is set; `/v1/status` shows whether it is live), a red-team set is kept in `eval/`, and all people and clubs are fictional. See [`docs/responsible-ai.md`](docs/responsible-ai.md) and [`docs/architecture/14-security-and-responsible-ai.md`](docs/architecture/14-security-and-responsible-ai.md).
