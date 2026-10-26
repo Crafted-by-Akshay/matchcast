@@ -202,6 +202,46 @@ def test_a_retracted_full_time_does_not_stop_the_timer(make_workflow, match) -> 
     assert len(flow.rundown) == before + 1
 
 
+def correction(match, target: dict, replacement: dict, offset: int) -> dict:
+    return after_match(
+        match,
+        offset,
+        {
+            "type": "correction",
+            "target_event_id": target["event_id"],
+            "target_stream_sequence": target["stream_sequence"],
+            "target_revision": 0,
+            "new_revision": 1,
+            "replacement": replacement,
+            "reason": "Synthetic test: boundary corrected",
+        },
+    )
+
+
+def test_a_correction_that_reinstates_play_puts_the_timer_back_on(make_workflow, match) -> None:
+    flow = make_workflow(stall_clock=(clock := Clock()))
+    ft = full_time(match)
+    reinstated = correction(match, ft, {"type": "period_boundary", "boundary": "started"}, 2)
+    run(flow.ingest([*match["events"], ft, reinstated]))
+    assert not flow._match_over()
+    clock.now += STALL_S * 3
+
+    async def look() -> bool:
+        return await flow._stall_tick()
+
+    before = len(flow.rundown)
+    assert run(look()) is True
+    assert len(flow.rundown) == before + 1
+
+
+def test_a_correction_that_ends_the_match_stops_the_timer(make_workflow, match) -> None:
+    flow = make_workflow()
+    started = after_match(match, 1, {"type": "period_boundary", "boundary": "started"})
+    ended = correction(match, started, {"type": "period_boundary", "boundary": "ended"}, 2)
+    run(flow.ingest([*match["events"], started, ended]))
+    assert flow._match_over()
+
+
 def test_a_closed_workflow_does_not_restart_its_timer(make_workflow, match) -> None:
     flow = make_workflow()
     flow.close()

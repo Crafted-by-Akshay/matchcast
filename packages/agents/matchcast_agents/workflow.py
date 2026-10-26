@@ -676,24 +676,39 @@ class MatchWorkflow:
 
     def _match_over(self) -> bool:
         """Full time has passed: the last period boundary still standing is an ended one in a
-        period from the second half on. A retracted boundary does not count, and a later
-        boundary (extra time) puts the match back on."""
-        events = self.store.events(self.sk)
-        retracted = {
-            e["payload"]["target_event_id"] for e in events if e["payload"]["type"] == "retraction"
-        }
-        boundaries = [
-            e
-            for e in events
-            if e["payload"]["type"] == "period_boundary" and e["event_id"] not in retracted
-        ]
-        if not boundaries:
+        period from the second half on. A retraction takes a boundary off the board, a correction
+        puts its replacement there (or takes the boundary off when the replacement is no
+        boundary), and a later boundary (extra time) puts the match back on."""
+        events = sorted(self.store.events(self.sk), key=lambda e: e["stream_sequence"])
+        periods = {e["event_id"]: e["clock"]["period"] for e in events}
+        standing: dict[
+            str, tuple[int, str, int]
+        ] = {}  # boundary's event id -> (sequence, kind, period)
+        for e in events:
+            payload = e["payload"]
+            if payload["type"] == "period_boundary":
+                standing[e["event_id"]] = (
+                    e["stream_sequence"],
+                    payload["boundary"],
+                    periods[e["event_id"]],
+                )
+            elif payload["type"] == "retraction":
+                standing.pop(payload["target_event_id"], None)
+            elif payload["type"] == "correction":
+                target = payload["target_event_id"]
+                replacement = payload["replacement"]
+                if replacement["type"] == "period_boundary":
+                    standing[target] = (
+                        e["stream_sequence"],
+                        replacement["boundary"],
+                        periods.get(target, 0),
+                    )
+                else:
+                    standing.pop(target, None)
+        if not standing:
             return False
-        last = max(boundaries, key=lambda e: e["stream_sequence"])
-        return (
-            last["payload"].get("boundary") == "ended"
-            and last["clock"]["period"] >= FULL_TIME_PERIOD
-        )
+        _, kind, period = max(standing.values())
+        return kind == "ended" and period >= FULL_TIME_PERIOD
 
     async def _stall_watch(self) -> None:
         """The stall timer (CREW-1.2): wall time passes whether or not an event arrives, so a
