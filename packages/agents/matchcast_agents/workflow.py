@@ -24,7 +24,7 @@ from . import half_time as half_time_mod
 from . import recap as recap_mod
 from .audio_description import MAX_LAG_MS, Window, gaps, spoken_span
 from .context import MatchContext
-from .feed_lines import audio_line, audio_placements, ticker_drafts
+from .feed_lines import audio_line, audio_placements, ctx_at, ticker_drafts
 from .feeds import (
     AUDIO_PERSONA,
     TICKER_PERSONA,
@@ -832,9 +832,12 @@ class MatchWorkflow:
             speaking = [span for span in busy if span[0] < ends and speak < span[1]]
             if eid in taken_back or speaking:
                 continue
+            # checked at the description's own cut, as its claims were valued: a later event that
+            # is not about it would otherwise make the claims stale and the line abstained
+            at_cut = ctx_at(ctx, claims[0]["max_evidence_sequence"])
             try:
                 await self._air_feed_line(
-                    ctx, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
+                    at_cut, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
                 )
             except Exception:
                 logger.exception("held description %s failed to air; it is dropped", draft.line_id)

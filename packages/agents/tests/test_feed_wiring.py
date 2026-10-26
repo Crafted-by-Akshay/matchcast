@@ -1,5 +1,7 @@
 """The ticker and audio description go on air through the match workflow (AB#471, AB#454)."""
 
+import copy
+
 from conftest import run
 from matchcast_agents.audio_description import spoken_span
 from matchcast_agents.feeds import AUDIO_PERSONA
@@ -192,3 +194,26 @@ def test_a_description_that_fails_to_air_is_tried_once_and_does_not_stop_the_mat
     assert tried, "a description was due and tried"
     assert len(tried) == len(set(tried)), tried
     assert not flow._pending_audio
+
+
+def test_a_dense_match_loses_no_described_line_to_the_freshness_check(match) -> None:
+    # a held description is checked at its own cut. Compressed in time, the match has more events
+    # between a description and its airing than the freshness rule allows (5 revisions), and a
+    # description checked against the state at airing is refused as stale: it is abstained
+    dense = copy.deepcopy(match)
+    for event in dense["events"]:
+        event["event_time_ms"] //= 4
+        event["clock"]["period_elapsed_ms"] //= 4
+    flow = flow_with(dense, personas=("casual", "analyst"))
+    flow.config.feed_lines = ("ticker", "audio_description")
+    run(flow.ingest(dense["events"]))
+    audio = {
+        ln.line_id: ln.status
+        for ln in flow.store.lines(flow.sk)
+        if ln.line_id.startswith("line-audio-")
+    }
+    assert len(flow._described) >= 15, "the compressed match has descriptions to air"
+    assert set(audio) == {f"line-audio-{eid}" for eid in flow._described}
+    assert "abstained" not in audio.values(), sorted(
+        i for i, s in audio.items() if s == "abstained"
+    )
