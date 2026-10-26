@@ -6,8 +6,9 @@ line waits for the producer, and a derived line that fails repair is dropped.
 Three lanes decide what a verified line does next:
 
 - booth: the two commentary voices. They wait in the producer queue in producer mode.
-- derived: the fan feeds that have a persona (casual, analyst, the half-time explainer, and the feed-only ticker and
-  audio description). They never wait for a person, and a line that fails repair is dropped,
+- derived: the fan feeds that have a persona (casual, analyst, the half-time explainer, and the
+  feed-only ticker and audio description). They never wait for a person, and a line that fails
+  repair is dropped,
   not escalated (CREW-4.3).
 - queue: every other persona (broadcast, the watch modes, anything malformed). These keep
   today's behaviour and fail closed: they wait for the producer in any mode but auto.
