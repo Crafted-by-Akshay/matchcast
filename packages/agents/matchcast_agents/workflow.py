@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from matchcast_contracts import ContractError, validate
 from opentelemetry import trace
 
+from . import catch_me_up
 from . import recap as recap_mod
 from .context import MatchContext
 from .feeds import drops_on_failed_repair, feed_for, waits_for_producer
@@ -39,6 +40,8 @@ from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .storyline import FALLBACK_PLAN, StorylineBook, pick_plan
 from .tools import InProcessTools, ToolCall, ToolError
+from .verify.checks import recompute
+from .verify.text import extract_numbers
 from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
 if TYPE_CHECKING:
@@ -296,6 +299,31 @@ MODEL_TEXT_DETAILS = frozenset({"why"})
 
 def _live_details(details: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in details.items() if k not in MODEL_TEXT_DETAILS}
+
+
+def _counted_events(events: Any, minute: int) -> tuple[dict[str, Any], ...]:
+    """The stored events a recap at a minute counts from. A retraction counts only if its event
+    time is at or before that minute: a later one does not change the recap."""
+    retracted = {
+        e["payload"]["target_event_id"]
+        for e in events
+        if e["payload"]["type"] == "retraction" and e["event_time_ms"] <= minute * 60_000
+    }
+    return tuple(e for e in events if e["event_id"] not in retracted)
+
+
+def _sentence_recounts(
+    events: tuple[dict[str, Any], ...],
+    piece: catch_me_up.CatchMeUp,
+    home: str,
+    sentence: str,
+    metrics: tuple[str, ...],
+) -> bool:
+    """A sentence with figures has them in the order of its metrics, each the recount of that
+    metric. A sentence with no figure (a named event) has nothing to recount."""
+    figures = extract_numbers(sentence)
+    expected = [float(recompute(events, m, piece.cut_sequence, home=home)) for m in metrics]
+    return not figures or figures == expected
 
 
 class MatchWorkflow:
@@ -1195,6 +1223,34 @@ class MatchWorkflow:
             )
 
         return len(named) == len(numbers) and all(from_the_log(n, k) for n, k in named)
+
+    # ---- catch-me-up on demand (CREW-7.3) ----------------------------------------------------
+
+    def catch_me_up(self, minute: int, *, publish: bool = True) -> dict[str, Any] | None:
+        """The recap as of a match minute. Every number it states is recounted from the stored
+        events up to the cut; a recap that does not recount is not published (None). A read
+        passes publish=False: the recap goes to the reader, not to every stream."""
+        ctx = self._ctx()
+        if "catch_me_up" in self.killed_feeds:
+            return None  # the desk has killed this feed on the match
+        piece = catch_me_up.build(ctx, minute)
+        if piece is None:
+            return None  # held (a correction before the cut) or over the word limit
+        events = _counted_events(ctx.events, minute)
+        for sentence, metrics in piece.sentences:
+            if not _sentence_recounts(events, piece, ctx.home, sentence, metrics):
+                return None  # a figure that the quoted metrics do not recount: nothing airs
+        data = {
+            "feed": "catch_me_up",
+            "minute": piece.minute,
+            "text": piece.text,
+            "word_count": piece.word_count,
+            "cut_sequence": piece.cut_sequence,
+            "source_event_ids": list(piece.source_event_ids),
+        }
+        if publish:
+            self.hub.publish("catch_me_up", f"catch-me-up:{minute}", data)
+        return data
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------
 
