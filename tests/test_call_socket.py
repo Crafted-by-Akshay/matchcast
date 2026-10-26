@@ -59,7 +59,7 @@ def verified(reply: str = REPLY) -> dict:
 async def talk_once(result: dict, *, speak=None, allow=lambda: True) -> FakeSocket:
     ws = FakeSocket()
 
-    async def talk(target: str, utterance: str, position: str | None) -> dict:
+    async def talk(target: str, utterance: str, position: str | None, lang: str) -> dict:
         return result
 
     async def default_speak(sentence: str, voice: str) -> bytes | None:
@@ -138,7 +138,7 @@ def test_a_sentence_that_cannot_be_voiced_ends_the_audio_without_cancel() -> Non
 def test_a_cancel_stops_the_reply_before_its_next_sentence() -> None:
     ws = FakeSocket()
 
-    async def talk(target: str, utterance: str, position: str | None) -> dict:
+    async def talk(target: str, utterance: str, position: str | None, lang: str) -> dict:
         return verified()
 
     async def speak_then_cancel(sentence: str, voice: str) -> bytes:
@@ -171,7 +171,7 @@ def test_a_cancel_stops_the_reply_before_its_next_sentence() -> None:
 def test_a_rate_limited_turn_is_refused_and_never_talked() -> None:
     called = []
 
-    async def talk(target: str, utterance: str, position: str | None) -> dict:
+    async def talk(target: str, utterance: str, position: str | None, lang: str) -> dict:
         called.append(target)
         return verified()
 
@@ -223,7 +223,7 @@ def test_a_talk_error_with_a_code_is_sent_with_that_code() -> None:
     class Refused(Exception):
         code = "not_found"
 
-    async def talk(target: str, utterance: str, position: str | None) -> dict:
+    async def talk(target: str, utterance: str, position: str | None, lang: str) -> dict:
         raise Refused("unknown target")
 
     ws = FakeSocket()
@@ -274,7 +274,7 @@ def test_frames_that_are_not_json_objects_are_refused_and_the_call_stays_open() 
 def test_a_talk_whose_id_is_in_flight_is_refused_and_the_first_still_answers() -> None:
     ws = FakeSocket()
 
-    async def talk(target: str, utterance: str, position: str | None) -> dict:
+    async def talk(target: str, utterance: str, position: str | None, lang: str) -> dict:
         await asyncio.sleep(0.02)
         return verified()
 
@@ -302,7 +302,7 @@ def test_a_disconnect_cancels_the_turn_in_flight() -> None:
     ws = FakeSocket()
     cancelled: list[str] = []
 
-    async def talk(target: str, utterance: str, position: str | None) -> dict:
+    async def talk(target: str, utterance: str, position: str | None, lang: str) -> dict:
         try:
             await asyncio.Event().wait()
         except asyncio.CancelledError:
@@ -331,7 +331,7 @@ def test_a_cancel_for_a_finished_turn_is_ignored() -> None:
     async def scenario() -> None:
         socket = CallSocket(
             ws,
-            talk=lambda t, u, p: asyncio.sleep(0, verified()),
+            talk=lambda t, u, p, lang: asyncio.sleep(0, verified()),
             speak=lambda s, v: asyncio.sleep(0, b"mp3"),
             voice_for=lambda r, t: "v",
             allow_talk=lambda: True,
@@ -347,3 +347,35 @@ def test_a_cancel_for_a_finished_turn_is_ignored() -> None:
     asyncio.run(scenario())
     assert not [p for p in ws.sent if isinstance(p, dict) and p["type"] == "error"]
     assert ws.sent[-1] == {"type": "audio_end", "id": 1, "cancelled": False}
+
+
+def test_the_viewers_language_reaches_the_talk_and_defaults_to_english() -> None:
+    ws = FakeSocket()
+    seen: list[str] = []
+
+    async def talk(target: str, utterance: str, position: str | None, lang: str) -> dict:
+        seen.append(lang)
+        return {**verified(), "captions": {"caption": {"lang": lang, "text": None}}}
+
+    async def scenario() -> None:
+        socket = CallSocket(
+            ws,
+            talk=talk,
+            speak=lambda s, v: asyncio.sleep(0, b"mp3"),
+            voice_for=lambda r, t: "v",
+            allow_talk=lambda: True,
+        )
+        server = asyncio.create_task(socket.serve())
+        await ws.inbox.put(
+            {"type": "talk", "id": 1, "target": "home9", "utterance": "x", "lang": "es"}
+        )
+        await until_turn_ends(ws, 1)
+        await ws.inbox.put({"type": "talk", "id": 2, "target": "home9", "utterance": "x"})
+        await until_turn_ends(ws, 2)
+        await ws.inbox.put(DISCONNECT)
+        await server
+
+    asyncio.run(scenario())
+    assert seen == ["es", "en"]
+    reply = next(p for p in ws.sent if isinstance(p, dict) and p["type"] == "reply")
+    assert reply["captions"] == {"caption": {"lang": "es", "text": None}}

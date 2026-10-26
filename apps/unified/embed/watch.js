@@ -241,7 +241,14 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
     window.__mcTalkReplies = (window.__mcTalkReplies || 0) + 1;   // read by tests
     const r = d.reply;
     if (r && r.api && r.verdict === 'verified' && r.text && r.facts && Object.keys(r.facts).length) {   // the player's own answer, checked against the match record
-      talkLine(p, 'pl', r.text);
+      const cap = r.captions || null, spoken = cap && cap.transcript && cap.transcript.text ? cap.transcript : null;
+      talkLine(p, 'pl', spoken ? spoken.text : r.text);   // in his own language when the api has a checked transcript (EXP-19), else English
+      // the caption in the viewer's language. A dropped translation falls back to English, but only when the line above is not already English
+      const shown = spoken ? spoken.lang : 'en';
+      if (cap && cap.caption && (cap.caption.text ? cap.caption.lang !== shown : spoken)) {
+        const capLang = cap.caption.text ? cap.caption.lang : 'en';
+        talkLine(p, 'pl', 'Caption (' + ((window.MC_LANG_NAMES || {})[capLang] || capLang) + '): ' + (cap.caption.text || r.text));
+      }
       if (r.order && r.order.accepted) setOrder(p, r.order.key, text);   // the api's role guard passed this order
       renderTalk(); return;
     }

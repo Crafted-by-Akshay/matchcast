@@ -170,13 +170,13 @@ const LV = (() => {
   };
 
   // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply; position is the sim's code (GK, ST...) so the role guard can bound an order
-  const talk = async (target, utterance, position) => {
+  const talk = async (target, utterance, position, lang) => {
     if (!run) throw new Error('no match yet');
     if (!String(utterance).trim()) throw new Error('empty utterance');
-    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}) });
+    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}), ...(lang && lang !== 'en' ? { lang } : {}) });
     if (!res.ok) throw Object.assign(new Error('talk ' + res.status), { status: res.status });
     const j = await res.json();
-    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, order: j.order || null, api: true, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // the api's Azure Speech clip of a verified reply (Voice lane)
+    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, order: j.order || null, api: true, captions: j.captions || null, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // captions (EXP-19): the transcript and the viewer's caption; audioUrl: the api's Azure Speech clip of a verified reply (Voice lane)
   };
 
   // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one
@@ -350,7 +350,7 @@ const LV = (() => {
     ws.onmessage = (e) => {
       if (typeof e.data !== 'string') { if (header) { h.audio(header.id, new Blob([e.data], { type: 'audio/mpeg' })); header = null; } return; }
       let d; try { d = JSON.parse(e.data); } catch (err) { return; }
-      if (d.type === 'reply') h.reply(d.id, { text: d.reply, verdict: d.verdict, facts: d.facts || {}, order: d.order || null, api: true, audioUrl: null });
+      if (d.type === 'reply') h.reply(d.id, { text: d.reply, verdict: d.verdict, facts: d.facts || {}, order: d.order || null, api: true, captions: d.captions || null, audioUrl: null });
       else if (d.type === 'audio') header = d;
       else if (d.type === 'audio_end') h.end(d.id);
       else if (d.type === 'error') h.error(d.id, d.code);
@@ -359,9 +359,9 @@ const LV = (() => {
     ws.onopen = () => { opened = true; };
     ws.onclose = () => h.close(opened);   // a socket that never opened was refused at the handshake (no match, or a bad session)
     return {
-      talk: (id, target, position, utterance) => {
+      talk: (id, target, position, utterance, lang) => {
         if (ws.readyState !== 1) return false;
-        ws.send(JSON.stringify({ type: 'talk', id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}) }));
+        ws.send(JSON.stringify({ type: 'talk', id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}), ...(lang && lang !== 'en' ? { lang } : {}) }));
         return true;
       },
       cancel: (id) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'cancel', id })); },

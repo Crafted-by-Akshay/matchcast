@@ -1311,6 +1311,12 @@ class MatchWorkflow:
             order = {"key": heard, "accepted": decision.accepted}
             stats = player_stats(ctx, target)  # the counts the order was checked against
             facts = stats.as_dict() if stats is not None else facts
+        team = (
+            None  # the player's team, for the transcript language (EXP-19); the producer has none
+        )
+        if target != "producer":
+            known = player_stats(ctx, target)
+            team = ctx.club_name(known.team_id) if known is not None and known.team_id else None
         numbers_ok = self._talk_numbers_ok(ctx, target, reply)
         names_ok = all(n.casefold() in ctx.allowed_names for n in extract_names(reply))
         words = len(reply.split())
@@ -1334,6 +1340,7 @@ class MatchWorkflow:
             "verdict": verdict,
             "facts": facts,
             "order": order,
+            "team": team,
         }
 
     @staticmethod
