@@ -59,6 +59,8 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 
 **Stream start.** `live.js` opens the SSE stream only after the match exists (`POST /v1/matches` answered 201 or 409), so the first connection cannot 404; if an events call answers 404 (the api lost the match), the next batch creates it again and reopens the stream.
 
+**Period boundaries.** Watch's engine reports `half_time` and `full_time` as data events; `live.js` sends each to `POST /v1/matches/{id}/events` as a contract `period_boundary` with `boundary: "ended"`, `clock.period` 1 at half time and 2 at full time (the same shape as `packages/agents/tests/fixtures/match-short.json`), in stream order after the events before it. They are what the half-time explainer and the full-time recap fire on. Each is sent once per match (a latch reset by `begin()`, so a stream reopen, pause or resume cannot repeat it). A match abandoned before half time sends no boundary. No `started` boundary is sent: nothing in the api consumes it. First-half stoppage time past minute 45 stays period 1, so the explainer sees the whole half (`tests/e2e/period-boundary.spec.ts`).
+
 **Full-time recap card.** When Watch reports full time against a live api, the shell polls `GET /v1/matches/{id}/recap/{persona}` (404 means not written yet; up to about two minutes) for `casual` and `broadcast` and shows a card in the matching view with the verified sentences only, their count and a "Rules fallback" (or "partly Rules fallback") label when the agents ran on rules. Listen plays `GET …/recap/{persona}/audio.mp3` through the voice path only when Voice is on; the card is absent without the live api (`tests/e2e/recap-card.spec.ts`, not run in the agent container).
 
 ## 3. Connection behaviour
