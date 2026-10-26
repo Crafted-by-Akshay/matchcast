@@ -26,7 +26,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from matchcast_agents.grading import SEED_RATE
@@ -56,6 +56,10 @@ def _iso_date(text: str) -> str:
         return date.fromisoformat(text).isoformat()
     except ValueError as error:
         raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from error
+
+
+def _stamp() -> str:
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def _replace(path: Path, data: dict) -> None:
@@ -150,14 +154,19 @@ def main(argv: list[str] | None = None) -> int:
             f"{partial} cannot be written; the arms kept as they finish go there", file=sys.stderr
         )
         return 2
-    partial.unlink(missing_ok=True)  # a stale partial from an earlier run is not this run's arms
+    if partial.exists():  # a partial from an earlier run holds its paid arms: keep it, aside
+        partial.replace(partial.with_name(f"{partial.name}.{_stamp()}"))
     print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)
     arms: dict[str, dict] = {}
 
     def keep_arm(key: str, arm: dict) -> None:
         # each arm is written as it completes, so a later failure does not lose a paid arm
         arms[key] = arm
-        _replace(partial, {"kind": "crew_live_partial", "arms": arms})
+        try:
+            _replace(partial, {"kind": "crew_live_partial", "arms": arms})
+        except OSError as error:  # the run goes on; the arm is printed so it is not lost
+            print(f"could not keep {key} in {partial} ({error}); its arm follows", file=sys.stderr)
+            print(json.dumps({key: arm}, sort_keys=True), file=sys.stderr)
         cost = arm["cost"]
         print(
             f"{key}: {arm['lines_aired']} lines, {arm['wrong_lines_aired']} wrong, "
@@ -176,7 +185,12 @@ def main(argv: list[str] | None = None) -> int:
         run_date=args.run_date,
         on_arm=keep_arm,
     )
-    _replace(args.out, record)
+    try:
+        _replace(args.out, record)
+    except OSError as error:  # the paid record is printed, so it is not lost with the run
+        print(f"could not write {args.out} ({error}); the record follows", file=sys.stderr)
+        print(json.dumps(record, sort_keys=True), file=sys.stderr)
+        return 1
     partial.unlink(missing_ok=True)
     print(f"run {record['run_id']} written to {args.out}", file=sys.stderr)
     return 0

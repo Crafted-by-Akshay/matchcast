@@ -523,12 +523,14 @@ def test_a_finished_run_removes_its_partial_file(monkeypatch, tmp_path) -> None:
     assert not (tmp_path / "out.json.partial").exists()
 
 
-def test_a_stale_partial_is_gone_even_when_the_run_fails(monkeypatch, tmp_path) -> None:
-    # the start-of-run removal, not the end-of-run one: a run that dies still clears the old file
+def test_a_stale_partial_is_moved_aside_not_deleted_even_when_the_run_fails(
+    monkeypatch, tmp_path
+) -> None:
+    # the arms a dead run paid for are kept under a dated name, so a rerun does not pay again
     script = load_script()
     match_file = tmp_path / "match.json"
     match_file.write_text(json.dumps(SAVED))
-    (tmp_path / "out.json.partial").write_text("{}")
+    (tmp_path / "out.json.partial").write_text('{"kind": "crew_live_partial", "arms": {}}')
     monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
     monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
 
@@ -550,6 +552,54 @@ def test_a_stale_partial_is_gone_even_when_the_run_fails(monkeypatch, tmp_path) 
             ]
         )
     assert not (tmp_path / "out.json.partial").exists()
+    kept = list(tmp_path.glob("out.json.partial.*"))
+    assert len(kept) == 1
+    assert json.loads(kept[0].read_text())["kind"] == "crew_live_partial"
+
+
+def test_an_arm_is_printed_when_its_partial_cannot_be_written(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    # disk full or read-only mid-run: the run goes on and the paid arm is printed, not dropped
+    script = load_script()
+    _real_replace = script._replace
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+    arm = {
+        "run_id": "full_crew-live",
+        "lines_aired": 0,
+        "wrong_lines_aired": 0,
+        "cost": {"model_calls": 4, "model_errors": 0, "budget_refused": 0},
+    }
+
+    def one_arm_then_done(match, *, on_arm, **kwargs):
+        on_arm("full_crew", arm)
+        return {"run_id": "r1"}
+
+    def broken_write(path, data):
+        if path.name.endswith(".partial"):
+            raise OSError("no space left on device")
+        _real_replace(path, data)
+
+    monkeypatch.setattr(script, "live_run", one_arm_then_done)
+    monkeypatch.setattr(script, "_replace", broken_write)
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "out.json"),
+        ]
+    )
+    assert code == 0
+    printed = [line for line in capsys.readouterr().err.splitlines() if line.startswith("{")]
+    assert [json.loads(line) for line in printed] == [{"full_crew": arm}]
 
 
 def test_a_failed_replace_leaves_the_file_that_was_there(monkeypatch, tmp_path) -> None:
@@ -590,3 +640,31 @@ def test_a_temp_file_that_cannot_be_written_is_refused_before_any_model_call(
     )
     assert code == 2
     assert "cannot be written" in capsys.readouterr().err
+
+
+def test_a_record_that_cannot_be_written_is_printed_not_lost(monkeypatch, capsys, tmp_path) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+    monkeypatch.setattr(script, "live_run", lambda match, *, on_arm, **kwargs: {"run_id": "r9"})
+
+    def full_disk(path, data):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(script, "_replace", full_disk)
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "out.json"),
+        ]
+    )
+    assert code == 1
+    assert json.loads(capsys.readouterr().err.splitlines()[-1]) == {"run_id": "r9"}
