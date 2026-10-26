@@ -235,6 +235,8 @@ sequenceDiagram
 
 The function holds no agent logic. It only triggers the `api`, so all agent code lives in one place. Full time is `period_boundary` `ended` in the final period (`RECAP_FINAL_PERIODS`, default 2: the contract has no `full_time` phase); the Functions host keeps its own checkpoints in the storage account, not in `eh-checkpoints/recap`.
 
+**Direct and memory (AB#499):** no recap function sees the match end there, so the workflow writes the recaps itself when the final period ends (`WorkflowConfig.recap_at_full_time`, set by the match service unless `MATCHCAST_PIPELINE=eventhubs`). The same recap body runs under the match lock, and a replayed boundary writes nothing (recap skips the personas it has). A failed recap is logged, and the match goes on. Extra time is not covered in these modes: the function writes it on eventhubs. The function path stays as it is on eventhubs.
+
 ## F9 Cold start and resume after a crash
 
 1. `api` starts with zero replicas. The first HTTP request or an Event Hubs backlog of 50 or more starts one replica (KEDA). The browser shows "Warming up the match engine" until `/ready` returns 200.
