@@ -335,3 +335,7 @@ def test_only_a_draft_line_may_carry_the_feed_only_persona() -> None:
     assert TypeAdapter(PacketPersona).validate_python("half_time") == "half_time"
     with pytest.raises(ValidationError):
         TypeAdapter(Persona).validate_python("half_time")
+
+
+def test_the_half_time_persona_has_the_explainer_limit() -> None:
+    assert personas.max_chars("half_time") == half_time.HALF_TIME_MAX_CHARS

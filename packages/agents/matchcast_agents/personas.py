@@ -21,6 +21,7 @@ VOICE = {
     "my-club": "casual",
     "player-focus": "casual",
     "one-metric": "analyst",
+    "half_time": "analyst",  # the explainer's sentences use the analyst's 280 (half_time.py)
     "booth": "broadcast",
 }
 BOOTH = ("booth:pbp", "booth:colour")  # the two voices of the commentary booth, in speaking order

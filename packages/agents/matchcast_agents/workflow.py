@@ -1254,13 +1254,15 @@ class MatchWorkflow:
                     value=packet["value"],
                     half_time=True,
                 )
-            # the Verifier sees the first half only: no later event, engine truth or Vision pass
+            # the Verifier sees the first half only: no later event, engine truth, Vision pass or
+            # storyline (storylines are built from every stored line, so later ones are in it)
+            later = {"vision_passes", "storylines"}
             half = replace(
                 ctx,
                 events=piece.events,
                 state=piece.state,
                 truth=(),
-                extra={k: v for k, v in ctx.extra.items() if k != "vision_passes"},
+                extra={k: v for k, v in ctx.extra.items() if k not in later},
             )
             kept: list[str] = []
             dropped = 0
@@ -1276,7 +1278,9 @@ class MatchWorkflow:
                 claims = [by_id[c] for c in draft.claim_ids]
                 verdict = await self._call(a.verifier, "check", draft.line_id, half, draft, claims)
                 verdict = await self._screen(draft, verdict)
-                if verdict.verdict == "rejected":
+                if (
+                    verdict.verdict != "verified"
+                ):  # a half-time line is verified or dropped, never held
                     dropped += 1
                     self._agent(
                         "line_rejected",
