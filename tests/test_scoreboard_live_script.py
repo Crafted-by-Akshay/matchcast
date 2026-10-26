@@ -213,7 +213,12 @@ def test_a_dot_segment_is_not_a_match_id(monkeypatch) -> None:
             script.fetch_input("https://api.example", "s1", match_id)
 
 
-SAVED = {"events": [], "teams": {"a": "Argentina"}, "names": {}, "roster": {"stream": {}}}
+SAVED = {
+    "events": [],
+    "teams": {"a": "Argentina"},
+    "names": {},
+    "roster": {"stream": {"match_id": "m1"}},
+}
 
 
 def test_a_saved_export_is_recorded_with_the_given_fixture(monkeypatch, tmp_path) -> None:
@@ -285,7 +290,7 @@ def test_an_output_that_cannot_be_written_is_refused_before_any_model_call(
         ]
     )
     assert code == 2
-    assert "must be a plain file path in a folder that exists" in capsys.readouterr().err
+    assert "must be a plain file path in a folder that can be written" in capsys.readouterr().err
 
 
 def test_an_output_that_is_a_symlink_is_refused_before_any_model_call(
@@ -355,3 +360,92 @@ def test_a_run_date_that_is_not_a_date_is_refused(capsys, tmp_path) -> None:
         )
     assert stop.value.code == 2
     assert "not a YYYY-MM-DD date" in capsys.readouterr().err
+
+
+def test_a_match_without_a_match_id_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    no_id = tmp_path / "match.json"
+    no_id.write_text(json.dumps({**SAVED, "roster": {"stream": {}}}))
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    code = script.main(
+        [
+            "--match",
+            str(no_id),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "o.json"),
+        ]
+    )
+    assert code == 1
+    assert "match_id" in capsys.readouterr().err
+
+
+def test_an_output_that_is_not_writable_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script.os, "access", lambda path, mode: False)  # root can write anywhere
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "o.json"),
+        ]
+    )
+    assert code == 2
+    assert "can be written" in capsys.readouterr().err
+
+
+def test_an_output_that_is_a_folder_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    folder = tmp_path / "out-dir"
+    folder.mkdir()
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    code = script.main(
+        ["--match", str(match_file), "--fixture", "N001", "--max-calls", "5", "--out", str(folder)]
+    )
+    assert code == 2
+    assert "can be written" in capsys.readouterr().err
+
+
+def test_a_call_budget_out_of_range_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5000",
+            "--out",
+            str(tmp_path / "o.json"),
+        ]
+    )
+    assert code == 2
+    assert "--max-calls must be between 1 and" in capsys.readouterr().err

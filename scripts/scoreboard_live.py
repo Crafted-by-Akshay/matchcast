@@ -35,7 +35,8 @@ from matchcast_agents.live.client import FoundryModelClient
 
 
 def fetch_input(api: str, session_id: str, match_id: str) -> dict:
-    """The stored match of a live session, from the read-only scoreboard input export."""
+    """The stored match of a live session, from the scoreboard input export. The route makes no
+    model call; its cold read writes the match record once, as the other match routes do."""
     if match_id in ("", ".", ".."):  # a dot segment would climb out of the match route
         raise ValueError(f"not a match id: {match_id!r}")
     query = urllib.parse.urlencode({"session_id": session_id})
@@ -57,6 +58,15 @@ def _iso_date(text: str) -> str:
         raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from error
 
 
+def _writable(out: Path) -> bool:
+    """Can the record be written to ``out`` now, so a paid run is not lost at the write?"""
+    if out.is_symlink() or out.is_dir():
+        return False
+    if out.exists():
+        return os.access(out, os.W_OK)
+    return out.parent.is_dir() and os.access(out.parent, os.W_OK | os.X_OK)
+
+
 def match_problem(match: object) -> str | None:
     """Why this is not a match the recording can run on, or None when it is."""
     if not isinstance(match, dict):
@@ -64,8 +74,9 @@ def match_problem(match: object) -> str | None:
     missing = [key for key in MATCH_KEYS if key not in match]
     if missing:
         return f"missing {', '.join(missing)}"
-    if not isinstance(match["roster"], dict) or "stream" not in match["roster"]:
-        return "the roster has no stream"
+    stream = match["roster"].get("stream") if isinstance(match["roster"], dict) else None
+    if not isinstance(stream, dict) or "match_id" not in stream:
+        return "the roster has no stream with a match_id"
     return None
 
 
@@ -111,9 +122,10 @@ def main(argv: list[str] | None = None) -> int:
     if problem := match_problem(match):
         print(f"{args.match or args.api}: {problem}", file=sys.stderr)
         return 1
-    if args.out.is_symlink() or args.out.is_dir() or not args.out.parent.is_dir():
+    if not _writable(args.out):
         print(
-            f"--out {args.out} must be a plain file path in a folder that exists", file=sys.stderr
+            f"--out {args.out} must be a plain file path in a folder that can be written",
+            file=sys.stderr,
         )
         return 2
     if not os.environ.get("FOUNDRY_PROJECT_ENDPOINT"):
