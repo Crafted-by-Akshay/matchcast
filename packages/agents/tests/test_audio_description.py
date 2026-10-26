@@ -108,7 +108,15 @@ def test_a_goal_no_gap_fits_is_not_described_at_all(match) -> None:
 
 def test_a_description_whose_gap_comes_more_than_ten_seconds_late_is_not_written(match) -> None:
     # a shot at 36.9 s with the first gap only from 47 s on: the line would talk about a play
-    # the audience has moved past, and freshness would refuse it at airing
+    # the audience has moved past, by the time it airs
     shot = event(match, "e9")
     late_window = [Window(shot["event_time_ms"] + 10_001, 60_000)]
     assert describe(ctx(match), shot, late_window) is None
+
+
+def test_a_description_starting_exactly_ten_seconds_after_its_event_is_still_written(match) -> None:
+    shot = event(match, "e9")
+    edge_window = [Window(shot["event_time_ms"] + 10_000, 60_000)]
+    found = describe(ctx(match), shot, edge_window)
+    assert found is not None
+    assert found.speak_at_ms - shot["event_time_ms"] == 10_000
