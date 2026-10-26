@@ -295,42 +295,57 @@
 
   /* CREW-7.3 catch-me-up. Asked only when the viewer picks the feed or presses Update (never polled). One GET at a time; a second ask inside the gap
      (MATCHCAST_CATCHUP_MS, default 5 s) gets the last answer; after a 429 nothing is sent until the api's Retry-After has passed. LV.catchMeUp does the GET. */
-  function freshCu(k) { return { key: k, rec: null, at: 0, until: 0, busy: null, busyLang: '', wait: null, want: null, timer: 0, resolveWait: null }; }
+  function freshCu(k) { return { key: k, rec: null, at: 0, until: 0, busy: null, busyLang: '', gen: 0, want: null, timer: 0, pend: null }; }
   var cu = freshCu('');
-  // a read waiting for the gap (or for an in-flight read of another language) is dropped: the viewer went back to the language already shown, left the feed, or the match changed
-  function cancelWait() { var c = cu; if (c.timer) clearTimeout(c.timer); c.timer = 0; c.want = null; if (c.resolveWait) { var r = c.resolveWait; c.resolveWait = null; r(c.rec || { state: 'none', minute: 0, lang: 'en' }); } c.wait = null; }
-  // one follow-up read: in the latest language and minute asked while the gap or another language's read was in the way (a burst of changes is one read)
+  var NONE = function (m, l) { return { state: 'none', minute: m, lang: l }; };
+  // One generation counter per match. A queued follow-up (a language asked while the gap or another language's read was in the way) is one pending ask, one wanted {minute, lang} and one timer.
+  // supersede() drops all three and bumps the generation, so every continuation still attached (the timer, a .then on the in-flight read) sees a stale generation and returns; the dropped ask's promise is always settled.
+  function supersede(c) {
+    c.gen++;
+    if (c.timer) clearTimeout(c.timer);
+    c.timer = 0; c.want = null;
+    var p = c.pend; c.pend = null;
+    if (p) p.res(c.rec || NONE(0, 'en'));
+  }
+  function cancelWait() { supersede(cu); }   // the viewer left the feed, or Watch reloaded
   function queue(m, l) {
-    var c = cu, gap = typeof window.MATCHCAST_CATCHUP_MS === 'number' ? window.MATCHCAST_CATCHUP_MS : 5000;
-    c.want = { minute: m, lang: l };
-    if (c.wait) return c.wait;
-    c.wait = (c.busy ? c.busy.then(function () {}, function () {}) : Promise.resolve()).then(function () {
-      if (c !== cu || !c.want) return c.rec || { state: 'none', minute: m, lang: l };
-      return new Promise(function (res) {
-        c.resolveWait = res;
-        c.timer = setTimeout(function () {
-          var w = c.want; c.timer = 0; c.want = null; c.wait = null; c.resolveWait = null;
-          res(c === cu && w ? catchUp(w.minute, w.lang) : (c.rec || { state: 'none', minute: m, lang: l }));
-        }, Math.max(0, gap - (Date.now() - c.at)) + 1);
-      });
-    });
-    return c.wait;
+    var c = cu, gen = c.gen, gap = typeof window.MATCHCAST_CATCHUP_MS === 'number' ? window.MATCHCAST_CATCHUP_MS : 5000;
+    c.want = { minute: m, lang: l };   // the latest ask wins
+    if (c.pend) return c.pend.promise;
+    var p = { res: null, promise: null };
+    p.promise = new Promise(function (res) { p.res = res; });
+    c.pend = p;
+    function fire() {
+      c.timer = 0;
+      if (gen !== c.gen || c !== cu || c.pend !== p) return;
+      var w = c.want; c.want = null; c.pend = null;
+      if (!w || keyOf(typeof LV !== 'undefined' ? LV : null) !== c.key) { p.res(c.rec || NONE(m, l)); return; }   // nothing wanted any more, or another match
+      catchUp(w.minute, w.lang).then(p.res, function () { p.res({ state: 'error', minute: w.minute, lang: w.lang }); });
+    }
+    function arm() {
+      if (gen !== c.gen || c !== cu || c.pend !== p) return;
+      if (c.timer) clearTimeout(c.timer);
+      c.timer = setTimeout(fire, Math.max(0, gap - (Date.now() - c.at)) + 1);
+    }
+    if (c.busy) c.busy.then(arm, arm); else arm();
+    return p.promise;
   }
   function catchUp(minute, lng) {
     var lv = typeof LV !== 'undefined' ? LV : null, k = keyOf(lv), m = Math.max(0, Math.min(200, Math.floor(+minute) || 0)), l = lng || 'en';
-    if (!on || !lv || typeof lv.catchMeUp !== 'function') return Promise.resolve({ state: 'none', minute: m, lang: l });
-    if (cu.key !== k) { cancelWait(); cu = freshCu(k); }   // another match or session: the old recap is not this one's
+    if (!on || !lv || typeof lv.catchMeUp !== 'function') return Promise.resolve(NONE(m, l));
+    if (cu.key !== k) { supersede(cu); cu = freshCu(k); }   // another match or session: the old recap and any waiting read are not this one's
     var now = Date.now();
     if (cu.busy) {
-      if (cu.busyLang === l) { cancelWait(); return cu.busy; }
+      if (cu.busyLang === l) { supersede(cu); return cu.busy; }
       return queue(m, l);   // the read in flight is for another language: ask again in this one when it lands
     }
     if (cu.until > now) return Promise.resolve({ state: 'limited', minute: m, lang: l, wait_s: Math.ceil((cu.until - now) / 1000) });
     var gap = typeof window.MATCHCAST_CATCHUP_MS === 'number' ? window.MATCHCAST_CATCHUP_MS : 5000;
     if (cu.rec && now - cu.at < gap) {
-      if ((cu.rec.lang || 'en') === l) { cancelWait(); return Promise.resolve(cu.rec); }
+      if ((cu.rec.lang || 'en') === l) { supersede(cu); return Promise.resolve(cu.rec); }
       return queue(m, l);
     }
+    supersede(cu);   // a read now makes any waiting one obsolete
     var mine = cu;
     cu.at = now; cu.busyLang = l;
     cu.busy = lv.catchMeUp(m, l).then(function (rec) {

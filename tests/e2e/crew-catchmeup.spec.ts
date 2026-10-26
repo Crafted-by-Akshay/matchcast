@@ -424,3 +424,85 @@ test('lang: a Watch reload (feed-ready) forgets the open pick: a language change
     expect(hits.length).toBe(1);
   });
 });
+
+// The follow-up queue is one generation-token state machine: one pending ask, one wanted language, one timer; anything superseded is settled and never leaves the block on "Catching you up".
+const pickPost = (f: any, key: string) => f.evaluate((k: string) => window.parent.postMessage({ src: 'matchcast', type: 'crew-feed-pick', key: k, lang: 'en' }, '*'), key);   // what the picker posts, without a slow click
+const DE = 'Nach 37 Minuten führt Northgate FC 1-0.';
+
+test('lang: en, es, en, de during one slow read: exactly one follow-up read, in de, and the block ends on it (not loading)', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi((q) => ({ ...withVariant(q), delay: q.n === 1 ? 3000 : 0 }), async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect.poll(() => hits.length, { timeout: 30_000 }).toBe(1);
+    await setLang(page, 'es'); await setLang(page, 'en'); await setLang(page, 'de');
+    await expect(card).toContainText(DE, { timeout: 30_000 });
+    await settle(page);
+    await expect(card).not.toContainText('Catching you up');
+    expect(hits.length, 'the first read plus one follow-up').toBe(2);
+    expect(new URL(hits[1], 'http://x').searchParams.get('lang')).toBe('de');
+  });
+});
+
+test('lang: leave the feed during a read, then pick Catch me up again in another language: that language is read and shown', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi((q) => ({ ...withVariant(q), delay: q.n === 1 ? 3000 : 0 }), async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect.poll(() => hits.length, { timeout: 30_000 }).toBe(1);
+    await pickPost(f, 'casual');
+    await setLang(page, 'es');
+    await pickPost(f, 'catch_me_up');
+    await expect(card).toContainText(ES, { timeout: 30_000 });
+    await expect(card).not.toContainText('Catching you up');
+    expect(hits.length).toBe(2);
+    expect(new URL(hits[1], 'http://x').searchParams.get('lang')).toBe('es');
+  });
+});
+
+test('lang: a 429 on the queued follow-up reads as the busy note, not a stuck loading state', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(({ lang }) => (lang ? { status: 429, body: { code: 'rate_limited' }, headers: { 'Retry-After': '60' } } : { status: 200, body: RECAP }), async (api, hits) => {
+    const f = await open(page, api, 2000);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await setLang(page, 'es');
+    await expect(card).toContainText('Catch me up is busy. Try again in a minute.', { timeout: 30_000 });
+    expect(hits.length).toBe(2);
+  });
+});
+
+test('lang: a new match during a read drops the old match\'s reply; the next ask reads the new match', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi((q) => ({ status: 200, body: { ...RECAP, text: q.n === 1 ? 'Old match recap.' : 'New match recap.' }, delay: q.n === 1 ? 3000 : 0 }), async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect.poll(() => hits.length, { timeout: 30_000 }).toBe(1);
+    await page.evaluate(() => LV.begin('k2', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }));
+    await expect.poll(() => page.evaluate(() => (LV.key && LV.key.match_id) || ''), { timeout: 30_000 }).toBe('m-k2');
+    await page.waitForTimeout(3500);
+    await expect(card).not.toContainText('Old match recap');
+    await card.getByRole('button', { name: /Update/ }).click();
+    await expect(card).toContainText('New match recap.', { timeout: 30_000 });
+    expect(hits[1]).toMatch(/\/matches\/m-k2\//);
+  });
+});
+
+test('lang: two rapid Update presses while a read is in flight are one read', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi((q) => ({ status: 200, body: RECAP, delay: q.n === 2 ? 2500 : 0 }), async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await f.evaluate(() => { const b = document.querySelector('.fp-cu-btn') as HTMLButtonElement; b.click(); b.click(); });
+    await expect.poll(() => hits.length, { timeout: 30_000 }).toBe(2);
+    await expect(card).not.toContainText('Catching you up', { timeout: 30_000 });
+    await settle(page);
+    expect(hits.length).toBe(2);
+  });
+});
