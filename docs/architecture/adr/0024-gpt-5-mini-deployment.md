@@ -20,9 +20,9 @@ The agents call the Foundry deployment `gpt-5-mini` (Global Standard, East US 2)
 
 ## Consequences
 
-- Docs and code name the same model; the span `chat gpt-5-mini` carries the model that answered.
+- Docs and code name the same model; the span `chat gpt-5-mini` carries the deployment it was called with, not a model the response reports.
 - Quota is the limit to watch: 10K TPM on gpt-5-mini (R1 is reworded to match).
-- `gpt-6-luna` labels that only name a fake deployment in tests are unchanged.
+- Test fakes that still name `gpt-6-luna` (`packages/shared/tests/test_shared.py`, `tests/test_api_health.py`) are labels only and are left as they are.
 
 ## Affects
 
