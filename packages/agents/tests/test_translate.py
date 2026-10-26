@@ -221,3 +221,25 @@ def test_a_translation_naming_a_competition_is_rejected():
 
 def test_a_faithful_spanish_line_with_la_liga_in_lowercase_is_kept():
     assert recheck(EN, "Northgate FC tiene 7 tiros y 2,5 xG, en la liga [claim:c-1].", []) is None
+
+
+def test_a_player_of_a_listed_team_gets_a_transcript_and_the_viewers_caption():
+    from matchcast_agents.translate import team_language
+
+    assert team_language("Brazil") == "pt" and team_language("Atlantis") is None
+    service = TranslationService(Fake(lambda t: t.replace("have", "têm")), 1000)
+    captions = run(service.talk_captions("s/m", EN, "Brazil", "en", ["Northgate FC"]))
+    assert captions["transcript"] == {"lang": "pt", "text": EN.replace("have", "têm")}
+    assert captions["caption"] == {"lang": "en", "text": EN}
+
+
+def test_a_viewer_language_gets_its_caption_and_a_changed_number_drops_it():
+    service = TranslationService(Fake(lambda t: t.replace("7", "9")), 1000)
+    captions = run(service.talk_captions("s/m", EN, None, "es", ["Northgate FC"]))
+    assert "transcript" not in captions
+    assert captions["caption"] == {"lang": "es", "text": None}
+
+
+def test_no_transcript_language_and_english_viewer_have_nothing_to_caption():
+    service = TranslationService(Fake(), 1000)
+    assert run(service.talk_captions("s/m", EN, "Atlantis", "en", [])) is None

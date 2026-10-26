@@ -99,6 +99,16 @@ def recheck(english: str, translated: str, names: Iterable[str]) -> str | None:
     return None
 
 
+# The language each national team speaks. A player's own answer is shown in it, as a transcript, and
+# the viewer's caption is a checked translation of the same English line. A team not listed here has
+# no transcript: its answer is shown in English only. (The fixture's two squads, ADR-0020.)
+TEAM_LANGUAGE = {"Argentina": "es", "Brazil": "pt"}
+
+
+def team_language(team: str | None) -> str | None:
+    return TEAM_LANGUAGE.get(team or "")
+
+
 class AzureTranslator:
     """Translator v3 on a custom-domain resource, called with the api's managed identity."""
 
@@ -131,6 +141,10 @@ class AzureTranslator:
             return str(body[0]["translations"][0]["text"])
         except Exception as error:  # noqa: BLE001 - nothing from the service is shown
             raise TranslationError(type(error).__name__) from error
+
+
+async def _none() -> Variant:
+    return Variant(None, "unsupported")
 
 
 @dataclass(frozen=True)
@@ -202,6 +216,32 @@ class TranslationService:
             while len(self._tasks) > CACHE_LIMIT:
                 self._tasks.popitem(last=False)
         return await asyncio.shield(task)  # a viewer leaving cancels only its own wait
+
+    async def talk_captions(
+        self,
+        scope: str,
+        reply: str,
+        team: str | None,
+        lang: str,
+        names: Iterable[str],
+    ) -> dict[str, Any] | None:
+        """The captions of a checked talk reply (EXP-19): the player's own-language transcript and
+        the caption in the viewer's language. Each is a checked translation of the English line, so
+        a translation that changes a number or a name is dropped and its text is None. None when
+        there is nothing to caption (English viewer, no transcript language)."""
+        spoken = team_language(team)
+        if spoken is None and lang == "en":
+            return None
+        names = list(names)
+        transcript, caption = await asyncio.gather(
+            self.variant(scope, reply, reply, spoken, names) if spoken else _none(),
+            self.variant(scope, reply, reply, lang, names) if lang != "en" else _none(),
+        )
+        captions: dict[str, Any] = {}
+        if spoken is not None:
+            captions["transcript"] = {"lang": spoken, "text": transcript.text}
+        captions["caption"] = {"lang": lang, "text": caption.text if lang != "en" else reply}
+        return captions
 
     def _settled(self, digest: str, task: asyncio.Task[Variant]) -> None:
         if task.cancelled() or task.exception() is not None or task.result().reason in _RETRY:
