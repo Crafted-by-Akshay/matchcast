@@ -240,14 +240,15 @@ MCS.progress('Loading the stadium and players');
   window.__mcxCards = { kept, redraw: () => { for (const c of kept) { const el = cards.get(c.id + 'mcx-log'); if (el) { el.innerHTML = html(c); el.querySelector('[data-why]').onclick = () => why(el, c); el.querySelector('[data-how]').onclick = () => MCS.send({ type: 'trace', id: c.id }); el.classList.toggle('mine', mine(c)); } } } };
 })();
 
-// the One metric picker keys that personas.WATCH_METRICS also names (today only xg). Any other picker key is Watch's own stat and sends no persona the api accepts.
+// the One metric picker keys the api follows, and the api name each one sends (personas.WATCH_METRICS names the api side). Any other picker key is Watch's own stat and sends no persona the api accepts.
 // Nothing enforces this list against WATCH_METRICS yet: a key may be added here only if the api follows it.
-const MC_API_METRICS = ['xg'];
+const MC_API_METRICS = ['xg', 'poss', 'pass'];
+const MC_API_NAME = { xg: 'xg', poss: 'possession_share', pass: 'pass_accuracy' };
 
 // ---- EXP-4: personalisation. The last watch mode is kept in localStorage and restored; the mode goes to the shell, and so to the api, as the viewer's persona.
 (() => {
   const KEY = 'mcx-mode';
-  const persona = () => FAN.mode === 'club' ? 'club:' + TEAMS[FAN.club].key : FAN.mode === 'player' && FAN.player ? 'player:' + FAN.player.name : FAN.mode === 'metric' ? 'metric:' + FAN.metric : FAN.mode;
+  const persona = () => FAN.mode === 'club' ? 'club:' + TEAMS[FAN.club].key : FAN.mode === 'player' && FAN.player ? 'player:' + FAN.player.name : FAN.mode === 'metric' ? 'metric:' + (MC_API_NAME[FAN.metric] || FAN.metric) : FAN.mode;
   const tell = () => { MCS.send({ type: 'persona', persona: persona(), lang: FAN.lang }); if (window.__mcxCards) window.__mcxCards.redraw(); };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: FAN.mode, club: FAN.club, metric: FAN.metric, lang: FAN.lang, player: FAN.player ? FAN.player.name : null })); } catch (e) { /* storage may be blocked */ } };
   const _set = fanSet;
