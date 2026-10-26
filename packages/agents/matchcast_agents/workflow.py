@@ -37,7 +37,7 @@ from .stall import StallClock
 from .state import MatchState, apply
 from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
-from .storyline import FALLBACK_PLAN, pick_plan
+from .storyline import FALLBACK_PLAN, StorylineBook, pick_plan
 from .tools import InProcessTools, ToolCall, ToolError
 from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
@@ -328,7 +328,8 @@ class MatchWorkflow:
         self._stall_task: asyncio.Task[None] | None = None  # the timer; it pauses at full time
         self._closed = False
         self._replans = 0  # numbers the replan moments, so two replans never share an id
-        self._plan: str | None = None  # the last storyline the stall replan chose; recorded only
+        self._plan: str | None = None  # the last storyline the stall replan chose
+        self._book = StorylineBook()  # the storylines a replan opened, each waiting for its payoff
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
@@ -641,6 +642,11 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
+        payoff = self._book.on_goal(event)  # a storyline's player scoring pays it off, once
+        if payoff is not None:
+            ctx.extra["payoff"] = {
+                "cites": list(payoff.cites)
+            }  # the text has minutes: not for lines
         self._start_stall_timer()
         self._replan_if_stalled(ctx, event)
         if self.config.orchestrator == "af":
@@ -752,6 +758,10 @@ class MatchWorkflow:
         old = self._plan
         new = FALLBACK_PLAN if step == "fallback" else pick_plan(ctx.extra.get("storylines", {}))
         self._plan = new
+        if new.startswith("player:"):
+            self._book.open(
+                new.removeprefix("player:"), event, f"{ctx.player_name(new[7:])} storyline"
+            )
         self._stall.note_replan()
         entry = {
             "moment_id": f"replan-{event['event_id']}-{self._next_replan()}",
@@ -1609,9 +1619,9 @@ class MatchWorkflow:
                 if target == "analyst":
                     fresh_ctx = self._ctx()
                     # the same specialist reports the first analysis read, not a new fan-out
-                    for key in ("specialists", "rhythm"):
-                        if key in ctx.extra:
-                            fresh_ctx.extra[key] = ctx.extra[key]
+                    for name in ("specialists", "rhythm", "payoff"):
+                        if name in ctx.extra:
+                            fresh_ctx.extra[name] = ctx.extra[name]
                     fresh_claims = await self._analyse(fresh_ctx, task, repair=True)
                 written = (
                     await self._call(
