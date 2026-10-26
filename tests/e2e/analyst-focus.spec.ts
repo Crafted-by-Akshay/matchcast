@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import { collectErrors, openShell, viewFrame } from './helpers';
 
-// Focused Analyst mode: five entries for the judge path (This match), the rest under More. Pages that are not in the nav keep their code and open by route.
+// Focused Analyst mode: seven entries for the judge path (This match), the rest under More. Pages that are not in the nav keep their code and open by route.
 async function openPage(page: Page, route = 'live') {
   await openShell(page, 'analyst', '?crew=0');
   const f = await viewFrame(page, 'analyst');
@@ -10,13 +10,13 @@ async function openPage(page: Page, route = 'live') {
   return f;
 }
 
-test('analyst focus: five entries under This match, the rest under More', async ({ page }) => {
+test('analyst focus: seven entries under This match, the rest under More', async ({ page }) => {
   const errs = collectErrors(page);
   const f = await openPage(page);
   // the nav ends with a Data footer (league and store status), which is not a page group
   expect((await f.locator('#nav .ng').allTextContents()).slice(0, 2)).toEqual(['This match', 'More']);
   const ids = await f.locator('#nav .ni').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.p));
-  expect(ids.slice(0, 5)).toEqual(['live', 'match', 'ask', 'trace', 'library']);
+  expect(ids.slice(0, 7)).toEqual(['live', 'live-maps', 'match', 'whatif', 'ask', 'trace', 'library']);
   expect(ids).not.toContain('ds-query');
   expect(ids).not.toContain('api');
   expect(errs).toEqual([]);
@@ -29,10 +29,10 @@ test('analyst focus: hidden pages keep their code and open by route', async ({ p
   expect(errs).toEqual([]);
 });
 
-test('analyst focus: the match centre has five tabs', async ({ page }) => {
+test('analyst focus: the match centre has six tabs', async ({ page }) => {
   const errs = collectErrors(page);
   const f = await openPage(page, 'match');
-  expect(await f.locator('.tabs [role=tab]').allTextContents()).toEqual(['Overview', 'Shots', 'Patterns', 'Players', 'Trust · Verifier']);
+  expect(await f.locator('.tabs [role=tab]').allTextContents()).toEqual(['Overview', 'Shots', 'Patterns', 'Heatmaps', 'Players', 'Trust · Verifier']);
   expect(errs).toEqual([]);
 });
 
