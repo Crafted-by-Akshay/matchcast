@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// ADR-0022 (Vision -> Agents): the Vision stream's summary from the api shows in the Agents strip and as a "From pixels" chip on Watch.
+// ADR-0022 (Vision -> Agents): the Vision stream's summary from the api shows in the Agents strip and as a "Camera mode" chip on Watch.
 declare const LV: any;
 
 const summary = {
@@ -41,6 +41,8 @@ test('vision -> agents: the Agents strip and the Watch chip show what Vision con
   const w = await viewFrame(page, 'watch');
   await expect(w.locator('#frompx')).toBeVisible({ timeout: 20_000 });
   await expect(w.locator('#frompx')).toContainText('Vision has tracked Northgate FC 41 passes');
+  await expect(w.locator('#visb')).toHaveText('Camera mode (experimental)');
+  await expect(w.locator('#frompx')).toContainText('Camera mode');
   expect(errs).toEqual([]);
 });
 
