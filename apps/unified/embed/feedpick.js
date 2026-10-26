@@ -7,7 +7,8 @@
 (() => {
   const feed = document.getElementById('mcf');
   if (!feed || document.getElementById('bc-view') || document.getElementById('mc-feedpick')) return;
-  let qs = ''; try { qs = location.search + '&' + (window.parent !== window ? window.parent.location.search : ''); } catch (e) { /* cross-origin parent */ }
+  let qs = location.search;   // the page's own query first; the parent's is appended in its own try (same lines as crew.js)
+  try { if (window.parent !== window) qs += '&' + window.parent.location.search; } catch (e) { /* cross-origin parent */ }
   let on = !/[?&]crew=0(&|$)/.test(qs);   // default on; ?crew=0 or localStorage mc-crew=0 turns it off, an explicit crew=1 beats a stored 0
   try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked */ }
   if (!on) return;
@@ -70,7 +71,7 @@
     if (!d.live) h = '<p class="fp-empty">Planned: this feed is not built yet</p>';
     else {
       lines = (feeds[d.key] || []).slice(-3).reverse();
-      h = (simulated ? '<span class="fp-sim" title="The lines are a fixture, not the live agents">Simulated</span>' : '')
+      h = (simulated && lines.length ? '<span class="fp-sim" title="The lines are a fixture, not the live agents">Simulated</span>' : '')
         + (lines.length
           ? '<ul>' + lines.map((l) => '<li><span class="fp-min">' + Math.floor((+l.match_time_ms || 0) / 60000) + "'</span>"
             + (!simulated && l.verdict === 'verified' ? '<span class="fp-tick" role="img" aria-label="Verified" title="Verified: the Verifier recounted this line from the stored events">✓</span>' : '')

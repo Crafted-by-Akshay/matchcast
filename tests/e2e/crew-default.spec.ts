@@ -145,3 +145,62 @@ test('feed picker at 320 px by default: the picker has room beside the chip, and
   expect(g.top).not.toBe('none');
   expect(g.sw).toBeLessThanOrEqual(g.iw);
 });
+
+test('Simulated shows only while fixture lines are on screen; an empty default feed says only "waiting for a moment"', async ({ page }) => {
+  test.setTimeout(300_000);
+  await open(page);
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  await expect(f.getByRole('radiogroup', { name: 'Feed' })).toBeVisible({ timeout: 60_000 });
+  await expect(f.locator('#mc-feedlines')).toContainText('waiting for a moment');
+  await expect(f.locator('#mc-feedlines .fp-sim')).toHaveCount(0);
+  await page.evaluate(() => (window as any).CREW.play(23));
+  await expect(f.locator('#mc-feedlines li').first()).toBeVisible({ timeout: 60_000 });
+  await expect(f.locator('#mc-feedlines .fp-sim')).toHaveText('Simulated');
+});
+
+// A real cross-origin parent cannot be built here (Chromium blocks a route-fulfilled parent from framing the local server), so the frames' access to parent.location is made to throw,
+// which is exactly what a cross-origin parent does. The page's own query (crew=0 as the shell forwards it) must still win.
+const throwingParent = () => {
+  if (window === window.top) return;
+  Object.defineProperty(window, 'parent', { get: () => new Proxy({}, { get: (_t, k) => { if (k === 'location') throw new DOMException('Blocked a frame from accessing a cross-origin frame.', 'SecurityError'); const v = (window.top as any)[k as string]; return typeof v === 'function' ? v.bind(window.top) : v; } }) });
+};
+
+test('a parent whose location cannot be read does not hide ?crew=0 on the Watch page, and with no flag it stays on', async ({ page, browser }) => {
+  test.setTimeout(420_000);
+  await page.addInitScript(throwingParent);
+  await open(page, '?crew=0');
+  await ready('watch')(page);
+  const a = await viewFrame(page, 'watch');
+  await a.waitForSelector('#mcf', { state: 'attached', timeout: 240_000 });
+  expect(await a.evaluate(() => { try { return String((window.parent as any).location.search); } catch (e) { return 'threw'; } }), 'the simulated parent really throws').toBe('threw');
+  expect(await a.locator('#mc-feedpick').count(), '?crew=0 on the page wins').toBe(0);
+  expect(await a.locator('#mc-feedpick-css').count()).toBe(0);
+  const p2 = await browser.newPage();
+  await p2.addInitScript(throwingParent);
+  await p2.route('**/broadcast/**', (r: any) => r.abort());
+  await openShell(p2, 'watch', '');
+  await ready('watch')(p2);
+  const b = await viewFrame(p2, 'watch');
+  await b.waitForSelector('#mc-feedpick', { state: 'attached', timeout: 240_000 });
+  await p2.close();
+});
+
+test('header at 320 px: Crew, Tour, Voice and Status do not grow the header, and Talk and Copilot stay on screen', async ({ page, browser }) => {
+  test.setTimeout(420_000);
+  const off = await browser.newPage({ viewport: { width: 320, height: 640 } });
+  await off.route('**/broadcast/**', (r: any) => r.abort());
+  await openShell(off, 'watch', '?crew=0');
+  const hOff = await off.evaluate(() => document.querySelector('header.top')!.getBoundingClientRect().height);
+  await off.close();
+  await open(page, '', 320, 640);
+  const hOn = await page.evaluate(() => document.querySelector('header.top')!.getBoundingClientRect().height);
+  expect(hOn, 'the Crew pill fits in the rows the header already had').toBeLessThanOrEqual(hOff + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('mcx-talk') && !!document.getElementById('cpbtn')), { timeout: 60_000 }).toBe(true);
+  const fb = await (await f.frameElement()).boundingBox();
+  const r = await f.evaluate(() => ['#mcx-talk', '#cpbtn'].map((s) => { const b = document.querySelector(s)!.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; }));
+  for (const x of r) { expect(fb!.y + x.b, 'on screen vertically').toBeLessThanOrEqual(640); expect(x.r).toBeLessThanOrEqual(320); expect(x.l).toBeGreaterThanOrEqual(0); }
+});

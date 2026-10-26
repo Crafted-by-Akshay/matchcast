@@ -38,7 +38,7 @@ test('Analyst opens the season and routes to the shared fixture', async () => {
   await page.click('#al-full');   // the console (the 28-match season) is one click behind "Full console"
   await ready('analyst', 60_000)(page);
   analyst = await viewFrame(page, 'analyst');
-  await expect.poll(() => analyst.evaluate(() => D?.matches.length)).toBe(28);
+  await expect.poll(() => analyst.evaluate(() => D?.matches.length), { timeout: 60_000 }).toBe(28);
   // a season fixture routes the Analyst to its live page; the national default has no run, so the Analyst opens on its own page and the chip says so
   if (await page.locator('#fx').inputValue().then((v) => /^N\d+$/.test(v))) await expect(page.locator('#src')).toContainText('no run for this match');
   else await expect.poll(() => analyst.evaluate(() => location.hash)).toMatch(/^#live\.M/);

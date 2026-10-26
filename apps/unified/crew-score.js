@@ -1,6 +1,6 @@
 /* Crew accuracy scoreboard (Experience lane, AB#442). Draws only CREW.state.score:
    {method, arms:{key:{accuracy, catch_rate, latency_ms, cost, n, precomputed?, run_id?}}}.
-   Mounts into #crew-score when CREW.enabled (?crew=1). Labelled Simulated while the score is the fixture; a score fetched from the api (GET /v1/matches/{id}/scoreboard) is real and carries no Simulated badge.
+   Mounts into #crew-score when CREW.enabled (on by default). Labelled Simulated while the score is the fixture; a score fetched from the api (GET /v1/matches/{id}/scoreboard) is real and carries no Simulated badge.
    No colour-only meaning: each arm has a name, a number and its own bar pattern; a table repeats the values. */
 (function () {
   'use strict';

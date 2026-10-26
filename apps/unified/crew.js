@@ -4,8 +4,9 @@
    crew_ledger / crew_spawn follow contract 1.3.0 (PR #379), onair / feed_drop contract 1.2.0; the scoreboard is a GET (fetchScore). Change the shapes here only. */
 (function () {
   'use strict';
-  var qs = '';
-  try { qs = location.search + '&' + ((window.parent !== window && window.parent.location.search) || ''); } catch (e) { /* cross-origin */ }
+  // the page's own query first; the parent's is appended in its own try, so a cross-origin parent never hides ?crew=0 on this page (the same lines are inlined in embed/feedpick.js, langpick.js and democtl.js)
+  var qs = location.search;
+  try { if (window.parent !== window) qs += '&' + window.parent.location.search; } catch (e) { /* cross-origin parent */ }
   // default ON (judges add no query flag): ?crew=0 on the page or its parent, or localStorage mc-crew=0, turns it off; an explicit ?crew=1 beats a stored 0
   var on = !/[?&]crew=0(&|$)/.test(qs);
   try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked: the default stands */ }
@@ -284,6 +285,7 @@
     if (S.scoreNote && !S.score && k !== noteFor) { S.scoreNote = ''; noteFor = ''; emit(); }   // the note belongs to the match that was asked
     if (k !== lastKey) { lastKey = k; lastPoll = 0; }   // a new match polls at once
     if (!lv || !lv.key || lv.status !== 'live') { lastPoll = 0; return; }
+    if (document.visibilityState === 'hidden' || (typeof current !== 'undefined' && current !== 'agents')) return;   // the scoreboard lives in the Agents tab (the Crew button opens it): no GET while it is not on screen
     var gap = +window.MATCHCAST_SCORE_MS || 15000, now = Date.now();
     if (lastPoll && now - lastPoll < gap) return;
     lastPoll = now;

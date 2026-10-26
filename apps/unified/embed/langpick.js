@@ -3,7 +3,8 @@
 // Watch's picker is the prototype's (fanPicker) and its language list is a const array, so the entries are replaced in place: the row, the saved settings, the shell's persona message and the
 // "Planned" tags (build.py) all follow the one list. A line with no checked translation stays English, and the row says so. Nothing is translated here.
 (() => {
-  let qs = ''; try { qs = location.search + '&' + (window.parent !== window ? window.parent.location.search : ''); } catch (e) { /* cross-origin parent */ }
+  let qs = location.search;   // the page's own query first; the parent's is appended in its own try (same lines as crew.js)
+  try { if (window.parent !== window) qs += '&' + window.parent.location.search; } catch (e) { /* cross-origin parent */ }
   let on = !/[?&]crew=0(&|$)/.test(qs);   // default on; ?crew=0 or localStorage mc-crew=0 turns it off, an explicit crew=1 beats a stored 0
   try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked */ }
   if (!on) return;

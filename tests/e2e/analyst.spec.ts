@@ -237,12 +237,13 @@ test('tracking lab: shows the vision report from Watch and shows the OCR row hon
 // DAT-11 task 278, end to end: Vision switched on in Watch reaches the Analyst's Tracking lab through the shell.
 test('vision on in Watch reaches the Tracking lab', async ({ page }) => {
   test.setTimeout(300_000);
-  await openShell(page, 'watch', '?crew=0');
+  await openShell(page, 'watch');   // the default path: the console is one click behind "Full console"
   const watch = await viewFrame(page, 'watch');
   await ready('watch')(page);
   await watch.evaluate(() => { const b = document.getElementById('visb') as HTMLElement; if (b.getAttribute('aria-pressed') !== 'true') b.click(); });
   await expect(watch.locator('#visb')).toHaveAttribute('aria-pressed', 'true');
   await page.evaluate(() => { location.hash = 'analyst'; });
+  await page.locator('#al-full').click();
   const f = await viewFrame(page, 'analyst');
   await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
   await f.evaluate(() => (window as any).go('ds-tracking'));
