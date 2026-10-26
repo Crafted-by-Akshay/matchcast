@@ -35,7 +35,7 @@ MatchCast turns a synthetic football match into explained, verified, personalise
 | C2 | Any third-party SDK, API or data must be licensed for this use | Rules §4.3, §4.11 |
 | C3 | Public GitHub repo, demo video under 2 minutes, English submission | Rules §4.4, §4.9 |
 | C4 | Submission closes 27 Oct 2026, 11:59 pm PT | Rules |
-| C5 | Agents run on Azure AI Foundry models; model `gpt-5-mini` (Global Standard, East US 2) | Akshay, 21 Oct |
+| C5 | Agents run on Azure AI Foundry models; model `gpt-5-mini` (Global Standard, East US 2), replacing `gpt-6-luna` | Akshay, 21 Oct; [ADR-0024](adr/0024-gpt-5-mini-deployment.md) |
 | C6 | No secret in the repo, the browser, chat or logs, ever | Akshay; [14-security-and-responsible-ai.md](14-security-and-responsible-ai.md) |
 | C7 | No real player names, club names, crests or match events in generated data | Akshay, 18 Oct; rules §4.6 |
 | C8 | 3D assets CC0 only, motion is our own code | Akshay, 18 Oct |

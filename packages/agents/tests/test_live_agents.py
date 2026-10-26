@@ -541,3 +541,18 @@ def test_a_live_call_is_a_chat_span_with_its_model_and_tokens(monkeypatch) -> No
     assert chat.attributes["gen_ai.request.model"] == "gpt-5-mini"
     assert chat.attributes["gen_ai.usage.input_tokens"] == 11
     assert chat.attributes["gen_ai.usage.output_tokens"] == 7
+
+
+def test_a_live_call_without_usage_still_returns_its_answer() -> None:
+    from types import SimpleNamespace
+
+    from matchcast_agents.live import FoundryModelClient
+
+    choice = SimpleNamespace(
+        message=SimpleNamespace(content='{"metrics": []}'), finish_reason="stop"
+    )
+    fake, _ = fake_openai(SimpleNamespace(choices=[choice], usage=None))
+    client = FoundryModelClient(deployment="gpt-5-mini", client=fake)
+
+    assert run(client.complete("sys", "user", {})) == {"metrics": []}
+    assert (client.usage.calls, client.usage.prompt_tokens) == (1, 0)

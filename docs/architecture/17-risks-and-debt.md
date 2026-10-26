@@ -6,7 +6,7 @@ Status: **Living list**. Last reviewed 22 Oct 2026. Review at every merge window
 
 | ID | Risk | Likelihood | Impact | Mitigation | Owner |
 | --- | --- | --- | --- | --- | --- |
-| R1 | Foundry quota for `gpt-5-mini` not approved in time (request sent 21 Oct) | Medium | High | Rules mode with the same interfaces; demo stays complete and labelled | Platform |
+| R1 | Foundry quota for `gpt-5-mini` (10K TPM) is too low for a live match under load; the direct pipeline is slow per moment | Medium | High | Rules mode with the same interfaces; demo stays complete and labelled; `MATCHCAST_LIVE_MAX_PRIORITY` limits the model to key moments | Platform |
 | R2 | No embeddings quota | Medium | Medium | Keyword-only search (BM25), documented | Agents |
 | R3 | AI Search Free service deleted after inactivity during judging | Low | Medium | Blob fallback `kb/v1/chunks.jsonl` with in-memory search; "Search fallback" chip | Agents |
 | R4 | Engine too slow for full-density simulation (> 60 s per 90 minutes headless) | Medium | Medium | Option B for the live view; dataset keeps full density | Data |
