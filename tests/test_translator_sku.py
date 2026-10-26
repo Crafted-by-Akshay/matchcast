@@ -1,4 +1,4 @@
-"""The Translator stays on S1: Azure policy blocks an in-place S1 to F0 change and stalls the deploy."""
+"""The Translator stays on S1: Azure policy blocks an in-place change to F0."""
 
 import re
 from pathlib import Path
