@@ -71,7 +71,12 @@ const MCS = (() => {
   const outbox = { events: [], moments: [] };
   const emit = () => {
     if (!framed) return;
-    onMatchEvent((ev) => { if (S.started) outbox.events.push(ev); });
+    // attack_x: the goal the event's player's side attacks at that moment (105 or 0), so the shell's views read a team's half from the events alone; null with no player
+    const attackOf = (ev) => {
+      const p = ev.player && typeof players !== 'undefined' ? players.find((q) => q.name === ev.player) : null;
+      return p && typeof dirOf === 'function' ? (dirOf(p.ti) > 0 ? 105 : 0) : null;
+    };
+    onMatchEvent((ev) => { if (S.started) outbox.events.push(Object.assign({}, ev, { attack_x: attackOf(ev) })); });
     MCX.onMoment((m) => outbox.moments.push({ id: m.id, minute: m.minute, type: m.type, team: m.team, title: m.title, why: m.why }));
     setInterval(() => {
       if (!outbox.events.length && !outbox.moments.length) return;
