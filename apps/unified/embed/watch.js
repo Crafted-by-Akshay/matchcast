@@ -293,6 +293,44 @@ const MC_API_METRICS = ['xg'];
   }, 300);
 })();
 
+// ---- Make it yours: the mode popover says what the viewer is watching in one line. The controls below it set the choice (fanSet); this only reads them back.
+(() => {
+  const st = document.createElement('style');
+  st.textContent = '#fan-pop .fm-now{margin:2px 0 8px;font:600 12px/1.35 var(--f-body,system-ui,sans-serif);color:#8CC2FF}';
+  document.head.appendChild(st);
+  const shown = (sel) => { const e = document.querySelector('#fan-pop ' + sel + '[aria-pressed="true"]'); return e ? e.textContent.trim() : ''; };
+  const now = () => {
+    const mode = document.querySelector('#fan-pop .fm-b[aria-pressed="true"] b');
+    const sel = document.querySelector('#fan-pop .fm-sel');
+    const parts = [mode ? mode.textContent : ''];
+    if (FAN.mode === 'club') parts.push(shown('.fm-c'));
+    if (FAN.mode === 'player' && sel && sel.value) parts.push(sel.options[sel.selectedIndex].text.replace(/^\d+ · /, ''));
+    if (FAN.mode === 'metric') parts.push(shown('.fm-k'));
+    parts.push(shown('.fm-l'));
+    return parts.filter(Boolean).join(' · ');
+  };
+  // the picker redraws its own rows (a mode change adds a row), so the heading and the line are put back each time before they are read
+  const ensure = () => {
+    const pop = document.getElementById('fan-pop'), head = pop && pop.querySelector('.fm-h');
+    if (!head || !head.firstChild) return;
+    head.firstChild.textContent = 'Make it yours';
+    if (pop.querySelector('.fm-now')) return;
+    const line = document.createElement('p'); line.className = 'fm-now'; line.setAttribute('aria-live', 'polite');
+    head.after(line);
+  };
+  const draw = () => { ensure(); const el = document.querySelector('#fan-pop .fm-now'); if (el) el.textContent = now(); };
+  const go = setInterval(() => {
+    const pop = document.getElementById('fan-pop');
+    if (!pop || !pop.querySelector('.fm-h')) return;
+    clearInterval(go);
+    draw();
+    pop.addEventListener('click', () => setTimeout(draw, 0));   // the picker's handlers run first, then the line reads the new choice
+    pop.addEventListener('change', draw);
+    // only the pressed state is watched: writing the line never re-triggers this observer
+    new MutationObserver(draw).observe(pop, { attributes: true, attributeFilter: ['aria-pressed'], subtree: true });
+  }, 300);
+})();
+
 // ---- the shell's Fan / Analyst switch (UX review, finding 10) sets Watch's mode; every other mode (club, player, metric) stays in Watch's own picker.
 window.addEventListener('message', (e) => {
   const d = e.data || {};
