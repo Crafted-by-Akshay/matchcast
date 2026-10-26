@@ -37,17 +37,18 @@ def first_half_end(match):
 
 
 class RejectingVerifier:
-    """The Verifier, except the half-time lines the predicate names come back rejected."""
+    """The Verifier, except the half-time lines the predicate names come back with ``verdict``."""
 
-    def __init__(self, inner, rejects):
+    def __init__(self, inner, rejects, verdict="rejected"):
         self._inner = inner
         self._rejects = rejects
+        self._verdict = verdict
 
     async def check(self, ctx, line, claims):
         verdict = await self._inner.check(ctx, line, claims)
         if self._rejects(line.line_id):
             return verdict.model_copy(
-                update={"verdict": "rejected", "reason_code": "number_mismatch"}
+                update={"verdict": self._verdict, "reason_code": "number_mismatch"}
             )
         return verdict
 
@@ -218,3 +219,35 @@ def test_no_piece_means_nothing_airs(match, monkeypatch) -> None:
     run(flow.ingest(match["events"]))
     assert halves(flow) == []
     assert half_time_publications(flow) == []
+
+
+def test_a_line_killed_on_air_does_not_stop_the_aired_piece_reading_back(match) -> None:
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    flow.agents = dataclasses.replace(
+        flow.agents,
+        verifier=RejectingVerifier(
+            flow.agents.verifier, lambda line_id: line_id == "line-halftime-1", verdict="review"
+        ),
+    )
+    run(flow.ingest(match["events"]))
+    [record] = halves(flow)
+    assert flow.store.get_line(flow.sk, "line-halftime-1").status == "review"
+    run(flow.kill("line-halftime-1", "the desk takes the line out of review"))
+    flow._half_times.clear()  # a fresh process asks for the piece
+    assert run(flow.half_time())["text"] == record["text"]
+
+
+def test_a_replayed_boundary_publishes_lines_a_crash_left_verified(match) -> None:
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    run(flow.ingest(match["events"]))
+    for line in flow.store.lines(flow.sk):  # the publication was stored, its line writes were not
+        if line.moment_id == "half_time":
+            line.status = "verified"
+            flow._save_line(line)
+    run(flow._air_half_time(first_half_end(match)))  # the boundary is processed again
+    statuses = {line.status for line in flow.store.lines(flow.sk) if line.moment_id == "half_time"}
+    assert statuses == {"published"}
+    with pytest.raises(WorkflowError):
+        run(flow.kill("line-halftime-1", "too late"))

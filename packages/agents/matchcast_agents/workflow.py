@@ -1382,9 +1382,25 @@ class MatchWorkflow:
         a = self.agents
         ctx = self._ctx()
         piece = half_time_mod.build(ctx)
-        if piece is None or self._half_time_line_killed():
+        if piece is None:
             return None
         stamp = _stamp(self._clock())
+        aired_id = f"pub-half-time-{piece.cut_sequence}"
+        aired = [p for p in self.store.publications(self.sk) if p["publication_id"] == aired_id]
+        if aired:  # aired already, and a fresh process asks again: read it back, write nothing, so
+            # the aired claims keep their approval; the kill guard below holds only before air
+            self._publish_half_time_lines()
+            return {
+                "match_id": self.stream["match_id"],
+                "persona": "half_time",
+                "cut_sequence": piece.cut_sequence,
+                "text": aired[0]["text"],
+                "claim_ids": list(aired[0]["claim_ids"]),
+                "source_event_ids": list(piece.source_event_ids),
+                "created_at": stamp,
+            }
+        if self._half_time_line_killed():
+            return None
         packets = half_time_mod.claims(piece, ctx.stream)
         # the claims carry the state they were counted from, so a late first-half control
         # that changes the state (though not the wording) is written again, not replayed
@@ -1397,19 +1413,6 @@ class MatchWorkflow:
         if key in self._half_times:  # a repeat call writes nothing new, so no new audit rows
             cached = self._half_times[key]
             return copy.deepcopy(cached) if cached is not None else None
-        aired_id = f"pub-half-time-{piece.cut_sequence}"
-        aired = [p for p in self.store.publications(self.sk) if p["publication_id"] == aired_id]
-        if aired:  # aired already, and a fresh process asks again: read it back, write nothing, so
-            # the aired claims keep their approval and the aired lines stay published
-            return {
-                "match_id": self.stream["match_id"],
-                "persona": "half_time",
-                "cut_sequence": piece.cut_sequence,
-                "text": aired[0]["text"],
-                "claim_ids": list(aired[0]["claim_ids"]),
-                "source_event_ids": list(piece.source_event_ids),
-                "created_at": stamp,
-            }
         by_id = {c["claim_id"]: c for c in packets}
         for packet in packets:
             validate(packet)
@@ -1516,6 +1519,15 @@ class MatchWorkflow:
         self._half_times[key] = result
         return copy.deepcopy(result)
 
+    def _publish_half_time_lines(self) -> None:
+        """On air, a kept half-time line is published, as a ticker line is, so kill() refuses it.
+        Called again on every replay of an aired boundary, so a crash between the publication and
+        these writes cannot leave a line on air that kill() still accepts."""
+        for line in self.store.lines(self.sk):
+            if line.moment_id == "half_time" and line.status == "verified":
+                line.status = "published"
+                self._save_line(line)
+
     def _half_time_line_killed(self) -> bool:
         """A desk kill on a stored half-time line (kill() accepts a verified line). A restart writes
         the lines again, so the kill is read back before a write could mark the line verified."""
@@ -1546,6 +1558,7 @@ class MatchWorkflow:
             return
         publication_id = f"pub-half-time-{built.cut_sequence}"
         if any(p["publication_id"] == publication_id for p in self.store.publications(self.sk)):
+            self._publish_half_time_lines()  # a crash after the publication left its lines verified
             return
         piece = await self._write_half_time()
         if piece is None:
@@ -1576,12 +1589,7 @@ class MatchWorkflow:
         }
         validate(publication)
         self.store.put_publication(self.sk, publication)
-        for line in self.store.lines(
-            self.sk
-        ):  # on air, a kept line is published, as a ticker line is
-            if line.moment_id == "half_time" and line.status == "verified":
-                line.status = "published"
-                self._save_line(line)
+        self._publish_half_time_lines()
         self.stats["published"] += 1
         self.hub.publish("publication", f"pub:{publication_id}", publication)
         onair = {
