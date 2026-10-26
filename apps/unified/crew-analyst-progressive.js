@@ -47,8 +47,8 @@ const ALG = (() => {
       const d = e.data;
       if (!num(d.attack_x) || !num(d.x0) || !num(d.x1) || !num(d.y0) || !num(d.y1)) continue;
       const dir = +d.attack_x === 105 ? 1 : -1;
-      // rounded to a tenth of a metre, so a true 10 m gain on one-decimal positions is not 9.999999 and missed
-      out.push({ id: e.id, minute: e.minute, side: s, x0: +d.x0, y0: +d.y0, x1: +d.x1, y1: +d.y1, gain: Math.round((+d.x1 - +d.x0) * dir * 10) / 10 });
+      // rounded to a micro-metre: float noise can turn a true 10 m gain into 9.999999999999998 and miss it, but a tenth of a metre would count 9.96 as 10
+      out.push({ id: e.id, minute: e.minute, side: s, x0: +d.x0, y0: +d.y0, x1: +d.x1, y1: +d.y1, gain: Math.round((+d.x1 - +d.x0) * dir * 1e6) / 1e6 });
     }
     return out;
   }

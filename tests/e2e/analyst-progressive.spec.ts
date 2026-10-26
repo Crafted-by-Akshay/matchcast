@@ -119,3 +119,32 @@ test('a match with no events yet: the panel says so and cites nothing', async ({
   expect(out.citations).toEqual([]);
   await expect(page.locator('#prog-empty [data-panel="progressive"]')).toContainText('No match events yet.');
 });
+
+test('the 10 m line: a gain of 9.96 m is not progressive, and 16.4 less 6.4 (float noise) is', async ({ page }) => {
+  await block3d(page);
+  await openShell(page, 'analyst', '?crew=1');
+  await page.evaluate(() => {
+    AG.reset('k', { hk: 'h', ak: 'a', home: 'Harbor City', away: 'Thames Rovers' });
+    const pass = (minute: number, x0: number, x1: number) => ({ minute, type: 'pass', team: 'h', player: 'E. Belruda', to: 'Mate', x0, y0: 34, x1, y1: 34, attack_x: 105 });
+    AG.onWatch('k', [pass(2, 40, 49.96), pass(3, 6.4, 16.4)], []);
+  });
+  await expect.poll(() => page.evaluate(() => AG.run.events.length), { timeout: 15_000 }).toBe(2);
+  const panel = page.locator('#al [data-panel="progressive"]');
+  await expect(panel.locator('[data-progressive-status]')).toContainText('Harbor City 1 progressive of 2 passes');
+  await expect(page.locator('#al svg[data-map="progressive"] line.pg-arrow')).toHaveCount(1);
+});
+
+test('a scrub during Play holds: the animation does not take the thumb back', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });   // the animated path; reduced motion jumps to the end and would not show this
+  await block3d(page);
+  await openShell(page, 'analyst', '?crew=1');
+  await seedMatch(page);
+  const panel = page.locator('#al [data-panel="progressive"]');
+  await panel.locator('[data-progressive-play]').click();
+  await panel.locator('[data-progressive-scrub]').evaluate((el: HTMLInputElement) => { el.value = '2'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  // the running Play would write minute 0 on its next frame if the scrub did not end it, and Play then counts a minute a second.
+  // Read the status once after the wait: a polling expect would see Play reach minute 2 after about 2 s and pass anyway.
+  await page.waitForTimeout(500);
+  expect(await panel.locator('[data-progressive-status]').textContent()).toContain("Up to 2'");
+  expect(await panel.locator('[data-progressive-scrub]').inputValue()).toBe('2');
+});
