@@ -141,7 +141,7 @@ resource web 'Microsoft.App/containerApps@2025-01-01' = {
       ]
       scale: {
         minReplicas: keepWarm ? 1 : 0
-        maxReplicas: 1
+        maxReplicas: 3
         rules: [{ name: 'http', http: { metadata: { concurrentRequests: '50' } } }]
       }
     }

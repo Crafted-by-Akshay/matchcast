@@ -24,6 +24,10 @@ api runs the consumer as a background task, the reducer (from services/worker) a
 
 - The MCP tool server is mounted inside the api at `/mcp` for the same reason (matches live in this process's memory). The separate `mcp` container takes over once a shared store exists.
 
+## Addendum (2026-10-26): scale-out path
+
+`web` now scales 1 to 3 replicas on HTTP load, because it holds no match state. The api stays at one replica. To scale it out, run the pipeline in Event Hubs mode (consumer groups per replica) and move match state, the crew ledger and SSE fan-out to a shared store (Redis or Cosmos), then raise `maxReplicas` on `api` and `mcp`. Until then the ceiling of about 50 concurrent viewers applies to the live feeds. Extra `web` replicas cost about $0.04/hr per 0.5 vCPU, only under load.
+
 ## Affects
 
 - 02-context-and-containers.md
