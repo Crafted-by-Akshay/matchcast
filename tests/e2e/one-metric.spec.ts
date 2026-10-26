@@ -11,22 +11,46 @@ async function openWatch(page: Page): Promise<Frame> {
   return f;
 }
 
-test('One metric: only api-followed metrics can be chosen, and the mode keeps one of them', async ({ page }) => {
+// the Planned metrics are disabled and say so; xG, the one the api follows, is open
+async function expectPicker(f: Frame, scope: string) {
+  const keys = await f.evaluate((s) => [...document.querySelectorAll<HTMLButtonElement>(`${s} .fm-k`)].map((b) => ({ k: b.dataset.k!, disabled: b.disabled, planned: !!b.querySelector('.fm-planned') })), scope);
+  expect(keys.find((x) => x.k === 'xg'), `${scope}: xG is in the picker`).toBeTruthy();
+  for (const x of keys) {
+    if (x.k === 'xg') expect(x.disabled, `${scope}: xG can be chosen`).toBe(false);
+    else expect({ k: x.k, disabled: x.disabled, planned: x.planned }, `${scope}: a metric the api does not follow is Planned and cannot be chosen`).toEqual({ k: x.k, disabled: true, planned: true });
+  }
+}
+
+test('One metric: the pre-kick card and the chip both offer only api-followed metrics', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   const f = await openWatch(page);
+
+  // before kick-off the intro card has its own picker
+  if (await f.evaluate(() => !!document.querySelector('#fan-intro .fm-b[data-m="metric"]'))) {
+    await f.click('#fan-intro .fm-b[data-m="metric"]');
+    await expectPicker(f, '#fan-intro');
+  }
+
   if (await f.evaluate(() => (document.getElementById('fan-pop') as HTMLElement).hidden)) await f.click('#fan-chip');
   await f.click('.fm-b[data-m="metric"]');
-
-  // the Planned metrics are disabled and say so; xG, the one the api follows, is open
-  const keys = await f.evaluate(() => [...document.querySelectorAll<HTMLButtonElement>('.fm-k')].map((b) => ({ k: b.dataset.k!, disabled: b.disabled, planned: !!b.querySelector('.fm-planned') })));
-  expect(keys.find((x) => x.k === 'xg'), 'xG is in the picker').toBeTruthy();
-  for (const x of keys) {
-    if (x.k === 'xg') expect(x.disabled, 'xG can be chosen').toBe(false);
-    else expect({ k: x.k, disabled: x.disabled, planned: x.planned }, 'a metric the api does not follow is Planned and cannot be chosen').toEqual({ k: x.k, disabled: true, planned: true });
-  }
+  await expectPicker(f, '#fan-pop');
 
   // the stored choice is one the api follows, so the persona reaches the stream (the default metric is not)
   expect(await f.evaluate(() => JSON.parse(localStorage.getItem('mcx-mode')!))).toMatchObject({ mode: 'metric', metric: 'xg' });
   expect(errs).toEqual([]);
+});
+
+test('One metric: a saved choice of an unfollowed metric is restored as xG', async ({ page }) => {
+  test.setTimeout(300_000);
+  // seeded once, before the first load: the viewer last chose One metric with Top speed, which the api does not follow
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('om-seeded')) return;
+    sessionStorage.setItem('om-seeded', '1');
+    localStorage.setItem('mcx-mode', JSON.stringify({ mode: 'metric', club: 0, metric: 'speed', lang: 'en', player: null }));
+  });
+  const f = await openWatch(page);
+  // the restore sets Watch's own state, which the strip shows (the persona reads the same state); the stored copy is rewritten on the next change
+  await expect.poll(() => f.evaluate(() => document.querySelector('#fan-metric .mk')?.textContent ?? ''), { timeout: 20_000, message: 'the restored One metric choice falls back to xG' }).toMatch(/^xG/);
+  await expect(f.locator('#fan-chip')).toContainText(/One metric/);
 });

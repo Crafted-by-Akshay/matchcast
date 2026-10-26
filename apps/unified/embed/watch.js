@@ -240,7 +240,8 @@ MCS.progress('Loading the stadium and players');
   window.__mcxCards = { kept, redraw: () => { for (const c of kept) { const el = cards.get(c.id + 'mcx-log'); if (el) { el.innerHTML = html(c); el.querySelector('[data-why]').onclick = () => why(el, c); el.querySelector('[data-how]').onclick = () => MCS.send({ type: 'trace', id: c.id }); el.classList.toggle('mine', mine(c)); } } } };
 })();
 
-// the One metric keys the api follows (personas.WATCH_METRICS). Any other key is Watch's own stat and sends no persona the api would accept.
+// the picker's One metric keys that personas.WATCH_METRICS also names (today only xg). Any other picker key is Watch's own stat and sends no persona the api accepts.
+// Keep in step with WATCH_METRICS: a new api metric needs a picker key here too.
 const MC_API_METRICS = ['xg'];
 
 // ---- EXP-4: personalisation. The last watch mode is kept in localStorage and restored; the mode goes to the shell, and so to the api, as the viewer's persona.
@@ -269,7 +270,8 @@ const MC_API_METRICS = ['xg'];
 (() => {
   const _pick = fanSet;
   fanSet = function (o, why) {
-    if (o && o.mode === 'metric' && !MC_API_METRICS.includes(o.metric || FAN.metric)) o = Object.assign({}, o, { metric: MC_API_METRICS[0] });
+    const mode = o && o.mode != null ? o.mode : FAN.mode;   // a call that sets only the metric, or only the language, still counts while One metric is on
+    if (mode === 'metric' && !MC_API_METRICS.includes((o && o.metric) || FAN.metric)) o = Object.assign({}, o, { metric: MC_API_METRICS[0] });
     _pick(o, why);
   };
   const mark = () => document.querySelectorAll('.fm-k').forEach((b) => {
@@ -281,10 +283,13 @@ const MC_API_METRICS = ['xg'];
   st.textContent = '.fm-k:disabled{opacity:.55;cursor:not-allowed}';
   document.head.appendChild(st);
   const go = setInterval(() => {
-    const pop = document.getElementById('fan-pop');
-    if (!pop) return;
+    const pop = document.getElementById('fan-pop'), intro = document.getElementById('fan-intro');
+    if (!pop || !intro) return;
     clearInterval(go);
-    new MutationObserver(mark).observe(pop, { childList: true, subtree: true });   // the metric row appears when One metric is picked, and redraws on a language change
+    // the metric row appears when One metric is picked, and redraws on a language change; the pre-kick intro card has its own picker
+    const obs = new MutationObserver(mark);
+    obs.observe(pop, { childList: true, subtree: true });
+    obs.observe(intro, { childList: true, subtree: true });
   }, 300);
 })();
 
