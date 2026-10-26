@@ -23,12 +23,36 @@ retry() {
   done
 }
 
+# A deploy that was cancelled or cut off can leave a nested module deployment Running, and the next
+# one then fails with DeploymentActive. Wait up to 20 minutes for the group to go quiet; if one is
+# still running, cancel it (the group has one deployer; a cancel never deletes a resource) and wait up to 5 more.
+wait_idle() {
+  local running name waited=0 cancelled=0
+  while :; do
+    # a failed query must not read as "nothing is running": that is the case this guards
+    running=$(az deployment group list -g rg-matchcast --query "[?properties.provisioningState=='Running' || properties.provisioningState=='Accepted' || properties.provisioningState=='Canceling'].name" -o tsv) || return 1
+    [ -z "$running" ] && return 0
+    if [ "$waited" -ge 1200 ] && [ "$cancelled" = 0 ]; then
+      for name in $running; do
+        echo "cancelling deployment still running after 20 minutes: $name" >&2
+        az deployment group cancel -g rg-matchcast -n "$name" --only-show-errors >&2 || echo "could not cancel $name" >&2
+      done
+      cancelled=1
+    fi
+    [ "$waited" -ge 1500 ] && { echo "deployments still running after 25 minutes: $running" >&2; return 1; }
+    echo "waiting for running deployments: $running" >&2
+    sleep 30
+    waited=$((waited + 30))
+  done
+}
+
 # `azd provision` checks for Docker because azure.yaml declares Docker services, so the acr path
 # deploys main.bicep with az and the parameters azd would pass (scripts/azd_params.py).
 # It chains with && and returns the status itself: called through retry, set -e is off inside it.
 provision_acr() {
   local params rc=0
   params=$(mktemp)
+  wait_idle &&
   azd env get-values -e "$ENV_NAME" | python3 scripts/azd_params.py infra/main.parameters.json > "$params" &&
     az deployment group create -g rg-matchcast -n "$ENV_NAME-$(date +%s)" \
       -f infra/main.bicep -p "@$params" --only-show-errors -o none || rc=$?
