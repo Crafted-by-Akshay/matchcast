@@ -6,7 +6,7 @@ far. The Verifier recounts it from the stored events, never from agent state.
 
 A correction or retraction is skipped, not applied to the event it names, the same as the counts
 recount. Pass accuracy was built and then taken out: the engine logs a turnover as a loose-ball
-possession change whatever caused it, so it cannot tell a failed pass from any other loss of the ball.
+possession change whatever caused it, so it cannot tell a failed pass from any other lost ball.
 """
 
 from typing import Any
