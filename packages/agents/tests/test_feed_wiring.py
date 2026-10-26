@@ -2,6 +2,7 @@
 
 from conftest import run
 from matchcast_agents.audio_description import spoken_span
+from matchcast_agents.feeds import AUDIO_PERSONA
 from matchcast_agents.personas import BOOTH
 from matchcast_agents.workflow import LIVE_FEED_LINES
 from matchcast_contracts import validate
@@ -169,3 +170,25 @@ def test_a_described_shot_is_not_dropped_when_the_descriptions_before_it_are_pla
     written = {ln.line_id for ln in flow.store.lines(flow.sk)}
     held = {draft.line_id for draft, *_ in flow._pending_audio}
     assert "line-audio-e16" in written | held
+
+
+def test_a_description_that_fails_to_air_is_tried_once_and_does_not_stop_the_match(
+    match, monkeypatch
+) -> None:
+    # a failure that repeats would be re-raised on every later event: each description is tried once
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = ("ticker", "audio_description")
+    tried: list[str] = []
+
+    async def broken(ctx, eid, draft, claims, timing=None) -> None:
+        if draft.persona == AUDIO_PERSONA:
+            tried.append(draft.line_id)
+            raise RuntimeError("the verifier fell over")
+        await real(ctx, eid, draft, claims, timing=timing)
+
+    real = flow._air_feed_line
+    monkeypatch.setattr(flow, "_air_feed_line", broken)
+    run(flow.ingest(match["events"]))
+    assert tried, "a description was due and tried"
+    assert len(tried) == len(set(tried)), tried
+    assert not flow._pending_audio

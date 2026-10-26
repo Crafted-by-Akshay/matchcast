@@ -811,8 +811,9 @@ class MatchWorkflow:
         """Air each held description whose window has ended, unless it no longer may.
 
         A description is skipped when a booth line speaks in its window, or when the engine took
-        its event back (a retraction or a correction stored by now). Each item leaves the hold only
-        once it is handled, so a failure leaves it to be tried again.
+        its event back (a retraction or a correction stored by now). Each item leaves the hold when
+        it is due, so it is tried once: a failure is logged and the description is dropped, rather
+        than raised again on every later event.
         """
         due = [p for p in self._pending_audio if p[3] <= at_ms]
         if not due:
@@ -825,14 +826,18 @@ class MatchWorkflow:
             if e["payload"]["type"] in ("retraction", "correction")
         }
         for item in due:
+            self._pending_audio.remove(item)
             draft, claims, speak, ends = item
             eid = draft.line_id.removeprefix("line-audio-")
             speaking = [span for span in busy if span[0] < ends and speak < span[1]]
-            if eid not in taken_back and not speaking:
+            if eid in taken_back or speaking:
+                continue
+            try:
                 await self._air_feed_line(
                     ctx, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
                 )
-            self._pending_audio.remove(item)
+            except Exception:
+                logger.exception("held description %s failed to air; it is dropped", draft.line_id)
 
     async def _air_feed_line(
         self,
