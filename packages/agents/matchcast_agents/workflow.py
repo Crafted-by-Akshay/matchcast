@@ -367,6 +367,7 @@ class MatchWorkflow:
         self._processed_key: tuple[str, int] | None = None  # (event id, revision) last finished
         self._plan: str | None = None  # the last storyline the stall replan chose
         self._book = StorylineBook()  # the storylines a replan opened, each waiting for its payoff
+        self._half_times: dict[tuple[int, str], dict[str, Any]] = {}  # by cut and text
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
@@ -1312,7 +1313,9 @@ class MatchWorkflow:
 
         Each line cites its claims; the Verifier recounts them from the first-half events only.
         A line that fails is dropped, not escalated. Nothing airs here: the air path belongs to
-        the feed lane (AB#499). None until the half is over, or when no piece can be written.
+        the feed lane (AB#499). None until the half is over, when no piece can be written, or
+        when no line survives the Verifier (the piece is held). A repeat call returns the same
+        piece without writing again.
         """
         async with self._lock:
             a = self.agents
@@ -1320,6 +1323,9 @@ class MatchWorkflow:
             piece = half_time_mod.build(ctx)
             if piece is None:
                 return None
+            key = (piece.cut_sequence, piece.text)
+            if key in self._half_times:  # a repeat call writes nothing new, so no new audit rows
+                return dict(self._half_times[key])
             stamp = _stamp(self._clock())
             packets = half_time_mod.claims(piece, ctx.stream)
             by_id = {c["claim_id"]: c for c in packets}
@@ -1368,9 +1374,24 @@ class MatchWorkflow:
                 claims = [by_id[c] for c in draft.claim_ids]
                 verdict = await self._call(a.verifier, "check", draft.line_id, half, draft, claims)
                 verdict = await self._screen(draft, verdict)
-                if (
-                    verdict.verdict != "verified"
-                ):  # a half-time line is verified or dropped, never held
+                # stored, so the claims it cites show their verdict (verified or rejected)
+                self.store.put_line(
+                    self.sk,
+                    LineRecord(
+                        line_id=draft.line_id,
+                        moment_id="half_time",
+                        claim_ids=list(draft.claim_ids),
+                        persona=draft.persona,
+                        text=draft.text,
+                        status="verified" if verdict.verdict == "verified" else "rejected",
+                        reason_code=verdict.reason_code,
+                        checks=list(verdict.checks),
+                        created_at=stamp,
+                        origin=draft.origin,
+                        snapshot_revision=claims[0]["snapshot"]["state_revision"],
+                    ),
+                )
+                if verdict.verdict != "verified":  # a half-time line is verified or dropped
                     dropped += 1
                     self._agent(
                         "line_rejected",
@@ -1393,7 +1414,9 @@ class MatchWorkflow:
                     },
                 )
                 kept.append(draft.text)
-            return {
+            if not kept:  # nothing survived the Verifier: hold the piece, never show it blank
+                return None
+            result = {
                 "match_id": self.stream["match_id"],
                 "persona": "half_time",
                 "cut_sequence": piece.cut_sequence,
@@ -1403,6 +1426,8 @@ class MatchWorkflow:
                 "source_event_ids": list(piece.source_event_ids),
                 "created_at": stamp,
             }
+            self._half_times[key] = result
+            return dict(result)
 
     async def _recap_persona(
         self,
