@@ -3,7 +3,7 @@ import { collectErrors, openShell, viewFrame } from './helpers';
 
 // One metric (watch mode): only the metrics the api follows (personas.WATCH_METRICS) can be chosen. Any other metric is Watch's own local stat,
 // its persona would be dropped by the api, so it is Planned and the mode falls back to xG.
-const API = ['xg', 'poss', 'pass'];   // the keys MC_API_METRICS in embed/watch.js lists
+const API = ['xg', 'poss'];   // the keys MC_API_METRICS in embed/watch.js lists
 
 async function openWatch(page: Page): Promise<Frame> {
   await openShell(page, 'watch');
@@ -62,7 +62,7 @@ test('One metric: a saved choice of an unfollowed metric is restored as xG', asy
 
 declare const LV: any;
 
-test('One metric: possession and pass accuracy are followed, and the shell hands the api their api names', async ({ page }) => {
+test('One metric: possession is followed, and the shell hands the api its api name', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   const f = await openWatch(page);
@@ -79,12 +79,10 @@ test('One metric: possession and pass accuracy are followed, and the shell hands
     const persona = LV.persona;
     LV.persona = (p: string, lang: string) => { seen.push(p); return persona(p, lang); };
   });
-  for (const [key, label] of [['poss', 'Possession'], ['pass', 'Pass accuracy']]) {
-    await f.click(`#fan-pop .fm-k[data-k="${key}"]`);
-    await expect(f.locator('#fan-metric .mk')).toContainText(label);
-  }
+  await f.click('#fan-pop .fm-k[data-k="poss"]');
+  await expect(f.locator('#fan-metric .mk')).toContainText('Possession');
   const seen = await page.evaluate(() => (window as any).__personas as string[]);
-  expect(seen).toEqual(expect.arrayContaining(['metric:possession_share', 'metric:pass_accuracy']));
-  expect(seen.some((p) => p === 'metric:poss' || p === 'metric:pass')).toBe(false);
+  expect(seen).toContain('metric:possession_share');
+  expect(seen).not.toContain('metric:poss');
   expect(errs).toEqual([]);
 });

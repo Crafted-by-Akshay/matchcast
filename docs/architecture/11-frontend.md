@@ -78,7 +78,7 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | Watch mode | Casual, Analyst, My club, Player focus, One metric | Persona sent to the agents; layout and density. The popover is headed "Make it yours" and names the current choice in one line |
 | My club | one of the two clubs | Lines framed from that club's angle |
 | Player focus | any player on the pitch | Lines lead with that player; their name tag is highlighted |
-| One metric | xG, possession and pass accuracy (the api follows them); the other picker metrics are Planned | Only that metric's lines. Possession is a share of on-ball actions to date (the events record no time in possession); pass accuracy is completed passes over completed plus turnovers on a pass (an estimate: a failed pass is not logged as such) |
+| One metric | xG and possession (the api follows them); the other picker metrics are Planned | Only that metric's lines. Possession is a share of on-ball actions to date (the events record no time in possession). Pass accuracy is Planned: the engine logs every loss of the ball as a loose-ball turnover, so it cannot be counted as failed passes |
 | Language | English, Spanish, Hindi | Captions, voice, Ask and Talk replies |
 | Voice | on or off | TTS playback |
 | Playback | 0.25x to 2x | Live passages; quiet spells always fast-forward |

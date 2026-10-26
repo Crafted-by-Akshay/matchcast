@@ -242,8 +242,8 @@ MCS.progress('Loading the stadium and players');
 
 // the One metric picker keys the api follows, and the api name each one sends (personas.WATCH_METRICS names the api side). Any other picker key is Watch's own stat and sends no persona the api accepts.
 // Nothing enforces this list against WATCH_METRICS yet: a key may be added here only if the api follows it.
-const MC_API_METRICS = ['xg', 'poss', 'pass'];
-const MC_API_NAME = { xg: 'xg', poss: 'possession_share', pass: 'pass_accuracy' };
+const MC_API_METRICS = ['xg', 'poss'];
+const MC_API_NAME = { xg: 'xg', poss: 'possession_share' };
 
 // ---- EXP-4: personalisation. The last watch mode is kept in localStorage and restored; the mode goes to the shell, and so to the api, as the viewer's persona.
 (() => {
