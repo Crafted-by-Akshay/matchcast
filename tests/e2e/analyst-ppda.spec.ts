@@ -70,16 +70,18 @@ test('Play with reduced motion jumps to the latest block', async ({ page }) => {
   await panel.locator('[data-ppda-scrub]').evaluate((el: HTMLInputElement) => { el.value = '0'; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await expect(panel.locator('[data-ppda-status]')).toContainText("0–5'");
   await panel.locator('[data-ppda-play]').click();
-  await expect(panel.locator('[data-ppda-status]')).toContainText("5–10'");
+  // the reduced path jumps at once; the normal path reaches the latest block after about 4.5 s, so a 1 s wait tells them apart
+  await expect(panel.locator('[data-ppda-status]')).toContainText("5–10'", { timeout: 1_000 });
 });
 
 test('Play walks through the blocks over the match, first block then latest', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await block3d(page);
   await openShell(page, 'analyst', '?crew=1');
   await seedMatch(page);
   const panel = page.locator('#al [data-panel="ppda"]');
   await panel.locator('[data-ppda-play]').click();
-  // the first block shows as soon as Play starts; the latest block follows once PLAY_MS (9 s) has run
+  // the first block shows as soon as Play starts; the latest block follows after about 4.5 s (half of PLAY_MS, 9 s, with two blocks)
   await expect(panel.locator('[data-ppda-status]')).toContainText("0–5'");
   await expect(panel.locator('[data-ppda-status]')).toContainText("5–10'", { timeout: 15_000 });
 });
