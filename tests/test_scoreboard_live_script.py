@@ -487,6 +487,7 @@ def test_a_partial_that_cannot_be_written_is_refused_before_any_model_call(
     match_file = tmp_path / "match.json"
     match_file.write_text(json.dumps(SAVED))
     (tmp_path / "out.json.partial").mkdir()  # a folder where the partial file goes
+
     monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
     monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
     code = script.main(
@@ -520,3 +521,72 @@ def test_a_finished_run_removes_its_partial_file(monkeypatch, tmp_path) -> None:
     assert code == 0
     assert json.loads(out.read_text()) == {"run_id": "r1"}
     assert not (tmp_path / "out.json.partial").exists()
+
+
+def test_a_stale_partial_is_gone_even_when_the_run_fails(monkeypatch, tmp_path) -> None:
+    # the start-of-run removal, not the end-of-run one: a run that dies still clears the old file
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    (tmp_path / "out.json.partial").write_text("{}")
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: None)
+
+    def dies(match, **kwargs):
+        raise RuntimeError("the run dies")
+
+    monkeypatch.setattr(script, "live_run", dies)
+    with pytest.raises(RuntimeError):
+        script.main(
+            [
+                "--match",
+                str(match_file),
+                "--fixture",
+                "N001",
+                "--max-calls",
+                "5",
+                "--out",
+                str(tmp_path / "out.json"),
+            ]
+        )
+    assert not (tmp_path / "out.json.partial").exists()
+
+
+def test_a_failed_replace_leaves_the_file_that_was_there(monkeypatch, tmp_path) -> None:
+    # written through a temp file, so a failure before the rename cannot truncate the old file
+    script = load_script()
+    path = tmp_path / "out.json.partial"
+    path.write_text("old arms")
+
+    def no_rename(src, dst):
+        raise OSError("the rename failed")
+
+    monkeypatch.setattr(script.os, "replace", no_rename)
+    with pytest.raises(OSError):
+        script._replace(path, {"kind": "crew_live_partial", "arms": {}})
+    assert path.read_text() == "old arms"
+
+
+def test_a_temp_file_that_cannot_be_written_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    (tmp_path / "out.json.partial.tmp").mkdir()  # the temp file the partial is written through
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "out.json"),
+        ]
+    )
+    assert code == 2
+    assert "cannot be written" in capsys.readouterr().err

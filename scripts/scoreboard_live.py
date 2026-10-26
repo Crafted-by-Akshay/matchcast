@@ -66,6 +66,11 @@ def _replace(path: Path, data: dict) -> None:
     os.replace(temp, path)
 
 
+def _replaceable(path: Path) -> bool:
+    """Can ``path`` be written whole now: both the path and its temp file, which _replace uses?"""
+    return _writable(path) and _writable(path.with_name(path.name + ".tmp"))
+
+
 def _writable(out: Path) -> bool:
     """Can the record be written to ``out`` now, so a paid run is not lost at the write?"""
     if out.is_symlink() or out.is_dir():
@@ -130,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     if problem := match_problem(match):
         print(f"{args.match or args.api}: {problem}", file=sys.stderr)
         return 1
-    if not _writable(args.out):
+    if not _replaceable(args.out):
         print(
             f"--out {args.out} must be a plain file path in a folder that can be written",
             file=sys.stderr,
@@ -140,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         print("FOUNDRY_PROJECT_ENDPOINT is not set; the calls would all fail", file=sys.stderr)
         return 2
     partial = args.out.with_name(args.out.name + ".partial")
-    if not _writable(partial):
+    if not _replaceable(partial):
         print(
             f"{partial} cannot be written; the arms kept as they finish go there", file=sys.stderr
         )

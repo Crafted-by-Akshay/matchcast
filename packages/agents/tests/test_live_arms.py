@@ -194,7 +194,18 @@ def test_a_recording_is_read_for_its_teams_seed_and_rate(tmp_path) -> None:
 def test_a_partial_file_of_arms_kept_mid_run_is_never_a_recording(tmp_path) -> None:
     # the script keeps finished arms in <out>.partial while the run goes on; that is not a run
     path = tmp_path / "out.json.partial"
-    path.write_text(json.dumps({"kind": "crew_live_partial", "arms": {"full_crew": {}}}))
+    partial = {
+        "kind": "crew_live_partial",
+        "arms": {"full_crew": {}},
+        "fixture": "N001",
+        "run_id": "abc123",
+        "run_date": "2026-10-25",
+        "teams": sorted(TEAMS),
+        "events_sha256": "abc",
+        "seed": 2026,
+        "seed_rate": SEED_RATE,
+    }
+    path.write_text(json.dumps(partial))  # every field a run has, so only the kind refuses it
     assert load_live_run(str(path), teams=TEAMS) is None
 
 
