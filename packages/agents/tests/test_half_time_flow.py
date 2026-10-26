@@ -1,6 +1,8 @@
 """Half-time explainer in the workflow (CREW-7.4, AB#465): verified lines, claims stored."""
 
+import pytest
 from conftest import run
+from matchcast_agents.workflow import WorkflowError
 
 
 def test_no_piece_before_the_first_half_has_ended(make_workflow) -> None:
@@ -118,4 +120,31 @@ def test_a_repeat_call_writes_no_new_audit_rows(make_workflow, match) -> None:
     before = len(flow.store.audit_records(flow.sk))
     again = run(flow.half_time())
     assert again is not None
+    assert len(flow.store.audit_records(flow.sk)) == before
+
+
+def test_a_half_time_line_is_not_approved_on_its_own(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    run(flow.half_time())
+    line = next(
+        ln
+        for ln in flow.store.lines(flow.sk)
+        if ln.moment_id == "half_time" and ln.status == "verified"
+    )
+    with pytest.raises(WorkflowError, match="not approved"):
+        run(flow.approve(line.line_id))
+
+
+def test_a_repeat_held_call_writes_nothing(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+
+    async def reject(draft, verdict):
+        return verdict.model_copy(update={"verdict": "rejected", "reason_code": "number_mismatch"})
+
+    flow._screen = reject
+    assert run(flow.half_time()) is None
+    before = len(flow.store.audit_records(flow.sk))
+    assert run(flow.half_time()) is None
     assert len(flow.store.audit_records(flow.sk)) == before
