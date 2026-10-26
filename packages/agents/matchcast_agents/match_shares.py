@@ -4,8 +4,9 @@ The engine emits no possession time, so possession is the team's share of its on
 (passes and carries), the same convention the Rhythm specialist uses, but over the whole match so
 far. The Verifier recounts it from the stored events, never from agent state.
 
-Pass accuracy was built and then taken out: the engine logs a turnover as a loose-ball possession
-change whatever caused it, so it cannot tell a failed pass from any other loss of the ball.
+A correction or retraction is skipped, not applied to the event it names, the same as the counts
+recount. Pass accuracy was built and then taken out: the engine logs a turnover as a loose-ball
+possession change whatever caused it, so it cannot tell a failed pass from any other loss of the ball.
 """
 
 from typing import Any

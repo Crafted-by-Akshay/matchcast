@@ -103,7 +103,9 @@ class AnalystRules:
         assert event is not None
         metrics = metrics or metrics_for(ctx, task, event)
         shares = [m for m in metrics if m.partition(":")[0] in SHARE_METRICS]
-        counts = [m for m in metrics if m not in shares][:MAX_CLAIMS]
+        if task.priority != 1:  # a share is a priority-1 claim, on the live menu too
+            shares = []
+        counts = [m for m in metrics if m.partition(":")[0] not in SHARE_METRICS][:MAX_CLAIMS]
         snapshot = ctx.state.snapshot()
         if self._tool_call is not None:  # MATCHCAST_TOOLS=mcp: the same lookup over an MCP client
             if "get_metrics" in self._failing:
