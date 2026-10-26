@@ -18,7 +18,7 @@ flowchart LR
     app[MatchCast web app + services]
   end
 
-  foundry[[Azure AI Foundry<br/>gpt-6-luna, embeddings]]:::ext
+  foundry[[Azure AI Foundry<br/>gpt-5-mini, embeddings]]:::ext
   ai[[Azure AI services<br/>Content Safety, Speech,<br/>Translator, Vision, AI Search]]:::ext
   data[[Azure data platform<br/>Event Hubs, Storage,<br/>Databricks, Fabric]]:::ext
   entra[[Microsoft Entra ID]]:::ext
@@ -65,7 +65,7 @@ flowchart TB
   end
 
   subgraph AI[Azure AI]
-    f[Foundry: gpt-6-luna,<br/>text-embedding-3-small]
+    f[Foundry: gpt-5-mini,<br/>text-embedding-3-small]
     cs[Content Safety]
     sp[Speech]
     tr[Translator]

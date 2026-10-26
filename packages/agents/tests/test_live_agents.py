@@ -194,10 +194,10 @@ def test_foundry_client_sends_a_json_schema_and_counts_tokens() -> None:
     from matchcast_agents.live import FoundryModelClient
 
     fake, completions = fake_openai(message('{"metrics": ["goals:home"]}'))
-    client = FoundryModelClient(deployment="gpt-6-luna", client=fake)
+    client = FoundryModelClient(deployment="gpt-5-mini", client=fake)
     result = run(client.complete("sys", "user", {"type": "object"}))
     assert result == {"metrics": ["goals:home"]}
-    assert completions.kwargs["model"] == "gpt-6-luna"
+    assert completions.kwargs["model"] == "gpt-5-mini"
     assert completions.kwargs["response_format"]["json_schema"]["strict"] is True
     assert (client.usage.calls, client.usage.prompt_tokens, client.usage.completion_tokens) == (
         1,
@@ -520,3 +520,24 @@ def test_the_narrator_is_told_which_club_the_player_plays_for(match, monkeypatch
     clubs = set(match["teams"].values())
     for facts in named:  # a player is never left for the model to place
         assert facts["player_club"] in clubs, facts
+
+
+def test_a_live_call_is_a_chat_span_with_its_model_and_tokens(monkeypatch) -> None:
+    from matchcast_agents.live import FoundryModelClient
+    from matchcast_shared import telemetry
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(telemetry, "_tracer", lambda: provider.get_tracer("matchcast"))
+
+    fake, _ = fake_openai(message('{"metrics": []}'))
+    run(FoundryModelClient(deployment="gpt-5-mini", client=fake).complete("sys", "user", {}))
+
+    [chat] = [s for s in exporter.get_finished_spans() if s.name == "chat gpt-5-mini"]
+    assert chat.attributes["gen_ai.request.model"] == "gpt-5-mini"
+    assert chat.attributes["gen_ai.usage.input_tokens"] == 11
+    assert chat.attributes["gen_ai.usage.output_tokens"] == 7

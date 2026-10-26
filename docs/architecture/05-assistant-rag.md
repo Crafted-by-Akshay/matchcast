@@ -84,7 +84,7 @@ flowchart TB
 ```
 
 Rules:
-1. Router: one `gpt-6-luna` call, temperature 0, at most 150 output tokens, JSON output (**Planned**). Today only the rules router runs: keyword lists per intent.
+1. Router: one `gpt-5-mini` call, temperature 0, at most 150 output tokens, JSON output (**Planned**). Today only the rules router runs: keyword lists per intent.
 2. Retrieved chunk text is placed in a `<documents>` block. The prompt tells the model that this text is reference data and never instructions. Prompt Shields also checks the documents (**Planned**; the answer is currently assembled from the chunks without a model).
 3. Answer length: casual ≤ 80 words, broadcast ≤ 60 words, analyst ≤ 200 words.
 4. Every sentence ends with at least one citation. A number in the answer must come from a claim (live) or from a chunk (knowledge). Live numbers taken from chunks are rejected with reason `stale_state`.

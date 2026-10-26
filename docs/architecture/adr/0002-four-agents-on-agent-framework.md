@@ -1,7 +1,7 @@
-# ADR-0002: Four core agents on Microsoft Agent Framework with Foundry gpt-6-luna
+# ADR-0002: Four core agents on Microsoft Agent Framework with Foundry gpt-5-mini
 
 - **Status:** Accepted
-- **Date:** 2026-10-19 (agents), 2026-10-21 (model)
+- **Date:** 2026-10-19 (agents), 2026-10-21 (model), 2026-10-26 (model changed to gpt-5-mini)
 - **Decided by:** Akshay
 
 ## Context
@@ -15,7 +15,7 @@ Multi-Agent judging rewards distinct roles, shared state, handoffs and failure r
 
 ## Decision
 
-Four role agents as executors in an Agent Framework workflow, model gpt-6-luna (Global Standard, East US 2) through the Foundry project with managed identity. Predictor and stats are MCP tools. The Data Scientist runs only on request.
+Four role agents as executors in an Agent Framework workflow, model gpt-5-mini (East US 2) through the Foundry project with managed identity. Predictor and stats are MCP tools. The Data Scientist runs only on request.
 
 ## Consequences
 
