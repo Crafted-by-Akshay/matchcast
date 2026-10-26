@@ -33,6 +33,7 @@ from matchcast_agents.ask import kb_root
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.feeds import FEED_KEYS
 from matchcast_agents.grading import scoreboard
+from matchcast_agents.grading_live import events_digest, load_live_run
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
 from matchcast_agents.live.knowledge import TalkKnowledge
@@ -45,7 +46,7 @@ from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
 from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
-from matchcast_agents.workflow import WorkflowError
+from matchcast_agents.workflow import WorkflowError, feed_kills_in, public_line
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
@@ -132,7 +133,7 @@ class MatchCreate(BaseModel):
     names: dict[str, str] = Field(default_factory=dict)
     clubs: dict[str, str] = Field(default_factory=dict)
     approval_mode: Literal["auto", "producer"] = "auto"
-    hold_booth: bool = False  # with approval_mode producer: hold the booth voices too
+    hold_booth: bool = True  # with approval_mode producer: hold the booth voices for the producer
     seed_bad_claim: bool = False
     seed_bad_claim_at_ms: int = Field(default=720_000, ge=0)
     # descriptive fields from docs/architecture/12-api.md; stored with the match, not used by agents
@@ -464,7 +465,7 @@ class Registry:
                 raise Problem(404, "not_found", f"unknown match {match_id}")
             config = WorkflowConfig(
                 approval_mode=info.get("approval_mode", "auto"),
-                hold_booth=bool(info.get("hold_booth", False)),
+                hold_booth=bool(info.get("hold_booth", True)),
             )
             live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
@@ -495,6 +496,11 @@ class Registry:
                 vision_feed=self.vision_feed_for(session_id, match_id),
                 spawn_budgets=self.spawn_budgets_for(session_id, match_id),
             )
+            if is_vision_stream({"session_id": session_id}):
+                # a Vision match created after a desk kill must not air from the killed feed
+                flow.killed_feeds |= await asyncio.to_thread(
+                    _engine_kills, self.store, session_id, match_id
+                )
             self.flows[key] = flow
             return flow
 
@@ -548,6 +554,29 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "local"
 
 
+def wanted_on_stream(item: StreamEvent, keep: tuple[str, ...]) -> bool:
+    """Whether a viewer reading the personas in `keep` gets this event (empty keep: all of them).
+
+    Publications belong to the persona they were written for. Line records and derived feed
+    records (onair, feed_drop) stay on every stream: the desk monitor counts the six feeds from
+    whichever lens is open, and it reads them by feed key (AB#499)."""
+    if not keep:
+        return True
+    if item.event == "publication":
+        return item.data["persona"] in keep
+    return True
+
+
+def _engine_kills(store: Any, vision_session: str, match_id: str) -> set[str]:
+    """The desk's feed kills on a Vision session's engine match, from its audit chain (AB#499)."""
+    engine = {
+        "tenant_id": TENANT,
+        "session_id": engine_stream_of(vision_session),
+        "match_id": match_id,
+    }
+    return feed_kills_in(store, stream_key(engine))
+
+
 def _is_stored(store: Any, sk: str) -> bool:
     hydrate = getattr(store, "hydrate", None)
     if hydrate is not None:
@@ -556,7 +585,7 @@ def _is_stored(store: Any, sk: str) -> bool:
 
 
 def _line_json(line: LineRecord) -> dict[str, Any]:
-    return line.model_dump()
+    return public_line(line)
 
 
 def _claim_verdict(lines: list[LineRecord], claim_id: str) -> str:
@@ -727,6 +756,10 @@ def build_router(registry: Registry) -> APIRouter:
                 raise Problem(
                     422, "contract_invalid", str(error), getattr(error, "path", "/roster")
                 ) from error
+            if is_vision_stream(stream):  # the Vision match is created after the desk's kills
+                flow.killed_feeds |= _engine_kills(
+                    registry.store, stream["session_id"], stream["match_id"]
+                )
             registry.flows[key] = flow
             registry.cuts[key] = cut
             registry.count_new_match(request, live)
@@ -840,10 +873,7 @@ def build_router(registry: Registry) -> APIRouter:
             raise Problem(429, "rate_limited", "this match already has the most watch modes")
 
         def wanted(item: StreamEvent) -> bool:
-            # publications belong to the persona they were written for; line records stay on
-            # every stream because the Broadcast producer queue reads all personas' lines
-            own = item.event == "publication" and keep
-            return not (own and item.data["persona"] not in keep)
+            return wanted_on_stream(item, keep)
 
         async def localised(item: StreamEvent) -> StreamEvent:
             """The publication with a checked `variants[lang]`, or untouched (English)."""
@@ -875,7 +905,7 @@ def build_router(registry: Registry) -> APIRouter:
         async def body() -> AsyncIterator[str]:
             yield StreamEvent("status", None, {"status": flow.status}).encode()
             yield StreamEvent("state", None, _state_json(flow)).encode()
-            replay = [e for e in flow.hub.replay_after(last_event_id) if wanted(e)]
+            replay = flow.hub.replay_after(last_event_id, wanted=wanted)
             if not follow:
                 for item in replay:
                     yield (await localised(item)).encode()
@@ -1001,18 +1031,28 @@ def build_router(registry: Registry) -> APIRouter:
         actor: tuple[str, str | None],
         killed: bool,
     ) -> dict[str, Any]:
-        """The desk's per-feed kill or resume (AB#499). Audited now; the air gate reads it later."""
+        """The desk's per-feed kill or resume (AB#499). Audited, and enforced by the air gate: a
+        killed feed airs nothing, on the engine match and on its Vision session."""
         need_producer(role)
         if feed not in FEED_KEYS:
             raise Problem(422, "contract_invalid", f"unknown feed {feed}", "/feed")
         flow = await registry.flow_for(body.session_id, match_id)
         reason = body.reason or ("killed on desk" if killed else "resumed")
         record = await flow.set_feed(feed, killed, reason, actor[0], actor[1])
+        if not is_vision_stream({"session_id": body.session_id}):
+            # the Vision session is its own workflow and its analyst lines air too: the kill
+            # reaches it, so a Vision pass cannot air from a feed the desk has killed
+            try:
+                vision = await registry.flow_for(f"{body.session_id}.vision", match_id)
+            except Problem:  # no Vision match was ever created: nothing from it can air
+                vision = None
+            if vision is not None:
+                await vision.set_feed(feed, killed, reason, actor[0], actor[1])
         return {
             "feed": feed,
             "state": "killed" if killed else "live",
             "audit_id": record["audit_id"],
-            "enforced": False,
+            "enforced": True,
         }
 
     @router.post("/matches/{match_id}/feeds/{feed}/kill")
@@ -1045,11 +1085,25 @@ def build_router(registry: Registry) -> APIRouter:
         flow = await registry.flow_for(session_id, match_id)
         return {"items": flow.store.audit_records(flow.sk, from_seq, limit)}
 
+    @router.get("/matches/{match_id}/scoreboard/input")
+    async def scoreboard_input(match_id: str, session_id: str) -> dict[str, Any]:
+        """The stored events, roster, names and teams of one match: the input of a live scoreboard
+        recording (scripts/scoreboard_live.py). Read-only, with the scoreboard's session check."""
+        flow = await registry.flow_for(session_id, match_id)
+        return {
+            "events": flow.store.events(flow.sk),
+            "roster": flow.roster,
+            "names": flow.names,
+            "teams": flow.clubs,
+        }
+
     @router.get("/matches/{match_id}/scoreboard")
     async def crew_scoreboard(match_id: str, session_id: str) -> dict[str, Any]:
-        """The three-arm crew scoreboard for this match (CREW-5.2). The arms are rules-mode and run
-        on the stored events, so the result is cached per match, event count and run date. A new
-        event or a new day runs them again. Labelled rules-only (docs/architecture/16, 4.1)."""
+        """The three-arm crew scoreboard for this match (CREW-5.2). The rules arms run on the
+        stored events, cached per match, event count and run date. When a recorded live run of
+        the fixture is set (MATCHCAST_SCOREBOARD_LIVE_RUN), it is shown beside them under
+        ``recorded``: as the same events when its digest matches this match, else as a benchmark
+        on the fixture, labelled not this match. The route never calls a model."""
         flow = await registry.flow_for(session_id, match_id)
         events = flow.store.events(flow.sk)
         run_date = datetime.now(UTC).date().isoformat()
@@ -1066,7 +1120,33 @@ def build_router(registry: Registry) -> APIRouter:
             if len(_SCOREBOARDS) >= SCOREBOARD_CACHE_SIZE:
                 _SCOREBOARDS.pop(next(iter(_SCOREBOARDS)))  # the oldest one out
             _SCOREBOARDS[key] = board
-        return board
+        live_path = os.environ.get("MATCHCAST_SCOREBOARD_LIVE_RUN", "")
+        recorded = (
+            load_live_run(live_path, teams=sorted(flow.clubs.values())) if live_path else None
+        )
+        if recorded is None:
+            return board
+        same = recorded["events_sha256"] == events_digest(events)
+        if same:
+            label = (
+                f"Recorded live run {recorded['run_id']}, {recorded['run_date']}, "
+                "same events as this match"
+            )
+        else:
+            label = (
+                f"Recorded live benchmark: {recorded['fixture']}, seed {recorded['seed']}, "
+                f"{recorded['run_date']}, not this match"
+            )
+        view = {
+            "run_id": recorded["run_id"],
+            "fixture": recorded["fixture"],
+            "run_date": recorded["run_date"],
+            "seed": recorded["seed"],
+            "same_events": same,
+            "label": label,
+            "arms": recorded["arms"],
+        }
+        return {**board, "recorded": view}
 
     @router.get("/matches/{match_id}/trace/{line_id}")
     async def trace(match_id: str, line_id: str, session_id: str) -> dict[str, Any]:

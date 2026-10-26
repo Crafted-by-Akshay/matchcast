@@ -29,10 +29,10 @@ async function seedMatch(page: Page) {
   });
 }
 
-test('flag off: the Analyst tab is the console iframe, no live view', async ({ page }) => {
+test('?crew=0: the Analyst tab is the console iframe, no live view', async ({ page }) => {
   const errs = collectErrors(page);
   await block3d(page);
-  await openShell(page, 'analyst');
+  await openShell(page, 'analyst', '?crew=0');
   await expect(page.locator('#al')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => !!(FR.analyst && FR.analyst.el))).toBe(true);
   await expect(page.locator('#v-analyst iframe')).toHaveAttribute('title', 'Analyst: enterprise console');
@@ -165,11 +165,18 @@ test('phone width 320: no sideways scroll, SVGs named', async ({ page }) => {
   for (const svg of await page.locator('#al svg').all()) expect(await svg.getAttribute('aria-label') || await svg.getAttribute('aria-hidden')).toBeTruthy();
 });
 
-test('localStorage mc-crew=1 turns the live view on without the query flag', async ({ page }) => {
+test('the live view is the default Analyst tab with no flag, never a spinner, and localStorage mc-crew=0 turns it off', async ({ page }) => {
   await block3d(page);
-  await page.addInitScript(() => localStorage.setItem('mc-crew', '1'));
   await openShell(page, 'analyst');
   await expect(page.locator('#al')).toBeVisible();
+  await expect(page.locator('#v-analyst .wait')).toBeHidden();   // no "Opening the Analyst" spinner over the live view
+  expect(await page.evaluate(() => !!(FR.analyst && FR.analyst.el)), 'the console iframe is not loaded until Full console is pressed').toBe(false);
+  const p2 = await page.context().newPage();
+  await block3d(p2);
+  await p2.addInitScript(() => localStorage.setItem('mc-crew', '0'));
+  await openShell(p2, 'analyst');
+  await expect(p2.locator('#al')).toHaveCount(0);
+  await expect.poll(() => p2.evaluate(() => !!(FR.analyst && FR.analyst.el))).toBe(true);
 });
 
 // Watch (real frame): the weather chip and the camera presets are gone unless ?demo=1
@@ -190,9 +197,9 @@ test('crew: Watch shows no weather chip and no camera presets unless ?demo=1', a
 });
 
 // flag off: Watch keeps Demo controls and shows the weather chip once they are opened; the camera presets stay off the screen (AB#497, first-screen.spec) unless ?demo=1
-test('flag off: Watch still has Demo controls and the weather chip, camera presets stay hidden', async ({ page }) => {
+test('?crew=0: Watch still has Demo controls and the weather chip, camera presets stay hidden', async ({ page }) => {
   test.setTimeout(300_000);
-  await openShell(page, 'watch');
+  await openShell(page, 'watch', '?crew=0');
   await ready('watch')(page);
   const f = await viewFrame(page, 'watch');
   await expect(f.locator('#mc-demo')).toBeVisible();
@@ -202,14 +209,14 @@ test('flag off: Watch still has Demo controls and the weather chip, camera prese
   await expect(f.locator('#cams')).toBeHidden();
 });
 
-test('real crew lines in the Analyst feed are not labelled Simulated, and a verified one is ticked (AB#498 proposal frames)', async ({ page }) => {
+test('real crew lines in the Analyst feed are not labelled Simulated, and a verified one is ticked (AB#498 onair)', async ({ page }) => {
   await block3d(page);
   await openShell(page, 'analyst', '?crew=1');
   const feed = page.locator('#al [data-panel="feed"]');
   await expect(feed).toBeVisible();
   await page.evaluate(() => {
-    CREW.ingest({ kind: 'crew_trace', match_id: 'm1', at_ms: 23 * 60000, line_id: 'L-1', moment_id: 'x', feed: 'analyst', state: 'published', text: 'A recounted crew line.',
-      claims: [{ claim_id: 'c1', source_event_ids: ['e1'], history_row_ids: [] }], verifier: { verdict: 'verified', reason_code: null, checks: [] }, repair_of: null, audit_hash: 'h' });
+    CREW.ingest({ kind: 'onair', publication_id: 'L-1', feed: 'analyst', lang: 'en', text: 'A recounted crew line.', source_event_ids: ['e1'], claim_ids: ['c1'],
+      match_time_ms: 23 * 60000, aired_at: '2026-10-25T10:00:00Z', repair_count: 0 });
   });
   const row = feed.locator('[data-group="crew"] li', { hasText: 'A recounted crew line.' });
   await expect(row).toContainText('verified');

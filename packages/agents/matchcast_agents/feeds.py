@@ -1,7 +1,7 @@
 """The six fan feeds (CREW-7.1 to 7.6) and the lane each verified line airs on.
 
-Not yet wired into MatchWorkflow. The gate and repair change that uses these functions
-lands in a separate PR, which also migrates the producer-mode tests it affects.
+MatchWorkflow reads these functions on the air path: the lane decides whether a verified
+line waits for the producer, and a derived line that fails repair is dropped.
 
 Three lanes decide what a verified line does next:
 
@@ -81,25 +81,26 @@ def lane_for(persona: str) -> str:
     return QUEUE_LANE
 
 
-def waits_for_producer(persona: str, approval_mode: str) -> bool:
+def waits_for_producer(persona: str, approval_mode: str, hold_booth: bool = True) -> bool:
     """Whether a verified line waits in the producer queue before it airs.
 
-    Derived lines never wait, whatever the approval mode (CREW-4.3 criterion 2). Every other
-    line waits in any mode except "auto". That includes booth lines: the producer approves
-    the main booth line in producer mode, per the 25 Oct decision. The commentary booth
-    paragraph in docs/architecture/04-agents.md still describes the older rule (booth airs
-    unless hold_booth is set), and the wiring PR updates it. An unknown mode fails closed:
-    the line waits.
+    Derived lines never wait, whatever the approval mode (CREW-4.3 criterion 2). The booth
+    waits in producer mode unless the match turns hold_booth off (25 Oct decision: the
+    producer approves the main booth line). Queue lines wait in any mode except "auto". An
+    unknown mode fails closed: the line waits.
     """
-    if lane_for(persona) == DERIVED_LANE:
+    lane = lane_for(persona)
+    if lane == DERIVED_LANE:
         return False
+    if lane == BOOTH_LANE:
+        return approval_mode != "auto" and hold_booth
     return approval_mode != "auto"
 
 
 def drops_on_failed_repair(persona: str) -> bool:
     """A derived line that fails repair is dropped, not escalated to a person (CREW-4.3).
 
-    This only says whether to drop. The audit record is written by the workflow when it is
-    wired in. The existing line_abstained record carries the reason code.
+    This only says whether to drop. The workflow writes the line_abstained audit record (with
+    the reason code and text) and the feed_drop record that points to it.
     """
     return lane_for(persona) == DERIVED_LANE

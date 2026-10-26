@@ -20,6 +20,7 @@ def _context(home: str, away: str) -> MatchContext:
         clubs={"home": home, "away": away},
         state=MatchState(event_time_ms=0),
         events=(),
+        extra={"history_on": date.today().isoformat()},  # the match's cut, as the workflow sets it
     )
 
 

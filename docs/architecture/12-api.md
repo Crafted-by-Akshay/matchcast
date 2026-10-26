@@ -1,6 +1,6 @@
 # 12 Interfaces: REST, SSE, MCP, A2A, events
 
-Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file is the final word on field types; this file is the design it must match.
+Status: **Agreed design**. Last reviewed 25 Oct 2026. The generated OpenAPI file is the final word on field types; this file is the design it must match.
 
 ## 1. Conventions
 
@@ -30,10 +30,11 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. The generated OpenAPI file
 | `POST /v1/lines/{line_id}/approve` | Producer | `session_id, match_id` | 200 line (+ publication) | 403, 404, 409 not approvable |
 | `POST /v1/lines/{line_id}/edit` | Producer | `session_id, match_id, text ≤ 280` | 200 line after re-verification | 403, 404, 422 rejected (verdict in body) |
 | `POST /v1/lines/{line_id}/kill` | Producer | `session_id, match_id, reason ≤ 200` | 200 | 403, 404 |
-| `POST /v1/matches/{match_id}/feeds/{feed}/kill` | Producer | `session_id, reason ≤ 200`; `feed` one of the six keys in `docs/contracts.md` (AB#499; the route is built, the air gate is **Planned**) | 200 `{feed, state: killed, audit_id, enforced: false}` | 403, 422 unknown feed, 404 |
-| `POST /v1/matches/{match_id}/feeds/{feed}/resume` | Producer | `session_id, reason ≤ 200` | 200 `{feed, state: live, audit_id, enforced: false}` | 403, 422, 404 |
+| `POST /v1/matches/{match_id}/feeds/{feed}/kill` | Producer | `session_id, reason ≤ 200`; `feed` one of the six keys in `docs/contracts.md` (AB#499; the air gate enforces the kill) | 200 `{feed, state: killed, audit_id, enforced: true}` | 403, 422 unknown feed, 404 |
+| `POST /v1/matches/{match_id}/feeds/{feed}/resume` | Producer | `session_id, reason ≤ 200` | 200 `{feed, state: live, audit_id, enforced: true}` | 403, 422, 404 |
 | `GET /v1/matches/{match_id}/audit` | anyone | `session_id, from_seq?, limit ≤ 1000` | 200 records | 404 |
-| `GET /v1/matches/{match_id}/scoreboard` | anyone | `session_id` | 200 the three-arm crew scoreboard (`kind: crew_ablation_scoreboard`, every arm `mode: rules`), computed from the stored events and cached per match, event count and run date | 404 |
+| `GET /v1/matches/{match_id}/scoreboard` | anyone | `session_id` | 200 the three-arm crew scoreboard (`kind: crew_ablation_scoreboard`). The rules arms (`mode: rules`) are computed from the stored events and cached per match, event count and run date. When `MATCHCAST_SCOREBOARD_LIVE_RUN` names a recording of this fixture (same teams, seed and rate), it is returned under `recorded` beside them: its `run_id`, `fixture`, `run_date`, `seed`, `same_events`, its arms (each with its run id and mode), and a `label` that says "same events as this match" only when the event digests match, else "not this match". The route reads only the default seed and rate (2026, 0.25), so a recording made with another `--seed` or `--rate` is never shown. The route never calls a model | 404 |
+| `GET /v1/matches/{match_id}/scoreboard/input` | anyone | `session_id` | 200 the stored `events`, `roster`, `names` and `teams` of the match: the input of a live scoreboard recording (`scripts/scoreboard_live.py`). It makes no model call and writes nothing once the match is loaded; a cold read rebuilds the match, which writes its record once, as `/audit` and `/scoreboard` do | 404 |
 | `GET /v1/matches/{match_id}/trace/{line_id}` | anyone | `session_id` | 200 steps with agent, duration, model or rules, tokens, tools | 404 |
 | `POST /v1/matches/{match_id}/ask` | anyone | `session_id, question ≤ 300, persona, lang (the same ten), surface (ask or broadcast; default ask)` (`browser_session_id` is **Planned**) | 200 `{answer, intent, abstained, citations[], mode, retrieval, lang, variants?, broadcast?}` where `broadcast` is `{highlights[]}`, `{focus}` or `{plan[]}` when `surface` is `broadcast` and the question asks for one (ADR-0019). `claim_ids`, `verdict` and `trace_id` are **Planned**. | 400 shield, 429 |
 | `POST /v1/matches/{match_id}/talk` | anyone | `session_id, target (player_id or producer), utterance ≤ 300, position (optional sim code, GK, CB, ST...; the Watch client asserts it and the api applies the role table to it)` | 200 `{target, reply, verdict, facts, order, lang, audio_url}` (`order` is `null`, or `{key, accepted}` for an instruction the player heard: accepted only when the role guard allows it for that position and the reply is verified, ADR-0016; a refused order's reply is his in-character refusal; in live mode the player's own reply from the model, checked against the log's counts and names, with `facts` the player's counts; otherwise, or when the model's reply fails a check, the rules template; a reply with words for counts is refused; the reply passes Content Safety as well as the Verifier; without `CONTENT_SAFETY_ENDPOINT` that check is the local word list (**Simulated**). `lang` is `en`; `audio_url` is `/v1/audio/{id}.mp3` only for a verified reply that was voiced, otherwise null; a clip stays in the api's memory for a while, so fetch it promptly) | 400 `prompt_attack`, 404 unknown target, 422, 429 |
@@ -67,10 +68,10 @@ Every match route rebuilds the workflow of a stored match from its roster when t
 | `claim` | claim packet | `claim:<claim_id>` |
 | `line` | line with status | `line:<line_id>:<status>` |
 | `publication` | publication with the variant for `lang` (+ English) | `pub:<publication_id>` |
-| `audit` | audit record | `audit:<sequence>` |
+| `audit` | audit record, with `details.why` (the Producer's free text, not yet verified) left out; the stored record keeps it | `audit:<sequence>` |
 | `recap_ready` | personas available | `recap` |
-| `onair` | **Planned** (AB#498 contract, AB#499 wiring): the `onair` record of a derived feed line that aired (`docs/contracts.md`, "Derived feed lines") | `onair:<publication_id>:<lang>` |
-| `feed_drop` | **Planned** (same): the `feed_drop` record of a derived line that did not air; the text stays in the audit chain | `feed_drop:<publication_id>` |
+| `onair` | the `onair` record of a derived feed line that aired (AB#498 contract, AB#499 wiring; `docs/contracts.md`, "Derived feed lines"). Feed records reach every stream, as line records do; the desk reads them by `feed` key | `onair:<publication_id>` |
+| `feed_drop` | the `feed_drop` record of a derived line that did not air. The text stays in the audit chain (the `line_abstained` record it points to), except for a line Content Safety refused (`unsafe_content`), whose text is never written to the audit. Its `publication_id` is `pub-<line_id>` even though nothing published, so a join on it finds no publication | `drop:<line_id>` |
 | `crew_ledger` | `crew_ledger` (contract 1.3.0): one moment the crew took, sent once its run has ended; `called`, `skipped`, `why`, `routed_by`, `spawn_reason`. Live only, not replayed on reconnect | `ledger:<moment_id>` |
 | `crew_spawn` | `crew_spawn` (contract 1.3.0): one specialist on one moment, on start (`running`) and on end (`done`, `no_data`, `failed` or `budget_exhausted`). Live only | `spawn:<moment_id>:<name>:<status>` |
 | `status` | `{status, reason?}`: `live`, `rules_fallback` (with `reason` from the `fallback_reason` list in 04-agents.md §4) or `warming_up`. Sent only when the status or reason changes; every refusal is still audited as `fallback_used` | none |
@@ -78,7 +79,7 @@ Every match route rebuilds the workflow of a stored match from its roster when t
 
 `persona` is `casual`, `analyst`, `broadcast` (aliases `fan`, `producer`) `booth` (both commentary voices, publications with persona `booth:pbp` then `booth:colour` for each moment, play-by-play first), or a watch mode: `club:<id or name>`, `player:<id or name>`, `metric:<name>` (server forms `my-club:`, `player-focus:`, `one-metric:`). A watch mode must name a real club, player or metric of the match; opening the stream registers it for the match from the next moment on (no back-fill), at most 8 extra modes per match, kept until the match ends.
 
-On reconnect with `Last-Event-ID`, the server replays publications and audit records after that point (at most 500), then continues live.
+With `Last-Event-ID`, the server replays the records after that point, then continues live. Publications and audit records are capped at the first 500 after it. Derived feed records (`onair`, `feed_drop`) are kept past the 5000-event buffer and replayed up to the newest 2000, so a desk that opens late still counts the recent feeds of a long match. A viewer's persona filter applies before either cap. The server reads `Last-Event-ID` from the header only. The replay after a cursor runs over the retained records in order: the kept feed records first, then the buffer. A cursor that is itself past the buffer still resumes correctly, but when more than 2000 feed records follow it, the oldest of them are skipped. The first-party desk closes and re-creates its stream on an error, which sends no header, so it gets the replay from the start of the retained records. The crew frames (`crew_ledger`, `crew_spawn`) are live only.
 
 ## 4. MCP and A2A
 

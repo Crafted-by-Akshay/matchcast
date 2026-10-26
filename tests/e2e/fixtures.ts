@@ -40,5 +40,5 @@ export const fakeSpeechSdk = () => {
   };
   w.__spoken = [];
   (window as any).SpeechSynthesisUtterance = function (this: any, t: string) { this.text = t; };
-  Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u: any) => { w.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 10); }, cancel() {} }, configurable: true });
+  Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u: any) => { w.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 10); }, cancel() {}, getVoices: () => [] }, configurable: true });
 };
