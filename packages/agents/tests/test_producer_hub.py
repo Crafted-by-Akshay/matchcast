@@ -184,3 +184,13 @@ def test_crew_frames_replay_the_newest_two_thousand_only() -> None:
     replay = [e.id for e in hub.replay_after(None)]
     assert len(replay) == CREW_REPLAY_LIMIT
     assert replay[0] == "spawn:100" and replay[-1] == f"spawn:{CREW_REPLAY_LIMIT + 99}"
+
+
+def test_crew_frames_survive_the_buffer_so_a_late_viewer_at_full_time_has_the_tree() -> None:
+    # a full match overflows the buffer: the spawn frames of early moments must still replay,
+    # as the feed records do, or the tree shows ledgers with no specialists
+    hub = StreamHub()
+    hub.publish("crew_spawn", "spawn:early", {"moment_id": "m1"})
+    for i in range(5100):
+        hub.publish("publication", f"pub:{i}", {"persona": "analyst"})
+    assert "spawn:early" in [e.id for e in hub.replay_after(None)]

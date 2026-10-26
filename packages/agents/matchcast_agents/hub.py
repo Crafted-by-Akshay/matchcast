@@ -41,6 +41,7 @@ class StreamHub:
         self._log: list[StreamEvent] = []
         # the newest feed records the buffer has evicted, oldest first: they are older than _log
         self._kept_feeds: list[StreamEvent] = []
+        self._kept_crew: list[StreamEvent] = []  # the newest crew frames the buffer has evicted
         self._subscribers: set[asyncio.Queue[StreamEvent]] = set()
 
     def publish(self, event: str, id_: str | None, data: dict[str, Any]) -> None:
@@ -52,6 +53,8 @@ class StreamHub:
             del self._log[:overflow]
             self._kept_feeds.extend(e for e in evicted if e.event in FEED_REPLAYED)
             del self._kept_feeds[:-FEED_REPLAY_LIMIT]
+            self._kept_crew.extend(e for e in evicted if e.event in CREW_REPLAYED)
+            del self._kept_crew[:-CREW_REPLAY_LIMIT]
         for queue in list(self._subscribers):
             try:
                 queue.put_nowait(item)
@@ -69,7 +72,7 @@ class StreamHub:
         Publications and audit records are capped at the first 500 of what ``wanted`` lets
         through. Feed records are capped at the newest 2000 of those, and they are kept past the
         buffer, so a late desk still counts the feeds of a long match."""
-        records = [*self._kept_feeds, *self._log]
+        records = [*self._kept_feeds, *self._kept_crew, *self._log]
         start = 0
         if last_id:
             for index, item in enumerate(records):
