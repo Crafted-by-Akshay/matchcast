@@ -10,10 +10,11 @@ const MIN_SHOTS = 8;
 test('the default match has shots and a goal in its first 50 simulated minutes', async ({ page }) => {
   test.setTimeout(420_000);
   await openShell(page, 'watch');
-  const q = await page.evaluate(() => {
-    const fx = byId((document.getElementById('fx') as HTMLSelectElement).value);
-    return new URLSearchParams(Object.entries(setupOf(fx)).map(([k, v]) => [k, String(v)])).toString();
+  const { id, q } = await page.evaluate(() => {
+    const id = (document.getElementById('fx') as HTMLSelectElement).value, fx = byId(id);
+    return { id, q: new URLSearchParams(Object.entries(setupOf(fx)).map(([k, v]) => [k, String(v)])).toString() };
   });
+  expect(id, 'the default fixture is the national one').toBe('N001');
   const ctx = page.context(); await page.close();   // the shell's own Watch frame would share the CPU
   const w = await ctx.newPage();
   await w.addInitScript(() => { (window as any).__mcHeadless = true; });
