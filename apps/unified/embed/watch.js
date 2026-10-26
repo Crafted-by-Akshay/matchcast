@@ -318,7 +318,7 @@ const MC_API_METRICS = ['xg'];
   const ensure = () => {
     const pop = document.getElementById('fan-pop'), head = pop && pop.querySelector('.fm-h');
     if (!head || !head.firstChild) return;
-    head.firstChild.textContent = 'Make it yours';
+    if (head.firstChild.textContent !== 'Make it yours') head.firstChild.textContent = 'Make it yours';   // written only when it differs, so the childList observer cannot loop
     if (pop.querySelector('.fm-now')) return;
     const line = document.createElement('p'); line.className = 'fm-now'; line.setAttribute('aria-live', 'polite');
     head.after(line);
