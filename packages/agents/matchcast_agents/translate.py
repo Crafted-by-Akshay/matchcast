@@ -40,6 +40,8 @@ _DIGITS = {
     ord("\uff0e"): ".",
 }
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
+# A score written as 2-1, 2–1 or 2:1 (the Verifier's own forms). Its order is part of the score.
+_SCORE = re.compile(r"(?<![\d.,])(\d+)\s*[-–:]\s*(\d+)(?![\d.,])")
 _MARKER = re.compile(r"\[(?:claim|kb|line|event):[^\]]+\]")
 _TAG = re.compile(r"<[^>]+>")
 # The neutral-wording list (ADR-0020, tests/test_neutral_names.py) applies to translations too.
@@ -67,6 +69,11 @@ def numbers(text: str) -> list[str]:
     return sorted(n.replace(",", ".") for n in found)  # 2.5 and 2,5 are the same, 25 is not
 
 
+def scores(text: str) -> list[tuple[str, str]]:
+    """The scores in the text, in order, with other numerals read as ASCII."""
+    return _SCORE.findall(text.translate(_DIGITS))
+
+
 def protect(text: str, names: Iterable[str]) -> str:
     """HTML for the Translator: names and citation markers sit in translate=no spans."""
     out = html.escape(text, quote=False)
@@ -89,6 +96,11 @@ def recheck(english: str, translated: str, names: Iterable[str]) -> str | None:
         return "empty"
     if numbers(english) != numbers(translated):
         return "numbers_differ"
+    # the numbers are compared as a sorted list, so a swapped score ("2-1" to "1-2") would pass:
+    # a score written in the translation must keep its order. A translation with no score written
+    # with a dash or colon ("2 a 1") is judged on its numbers alone.
+    if (written := scores(translated)) and written != scores(english):
+        return "score_order"
     for name in names:
         if name and name in english and name not in translated:
             return "name_changed"

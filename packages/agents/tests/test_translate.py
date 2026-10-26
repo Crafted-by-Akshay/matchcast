@@ -243,3 +243,15 @@ def test_a_viewer_language_gets_its_caption_and_a_changed_number_drops_it():
 def test_no_transcript_language_and_english_viewer_have_nothing_to_caption():
     service = TranslationService(Fake(), 1000)
     assert run(service.talk_captions("s/m", EN, "Atlantis", "en", [])) is None
+
+
+def test_a_swapped_score_is_rejected_even_though_its_numbers_match():
+    english = "Northgate FC lead 2-1 at half time."
+    assert recheck(english, "Northgate FC lideran 1-2 al descanso.", []) == "score_order"
+    assert recheck(english, "Northgate FC lideran 2–1 al descanso.", []) is None
+    assert recheck(english, "Northgate FC venceu por 2 a 1 no intervalo.", []) is None
+
+
+def test_a_legitimately_reordered_clause_is_kept():
+    english = "Northgate FC have 7 shots and 2 on target."
+    assert recheck(english, "Northgate FC tem 2 no alvo e 7 chutes.", []) is None
