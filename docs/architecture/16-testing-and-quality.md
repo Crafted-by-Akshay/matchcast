@@ -35,7 +35,7 @@ Status: **Agreed design**. Last reviewed 22 Oct 2026. Backlog: QUA-1 to QUA-9, D
 ## 4. Evaluation method (QUA-4)
 
 - 30 fixed moments (5 per scene family) from recorded matches.
-- Arm A: one `gpt-6-luna` agent with the same tools and a combined prompt. Arm B: the four-agent workflow.
+- Arm A: one `gpt-5-mini` agent with the same tools and a combined prompt. Arm B: the four-agent workflow.
 - The score comes from deterministic Verifier checks only, so no model grades the system under test.
 - Measures: verified-line rate, hallucinated numbers or names per 100 lines, p50 and p95 latency, tokens, cost. 3 runs per arm; mean and range in `eval/results/<date>.json` and the README.
 
