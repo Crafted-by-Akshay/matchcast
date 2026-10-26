@@ -218,6 +218,7 @@ SAVED = {"events": [], "teams": {"a": "Argentina"}, "names": {}, "roster": {"str
 
 def test_a_saved_export_is_recorded_with_the_given_fixture(monkeypatch, tmp_path) -> None:
     script = load_script()
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
     match_file = tmp_path / "match.json"
     match_file.write_text(json.dumps(SAVED))
     seen = {}
@@ -270,6 +271,7 @@ def test_an_output_that_cannot_be_written_is_refused_before_any_model_call(
         raise AssertionError("the model must not be built before the output is checked")
 
     monkeypatch.setattr(script, "FoundryModelClient", no_model)
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
     code = script.main(
         [
             "--match",
@@ -283,4 +285,73 @@ def test_an_output_that_cannot_be_written_is_refused_before_any_model_call(
         ]
     )
     assert code == 2
-    assert "must be a file in a folder that exists" in capsys.readouterr().err
+    assert "must be a plain file path in a folder that exists" in capsys.readouterr().err
+
+
+def test_an_output_that_is_a_symlink_is_refused_before_any_model_call(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    dangling = tmp_path / "out.json"
+    dangling.symlink_to(tmp_path / "nowhere.json")
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.services.ai.azure.com")
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(dangling),
+        ]
+    )
+    assert code == 2
+    assert "plain file path" in capsys.readouterr().err
+
+
+def test_a_run_without_the_model_endpoint_is_refused(monkeypatch, capsys, tmp_path) -> None:
+    script = load_script()
+    match_file = tmp_path / "match.json"
+    match_file.write_text(json.dumps(SAVED))
+    monkeypatch.delenv("FOUNDRY_PROJECT_ENDPOINT", raising=False)
+    monkeypatch.setattr(script, "FoundryModelClient", lambda: pytest.fail("no model call"))
+    code = script.main(
+        [
+            "--match",
+            str(match_file),
+            "--fixture",
+            "N001",
+            "--max-calls",
+            "5",
+            "--out",
+            str(tmp_path / "o.json"),
+        ]
+    )
+    assert code == 2
+    assert "FOUNDRY_PROJECT_ENDPOINT is not set" in capsys.readouterr().err
+
+
+def test_a_run_date_that_is_not_a_date_is_refused(capsys, tmp_path) -> None:
+    script = load_script()
+    with pytest.raises(SystemExit) as stop:
+        script.main(
+            [
+                "--match",
+                str(tmp_path / "m.json"),
+                "--fixture",
+                "N001",
+                "--max-calls",
+                "5",
+                "--out",
+                str(tmp_path / "o.json"),
+                "--run-date",
+                "tomorrow",
+            ]
+        )
+    assert stop.value.code == 2
+    assert "not a YYYY-MM-DD date" in capsys.readouterr().err

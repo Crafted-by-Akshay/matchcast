@@ -21,10 +21,12 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import date
 from pathlib import Path
 
 from matchcast_agents.grading import SEED_RATE
@@ -46,6 +48,13 @@ def fetch_input(api: str, session_id: str, match_id: str) -> dict:
 
 
 MATCH_KEYS = ("events", "teams", "roster", "names")  # what live_run and the grader read
+
+
+def _iso_date(text: str) -> str:
+    try:
+        return date.fromisoformat(text).isoformat()
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from error
 
 
 def match_problem(match: object) -> str | None:
@@ -73,7 +82,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--rate", type=float, default=SEED_RATE)
-    parser.add_argument("--run-date", default=None, help="YYYY-MM-DD; default today")
+    parser.add_argument(
+        "--run-date", type=_iso_date, default=None, help="YYYY-MM-DD; default today"
+    )
     args = parser.parse_args(argv)
     if not 1 <= args.max_calls <= MAX_CALLS_PER_ARM:
         print(f"--max-calls must be between 1 and {MAX_CALLS_PER_ARM}", file=sys.stderr)
@@ -85,13 +96,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.match is not None:
         try:
             match = json.loads(args.match.read_text())
-        except (OSError, ValueError) as error:
+        except (OSError, ValueError, RecursionError) as error:
             print(f"could not read {args.match}: {error}", file=sys.stderr)
             return 1
     elif from_api:
         try:
             match = fetch_input(args.api, args.session_id, args.match_id)
-        except (OSError, http.client.HTTPException, ValueError) as error:  # URLError is an OSError
+        except (OSError, http.client.HTTPException, ValueError, RecursionError) as error:
             print(f"could not export the match from {args.api}: {error}", file=sys.stderr)
             return 1
     else:
@@ -100,8 +111,13 @@ def main(argv: list[str] | None = None) -> int:
     if problem := match_problem(match):
         print(f"{args.match or args.api}: {problem}", file=sys.stderr)
         return 1
-    if args.out.is_dir() or not args.out.parent.is_dir():
-        print(f"--out {args.out} must be a file in a folder that exists", file=sys.stderr)
+    if args.out.is_symlink() or args.out.is_dir() or not args.out.parent.is_dir():
+        print(
+            f"--out {args.out} must be a plain file path in a folder that exists", file=sys.stderr
+        )
+        return 2
+    if not os.environ.get("FOUNDRY_PROJECT_ENDPOINT"):
+        print("FOUNDRY_PROJECT_ENDPOINT is not set; the calls would all fail", file=sys.stderr)
         return 2
     print(f"three arms, up to {args.max_calls} model calls each", file=sys.stderr)
     record = live_run(
