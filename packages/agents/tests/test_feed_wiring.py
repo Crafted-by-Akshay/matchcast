@@ -233,3 +233,18 @@ def test_a_description_aired_more_than_30_seconds_after_its_cut_is_abstained(mat
     run(flow.ingest(late["events"][:5]))
     status = {ln.line_id: ln.status for ln in flow.store.lines(flow.sk)}
     assert status.get("line-audio-e4") == "abstained"
+
+
+def test_no_description_is_reserved_over_the_half_time_piece(match) -> None:
+    # the first half ends at 600 s and the half-time piece airs then, for its own length. A shot
+    # 3 s after the whistle would be placed in the piece's gap, because only booth lines are speech
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    shot = copy.deepcopy(next(e for e in match["events"] if e["payload"]["type"] == "shot"))
+    shot.update(event_id="e-late", stream_sequence=138, event_time_ms=603_000)
+    shot["clock"]["period_elapsed_ms"] = 603_000
+    run(flow.ingest([*match["events"], shot]))
+    piece = next(p for p in flow.store.publications(flow.sk) if p["persona"] == "half_time")
+    start = piece["event_time_ms"]
+    end = start + spoken_span(0, piece["text"])[1]
+    assert not [span for span in flow._audio_spans if span[0] < end and start < span[1]]

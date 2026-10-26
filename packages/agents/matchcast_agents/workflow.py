@@ -823,7 +823,7 @@ class MatchWorkflow:
         if not due:
             return
         ctx = self._ctx()
-        busy = self._booth_spans(ctx)
+        busy = self._speech_spans(ctx)
         taken_back = {
             e["payload"]["target_event_id"]
             for e in ctx.events
@@ -892,13 +892,27 @@ class MatchWorkflow:
         at_by_id = {e["event_id"]: int(e["event_time_ms"]) for e in ctx.events}
         return commentary_spans(list(self.store.lines(self.sk)), at_by_id)
 
+    def _speech_spans(self, ctx: MatchContext) -> list[tuple[int, int]]:
+        """Where anything is spoken on air: the booth's lines and the half-time piece (AB#499).
+
+        The piece is spoken from its publication time for its own length. It is read from the
+        build, the same piece that airs, unless the desk has killed the feed.
+        """
+        spans = self._booth_spans(ctx)
+        if HALF_TIME_PERSONA in self.config.feed_lines and "half_time" not in self.killed_feeds:
+            built = half_time_mod.build(ctx)
+            if built is not None:
+                start = built.state.event_time_ms
+                spans.append((start, start + spoken_span(0, built.text)[1]))
+        return spans
+
     def _commentary_windows(self, ctx: MatchContext, event: dict[str, Any]) -> list[Window]:
         """The commentary gaps up to the feed horizon after an event, from the booth's lines so far.
 
         A later booth line can still land in a gap read here; the check when a description is due
         (_air_held_audio) is what keeps it from talking over the commentary.
         """
-        spans = [*self._booth_spans(ctx), *self._audio_spans]
+        spans = [*self._speech_spans(ctx), *self._audio_spans]
         return gaps(spans, end_ms=int(event["event_time_ms"]) + FEED_HORIZON_MS)
 
     def _note_aired(self, event: dict[str, Any]) -> None:
