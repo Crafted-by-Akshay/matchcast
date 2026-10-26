@@ -36,6 +36,15 @@ const CM = (() => {
     (s) => 'The shape is all we can read so far.',
     (s) => 'Watch who takes the first possession and how they play it.',
   ];
+  // the newest team action has no pass in its window (a shot, a corner, a change): a build-up would claim a possession the match has not shown, so the booth reads the score
+  const FILL_QUIET_PBP = [
+    (s) => 'Still ' + s.home + ' ' + s.score + ' ' + s.away + '.',
+    (s) => s.club + ' have not put a pass together in the last two minutes.',
+  ];
+  const FILL_QUIET_COLOUR = [
+    (s) => 'The shape is all we can read so far.',
+    (s) => 'Watch who wins the next possession and how they use it.',
+  ];
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
   const club = (ti) => (ti === 0 ? names.home : names.away);
@@ -131,17 +140,22 @@ const CM = (() => {
   const fill = (now = Date.now()) => {
     if (!names || over || now - lastPushAt < FILL_MS) return;
     const k = fillN++ % FILL_PBP.length;
-    const last = [...events].reverse().find((e) => e.type !== 'kickoff');   // the kick-off is not an action: the fill has no play to count yet
+    // the newest action with a team: the kick-off is not an action, and a team-less event (half-time) has no side to count
+    const last = [...events].reverse().find((e) => e.type !== 'kickoff' && e.ti >= 0);
     if (!last) {   // no action yet: the kick-off score is the whole fact
       const s = { home: names.home, away: names.away, score: score.join('–') };
       push({ minute: 0, kind: 'filler', speaker: 'pbp', text: FILL_START_PBP[k % FILL_START_PBP.length](s) });
       push({ minute: 0, kind: 'filler', speaker: 'colour', text: FILL_START_COLOUR[k % FILL_START_COLOUR.length](s) });
       return;
     }
-    if (last.ti < 0) return;
     const ti = last.ti;
     const passes = events.filter((e) => e.ti === ti && e.type === 'pass' && last.minute - e.minute <= 2).length;
     const s = { club: club(ti), who: last.player || null, score: score.join('–'), home: names.home, away: names.away, at: Math.floor(last.minute), passes };
+    if (passes === 0) {
+      push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_QUIET_PBP[k % 2](s) });
+      push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_QUIET_COLOUR[k % 2](s) });
+      return;
+    }
     push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_PBP[k](s) });
     push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_COLOUR[k](s) });
   };
@@ -165,7 +179,7 @@ const historyLine = (names) => {
   const last = m ? ' Last meeting: ' + m.date + ', ' + names.home + ' ' + m.score + ' ' + names.away + ' (' + m.competition + ').' : '';
   return { minute: 0, kind: 'buildup', speaker: 'colour', text: 'Real results: ' + h.played + ' meetings, ' + names.home + ' ' + h.home_wins + ' wins, ' + h.draws + ' draws, ' + names.away + ' ' + h.away_wins + ' wins.' + last };
 };
-const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playTi = -1; playFrom = 0; n = 0; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); const hl = historyLine(names); if (hl) push(hl); } };
+const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playTi = -1; playFrom = 0; n = 0; fillN = 0; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); const hl = historyLine(names); if (hl) push(hl); } };
   // the feed the views draw: newest last, each with its label
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers, speaker: x.speaker || (x.source === 'live' || x.kind === 'summary' ? 'colour' : 'pbp') }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under

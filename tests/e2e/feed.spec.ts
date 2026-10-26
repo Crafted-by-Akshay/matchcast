@@ -249,11 +249,39 @@ test('a silence that goes on gets a fresh booth exchange every 4 s, and no line 
     counts.push(filled());
     CM.fill(Date.now() + 4000);
     counts.push(filled());
-    const texts = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.text);
-    return { counts, texts };
+    const fillers = CM.view().filter((l: any) => l.kind === 'filler');
+    const bySpeaker = (who: string) => fillers.filter((l: any) => l.speaker === who).map((l: any) => l.text);
+    return { counts, pbp: bySpeaker('pbp'), colour: bySpeaker('colour') };
   });
   expect(out.counts, 'one exchange, held inside 4 s, then one exchange per 4 s').toEqual([2, 2, 4, 6]);
-  for (let i = 1; i < out.texts.length; i++) expect(out.texts[i], 'the booth does not repeat its last line').not.toBe(out.texts[i - 1]);
+  // each voice is checked on its own: the two voices interleave, so a line is only compared with the last line from the same voice
+  for (const texts of [out.pbp, out.colour]) {
+    for (let i = 1; i < texts.length; i++) expect(texts[i], 'the booth does not repeat its own last line').not.toBe(texts[i - 1]);
+  }
+});
+
+test('a corner as the newest action is not a build-up: with no pass in the window the booth reads the score', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('corner', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 2, type: 'corner', team: 'A' }], []);
+    CM.fill(Date.now() + 9000);
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text }));
+  });
+  expect(out.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out[0].text, 'the score, not a count of passes Thames Rovers never made').toContain('Ridgeview 0–0 Thames Rovers');
+  expect(out.map((l) => l.text).join(' '), 'no build-up or possession claim without a pass').not.toMatch(/build-up|keep the ball|passes/);
+});
+
+test('a team-less event such as half-time does not stop the fill: it counts from the last team action', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('half', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 45, type: 'half_time' }], []);
+    CM.fill(Date.now() + 9000);
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.speaker);
+  });
+  expect(out, 'the booth still talks after half-time, on both voices').toEqual(['pbp', 'colour']);
 });
 
 test('before any action the booth talks from the kick-off score, and names no player', async ({ page }) => {
