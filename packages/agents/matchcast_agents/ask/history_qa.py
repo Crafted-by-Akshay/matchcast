@@ -43,7 +43,9 @@ _RECORD = re.compile(
     r"\b(record|head[- ]to[- ]head|all[- ]time|history|ranking|elo|results)\b", re.I
 )
 # a scorer or result question about a match, which a year alone does not make a history question
-_MATCH_OUTCOME = re.compile(r"\b(scor\w*|scoreline|who won|winner)\b", re.I)
+_MATCH_OUTCOME = re.compile(
+    r"\b(who scored|who score|scorers?|goalscorers?|scoreline|the score|who won|winner)\b", re.I
+)
 _H2H = re.compile(r"\b(record|head[- ]to[- ]head|all[- ]time|history|ranking|elo)\b", re.I)
 _TOP = re.compile(
     r"\b(best|top|strongest)\b.*\b(teams?|nations?|sides?|countries)\b"
@@ -79,11 +81,14 @@ def parse(question: str) -> Query | None:
     """The history question in ``question``, or None when it is not one (a match question stays)."""
     if _LIVE.search(question):
         return None
-    if _MATCH_OUTCOME.search(question) and not _RECORD.search(question):
-        return None
     years = [int(y) for y in _YEAR.findall(question)]
     year = years[0] if years and MIN_YEAR <= years[0] <= MAX_YEAR else None
     teams = _teams_in(question)
+    scores = len(set(teams)) >= 2 and re.search(
+        r"\bscor\w*", question, re.I
+    )  # "Argentina v Brazil score"
+    if (_MATCH_OUTCOME.search(question) or scores) and not _RECORD.search(question):
+        return None
     metric = _metric(question)
     if metric is not None and metric != "goals":
         return None  # shots, cards and the like belong to the match

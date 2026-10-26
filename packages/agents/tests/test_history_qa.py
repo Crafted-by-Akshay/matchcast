@@ -59,6 +59,9 @@ def test_a_scorer_or_outcome_question_with_a_year_is_still_a_match_question() ->
     assert qa.parse("Who scored for Argentina in 2026?") is None
     assert qa.parse("Argentina v Brazil score in 2026") is None
     assert qa.parse("Argentina v Brazil record in 2026") is not None
+    assert qa.parse("How many goals did Argentina score in 2022?") == qa.Query(
+        "record", "Argentina", None, 2022
+    )
 
 
 def test_match_questions() -> None:
