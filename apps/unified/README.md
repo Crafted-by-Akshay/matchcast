@@ -63,6 +63,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 
 
 ## One match source (EXP-2)
+- Watch's match clock follows wall time: one frame carries up to 0.25 s of play in fixed 0.02 s steps (at most 15 per frame, times the speed above 1x), so a slow machine without a GPU still sees a true-speed match down to about 4 fps. `build.py` patches this into both engine copies (`walltime()`); on a high-density screen `MCRes` (`embed/watch.js`) also drops the 3D pass to pixel ratio 1 while fps stays below 24. See doc 11, "Wall-time match clock and adaptive resolution".
 - Watch is the only engine. Four times a second it sends the pitch state (22 players' positions, velocities and headings, the ball, score, clock, pause, speed and stats) and the shell forwards it to Broadcast, along with Watch's events.
 - Broadcast runs in consumer mode (`window.MC_CONSUMER`, `consumerStep` in `embed/broadcast.js`, patched into `stepSim` by `build.py`): it moves its players and ball toward the latest frame, takes the score, minute, half and stats from it, and replays Watch's events onto its own event bus. Its desk modules (odds, calls, focus board, lower-thirds) read that. Its own play and pause buttons are disabled; Watch's controls drive the match.
 - The Analyst's live pill shows the same score and minute and lists the last five events in its tooltip.

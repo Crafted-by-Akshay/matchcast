@@ -78,6 +78,8 @@ test.describe('on a high-density screen', () => {
     const first = await ratio();
     expect(first.pr, 'first paint at ratio 1').toBe(1);
     expect(first.canvasW, 'canvas has one pixel per CSS pixel').toBeLessThanOrEqual(first.cssW + 1);
+    // software GL is slow enough for the fps rule (adaptive-resolution.spec.ts) to hold ratio 1 on its own: this test is about the first-line rule, so the fps sampler is stopped and cleared
+    await f.evaluate(() => { (window as any).__mcRes.stop(); (window as any).__mcRes.reset(); });
     await expect.poll(async () => {
       await stepSim(f, 20);
       return (await ratio()).pr;

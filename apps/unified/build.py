@@ -61,6 +61,24 @@ def sub(text, old, new, label):
     return text.replace(old, new)
 
 
+# Wall-time match clock (docs/architecture/11-frontend.md). The engine's loop capped each frame at 0.05 s, so under 20 fps
+# the match ran slow (8 fps = 0.4x). One frame may now carry 0.25 s, and a live frame spends at most CATCHUP_STEPS fixed
+# steps (0.3 s of play, times the playback speed above 1x); the rest of a long stall is dropped, so a very slow machine plays slower instead of freezing.
+# STEP stays 0.02 s with its remainder carry (simAcc), and the headless runner path (__mcHeadless, __mcDt) is not clamped.
+# Applied to both engine copies (Watch and the desk), which must stay identical (tests/test_engine_copies.py).
+WALLTIME = [
+    ("function loop() { frame(Math.min(clk.getDelta(), 0.05), true); }", "function loop() { frame(Math.min(clk.getDelta(), 0.25), true); }", "loop dt cap"),
+    ("const STEP = 0.02; let simAcc = 0;", "const STEP = 0.02; let simAcc = 0;\nconst CATCHUP_STEPS = 15; const catchup = () => CATCHUP_STEPS * STEP * Math.max(1, S.speed);   // live frames only (the runner's budget is exact); faster playback gets a proportionally larger cap, so 2x and up never play slower than before", "catch-up cap"),
+    ("window.__mcHeadless ? (window.__mcDt || 0) : dt * S.speed;", "window.__mcHeadless ? (window.__mcDt || 0) : Math.min(dt * S.speed, catchup());", "frame budget"),
+]
+
+
+def walltime(text, label):
+    for old, new, what in WALLTIME:
+        text = sub(text, old, new, label + " wall-time " + what)
+    return text
+
+
 ORDER_OLD = "function setOrder(p, k, text, by) {\n  if (!k || k === 'none') return;"
 ORDER_NEW = (
     "function setOrder(p, k, text, by) {\n"
@@ -108,6 +126,7 @@ def build_watch():
         .replace("/*@@SETUP@@*/", "\n".join(r(W + f) for f in WATCH_MODS))
     )
     main = sub(main, ORDER_OLD, ORDER_NEW, "watch role bound")
+    main = walltime(main, "watch")
     main = sub(main, "'./players.json'", "'../shared/players.json'", "watch players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
@@ -210,6 +229,7 @@ def build_broadcast():
         )
     )
     main = sub(main, ORDER_OLD, ORDER_NEW, "broadcast role bound")
+    main = walltime(main, "broadcast")
     # a refused order is said out loud, not acknowledged: the same line Watch uses
     main = sub(
         main,
