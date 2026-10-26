@@ -13,7 +13,7 @@ async function openWatch(page: Page, query = '?seed=2026&speed=4'): Promise<Fram
   return f;
 }
 
-// steps the match, three simulated minutes at a time, until the condition holds or the steps run out
+// steps the match, 2.5 simulated minutes at a time (3000 steps of 0.05 s), until the condition holds or the steps run out
 async function stepUntil(f: Frame, done: () => Promise<boolean>, max: number) {
   for (let i = 0; i < max && !(await done()); i++) await stepSim(f, 3000);
 }
@@ -69,5 +69,7 @@ test('each side swaps its goal at half time, and an event with no player carries
   }
   const bare = evs.filter((e) => !e.player);
   expect(bare.length, 'the match has events with no player').toBeGreaterThan(0);
+  // a no-player event that names a team, so the player check in attackOf is what makes it null (half_time alone names no team)
+  expect(bare.some((e) => e.team), 'a no-player event that names a team').toBe(true);
   for (const e of bare) expect(e.attack, `${e.type} with no player carries null`).toBeNull();
 });
