@@ -187,13 +187,13 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     lowered = question.casefold()
     if DECLINE.search(question):
         return Route("out_of_scope", None, (), "")
-    if names_outside_the_match(ctx, question, index) or (
-        history_qa.parse(question) is not None
-        and names_outside_the_match(ctx, history_qa.without_teams(question), index)
-    ):  # a real person in a history question is still out of scope
-        return Route("out_of_scope", None, (), "")
     if history_qa.parse(question) is not None:
+        # a real person in a history question is still out of scope; the nations are not names
+        if names_outside_the_match(ctx, history_qa.without_teams(question), index):
+            return Route("out_of_scope", None, (), "")
         return Route("history", None, (), "")
+    if names_outside_the_match(ctx, question, index):
+        return Route("out_of_scope", None, (), "")
     teams = tuple(t for t in (ctx.home, ctx.away) if ctx.club_name(t).casefold() in lowered)
     if FUTURE_CUE.search(question):
         return Route("abstain", None, teams, "")  # we never predict

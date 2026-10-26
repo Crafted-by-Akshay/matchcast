@@ -44,7 +44,24 @@ def _side_result(r: dict[str, str], team: str) -> str:
     return "won" if mine > theirs else "lost" if mine < theirs else "drawn"
 
 
-def test_match_questions_are_not_history() -> None:
+def test_multi_word_nations_are_history_and_not_out_of_scope() -> None:
+    index = Bm25Index(load_kb(KB))
+    ctx = SimpleNamespace(allowed_names=frozenset())
+    for question in (
+        "Costa Rica results in 2022",
+        "Ivory Coast results in 2022",
+        "South Korea record v Japan all-time",
+    ):
+        assert route(ctx, question, index).intent == "history", question
+
+
+def test_a_scorer_or_outcome_question_with_a_year_is_still_a_match_question() -> None:
+    assert qa.parse("Who scored for Argentina in 2026?") is None
+    assert qa.parse("Argentina v Brazil score in 2026") is None
+    assert qa.parse("Argentina v Brazil record in 2026") is not None
+
+
+def test_match_questions() -> None:
     for question in (
         "How many shots does Argentina have so far?",
         "Who scored for Northgate FC?",

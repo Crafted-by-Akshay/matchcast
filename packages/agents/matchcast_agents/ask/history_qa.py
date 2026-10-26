@@ -42,6 +42,8 @@ _LIVE = re.compile(
 _RECORD = re.compile(
     r"\b(record|head[- ]to[- ]head|all[- ]time|history|ranking|elo|results)\b", re.I
 )
+# a scorer or result question about a match, which a year alone does not make a history question
+_MATCH_OUTCOME = re.compile(r"\b(scor\w*|scoreline|who won|winner)\b", re.I)
 _H2H = re.compile(r"\b(record|head[- ]to[- ]head|all[- ]time|history|ranking|elo)\b", re.I)
 _TOP = re.compile(
     r"\b(best|top|strongest)\b.*\b(teams?|nations?|sides?|countries)\b"
@@ -76,6 +78,8 @@ def _teams_in(question: str) -> list[str]:
 def parse(question: str) -> Query | None:
     """The history question in ``question``, or None when it is not one (a match question stays)."""
     if _LIVE.search(question):
+        return None
+    if _MATCH_OUTCOME.search(question) and not _RECORD.search(question):
         return None
     years = [int(y) for y in _YEAR.findall(question)]
     year = years[0] if years and MIN_YEAR <= years[0] <= MAX_YEAR else None
