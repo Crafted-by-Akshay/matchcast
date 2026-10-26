@@ -12,7 +12,7 @@ test.skip(!!process.env.E2E_BASE_URL, 'PR checks only: a fixture api feeds the d
 
 const RECAP = { feed: 'catch_me_up', minute: 37, text: 'After 37 minutes, Northgate FC lead Coastal Rovers 1-0. Northgate FC scored in minute 23.', word_count: 15, cut_sequence: 41,
   source_event_ids: ['E3', 'E9', 'E12'] };
-type Reply = { status: number; body?: any; headers?: Record<string, string> };
+type Reply = { status: number; body?: any; headers?: Record<string, string>; delay?: number };
 
 async function withApi(cmu: (q: { minute: string | null; session: string | null; lang: string | null; n: number }) => Reply, body: (api: string, hits: string[], posts: { n: number }) => Promise<void>) {
   const hits: string[] = [], posts = { n: 0 }, sockets = new Set<any>();
@@ -24,7 +24,8 @@ async function withApi(cmu: (q: { minute: string | null; session: string | null;
       if (/\/catch-me-up/.test(q.url!)) {
         hits.push(q.url!);
         const u = new URL(q.url!, 'http://x'), a = cmu({ minute: u.searchParams.get('minute'), session: u.searchParams.get('session_id'), lang: u.searchParams.get('lang'), n: hits.length });
-        r.writeHead(a.status, { 'Content-Type': a.status >= 400 ? 'application/problem+json' : 'application/json', ...cors, ...(a.headers || {}) }); return r.end(JSON.stringify(a.body || {}));
+        const send = () => { r.writeHead(a.status, { 'Content-Type': a.status >= 400 ? 'application/problem+json' : 'application/json', ...cors, ...(a.headers || {}) }); r.end(JSON.stringify(a.body || {})); };
+        if (a.delay) { setTimeout(send, a.delay); return; } return send();
       }
       if (/\/stream/.test(q.url!)) { r.writeHead(200, { 'Content-Type': 'text/event-stream', ...cors }); r.write('event: status\ndata: {"status":"live"}\n\n'); return; }
       r.writeHead(404, cors); r.end();
@@ -221,7 +222,9 @@ test('lang: the shell language goes on the request, a returned variant is shown 
     await expect(card).toContainText(/Translated/);
     await expect(card).not.toContainText('Showing English');
     await expect(card).not.toContainText('After 37 minutes');
-    await expect(card).toContainText('Verified: recounted from 3 events');
+    await expect(card).toContainText('English recap recounted from 3 events');
+    await expect(card).not.toContainText('Verified: recounted');
+    await expect(card).not.toContainText('words');
     expect(hits.length).toBe(1);
     expect(new URL(hits[0], 'http://x').searchParams.get('lang')).toBe('es');
     expect(await card.locator('.fp-cu-text').getAttribute('lang')).toBe('es');
@@ -360,5 +363,64 @@ test('lang: the translated text is set as text; markup in it stays literal', asy
     await expect(card).toContainText('Tras 5 minutos, 1-0 & "x".', { timeout: 30_000 });
     expect(await card.locator('img').count()).toBe(0);
     expect(await f.evaluate(() => (window as any).__xss)).toBeUndefined();
+  });
+});
+
+test('lang: a language change while a read is in flight is not lost: one follow-up in the latest language, no storm', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi((q) => ({ ...withVariant(q), delay: q.n === 1 ? 2500 : 0 }), async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect.poll(() => hits.length, { timeout: 30_000 }).toBe(1);   // the English read is now in flight
+    await setLang(page, 'es'); await setLang(page, 'de'); await setLang(page, 'es');
+    await expect(card).toContainText(ES, { timeout: 30_000 });
+    await settle(page);
+    expect(hits.length, 'the English read plus one follow-up').toBe(2);
+    expect(new URL(hits[1], 'http://x').searchParams.get('lang')).toBe('es');
+    await expect(card).toContainText('Translated');
+  });
+});
+
+test('lang: back to the cached language while another is waiting for the gap: the waiting read is dropped and Watch ends on the cached recap', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(withVariant, async (api, hits) => {
+    const f = await open(page, api, 2000);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await setLang(page, 'es'); await setLang(page, 'en');
+    await page.waitForTimeout(2800);
+    expect(hits.length, 'no stale read for Spanish').toBe(1);
+    await expect(card).toContainText('After 37 minutes');
+    await expect(card).not.toContainText(/Translated|Catching you up/);
+  });
+});
+
+test('lang: leaving Catch me up drops a read that was waiting for the gap', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(withVariant, async (api, hits) => {
+    const f = await open(page, api, 6000);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    const card = f.locator('#mc-feedlines');
+    await expect(card).toContainText('After 37 minutes', { timeout: 30_000 });
+    await setLang(page, "es");
+    await f.evaluate(() => window.parent.postMessage({ src: "matchcast", type: "crew-feed-pick", key: "casual", lang: "en" }, "*"));   // what the picker posts for Casual, without the slow click
+    await page.waitForTimeout(7500);
+    expect(hits.length, "no read for Spanish").toBe(1);
+  });
+});
+
+test('lang: a Watch reload (feed-ready) forgets the open pick: a language change reads nothing until Catch me up is picked again', async ({ page }) => {
+  test.setTimeout(300_000);
+  await withApi(withVariant, async (api, hits) => {
+    const f = await open(page, api);
+    await f.getByRole('radio', { name: /Catch me up/ }).click();
+    await expect(f.locator('#mc-feedlines')).toContainText('After 37 minutes', { timeout: 30_000 });
+    await f.evaluate(() => window.parent.postMessage({ src: 'matchcast', type: 'feed-ready' }, '*'));
+    await settle(page);
+    await setLang(page, 'es');
+    await page.waitForTimeout(500);
+    expect(hits.length).toBe(1);
   });
 });

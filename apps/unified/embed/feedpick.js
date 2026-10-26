@@ -88,7 +88,7 @@
       const parts = [span('fp-cu-min', 'As of ' + shown.minute + "'")];
       if (shown.translated) parts.push(span('fp-cu-lang', 'Translated: ' + ((window.MC_LANG_NAMES && window.MC_LANG_NAMES[shown.lang]) || shown.lang)));
       else if (shown.word_count != null) parts.push(span('', shown.word_count + (shown.word_count === 1 ? ' word' : ' words')));
-      if (shown.events > 0) parts.push(span('fp-verified', 'Verified: recounted from ' + shown.events + (shown.events === 1 ? ' event' : ' events')));   // real: the route returned its source_event_ids
+      if (shown.events > 0) parts.push(span('fp-verified', (shown.translated ? 'English recap recounted from ' : 'Verified: recounted from ') + shown.events + (shown.events === 1 ? ' event' : ' events')));   // real: the route returned its source_event_ids, which are the English recap's; a translation is re-checked separately
       cuMeta.replaceChildren(...parts);
     }
     cuBtn.hidden = cu.state === 'none';
