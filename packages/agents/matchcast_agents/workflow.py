@@ -1328,10 +1328,15 @@ class MatchWorkflow:
             packets = half_time_mod.claims(piece, ctx.stream)
             # the claims carry the state they were counted from, so a late first-half control
             # that changes the state (though not the wording) is written again, not replayed
-            key = (piece.cut_sequence, json.dumps(packets, sort_keys=True))
+            key = (
+                piece.cut_sequence,
+                json.dumps(
+                    [packets, list(piece.sentences), list(piece.source_event_ids)], sort_keys=True
+                ),
+            )
             if key in self._half_times:  # a repeat call writes nothing new, so no new audit rows
                 cached = self._half_times[key]
-                return dict(cached) if cached is not None else None
+                return copy.deepcopy(cached) if cached is not None else None
             by_id = {c["claim_id"]: c for c in packets}
             for packet in packets:
                 validate(packet)
@@ -1432,7 +1437,7 @@ class MatchWorkflow:
                 "created_at": stamp,
             }
             self._half_times[key] = result
-            return dict(result)
+            return copy.deepcopy(result)
 
     async def _recap_persona(
         self,
