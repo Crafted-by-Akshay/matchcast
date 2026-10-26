@@ -80,7 +80,7 @@ function wiPage(el) {
   const cur = clips.find((x) => x.id === WI.clip) || clips[0];
   WI.current = cur;
   const o = wiOutcome(cur);
-  el.innerHTML = pgHead('What if', 'Simulated estimates. The same seed plays the fixture twice; one change at one minute.') +
+  el.innerHTML = pgHead('What if', 'Simulated estimates. The same seed plays the fixture twice; one change at one minute. The untouched run is the simulator\'s own re-run in the reference browser. Another browser can give a different result for the same seed, so read the direction of the change, not the exact score.') +
     '<div class="grid"><div class="s12">' + card(esc(cur.label), esc(cur.teams.home.club) + ' v ' + esc(cur.teams.away.club) + ' · seed ' + esc(cur.fixture.seed) + ' · ' + o.n + ' seeds',
       '<div class="key"><label class="field">Clip<select id="wi-clip">' + clips.map((x) => '<option value="' + x.id + '"' + (x.id === cur.id ? ' selected' : '') + '>' + esc(x.label) + '</option>').join('') + '</select></label>' +
       '<label class="field">View<select id="wi-view"><option value="side"' + (WI.view === 'side' ? ' selected' : '') + '>Side by side</option><option value="over"' + (WI.view === 'over' ? ' selected' : '') + '>Overlay</option></select></label>' +

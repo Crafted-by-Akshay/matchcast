@@ -17,4 +17,4 @@ Making a clip set (about 10 minutes per preset on 4 cores, 12 seeds):
 `clips/index.json` is committed; `build.py` copies it to `analyst/data/whatif/`.
 
 Known: a season fixture re-run does not reproduce the recorded season run (M001 recorded 0-0, 0 v 3 shots; the re-run is its own
-match from the same setup). The page says the untouched run is the simulator's own re-run.
+match from the same setup). The page says the untouched run is the simulator's own re-run in the reference browser, and that another browser can give a different result for the same seed.
