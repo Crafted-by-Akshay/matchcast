@@ -1382,7 +1382,7 @@ class MatchWorkflow:
         a = self.agents
         ctx = self._ctx()
         piece = half_time_mod.build(ctx)
-        if piece is None:
+        if piece is None or self._half_time_line_killed():
             return None
         stamp = _stamp(self._clock())
         packets = half_time_mod.claims(piece, ctx.stream)
@@ -1430,6 +1430,9 @@ class MatchWorkflow:
             extra={k: v for k, v in ctx.extra.items() if k not in later},
         )
         kept: list[str] = []
+        kept_claims: list[
+            str
+        ] = []  # only the claims a kept line cites: a dropped line's do not air
         dropped = 0
         for draft in half_time_mod.drafts(piece, packets):
             self._agent(
@@ -1483,6 +1486,7 @@ class MatchWorkflow:
                 },
             )
             kept.append(draft.text)
+            kept_claims.extend(draft.claim_ids)
         if not kept:  # nothing survived the Verifier: hold the piece, never show it blank
             self._half_times[key] = None
             return None
@@ -1492,17 +1496,27 @@ class MatchWorkflow:
             "cut_sequence": piece.cut_sequence,
             "text": " ".join(kept),
             "lines_dropped": dropped,
-            "claim_ids": [c["claim_id"] for c in packets],
+            "claim_ids": list(dict.fromkeys(kept_claims)),
             "source_event_ids": list(piece.source_event_ids),
             "created_at": stamp,
         }
         self._half_times[key] = result
         return copy.deepcopy(result)
 
+    def _half_time_line_killed(self) -> bool:
+        """A desk kill on a stored half-time line (kill() accepts a verified line). A restart writes
+        the lines again, so the kill is read back before a write could mark the line verified."""
+        return any(
+            line.moment_id == "half_time" and line.status == "killed"
+            for line in self.store.lines(self.sk)
+        )
+
     async def _air_half_time(self, event: dict[str, Any]) -> None:
         """The half-time piece airs once, when the first half ends (AB#499). It is written whole or
         held (_write_half_time), and it airs with the same publication and onair records as a feed
-        line. A desk kill of the feed holds it; a replayed boundary does not air it twice."""
+        line. A desk kill of the feed holds it for good; a replayed boundary does not air it twice.
+        The kill and dedupe checks run before the write, so an aired or killed piece is not
+        verified again."""
         if HALF_TIME_PERSONA not in self.config.feed_lines:
             return
         payload = event["payload"]
@@ -1512,11 +1526,16 @@ class MatchWorkflow:
             and event["clock"]["period"] == 1
         ):
             return
-        piece = await self._write_half_time()
-        if piece is None or "half_time" in self.killed_feeds:
+        if "half_time" in self.killed_feeds:
             return
-        publication_id = f"pub-half-time-{piece['cut_sequence']}"
+        built = half_time_mod.build(self._ctx())
+        if built is None:
+            return
+        publication_id = f"pub-half-time-{built.cut_sequence}"
         if any(p["publication_id"] == publication_id for p in self.store.publications(self.sk)):
+            return
+        piece = await self._write_half_time()
+        if piece is None:
             return
         claims = []
         for claim_id in piece["claim_ids"]:
