@@ -652,7 +652,7 @@ function pushFeed() {
   post('broadcast', msg); post('analyst', msg);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const mins = (m) => (m < 1 ? '0:' + String(Math.floor(m * 60)).padStart(2, '0') : Math.floor(m) + "'");   // before minute 1 the match time reads as a clock
+const mins = (m) => (m < 1 ? '0:' + String(Math.floor(m * 60 + 1e-6)).padStart(2, '0') : Math.floor(m) + "'");   // before minute 1 the match time reads as a clock
 const nameOf = (k) => { const f = FX.find((x) => x.home.key === k || x.away.key === k); return f ? (f.home.key === k ? f.home.club : f.away.club) : k; };
 const teamsOf = (s) => ({ hk: s.h, ak: s.a, home: nameOf(s.h), away: nameOf(s.a) });
 // the claims ledger (EXP-10): one row per claim, newest first, filtered by verdict, agent and metric; the export is the same rows
@@ -845,7 +845,7 @@ function pushCards() {
   const r = AG.run; if (!r) return;
   for (const c of r.claims) {
     if (c.approval === 'pending' || c.approval === 'killed') continue;   // a line waiting for a person, or killed, reaches no view
-    const firstTotal = c.kind === 'xg_total' && r.claims.find((x) => x.kind === 'xg_total') === c;   // first-load: the early kick-off running total (recounted like any claim) is Watch's first checked line; later totals stay in the Agents and Analyst views
+    const firstTotal = c.kind === 'xg_total' && r.claims.find((x) => x.kind === 'xg_total') === c;   // first-load: the opening running total (recounted like any claim) is Watch's first checked line; later totals stay in the Agents and Analyst views
     if (!c.text || ((c.route === 'analyst' || c.kind === 'xg_total') && !firstTotal)) continue;
     const sig = c.verdict + '|' + c.source + '|' + c.text + '|' + JSON.stringify(c.tr || null);
     if (sentCards.get(c.id) === sig) continue;

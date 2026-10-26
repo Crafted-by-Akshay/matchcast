@@ -16,7 +16,7 @@ const AG = (() => {
     stat: { events: 0, claims: 0, verified: 0, repaired: 0, abstained: 0, moments: 0, predictions: 0, lines: 0, dropped: 0 }, aired: new Set() });
   const teamIx = (k) => (!run || k == null) ? -1 : k === run.names.hk ? 0 : k === run.names.ak ? 1 : -1;
   const teamName = (t) => (t === 0 ? run.names.home : run.names.away);
-  const clockOf = (m) => '0:' + String(Math.floor(m * 60)).padStart(2, '0');   // before minute 1 the match time reads as a clock (0:15), never as minute 0
+  const clockOf = (m) => '0:' + String(Math.floor(m * 60 + 1e-6)).padStart(2, '0');   // before minute 1 the match time reads as a clock (0:15), never as minute 0
   const min = (m) => (m < 1 ? clockOf(m) : Math.floor(m) + "'");
   const f2 = (x) => (+x).toFixed(2);
   const say = (who, minute, text, tone) => { run.feed.push({ minute, who, text, tone: tone || '' }); if (run.feed.length > 200) run.feed.shift(); };
