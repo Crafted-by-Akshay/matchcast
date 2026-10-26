@@ -232,6 +232,32 @@ test('a quiet stretch gets a booth exchange drawn from the match state, and not 
   expect(out.after).toBe(2);
 });
 
+test('a silence that goes on gets a fresh booth exchange every few seconds, and no line repeats its last one', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('long', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }], []);
+    const t0 = Date.now();
+    // twelve seconds of real time with no new action: the booth keeps talking, and each exchange is worded fresh
+    for (let s = 5; s <= 12; s += 1) CM.fill(t0 + s * 1000);
+    const fillers = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.text);
+    return { count: fillers.length, texts: fillers };
+  });
+  expect(out.count, 'a fill every 4 s of silence: two exchanges in 12 s').toBeGreaterThanOrEqual(4);
+  for (let i = 1; i < out.texts.length; i++) expect(out.texts[i], 'the booth does not repeat its last line').not.toBe(out.texts[i - 1]);
+});
+
+test('before any action the booth talks from the kick-off score, and names no player', async ({ page }) => {
+  await openShell(page, 'watch', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('start', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fill(Date.now() + 9000);   // nine seconds of real time, and not one event yet
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text }));
+  });
+  expect(out.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out[0].text, 'the score is the kick-off score').toContain('Ridgeview 0–0 Thames Rovers');
+});
+
 test('a live booth line keeps the speaker its persona gives it', async ({ page }) => {
   await openShell(page, 'watch', '?seed=2026');
   // one synchronous step: the Watch frame may reset the feed between awaits, so the lines are read straight after they are added
