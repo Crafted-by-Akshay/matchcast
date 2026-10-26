@@ -1,17 +1,39 @@
 // ---- unified shell hook: Watch ----
 MCS.view = 'watch';
 MCS.progress('Loading the stadium and players');
-// First-load budget: on a high-density screen the 3D pass (with bloom) draws at pixel ratio 1 until the first verified line is on screen
-// (or 20 s, whichever comes first), then returns to the ratio the engine chose. Looks softer for those first seconds, changes nothing else.
+// Pixel ratio of the 3D pass (bloom included). On a high-density screen it draws at ratio 1 (a) from ready until the first verified line
+// is on screen, or 20 s, whichever comes first (first-load budget), and (b) whenever the measured frame rate stays low: below 24 fps over
+// one 2 s window drops to ratio 1; it returns to the engine's ratio after three 2 s windows (6 s) at 50 fps or better, and a second drop is
+// kept for the rest of the session so the picture does not flap. Looks softer, changes nothing else; ratio 1 screens never change.
 const MCRes = (() => {
-  let full = 0, timer = 0;
+  const LOW = 24, HIGH = 50, WIN = 2000, CALM = 3;
+  let base = 0, startup = false, slow = false, timer = 0, drops = 0, calm = 0, w0 = 0, n = 0, raf = 0, last = 0;
   const R = () => { try { return window.__mc.composer.renderer; } catch (e) { return null; } };
-  const set = (k) => { const r = R(); if (r) { r.setPixelRatio(k); window.__mc.composer.setPixelRatio(k); } };
+  const apply = () => {
+    const r = R(); if (!r) return;
+    if (!base) base = r.getPixelRatio();
+    const k = startup || slow ? 1 : base;
+    if (base > 1 && r.getPixelRatio() !== k) { r.setPixelRatio(k); window.__mc.composer.setPixelRatio(k); }
+  };
+  const feed = (t) => {   // one animation frame at time t (ms)
+    if (!w0 || document.hidden) { w0 = t; n = 0; return; }   // a hidden tab pauses the frames: start the window again
+    n++;
+    if (t - w0 < WIN) return;
+    const fps = n * 1000 / (t - w0); w0 = t; n = 0; last = Math.round(fps);
+    if (base <= 1) return;   // nothing to drop to (or the pass has not started)
+    if (fps < LOW) { calm = 0; if (!slow) { slow = true; drops++; apply(); } }
+    else if (slow && drops < 2 && fps >= HIGH && ++calm >= CALM) { slow = false; calm = 0; apply(); }
+    else if (fps < HIGH) calm = 0;
+  };
+  const tick = (t) => { raf = requestAnimationFrame(tick); feed(t); };
   return {
-    low() { const r = R(); if (!r || full || r.getPixelRatio() <= 1) return; full = r.getPixelRatio(); set(1); timer = setTimeout(() => MCRes.full(), 20000); },
-    full() { clearTimeout(timer); if (!full) return; const k = full; full = 0; set(k); }
+    low() { const r = R(); if (!r || startup) return; if (!base) base = r.getPixelRatio(); if (base <= 1) return; startup = true; apply(); timer = setTimeout(() => MCRes.full(), 20000); if (!raf) raf = requestAnimationFrame(tick); },
+    full() { clearTimeout(timer); if (!startup) return; startup = false; apply(); },
+    feed, reset() { slow = false; drops = 0; calm = 0; w0 = 0; n = 0; apply(); },   // for tests, which feed their own frame times
+    stop() { cancelAnimationFrame(raf); raf = 0; }, state: () => ({ base, startup, slow, drops, fps: last })
   };
 })();
+window.__mcRes = MCRes;
 (() => {
   const Q = new URLSearchParams(location.search);
   const ready = setInterval(() => {
