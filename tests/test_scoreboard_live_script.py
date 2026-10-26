@@ -526,7 +526,8 @@ def test_a_finished_run_removes_its_partial_file(monkeypatch, tmp_path) -> None:
 def test_a_stale_partial_is_moved_aside_not_deleted_even_when_the_run_fails(
     monkeypatch, tmp_path
 ) -> None:
-    # the arms a dead run paid for are kept under a dated name, so a rerun does not pay again
+    # the arms a dead run paid for are kept under a dated name, so they can be read by hand; a
+    # rerun still pays for its own calls
     script = load_script()
     match_file = tmp_path / "match.json"
     match_file.write_text(json.dumps(SAVED))
@@ -598,8 +599,10 @@ def test_an_arm_is_printed_when_its_partial_cannot_be_written(
         ]
     )
     assert code == 0
-    printed = [line for line in capsys.readouterr().err.splitlines() if line.startswith("{")]
+    err = capsys.readouterr().err
+    printed = [line for line in err.splitlines() if line.startswith("{")]
     assert [json.loads(line) for line in printed] == [{"full_crew": arm}]
+    assert "NOT kept (printed above)" in err
 
 
 def test_a_failed_replace_leaves_the_file_that_was_there(monkeypatch, tmp_path) -> None:

@@ -13,7 +13,8 @@ a saved export (`--match`, a JSON file with `events`, `roster`, `names` and `tea
 api builds for a match). Each arm has its own budget of --max-calls model calls, one per
 complete() call (the SDK may retry one request inside a call). Calls past a budget are refused and
 fall back to the rules. The record says how many were sent, failed or refused, and how many agent
-calls a fallback answered. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
+calls a fallback answered. Each finished arm is kept in <out>.partial as it completes; an interrupt inside
+an arm loses only that arm's calls, which are not yet kept. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
 """
 
 from __future__ import annotations
@@ -59,7 +60,9 @@ def _iso_date(text: str) -> str:
 
 
 def _stamp() -> str:
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return datetime.now(UTC).strftime(
+        "%Y%m%dT%H%M%S%fZ"
+    )  # to the microsecond: no two move-asides clash
 
 
 def _replace(path: Path, data: dict) -> None:
@@ -162,16 +165,19 @@ def main(argv: list[str] | None = None) -> int:
     def keep_arm(key: str, arm: dict) -> None:
         # each arm is written as it completes, so a later failure does not lose a paid arm
         arms[key] = arm
+        kept = True
         try:
             _replace(partial, {"kind": "crew_live_partial", "arms": arms})
         except OSError as error:  # the run goes on; the arm is printed so it is not lost
+            kept = False
             print(f"could not keep {key} in {partial} ({error}); its arm follows", file=sys.stderr)
             print(json.dumps({key: arm}, sort_keys=True), file=sys.stderr)
         cost = arm["cost"]
+        where = f"kept in {partial}" if kept else "NOT kept (printed above)"
         print(
             f"{key}: {arm['lines_aired']} lines, {arm['wrong_lines_aired']} wrong, "
             f"{cost['model_calls']} calls sent, {cost['model_errors']} failed, "
-            f"{cost['budget_refused']} refused; kept in {partial}",
+            f"{cost['budget_refused']} refused; {where}",
             file=sys.stderr,
         )
 
