@@ -95,11 +95,11 @@ def test_an_audio_line_with_no_gap_is_not_written(match) -> None:
 
 
 def test_two_described_events_in_one_gap_never_talk_over_each_other(match) -> None:
-    # e9 (a shot at 36.9 s) and e10 (the goal at 37.8 s) fall in one long gap: e10 waits its turn
+    # e9 (a shot at 36.9 s) takes the gap first; e10 (the goal at 37.8 s) then starts too late
     placed = sorted(
         audio_placements(ctx(match), [Window(0, 3_000_000)]), key=lambda d: d.speak_at_ms
     )
-    assert {d.source_event_id for d in placed} >= {"e9", "e10"}
+    assert "e9" in {d.source_event_id for d in placed}
     spans = [(d.speak_at_ms, d.speak_at_ms + spoken_span(0, d.text)[1]) for d in placed]
     assert all(end <= start for (_, end), (start, _) in zip(spans, spans[1:]))
 
@@ -145,3 +145,40 @@ def test_a_goal_described_after_its_deadline_is_not_written(match) -> None:
     late_only = [Window(42_778, 60_000)]
     lines = [line.line_id for line, _ in audio_drafts(ctx(match), late_only)]
     assert "line-audio-e10" not in lines
+
+
+def test_the_describer_does_not_announce_a_goal_the_engine_has_corrected(match) -> None:
+    correction = {
+        "event_id": "c3",
+        "stream_sequence": 9998,
+        "event_time_ms": 240_000,
+        "clock": {"period": 1, "period_elapsed_ms": 240_000},
+        "payload": {"type": "correction", "target_event_id": "e10"},
+    }
+    placed = audio_placements(ctx(match, [*match["events"], correction]), [Window(0, 3_000_000)])
+    assert "e10" not in {d.source_event_id for d in placed}
+
+
+def test_a_late_goal_reserves_no_gap_so_the_lines_after_it_keep_their_times(match) -> None:
+    # e10 is placed late, so it must not move the lines after it: their times match a match
+    # without e10 at all
+    window = [Window(36_000, 3_000_000)]
+    with_goal = audio_placements(ctx(match), window)
+    assert "e10" not in {d.source_event_id for d in with_goal}
+    without = [e for e in match["events"] if e["event_id"] != "e10"]
+    alone = audio_placements(ctx(match, without), window)
+    times = {d.source_event_id: d.speak_at_ms for d in with_goal}
+    assert times == {d.source_event_id: d.speak_at_ms for d in alone}
+
+
+def test_a_goal_correction_holds_every_score_line_while_the_recount_counts_it(match) -> None:
+    correction = {
+        "event_id": "c4",
+        "stream_sequence": 9998,
+        "event_time_ms": 240_000,
+        "clock": {"period": 1, "period_elapsed_ms": 240_000},
+        "payload": {"type": "correction", "target_event_id": "e10"},
+    }
+    drafts = ticker_drafts(ctx(match, [*match["events"], correction]))
+    assert not any(line.text.startswith(("Goal:", "Own goal")) for line, _ in drafts)
+    assert "line-ticker-e109" in [line.line_id for line, _ in drafts]

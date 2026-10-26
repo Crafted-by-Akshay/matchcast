@@ -88,12 +88,17 @@ def _claims(ctx: MatchContext, line_id: str, metrics: list[str], upto: int) -> l
 
 
 def _goal_retracted(ctx: MatchContext) -> bool:
-    """Whether any goal in the match is retracted. The Verifier's recount still counts a retracted
-    goal (quality lane: verify/checks.py recompute), so a score line after one would be refused
-    as a number mismatch. The line is not written instead, and it stays unwritten until the
-    recount skips retracted events."""
+    """Whether any goal in the match is retracted or corrected.
+
+    The Verifier's recount (quality lane: verify/checks.py recompute) skips only the control
+    events themselves, so it still counts a retracted or corrected goal. A score line after one
+    would be refused as a number mismatch; the line is not written instead, until the recount
+    skips the events a control holds.
+    """
     targets = {
-        e["payload"]["target_event_id"] for e in ctx.events if e["payload"]["type"] == "retraction"
+        e["payload"]["target_event_id"]
+        for e in ctx.events
+        if e["payload"]["type"] in ("retraction", "correction")
     }
     return any(e["event_id"] in targets and e["payload"]["type"] == "goal" for e in ctx.events)
 
@@ -148,8 +153,8 @@ def audio_placements(ctx: MatchContext, windows: list[Window]) -> list[Descripti
         if event["event_id"] in held or not event_metrics(event["payload"]):
             continue
         described = describe(ctx, event, free)
-        if described is None:
-            continue
+        if described is None or described.late:
+            continue  # a late goal is not written, so it reserves no gap for a later line
         _, length = spoken_span(0, described.text)
         free = take(free, described.speak_at_ms, described.speak_at_ms + length)
         placed.append(described)

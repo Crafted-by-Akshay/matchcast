@@ -6,13 +6,14 @@ line waits for the producer, and a derived line that fails repair is dropped.
 Three lanes decide what a verified line does next:
 
 - booth: the two commentary voices. They wait in the producer queue in producer mode.
-- derived: the fan feeds that have a persona today (casual, analyst). They never wait for
-  a person, and a line that fails repair is dropped, not escalated (CREW-4.3).
+- derived: the fan feeds that have a persona (casual, analyst, and the feed-only ticker and
+  audio description). They never wait for a person, and a line that fails repair is dropped,
+  not escalated (CREW-4.3).
 - queue: every other persona (broadcast, the watch modes, anything malformed). These keep
   today's behaviour and fail closed: they wait for the producer in any mode but auto.
 
-The other four feeds (audio description, catch-me-up, half-time, ticker) have no persona yet,
-so no line can be tagged with them. The half-time writer is in half_time.py (CREW-7.4); it
+The other two feeds (catch-me-up and half-time) have no persona yet, so no line can be tagged with
+them. The half-time writer is in half_time.py (CREW-7.4); it
 joins DERIVED_PERSONAS when the workflow and feed stream wire it in.
 """
 
