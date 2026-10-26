@@ -3,7 +3,7 @@ import { collectErrors, openShell, viewFrame } from './helpers';
 
 // Focused Analyst mode: five entries for the judge path (This match), the rest under More. Pages that are not in the nav keep their code and open by route.
 async function openPage(page: Page, route = 'live') {
-  await openShell(page, 'analyst');
+  await openShell(page, 'analyst', '?crew=0');
   const f = await viewFrame(page, 'analyst');
   await f.waitForFunction(() => typeof D !== 'undefined' && D.matches.length > 0, null, { timeout: 120_000 });
   await f.evaluate((r) => (window as any).go(r), route);

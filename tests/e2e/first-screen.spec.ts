@@ -56,10 +56,24 @@ test('Hindi casual lines keep every name and number, and a line with no rule sta
   expect(errs).toEqual([]);
 });
 
+// the crew UI is on by default, and with it the first screen has no Demo controls button, weather chip or camera presets (crew-analyst.spec); the fold itself is the ?crew=0 path
+test('With the crew UI on (the default) the first screen has no Demo controls, weather chip or camera presets, and Pause and Copilot stay', async ({ page }) => {
+  test.setTimeout(300_000);
+  await openShell(page, 'watch');
+  await ready('watch')(page);
+  const f = await viewFrame(page, 'watch');
+  await expect(f.locator('#mc-demo')).toBeHidden();
+  await expect(f.locator('#wxchip')).toBeHidden();
+  await expect(f.locator('#cams')).toBeHidden();
+  await expect(f.locator('#play')).toBeHidden();
+  await expect(f.locator('#mc-pause')).toBeVisible();
+  await expect(f.locator('#cpbtn')).toBeVisible();
+});
+
 test('Speed and names sit behind Demo controls, one click away; the camera presets stay off the first screen', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
-  await openShell(page, 'watch');
+  await openShell(page, 'watch', '?crew=0');
   await ready('watch')(page);
   const f = await viewFrame(page, 'watch');
   const btn = f.locator('#mc-demo');

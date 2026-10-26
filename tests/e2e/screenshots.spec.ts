@@ -10,7 +10,7 @@ const tab = (page: import('@playwright/test').Page, v: string) => page.evaluate(
 test('screenshots: Watch, Broadcast, Analyst and Agents', async ({ page }) => {
   test.skip(!dir, 'set SCREENSHOTS_DIR to write the images');
   test.setTimeout(480_000);
-  await openShell(page, 'watch');
+  await openShell(page, 'watch', '?crew=0');
   const w = await viewFrame(page, 'watch');
   await expect.poll(() => w.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
   await stepSim(w, 4000);   // several match minutes: events, a Match Pulse card, a score

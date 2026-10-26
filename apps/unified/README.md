@@ -58,7 +58,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 
 ## Trace panel (EXP-6)
 - `trace-panel.js` (`TP`): 'How was this made?' on any line (a Match Pulse card or the Agents tab's Provenance) opens a timeline: Producer task, Analyst claim with its tool names, Narrator draft, Verifier verdict and repair, Producer approval and publication, each with its time and 'rules' or 'model'. Rules steps carry no tokens. Data is the claim's own trace (`agents.js`) and its audit records.
-- `crew.js` (`CREW`): the crew data layer behind `?crew=1` (Simulated fixture until the real frames land). `crew-score.js`: the accuracy scoreboard in the Agents tab, drawn from `CREW.state.score` only.
+- `crew.js` (`CREW`): the crew data layer, **on by default** (`?crew=0` or `localStorage` `mc-crew=0` turns it off; `?demo=1` shows the Demo controls, weather chip and camera presets). A `Crew` button in the header opens the Agents tab at the Crew section. Simulated fixture until the real frames land. `crew-score.js`: the accuracy scoreboard in the Agents tab, drawn from `CREW.state.score` only.
 - 'Seed a bad claim' (Agents tab) makes the next score claim wrong so the Verifier rejects and repairs it; the trace shows the reason and the repair. Lines from the api show what the stream carried until the server trace summaries (AGT-3) are added to it.
 
 
