@@ -13,8 +13,9 @@ a saved export (`--match`, a JSON file with `events`, `roster`, `names` and `tea
 api builds for a match). Each arm has its own budget of --max-calls model calls, one per
 complete() call (the SDK may retry one request inside a call). Calls past a budget are refused and
 fall back to the rules. The record says how many were sent, failed or refused, and how many agent
-calls a fallback answered. Each finished arm is kept in <out>.partial as it completes; an interrupt inside
-an arm loses only that arm's calls, which are not yet kept. Needs FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT and `az login`.
+calls a fallback answered. Each finished arm is kept in <out>.partial as it completes; an interrupt
+inside an arm loses only that arm's calls, which are not yet kept. Needs FOUNDRY_PROJECT_ENDPOINT,
+FOUNDRY_MODEL_DEPLOYMENT and `az login`.
 """
 
 from __future__ import annotations
