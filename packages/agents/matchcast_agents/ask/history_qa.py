@@ -33,11 +33,16 @@ _YEAR = re.compile(r"\b(18[7-9]\d|19\d\d|20[0-2]\d)\b")
 _CITE = re.compile(r"\[(result|history):([^\]]+)\]")
 # a match question, not a history one: the score, shots and cards of the game on screen
 _LIVE = re.compile(
-    r"\b(so far|right now|currently|at the moment|this match|tonight|the score|live)\b", re.I
+    r"\b(so far|right now|now|currently|at the moment|this match|this game|tonight|the score|"
+    r"live)\b",
+    re.I,
 )
+# the words that make a team-only or two-team question a history one; a bare "result" or "ever"
+# is a match question ("Argentina v Brazil result", "has Argentina ever scored")
 _RECORD = re.compile(
-    r"\b(record|results?|head[- ]to[- ]head|all[- ]time|history|ever|ranking|elo)\b", re.I
+    r"\b(record|head[- ]to[- ]head|all[- ]time|history|ranking|elo|results)\b", re.I
 )
+_H2H = re.compile(r"\b(record|head[- ]to[- ]head|all[- ]time|history|ranking|elo)\b", re.I)
 _TOP = re.compile(
     r"\b(best|top|strongest)\b.*\b(teams?|nations?|sides?|countries)\b"
     r"|\b(teams?|nations?|sides?|countries)\b.*\b(best|top|strongest)\b",
@@ -83,10 +88,19 @@ def parse(question: str) -> Query | None:
     if year is None and not _RECORD.search(question):
         return None
     if len(set(teams)) >= 2:
+        if year is None and not _H2H.search(question):
+            return None  # "Argentina v Brazil results" is the match, not the head-to-head
         return Query("record", teams[0], teams[1], year)
     if year is None and re.search(r"\bresults?\b", question, re.I):
         return Query("by_year", teams[0])
     return Query("record", teams[0], None, year)
+
+
+def without_teams(question: str) -> str:
+    """The question with its national-team names taken out, for the name check."""
+    for team in _teams_in(question):
+        question = re.sub(rf"\b{re.escape(team)}\b", " ", question, flags=re.IGNORECASE)
+    return question
 
 
 def _metric(question: str) -> str | None:
@@ -179,8 +193,7 @@ def _answer_sentences(query: Query) -> list[str]:
     rows = _rows(query.team, query.opponent, query.year)
     if query.opponent is not None and rows:
         number, last = rows[-1]
-        comp = hist._competition(last[5])
-        out.append(f"The last meeting was {_when(last)}: {_score(last)}, {comp}. [result:{number}]")
+        out.append(_row_sentence(number, last))  # the most recent meeting, as its own row
     elif rows:
         out.extend(_row_sentence(number, m) for number, m in reversed(rows[-SHOWN_ROWS:]))
     return out
@@ -242,8 +255,27 @@ def _recount(kind: str, body: str) -> set[float] | None:
     return None
 
 
+def _expected(kind: str, body: str) -> str | None:
+    """The sentence a single citation must support, rebuilt from the file; None when unknown."""
+    if kind == "result":
+        rows = _by_number()
+        if not body.isdigit() or int(body) not in rows:
+            return None
+        return _row_sentence(int(body), rows[int(body)]).replace(f" [result:{body}]", "")
+    parts = body.split("|")
+    if parts[0] == "record" and len(parts) == 4 and _recount(kind, body) is not None:
+        _, team, opponent, year = parts
+        text, _ = _record_sentence(team, opponent or None, int(year) if year else None)
+        return text
+    return None
+
+
 def verified(sentence: str) -> bool:
-    """Every citation is real, and every number in the sentence is one its citations recount."""
+    """Every citation is real, and every number in the sentence is one its citations recount.
+
+    A sentence with one citation must also say exactly what that citation supports, so the
+    numbers cannot be swapped between rows or between sides of a score.
+    """
     cites = _CITE.findall(sentence)
     if not cites:
         return False
@@ -253,7 +285,11 @@ def verified(sentence: str) -> bool:
         if got is None:
             return False
         allowed |= got
-    plain = _CITE.sub("", sentence)
+    plain = _CITE.sub("", sentence).strip()
+    if len(cites) == 1:
+        expected = _expected(*cites[0])
+        if expected is not None and plain != expected.strip():
+            return False
     return all(n in allowed for n in extract_numbers(plain))
 
 

@@ -3,6 +3,7 @@
 import csv
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 from matchcast_agents.ask import Bm25Index, load_kb
 from matchcast_agents.ask import history_qa as qa
@@ -56,9 +57,13 @@ def test_match_questions_are_not_history() -> None:
 
 
 def test_the_router_sends_history_ahead_of_the_name_check() -> None:
-    index = Bm25Index(load_kb(KB))  # the route reads no match when the question is history
-    assert route(None, "Argentina results in 2022", index).intent == "history"
-    assert route(None, "Brazil's record v Germany", index).intent == "history"
+    index = Bm25Index(load_kb(KB))
+    ctx = SimpleNamespace(allowed_names=frozenset())  # a history question reads no match
+    assert route(ctx, "Argentina results in 2022", index).intent == "history"
+    assert route(ctx, "Brazil's record v Germany", index).intent == "history"
+    assert (
+        route(ctx, "Did Lionel Messi score for Argentina in 2022?", index).intent == "out_of_scope"
+    )
 
 
 def test_a_year_of_results_counts_what_the_file_holds() -> None:
@@ -94,7 +99,7 @@ def test_a_year_with_no_results_abstains_instead_of_guessing() -> None:
 
 def test_every_sentence_must_cite_and_recount_its_numbers() -> None:
     games = played_by("Argentina", 2022)
-    good = f"Argentina played {len(games)} in 2022. [history:record|Argentina||2022]"
+    good = qa._answer_sentences(qa.Query("record", "Argentina", None, 2022))[0]
     assert qa.verified(good)
     assert not qa.verified(good.replace(f"played {len(games)}", "played 99"))  # a wrong count
     assert not qa.verified("Argentina played 16 in 2022.")  # no citation

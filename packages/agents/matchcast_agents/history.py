@@ -27,7 +27,7 @@ HOME_EDGE = 100.0
 K = 30.0
 FORM_LENGTH = 5
 # federation names are trademarks; ADR-0020 keeps them out of what we show
-_FEDERATION = re.compile(r"\b(FIFA|UEFA)\b")
+_FEDERATION = re.compile(r"\b(FIFA|UEFA|IFAB|CONMEBOL|CONCACAF|CAF|AFC|OFC|OFC)\b")
 
 
 @lru_cache(maxsize=1)
