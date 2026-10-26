@@ -66,3 +66,12 @@ def test_a_goal_that_pays_nothing_says_nothing_of_a_storyline(match) -> None:
     with contextlib.suppress(ModelError):
         run(LiveNarrator(client).write(_ctx(match, {}), _task(goal), claims=[]))
     assert "storyline_payoff" not in client.facts[0]
+
+
+def test_a_payoff_for_another_goal_says_nothing_of_a_storyline(match) -> None:
+    goal = _goal(match)
+    other = {"payoff": {"cites": [1, goal["stream_sequence"] + 1]}}
+    client = Recording()
+    with contextlib.suppress(ModelError):
+        run(LiveNarrator(client).write(_ctx(match, other), _task(goal), claims=[]))
+    assert "storyline_payoff" not in client.facts[0]
