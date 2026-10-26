@@ -1,6 +1,7 @@
 """The half-time explainer airs once, when the first half ends (CREW-7.4, AB#499). No test here
 reaches a model: the rules agents write and verify the piece."""
 
+import copy
 import dataclasses
 
 import pytest
@@ -221,7 +222,7 @@ def test_no_piece_means_nothing_airs(match, monkeypatch) -> None:
     assert half_time_publications(flow) == []
 
 
-def test_a_line_killed_on_air_does_not_stop_the_aired_piece_reading_back(match) -> None:
+def test_killing_a_dropped_line_after_air_does_not_stop_the_read_back(match) -> None:
     flow = flow_with(match, personas=("casual", "analyst"))
     flow.config.feed_lines = LIVE_FEED_LINES
     flow.agents = dataclasses.replace(
@@ -251,3 +252,44 @@ def test_a_replayed_boundary_publishes_lines_a_crash_left_verified(match) -> Non
     assert statuses == {"published"}
     with pytest.raises(WorkflowError):
         run(flow.kill("line-halftime-1", "too late"))
+
+
+def test_a_crash_before_the_line_writes_still_refuses_the_kill(match) -> None:
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    run(flow.ingest(match["events"]))
+    for line in flow.store.lines(flow.sk):  # the publication was stored, its line writes were not
+        if line.moment_id == "half_time":
+            line.status = "verified"
+            flow._save_line(line)
+    with pytest.raises(WorkflowError) as error:  # no replay: the text on air is enough to refuse
+        run(flow.kill("line-halftime-1", "too late"))
+    assert error.value.code == "not_approvable"
+
+
+def test_the_read_back_publishes_lines_a_crash_left_verified(match) -> None:
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    run(flow.ingest(match["events"]))
+    for line in flow.store.lines(flow.sk):
+        if line.moment_id == "half_time":
+            line.status = "verified"
+            flow._save_line(line)
+    flow._half_times.clear()  # a fresh process asks for the piece
+    run(flow.half_time())
+    statuses = {line.status for line in flow.store.lines(flow.sk) if line.moment_id == "half_time"}
+    assert statuses == {"published"}
+
+
+def test_a_leftover_verified_line_is_not_put_on_air(match) -> None:
+    flow = flow_with(match, personas=("casual", "analyst"))
+    flow.config.feed_lines = LIVE_FEED_LINES
+    run(flow.ingest(match["events"]))
+    kept = flow.store.get_line(flow.sk, "line-halftime-1")
+    leftover = copy.copy(kept)  # written by an earlier write, not in the aired piece
+    leftover.line_id = "line-halftime-99"
+    leftover.text = "A sentence the aired piece does not carry."
+    leftover.status = "verified"
+    flow.store.put_line(flow.sk, leftover)
+    run(flow._air_half_time(first_half_end(match)))  # a replayed boundary
+    assert flow.store.get_line(flow.sk, "line-halftime-99").status == "verified"

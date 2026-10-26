@@ -1387,9 +1387,10 @@ class MatchWorkflow:
         stamp = _stamp(self._clock())
         aired_id = f"pub-half-time-{piece.cut_sequence}"
         aired = [p for p in self.store.publications(self.sk) if p["publication_id"] == aired_id]
-        if aired:  # aired already, and a fresh process asks again: read it back, write nothing, so
-            # the aired claims keep their approval; the kill guard below holds only before air
-            self._publish_half_time_lines()
+        if aired:  # aired already, and a fresh process asks again: read it back and write nothing
+            # but the publish of kept lines a crash left verified; the aired claims keep their
+            # approval, and the kill guard below holds only before air
+            self._publish_half_time_lines(aired[0])
             return {
                 "match_id": self.stream["match_id"],
                 "persona": "half_time",
@@ -1519,14 +1520,28 @@ class MatchWorkflow:
         self._half_times[key] = result
         return copy.deepcopy(result)
 
-    def _publish_half_time_lines(self) -> None:
-        """On air, a kept half-time line is published, as a ticker line is, so kill() refuses it.
-        Called again on every replay of an aired boundary, so a crash between the publication and
-        these writes cannot leave a line on air that kill() still accepts."""
+    def _publish_half_time_lines(self, publication: dict[str, Any]) -> None:
+        """On air, the kept half-time lines of this piece are published, as a ticker line is, so
+        kill() refuses them. A line is this piece's when its text is in the piece's text, so a
+        verified line left by an earlier write is not put on air. Called again on every replay of
+        an aired boundary, so a crash between the publication and these writes is repaired."""
         for line in self.store.lines(self.sk):
-            if line.moment_id == "half_time" and line.status == "verified":
+            if (
+                line.moment_id == "half_time"
+                and line.status == "verified"
+                and line.text in publication["text"]
+            ):
                 line.status = "published"
                 self._save_line(line)
+
+    def _on_air(self, line: LineRecord) -> bool:
+        """Whether a half-time line's text is on air. kill() refuses it then, even before its status
+        says published, so a crash after the publication cannot leave a killable line on air."""
+        return line.moment_id == "half_time" and any(
+            line.text in p["text"]
+            for p in self.store.publications(self.sk)
+            if p["publication_id"].startswith("pub-half-time-")
+        )
 
     def _half_time_line_killed(self) -> bool:
         """A desk kill on a stored half-time line (kill() accepts a verified line). A restart writes
@@ -1557,8 +1572,11 @@ class MatchWorkflow:
         if built is None:
             return
         publication_id = f"pub-half-time-{built.cut_sequence}"
-        if any(p["publication_id"] == publication_id for p in self.store.publications(self.sk)):
-            self._publish_half_time_lines()  # a crash after the publication left its lines verified
+        aired = [
+            p for p in self.store.publications(self.sk) if p["publication_id"] == publication_id
+        ]
+        if aired:  # a crash after the publication may have left its lines verified: publish them
+            self._publish_half_time_lines(aired[0])
             return
         piece = await self._write_half_time()
         if piece is None:
@@ -1589,7 +1607,7 @@ class MatchWorkflow:
         }
         validate(publication)
         self.store.put_publication(self.sk, publication)
-        self._publish_half_time_lines()
+        self._publish_half_time_lines(publication)
         self.stats["published"] += 1
         self.hub.publish("publication", f"pub:{publication_id}", publication)
         onair = {
@@ -2211,6 +2229,8 @@ class MatchWorkflow:
     ) -> LineRecord:
         async with self._lock:
             line = self._line(line_id)
+            if self._on_air(line):
+                raise WorkflowError("not_approvable", "a half-time line on air cannot be killed")
             if line.status in ("published", "killed"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
             line.status = "killed"
