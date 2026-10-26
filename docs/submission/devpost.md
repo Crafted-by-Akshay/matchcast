@@ -23,7 +23,7 @@ What the Verifier catches, measured: in the offline evaluation (`docs/eval/agent
 
 Live on Foundry (25 Oct, gpt-5-mini, `docs/eval/agents-eval-live.md`, a smaller replay of 14 verified lines): seeded bad claim caught 7 of 7 with 0 wrong claims shown, and 100% of 58 planted errors caught for the right reason. Ask, which has no model, answered 40 of 40 and stopped all 20 red-team prompts, as offline. Weak spots in the same run: 46.2% of 26 honest lines were rejected (the Verifier errs towards holding a line), so only 4 of 22 moments got a live line end to end (14 of 22 on rules), with no wrong line aired; 83.3% of 18 Narrator first drafts stayed inside their claims and the roster; 3 model calls fell back to the rules. A re-run after the crew deploy will replace these numbers; until it is recorded, these are the live numbers we quote.
 
-Resilience, shown on screen: the Agents tab's **Cut the model** button cuts one match's model mid-match. Each agent's rules twin takes over (ADR-0014), the status pill reads rules fallback, the lines keep coming and every fallback is audited; **Restore the model** brings the model back after the circuit breaker's 30 s. The header's **Event → on air** pill shows the measured median time from a Watch event to the verified line arriving in the browser.
+Resilience, shown on screen: the Agents tab's **Cut the model** button cuts one match's model mid-match. Each agent's rules twin takes over (ADR-0014), the status pill reads rules fallback, the lines keep coming and every fallback is audited; **Restore the model** brings the model back after the circuit breaker's 30 s. The header's **Event → on air** pill shows the measured median time from a Watch event reaching the app to the verified line arriving in the browser.
 
 Evidence: we have not yet run this with a rights holder. The team above is a design target, not a named customer or pilot. We will say so in the video and the README rather than claim one.
 
@@ -39,17 +39,17 @@ Microsoft Foundry, Microsoft Agent Framework, Model Context Protocol, Azure Cont
 
 ## How to try it (testing instructions, §4.8)
 
-No login is needed.
+No login is needed to watch, use the views or run the drills. Approving, editing or killing a line goes through Entra sign-in with the Producer role.
 1. Open [live demo URL].
 2. Watch view: the match starts on load. Pick Casual or Analyst in the Feed picker and read the same moment two ways; pick a language in the header.
 3. Press Why? on a line to see the claim and its cited events; open the trace panel to see each agent's step.
 4. Crew pill (Agents tab): on a goal, the spawn tree shows the specialists the crew ran; the scoreboard grades the full crew against a single agent and against the crew without its Verifier.
 5. Agents tab, Seed a bad claim: the Verifier rejects the wrong number and repairs it from the raw log. Then **Cut the model**: the rules twins take over and the lines keep coming.
-6. Broadcast view: the six-up feed monitor, and in producer mode approve a booth line and watch it go on air.
+6. Broadcast view: the six-up feed monitor; with Producer sign-in and producer mode, approve a booth line and watch it go on air.
 7. Locally without any cloud account: `make judge-path` (boots the api and the app and proves the flow), then the README's "Run locally".
 
 ## Demo video
-[public video URL]. Under two minutes; script in `docs/video-script.md`. (`docs/submission/shot-list.md` predates the crew build and national teams; the 26 Oct shot list replaces it.)
+[public video URL]. Under two minutes; script in `docs/video-script.md`. (`docs/submission/shot-list.md` predates the crew build and national teams; the crew-build shot list that replaces it is kept with the recording plan, outside the repo.)
 
 ## Links
 Repository: https://github.com/Crafted-by-Akshay/matchcast (must be public at submission). Architecture: `docs/architecture/`. Rules mapping: `docs/submission/rules-checklist.md`.
