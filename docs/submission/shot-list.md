@@ -1,6 +1,6 @@
 # Demo video shot list
 
-Status: **Draft**. Companion to `docs/video-script.md` (the scenes, timing and narration). This file says how to capture each shot and which proof line from `make judge-path` backs it, so the video can be re-shot from a clean machine. Under 2 minutes (rules: less than two, so end by 1:58), public, no third-party trademarks or music (rules §4.4).
+Status: **Superseded 26 Oct** by the crew-build shot list (failure drill, Event → on air pill, Crew spawn tree, six-up desk, ten languages); this file predates the crew build and the national teams, so its fixture codes and shots are out of date. Was: **Draft**. Companion to `docs/video-script.md` (the scenes, timing and narration). This file says how to capture each shot and which proof line from `make judge-path` backs it, so the video can be re-shot from a clean machine. Under 2 minutes (rules: less than two, so end by 1:58), public, no third-party trademarks or music (rules §4.4).
 
 ## Before filming (26 Oct)
 
