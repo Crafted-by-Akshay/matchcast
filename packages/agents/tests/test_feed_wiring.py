@@ -20,14 +20,13 @@ def test_ticker_lines_air_with_an_onair_record_that_names_their_event(match) -> 
         assert record["source_event_ids"] and set(record["source_event_ids"]) <= event_ids
 
 
-def test_audio_description_lines_air_in_the_commentary_gaps(match) -> None:
+def test_audio_descriptions_do_not_air_until_the_speak_time_check_lands(match) -> None:
+    # a later booth line can land inside a description placed in the gap before it (the fixture
+    # has 11 of 24 overlapping), so the description is not aired on a live match yet
     flow = flow_with(match, personas=BOOTH_PERSONAS)
-    flow.config.feed_lines = LIVE_FEED_LINES
+    flow.config.feed_lines = ("ticker", "audio_description")
     run(flow.ingest(match["events"]))
-    onair = [e.data for e in events_of(flow, "onair") if e.data["feed"] == "audio_description"]
-    assert onair, "a described event that fits a commentary gap must air"
-    for record in onair:
-        validate(record)
+    assert not [e for e in events_of(flow, "onair") if e.data["feed"] == "audio_description"]
 
 
 def test_the_library_writes_no_feed_lines_unless_the_match_turns_them_on(match) -> None:
