@@ -54,7 +54,7 @@ Everything except the Foundry resource (created by hand on 21 Oct) and Fabric is
 | `infra/modules/keyvault.bicep` | Key Vault, RBAC mode, soft delete, purge protection off (so `azd down --purge` works) |
 | `infra/modules/storage.bicep` | Account (shared key off), 9 tables, 10 containers, lifecycle rules from [07-data-and-storage.md](07-data-and-storage.md) §5 |
 | `infra/modules/eventhubs.bicep` | Basic namespace, hub `match-events`, local auth off |
-| `infra/modules/ai.bicep` | Content Safety, Speech, Translator (F0 free tier: 2M characters a month, the api keeps English past it), Vision (custom subdomains, local auth off), AI Search Free |
+| `infra/modules/ai.bicep` | Content Safety, Speech, Translator (S1), Vision (custom subdomains, local auth off), AI Search Free |
 | `infra/modules/containerapps.bicep` | Environment, apps `web`, `api`, `mcp`, scale rules, Easy Auth, Key Vault secret references |
 | `infra/modules/function.bicep` | Flex Consumption plan and `fn-matchcast-recap-dev` |
 | `infra/modules/databricks.bicep` | Workspace and access connector |
