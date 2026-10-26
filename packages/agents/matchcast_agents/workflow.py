@@ -1458,7 +1458,9 @@ class MatchWorkflow:
         """With ``recap_at_full_time``, the end of period 2 writes the recaps (AB#499): no recap
         function sees the match end there. Extra time is not covered (the function writes it on
         eventhubs). A replayed boundary writes nothing, since recap() skips the personas it has.
-        A failed recap is logged and the match goes on: the recap route can write it later."""
+        A failed recap of any kind is logged and the match goes on: the boundary is not checkpointed,
+        so a narrow catch would replay it on every batch and hold the match at full time. The recap
+        route can write the recap later."""
         if not self.config.recap_at_full_time:
             return
         payload = event["payload"]
@@ -1470,8 +1472,8 @@ class MatchWorkflow:
             return
         try:
             await self._write_recap()
-        except WorkflowError as error:
-            logger.warning("full-time recap for %s not written: %s", self.sk, error.code)
+        except Exception:  # best effort: see the docstring
+            logger.exception("full-time recap for %s not written", self.sk)
 
     async def _write_recap(
         self, personas: tuple[str, ...] = ("casual", "analyst", "broadcast"), *, force: bool = False
