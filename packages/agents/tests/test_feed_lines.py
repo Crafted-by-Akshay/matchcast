@@ -126,3 +126,22 @@ def test_goal_lines_wait_while_a_goal_is_retracted_but_card_lines_still_air(matc
     ids = [line.line_id for line, _ in drafts]
     assert not any(line.text.startswith(("Goal:", "Own goal")) for line, _ in drafts)
     assert "line-ticker-e109" in ids  # the red card is not affected by the goal retraction
+
+
+def test_the_describer_does_not_announce_a_goal_the_engine_has_retracted(match) -> None:
+    retraction = {
+        "event_id": "r3",
+        "stream_sequence": 9998,
+        "event_time_ms": 240_000,
+        "clock": {"period": 1, "period_elapsed_ms": 240_000},
+        "payload": {"type": "retraction", "target_event_id": "e10"},
+    }
+    placed = audio_placements(ctx(match, [*match["events"], retraction]), [Window(0, 3_000_000)])
+    assert "e10" not in {d.source_event_id for d in placed}
+
+
+def test_a_goal_described_after_its_deadline_is_not_written(match) -> None:
+    # the only gap starts 5 s after the goal at 37.8 s: a late goal line is not written
+    late_only = [Window(42_778, 60_000)]
+    lines = [line.line_id for line, _ in audio_drafts(ctx(match), late_only)]
+    assert "line-audio-e10" not in lines

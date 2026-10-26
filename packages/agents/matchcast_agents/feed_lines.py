@@ -134,12 +134,18 @@ def audio_placements(ctx: MatchContext, windows: list[Window]) -> list[Descripti
     """The described events, placed in the gaps left after the lines before each one.
 
     A placed line uses its time, so a later line cannot be talked over. An event that moves no
-    counter is not placed: no claim would back its line.
+    counter is not placed (no claim would back its line), and neither is an event a retraction or
+    a correction holds: the describer must not announce what the engine has taken back.
     """
+    held = {
+        e["payload"]["target_event_id"]
+        for e in ctx.events
+        if e["payload"]["type"] in ("retraction", "correction")
+    }
     free = list(windows)
     placed = []
     for event in sorted(ctx.events, key=lambda e: e["stream_sequence"]):
-        if not event_metrics(event["payload"]):
+        if event["event_id"] in held or not event_metrics(event["payload"]):
             continue
         described = describe(ctx, event, free)
         if described is None:
@@ -151,10 +157,16 @@ def audio_placements(ctx: MatchContext, windows: list[Window]) -> list[Descripti
 
 
 def audio_drafts(ctx: MatchContext, windows: list[Window]) -> list[tuple[DraftLine, list[Claim]]]:
-    """One DraftLine per placed description, backed by the counters of its event."""
+    """One DraftLine per placed description, backed by the counters of its event.
+
+    A goal described late (its gap starts more than 3 s after it) is not written: the goal's
+    description must be spoken within the deadline, so a late one would only mislead.
+    """
     events = {e["event_id"]: e for e in ctx.events}
     drafts = []
     for described in audio_placements(ctx, windows):
+        if described.late:
+            continue
         event = events[described.source_event_id]
         line_id = f"line-audio-{event['event_id']}"
         claims = _claims(ctx, line_id, event_metrics(event["payload"]), event["stream_sequence"])
