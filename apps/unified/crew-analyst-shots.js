@@ -155,7 +155,7 @@ const ALX = (() => {
     }).join('');
     const list = idx.map((i) => {
       const e = r.events[i], d = e.data, sd = sideOf(r, e.team);
-      return '<li><button type="button" data-shot-pick="' + i + '" data-side="' + sd + '" aria-pressed="' + (i === s.sel) + '">' + esc(mn(e.minute)) + ' <b>' + esc(e.player || '') + '</b> · ' + esc(cl[sd]) + ' · xG ' + f2(d.xg) + ' · ' + fateOf(d) + ' · ' + band(+d.xg || 0) + '</button></li>';
+      return '<li><button type="button" data-shot-pick="' + i + '" data-focus-id="shot-' + i + '" data-side="' + sd + '" aria-pressed="' + (i === s.sel) + '">' + esc(mn(e.minute)) + ' <b>' + esc(e.player || '') + '</b> · ' + esc(cl[sd]) + ' · xG ' + f2(d.xg) + ' · ' + fateOf(d) + ' · ' + band(+d.xg || 0) + '</button></li>';
     }).join('');
     const st = s.sel >= 0 && r.events[s.sel] && r.events[s.sel].type === 'shot' && idx.includes(s.sel) ? statusFor(r, s.sel) : IDLE;
     h += '<div class="key"><span data-side="0"' + fav(0, f) + '>' + esc(cl[0]) + ' · ' + n[0] + ' shots · xG ' + f2(xg[0]) + '</span><span data-side="1"' + fav(1, f) + '>' + esc(cl[1]) + ' · ' + n[1] + ' shots · xG ' + f2(xg[1]) + '</span></div>'
@@ -166,14 +166,14 @@ const ALX = (() => {
     return h + '</section>';
   }
 
-  // replaces a panel's html. Keyboard focus on a shot and the list's scroll position survive the redraw
+  // replaces a panel's html. Keyboard focus (on an element marked data-focus-id) and the shot list's scroll position survive the redraw
   function setHtml(root, html) {
-    const f = document.activeElement, k = f && root.contains(f) && f.hasAttribute && f.hasAttribute('data-shot-pick') ? f.getAttribute('data-shot-pick') : null;
+    const f = document.activeElement, id = f && root.contains(f) && f.getAttribute ? f.getAttribute('data-focus-id') : null;
     const before = root.querySelector('.xg-list'), top = before ? before.scrollTop : 0;
     root.innerHTML = html;
     const after = root.querySelector('.xg-list');
     if (after) after.scrollTop = top;
-    if (k !== null) { const b = root.querySelector('.xg-list [data-shot-pick="' + k + '"]'); if (b) b.focus(); }
+    if (id !== null) { const b = root.querySelector('[data-focus-id="' + id + '"]'); if (b) b.focus(); }
   }
 
   // after a panel is in the page: draw the shot's replay layer. A redraw during a replay resumes it; a tap starts it again; otherwise the finished state
@@ -224,21 +224,30 @@ const ALX = (() => {
     pick(+t.getAttribute('data-shot-pick'), root);
   });
 
+  // the card kinds: each draws into its container and returns the ids of the events it read
+  const kinds = {
+    shot_map(container, params, r) {
+      renderInto(container, params);
+      return r ? shots(r, params).map((i) => r.events[i].id) : [];
+    },
+  };
+  // a view (crew-analyst-momentum.js, ...) adds its kind: fn(container, params, r) draws and returns the citation ids
+  function register(kind, fn) { kinds[kind] = fn; }
+
   // window.MC.analysis: the Ask lane's cards. Unknown kinds are Planned, not drawn
   window.MC = window.MC || {};
   window.MC.analysis = {
     render(kind, params, container) {
       if (!container) return { kind, status: 'empty', citations: [] };
-      if (kind !== 'shot_map') { container.textContent = 'Planned: this view is not built yet.'; return { kind, status: 'planned', citations: [] }; }
+      const fn = kinds[kind];
+      if (!fn) { container.textContent = 'Planned: this view is not built yet.'; return { kind, status: 'planned', citations: [] }; }
       const r = typeof AG !== 'undefined' ? AG.run : null;
       container.setAttribute('data-mc-analysis', kind);
       cards.set(container, params || {});
-      renderInto(container, params || {});
-      if (!r) return { kind, status: 'empty', citations: [] };
-      const ids = shots(r, params).map((i) => r.events[i].id);
-      return { kind, status: ids.length ? 'ok' : 'empty', citations: ids };
+      const ids = fn(container, params || {}, r);
+      return { kind, status: !r ? 'empty' : ids.length ? 'ok' : 'empty', citations: ids };
     }
   };
 
-  return { panel, mounted, setHtml, pick, buildUp, shots };
+  return { panel, mounted, setHtml, pick, buildUp, shots, register };
 })();
