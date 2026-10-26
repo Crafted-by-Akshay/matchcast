@@ -1,6 +1,8 @@
 """Half-time explainer in the workflow (CREW-7.4, AB#465): verified lines, claims stored."""
 
+import pytest
 from conftest import run
+from matchcast_agents.workflow import WorkflowError
 
 
 def test_no_piece_before_the_first_half_has_ended(make_workflow) -> None:
@@ -85,3 +87,64 @@ def test_later_events_do_not_make_the_half_time_lines_stale(make_workflow, match
     run(flow.ingest([*match["events"], *second_half_events(match, count=10)]))
     piece = run(flow.half_time())
     assert piece["lines_dropped"] == 0
+
+
+def test_each_half_time_claim_shows_the_verdict_of_its_line(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    piece = run(flow.half_time())
+    lines = flow.store.lines(flow.sk)
+    for claim_id in piece["claim_ids"]:
+        cited = [ln for ln in lines if claim_id in ln.claim_ids]
+        assert any(ln.status == "verified" for ln in cited), claim_id
+
+
+def test_an_all_dropped_piece_is_held_not_shown_blank(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+
+    async def reject(draft, verdict):
+        return verdict.model_copy(update={"verdict": "rejected", "reason_code": "number_mismatch"})
+
+    flow._screen = reject
+    assert run(flow.half_time()) is None
+    half_time_lines = [ln for ln in flow.store.lines(flow.sk) if ln.moment_id == "half_time"]
+    assert half_time_lines and all(ln.status == "rejected" for ln in half_time_lines)
+    assert any(r["action"] == "line_rejected" for r in flow.store.audit_records(flow.sk))
+
+
+def test_a_repeat_call_writes_no_new_audit_rows(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    run(flow.half_time())
+    before = len(flow.store.audit_records(flow.sk))
+    again = run(flow.half_time())
+    assert again is not None
+    assert len(flow.store.audit_records(flow.sk)) == before
+
+
+def test_a_half_time_line_is_not_approved_on_its_own(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    run(flow.half_time())
+    line = next(
+        ln
+        for ln in flow.store.lines(flow.sk)
+        if ln.moment_id == "half_time" and ln.status == "verified"
+    )
+    with pytest.raises(WorkflowError, match="not approved"):
+        run(flow.approve(line.line_id))
+
+
+def test_a_repeat_held_call_writes_nothing(make_workflow, match) -> None:
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+
+    async def reject(draft, verdict):
+        return verdict.model_copy(update={"verdict": "rejected", "reason_code": "number_mismatch"})
+
+    flow._screen = reject
+    assert run(flow.half_time()) is None
+    before = len(flow.store.audit_records(flow.sk))
+    assert run(flow.half_time()) is None
+    assert len(flow.store.audit_records(flow.sk)) == before
