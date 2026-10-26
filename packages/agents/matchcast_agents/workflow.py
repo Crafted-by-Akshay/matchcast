@@ -1044,10 +1044,13 @@ class MatchWorkflow:
 
     # ---- catch-me-up on demand (CREW-7.3) ----------------------------------------------------
 
-    def catch_me_up(self, minute: int) -> dict[str, Any] | None:
+    def catch_me_up(self, minute: int, *, publish: bool = True) -> dict[str, Any] | None:
         """The recap as of a match minute. Every number it states is recounted from the stored
-        events up to the cut; a recap that does not recount is not published (None)."""
+        events up to the cut; a recap that does not recount is not published (None). A read
+        passes publish=False: the recap goes to the reader, not to every stream."""
         ctx = self._ctx()
+        if "catch_me_up" in self.killed_feeds:
+            return None  # the desk has killed this feed on the match
         piece = catch_me_up.build(ctx, minute)
         if piece is None:
             return None  # held (a correction before the cut) or over the word limit
@@ -1063,7 +1066,8 @@ class MatchWorkflow:
             "cut_sequence": piece.cut_sequence,
             "source_event_ids": list(piece.source_event_ids),
         }
-        self.hub.publish("catch_me_up", f"catch-me-up:{minute}", data)
+        if publish:
+            self.hub.publish("catch_me_up", f"catch-me-up:{minute}", data)
         return data
 
     # ---- full-time recap (AGT-15) -------------------------------------------------------

@@ -90,3 +90,12 @@ def test_a_retraction_after_the_minute_does_not_change_the_recount(match) -> Non
     events = [*match["events"], late]
     assert goal in workflow_mod._counted_events(events, 5)
     assert goal not in workflow_mod._counted_events(events, 50)
+
+
+def test_a_desk_kill_on_the_feed_holds_the_recap(make_workflow, match) -> None:
+    """A kill on the feed is audited and enforced: the recap does not publish."""
+    flow = make_workflow()
+    run(flow.ingest(match["events"]))
+    flow.killed_feeds.add("catch_me_up")
+    assert flow.catch_me_up(30) is None
+    assert not [e for e in flow.hub.history() if e.event == "catch_me_up"]
