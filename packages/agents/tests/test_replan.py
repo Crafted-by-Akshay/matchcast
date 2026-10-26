@@ -333,3 +333,23 @@ def test_the_timer_does_not_checkpoint_an_event_that_was_never_processed(
     assert run(look())
     assert flow.store.get_checkpoint(flow.sk)["processed_sequence"] == before
     assert not [e for e in flow.rundown if e["moment_id"].startswith("replan-")]
+
+
+def test_a_stored_revision_of_the_last_event_does_not_pass_the_timer_guard(
+    make_workflow, match
+) -> None:
+    # a corrected revision keeps its sequence, so the guard compares the revision too
+    clock = Clock()
+    flow = make_workflow(stall_clock=clock)
+    run(flow.ingest(match["events"][:5]))
+    revised = {**match["events"][4], "revision": 1}
+    assert flow.store.add_event(flow.sk, revised)
+    before = flow.store.get_checkpoint(flow.sk)["processed_sequence"]
+    clock.now += STALL_S * 3
+
+    async def look() -> bool:
+        return await flow._stall_tick()
+
+    assert run(look())
+    assert not [e for e in flow.rundown if e["moment_id"].startswith("replan-")]
+    assert flow.store.get_checkpoint(flow.sk)["processed_sequence"] == before
