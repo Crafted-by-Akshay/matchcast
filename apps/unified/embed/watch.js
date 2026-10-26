@@ -1,11 +1,48 @@
 // ---- unified shell hook: Watch ----
 MCS.view = 'watch';
 MCS.progress('Loading the stadium and players');
+// Pixel ratio of the 3D pass (bloom included). On a high-density screen it draws at ratio 1 (a) from ready until the first verified line
+// is on screen, or 20 s, whichever comes first (first-load budget), and (b) whenever the measured frame rate stays low: below 24 fps over
+// one 2 s window drops to ratio 1; it returns to the engine's ratio after three 2 s windows (6 s) at 50 fps or better, and a second drop is
+// kept for the rest of the session so the picture does not flap. Looks softer, changes nothing else; ratio 1 screens never change.
+const MCRes = (() => {
+  const LOW = 24, HIGH = 50, WIN = 2000, CALM = 3;
+  let base = 0, startup = false, slow = false, timer = 0, drops = 0, calm = 0, w0 = 0, n = 0, raf = 0, last = 0;
+  const R = () => { try { return window.__mc.composer.renderer; } catch (e) { return null; } };
+  const apply = () => {
+    const r = R(); if (!r) return;
+    if (!base) base = r.getPixelRatio();
+    const k = startup || slow ? 1 : base;
+    if (base > 1 && r.getPixelRatio() !== k) { r.setPixelRatio(k); window.__mc.composer.setPixelRatio(k); }
+  };
+  const feed = (t) => {   // one animation frame at time t (ms)
+    if (!w0 || document.hidden || t - w0 > WIN * 2.5) { w0 = t; n = 0; return; }   // first frame, a hidden tab, or a gap (frames do not fire while hidden or offscreen): start the window again
+    n++;
+    if (t - w0 < WIN) return;
+    const fps = n * 1000 / (t - w0); w0 = t; n = 0; last = Math.round(fps);
+    if (startup) return;   // first-load jank (shader compile) is not a verdict on the machine
+    if (base <= 1) return;   // nothing to drop to (or the pass has not started)
+    if (fps < LOW) { calm = 0; if (!slow) { slow = true; drops++; apply(); } }
+    else if (slow && drops < 2 && fps >= HIGH && ++calm >= CALM) { slow = false; calm = 0; apply(); }
+    else if (fps < HIGH) calm = 0;
+  };
+  const tick = (t) => { raf = requestAnimationFrame(tick); feed(t); };
+  return {
+    low() { const r = R(); if (!r || startup) return; if (!base) base = r.getPixelRatio(); if (base <= 1) return; startup = true; apply(); timer = setTimeout(() => MCRes.full(), 20000); if (!raf) raf = requestAnimationFrame(tick); },
+    full() { clearTimeout(timer); if (!startup) return; startup = false; apply(); },
+    feed, reset() { slow = false; drops = 0; calm = 0; w0 = 0; n = 0; apply(); },   // for tests, which feed their own frame times
+    restart() { w0 = 0; n = 0; },
+    stop() { cancelAnimationFrame(raf); raf = 0; }, state: () => ({ base, startup, slow, drops, fps: last })
+  };
+})();
+window.__mcRes = MCRes;
+document.addEventListener('visibilitychange', () => MCRes.restart());
 (() => {
   const Q = new URLSearchParams(location.search);
   const ready = setInterval(() => {
     if (!window.__mc || !players.length || !$('load').hidden || !MCS.clubs.ready) return;
     clearInterval(ready);
+    MCRes.low();
     MCS.progress('Setting up the squads and kits');
     if (Q.has('seed')) { MCS.apply(Q); kickOff(); MCS.started(); }
     $('kick').addEventListener('click', () => MCS.started());
@@ -231,6 +268,7 @@ MCS.progress('Loading the stadium and players');
     const d = e.data || {};
     if (d.src !== 'matchcast-shell' || d.type !== 'pulse') return;
     const c = d.card, i = kept.findIndex((x) => x.id === c.id);
+    if (c && c.verdict === 'verified') MCRes.full();   // the first verified line is up: draw at full sharpness
     if (i >= 0) kept[i] = c; else kept.push(c);
     while (kept.length > 10) { const o = kept.shift(); const el = cards.get(o.id + 'mcx-log'); if (el) el.remove(); cards.delete(o.id + 'mcx-log'); }
     draw(c, live, true); draw(c, log, false);

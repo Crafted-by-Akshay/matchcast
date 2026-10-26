@@ -173,21 +173,20 @@ def audio_drafts(ctx: MatchContext, windows: list[Window]) -> list[tuple[DraftLi
     A goal described late (its gap starts more than 3 s after it) is not written: the goal's
     description must be spoken within the deadline, so a late one would only mislead.
     """
-    events = {e["event_id"]: e for e in ctx.events}
-    drafts = []
-    for described in audio_placements(ctx, windows):
-        if described.late:
-            continue
-        event = events[described.source_event_id]
-        line_id = f"line-audio-{event['event_id']}"
-        claims = _claims(ctx, line_id, event_metrics(event["payload"]), event["stream_sequence"])
-        line = DraftLine(
-            line_id=line_id,
-            claim_ids=tuple(c["claim_id"] for c in claims),
-            persona=AUDIO,
-            text=described.text,
-            max_chars=AUDIO_MAX_CHARS,
-            origin="template",
-        )
-        drafts.append((line, claims))
-    return drafts
+    return [audio_line(ctx, d) for d in audio_placements(ctx, windows) if not d.late]
+
+
+def audio_line(ctx: MatchContext, described: Description) -> tuple[DraftLine, list[Claim]]:
+    """The DraftLine for one placed description, backed by the counters of its event."""
+    event = next(e for e in ctx.events if e["event_id"] == described.source_event_id)
+    line_id = f"line-audio-{event['event_id']}"
+    claims = _claims(ctx, line_id, event_metrics(event["payload"]), event["stream_sequence"])
+    line = DraftLine(
+        line_id=line_id,
+        claim_ids=tuple(c["claim_id"] for c in claims),
+        persona=AUDIO,
+        text=described.text,
+        max_chars=AUDIO_MAX_CHARS,
+        origin="template",
+    )
+    return line, claims

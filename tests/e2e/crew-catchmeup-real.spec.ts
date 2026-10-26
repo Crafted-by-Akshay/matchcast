@@ -68,4 +68,24 @@ test('the real route: 200 with the shape the block reads, 404-free path, the min
   await expect.poll(() => seen.length, { timeout: 30_000 }).toBe(1);
   expect(seen).toEqual(['200']);
   await expect(card.locator('.fp-cu-note')).toBeHidden();
+
+  // lang (PR #424), with no Translator configured (the script unsets TRANSLATOR_ENDPOINT, so no Azure call is possible): the route answers 200 with the English recap and no variants,
+  // 422 for a language outside the ten; the block, asked in Spanish, shows the English recap and says "Showing English", never "Translated". A real translation needs Azure Translator and is not covered here.
+  const es = await page.request.get(`${API}/v1/matches/${key.match_id}/catch-me-up`, { params: { session_id: key.session_id, minute: '8', lang: 'es' } });
+  expect(es.status(), await es.text()).toBe(200);
+  const esBody = await es.json();
+  expect(esBody.variants).toBeUndefined();
+  expect(esBody.text).toBe(body.text);
+  const bad = await page.request.get(`${API}/v1/matches/${key.match_id}/catch-me-up`, { params: { session_id: key.session_id, minute: '8', lang: 'xx' } });
+  expect(bad.status()).toBe(422);
+  await page.evaluate(() => { Object.defineProperty(FR.watch, 'live', { configurable: true, get: () => ({ minute: 8 }), set: () => {} }); });
+  seen.length = 0;
+  const langs: string[] = [];
+  page.on('request', (r) => { if (/catch-me-up/.test(r.url())) langs.push(new URL(r.url()).searchParams.get('lang') || ''); });
+  await page.evaluate(() => (window as any).setLang('es', null));
+  await expect.poll(() => langs.length, { timeout: 30_000 }).toBe(1);
+  expect(langs).toEqual(['es']);
+  await expect(card).toContainText('Showing English', { timeout: 30_000 });
+  await expect(card.locator('.fp-cu-text')).toHaveText(body.text);
+  await expect(card).not.toContainText('Translated');
 });

@@ -8,7 +8,7 @@ repo=${API_REPO:-$here}
 port=${API_PORT:-8765}
 grep -q "catch-me-up" "$repo/services/api/app/matches.py" || { echo "no catch-me-up route in $repo/services/api/app/matches.py"; exit 2; }
 log=$(mktemp)
-(cd "$repo" && CORS_ORIGINS="http://localhost:4173" MATCHCAST_AGENT_MODE=rules uv run --locked --all-packages uvicorn app.main:app --app-dir services/api --host 127.0.0.1 --port "$port" >"$log" 2>&1) &
+(cd "$repo" && env -u TRANSLATOR_ENDPOINT CORS_ORIGINS="http://localhost:4173" MATCHCAST_AGENT_MODE=rules uv run --locked --all-packages uvicorn app.main:app --app-dir services/api --host 127.0.0.1 --port "$port" >"$log" 2>&1) &
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true; rm -f "$log"' EXIT
 for _ in $(seq 1 60); do curl -fs "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 1; done

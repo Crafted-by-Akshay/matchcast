@@ -1398,12 +1398,17 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/matches/{match_id}/catch-me-up")
     async def get_catch_me_up(
-        match_id: str, session_id: str, minute: int = Query(ge=0, le=200)
+        match_id: str,
+        session_id: str,
+        minute: int = Query(ge=0, le=200),
+        # ADR-0023: the feed languages, the same as on the stream and in /ask
+        lang: Literal["en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans"] = "en",
     ) -> dict[str, Any]:
         """The catch-me-up recap as of a minute (CREW-7.3): the score and the most important
         events up to that minute, every figure recounted from the stored events. A read: it is
         not sent to the streams. Held (404) when a correction before the cut holds it, the desk
-        has killed the feed, or the recap does not recount."""
+        has killed the feed, or the recap does not recount. With lang, a checked translation
+        rides along as variants[lang]; the same re-check as a stream line keeps it or drops it."""
         if not registry.allow_catch_me_up(session_id):
             raise Problem(
                 429, "rate_limited", "too many catch-me-up reads a minute", retry_after=60
@@ -1412,6 +1417,18 @@ def build_router(registry: Registry) -> APIRouter:
         recap = await asyncio.to_thread(flow.catch_me_up, minute, publish=False)
         if recap is None:
             raise Problem(404, "not_found", f"the catch-me-up is held at minute {minute}")
+        if lang != "en":
+            key = f"catch-me-up:{minute}"
+            variant = await registry.translation.variant(
+                f"{session_id}/{match_id}",
+                key,
+                recap["text"],
+                lang,
+                _names(flow),
+                lambda reason: flow.record_translation_rejected(key, lang, reason),
+            )
+            if variant.text is not None:
+                recap = {**recap, "variants": {lang: variant.text}}
         return recap
 
     @router.post("/matches/{match_id}/ask")
