@@ -2,12 +2,15 @@
 
 from dataclasses import replace
 
+import pytest
 from matchcast_agents import half_time, personas
 from matchcast_agents.context import MatchContext
 from matchcast_agents.feeds import FEEDS
+from matchcast_agents.messages import PacketPersona, Persona
 from matchcast_agents.state import MatchState
 from matchcast_agents.verify.checks import run_checks
 from matchcast_contracts import validate
+from pydantic import TypeAdapter, ValidationError
 
 HOME, AWAY = "northgate", "southfield"
 MAX_SECONDS = next(f.max_seconds for f in FEEDS if f.key == "half_time")
@@ -325,3 +328,10 @@ def test_the_half_time_persona_is_written_but_never_asked_for() -> None:
     assert personas.packet_valid("half_time")  # a DraftLine may carry it
     assert not personas.valid("half_time")  # a viewer may not ask for it
     assert not personas.known("half_time", {}, {})
+
+
+def test_only_a_draft_line_may_carry_the_feed_only_persona() -> None:
+    # ProducerTask and LineRecord take the viewer's Persona, so the feed-only one is refused there
+    assert TypeAdapter(PacketPersona).validate_python("half_time") == "half_time"
+    with pytest.raises(ValidationError):
+        TypeAdapter(Persona).validate_python("half_time")

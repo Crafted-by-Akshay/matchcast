@@ -1254,8 +1254,14 @@ class MatchWorkflow:
                     value=packet["value"],
                     half_time=True,
                 )
-            # the Verifier sees the first half only, so a line cannot quote a later event
-            half = replace(ctx, events=piece.events, state=piece.state)
+            # the Verifier sees the first half only: no later event, engine truth or Vision pass
+            half = replace(
+                ctx,
+                events=piece.events,
+                state=piece.state,
+                truth=(),
+                extra={k: v for k, v in ctx.extra.items() if k != "vision_passes"},
+            )
             kept: list[str] = []
             dropped = 0
             for draft in half_time_mod.drafts(piece, packets):

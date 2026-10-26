@@ -4,9 +4,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from .personas import PACKET_PATTERN
+from .personas import PACKET_PATTERN, PATTERN
 
-Persona = Annotated[str, StringConstraints(pattern=PACKET_PATTERN)]
+Persona = Annotated[str, StringConstraints(pattern=PATTERN)]  # a viewer's persona
+PacketPersona = Annotated[str, StringConstraints(pattern=PACKET_PATTERN)]  # a DraftLine's
 Priority = Literal[1, 2, 3]
 VerdictName = Literal["verified", "review", "rejected"]
 ReasonCode = Literal[
@@ -61,7 +62,7 @@ class Skip(Packet):
 class DraftLine(Packet):
     line_id: str
     claim_ids: tuple[str, ...]
-    persona: Persona
+    persona: PacketPersona
     text: str
     max_chars: int
     origin: Literal["template", "model"] = "template"

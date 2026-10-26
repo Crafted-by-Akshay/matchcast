@@ -25,5 +25,6 @@ def test_the_piece_cites_only_first_half_events(make_workflow, match) -> None:
     flow = make_workflow()
     run(flow.ingest(match["events"]))
     piece = run(flow.half_time())
-    assert all(eid for eid in piece["source_event_ids"])
+    first_half = {e["event_id"] for e in match["events"] if e["stream_sequence"] <= 137}
+    assert set(piece["source_event_ids"]) <= first_half
     assert piece["cut_sequence"] == 137
