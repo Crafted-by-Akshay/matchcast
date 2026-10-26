@@ -399,6 +399,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
 <script src="crew.js"></script>
+<script src="maps.js"></script>
 <script src="crew-analyst.js"></script>
 <script src="crew-score.js"></script>
 <script src="crew-tree.js"></script>
@@ -1031,10 +1032,10 @@ window.addEventListener('message', (e) => {
   }
   if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; paintStory(); LV.persona(d.persona, d.lang); CM.setPersona(d.persona); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
    // the viewer's watch mode changed (EXP-4)
-  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) { post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); post('analyst', { src: 'matchcast-shell', type: 'live-frame', setup: d.setup, frame: d.frame }); /* the Analyst's live maps sample these positions (77_live.js) */ if (FR.watch) { FR.watch.stats = d.frame.stats; if (Date.now() - (FR.watch.feedAt || 0) > 1000) { FR.watch.feedAt = Date.now(); pushFeed(); } } } return; }   // Watch's pitch state goes to Broadcast (EXP-2)
+  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) { post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); post('analyst', { src: 'matchcast-shell', type: 'live-frame', setup: d.setup, frame: d.frame }); /* the Analyst's live maps sample these positions (77_live.js) */ MAPS.frame(d.setup, d.frame); /* and the shell's own live maps (maps.js) */ if (FR.watch) { FR.watch.stats = d.frame.stats; if (Date.now() - (FR.watch.feedAt || 0) > 1000) { FR.watch.feedAt = Date.now(); pushFeed(); } } } return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
-    if (keyOf(d.setup) === keyOf(M.setup)) post('analyst', { src: 'matchcast-shell', type: 'live-batch', setup: d.setup, batch: d.batch });
+    if (keyOf(d.setup) === keyOf(M.setup)) { post('analyst', { src: 'matchcast-shell', type: 'live-batch', setup: d.setup, batch: d.batch }); MAPS.events(d.setup, d.batch); }
     if (view === 'watch' && AG.run && AG.run.key === keyOf(d.setup)) CM.fromWatch(d.batch, d.moments);   // the continuous feed (feed.js): every moment, key event and quiet-stretch summary
     if (AG.run && AG.run.key === keyOf(d.setup)) { LV.events(d.batch); post('broadcast', { src: 'matchcast-shell', type: 'events', batch: d.batch }); pushFeed(); }
     return;
@@ -1044,7 +1045,7 @@ window.addEventListener('message', (e) => {
   const f = FR[view];
   if (d.setup) f.live = { setup: d.setup, started: !!d.started, over: !!d.over, score: d.score || [0, 0], minute: d.minute || 0 };
   if (d.type === 'start') {
-    LIVE_LAST = { setup: d.setup, roster: d.roster };
+    LIVE_LAST = { setup: d.setup, roster: d.roster }; MAPS.start(d.setup, d.roster);
     post('analyst', { src: 'matchcast-shell', type: 'live-start', setup: d.setup, roster: d.roster });
     // a new match was started inside the view (its own setup or New match): it becomes the shared match
     const s = d.setup, fxId = fixtureOf(s);

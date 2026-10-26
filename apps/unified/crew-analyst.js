@@ -48,6 +48,18 @@ const ALV = (() => {
   }
   const fav = (side, f) => (side === f ? ' data-fav="1"' : '');
 
+  // the live match's maps, drawn by MAPS (maps.js) through window.MC.analysis; the team and map choice are buttons
+  let mapTeam = 'home', mapKind = 'heatmap', mapAt = 0;
+  const mapPanel = (cl) => '<section class="wide" id="al-maps"><h3>Maps <small>live match, simulated: ' + esc(cl[0]) + ' v ' + esc(cl[1]) + '</small></h3>' +
+    '<div class="key" role="group" aria-label="Team">' + [['home', cl[0]], ['away', cl[1]]].map(([t, n]) => '<button type="button" data-team="' + t + '" aria-pressed="' + (mapTeam === t) + '">' + esc(n) + '</button>').join('') + '</div>' +
+    '<div class="key" role="group" aria-label="Map">' + [['heatmap', 'Heatmap'], ['pass_network', 'Pass network'], ['avg_positions', 'Average positions']].map(([k, l]) => '<button type="button" data-map="' + k + '" aria-pressed="' + (mapKind === k) + '">' + l + '</button>').join('') + '</div>' +
+    '<div id="al-map"></div></section>';
+  function drawMap(force) {
+    const el = hostEl && hostEl.querySelector('#al-map');
+    if (!el || !window.MC || !window.MC.analysis || (!force && Date.now() - mapAt < 2000)) return;
+    mapAt = Date.now(); window.MC.analysis.render(mapKind, { team: mapTeam }, el);
+  }
+
   // ---- panels, each a string of html built from the data the shell already holds
   function feedPanel(r) {
     const ver = [], sim = [];
@@ -155,6 +167,12 @@ const ALV = (() => {
     hostEl = document.createElement('div'); hostEl.id = 'al'; hostEl.setAttribute('role', 'region'); hostEl.setAttribute('aria-label', 'Analyst live view');
     hostEl.innerHTML = '<div class="alh"><h2>Analyst live view</h2><span class="sim" title="The match is the browser simulator, not a real fixture">Simulated</span><label>Favourite club <select id="al-fav"></select></label><span class="sp"></span><button type="button" id="al-full" title="Open the 27-page enterprise console">Full console</button></div><div id="al-body" class="grid"></div>';
     sec.insertBefore(hostEl, sec.firstChild);
+    hostEl.addEventListener('click', (e) => {   // the Maps section's team and map buttons
+      const t = e.target.closest && e.target.closest('[data-team],[data-map]'); if (!t) return;
+      if (t.dataset.team) mapTeam = t.dataset.team;
+      if (t.dataset.map) mapKind = t.dataset.map;
+      bodySig = ''; render(); drawMap(true);
+    });
     const bar = document.createElement('div'); bar.id = 'al-bar'; bar.hidden = true;
     const back = document.createElement('button'); back.type = 'button'; back.id = 'al-back'; back.textContent = 'Live view'; back.title = 'Back to the compact live view';
     bar.appendChild(back); sec.appendChild(bar);
@@ -173,8 +191,9 @@ const ALV = (() => {
     if (hs !== headSig) { headSig = hs; sel.innerHTML = cl ? cl.map((c, i) => '<option value="' + i + '"' + (i === f ? ' selected' : '') + '>' + esc(c) + '</option>').join('') : ''; sel.disabled = !cl; }
     let body;
     if (!cl) body = '<section class="wide"><p class="empty">Pick a fixture to see its live view.</p></section>';
-    else body = feedPanel(r) + controlPanel(r, cl, f) + shotPanel(r, cl, f) + passPanel(r, cl, f) + storyPanel(r, cl, f);
-    if (body !== bodySig) { bodySig = body; hostEl.querySelector('#al-body').innerHTML = body; }
+    else body = feedPanel(r) + mapPanel(cl) + controlPanel(r, cl, f) + shotPanel(r, cl, f) + passPanel(r, cl, f) + storyPanel(r, cl, f);
+    if (body !== bodySig) { bodySig = body; hostEl.querySelector('#al-body').innerHTML = body; mapAt = 0; }
+    drawMap();
   }
   // which of the live view and the console shows; the console iframe is created only when asked for
   function sync() {
