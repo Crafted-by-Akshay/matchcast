@@ -283,6 +283,29 @@ def _live_details(details: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in details.items() if k not in MODEL_TEXT_DETAILS}
 
 
+def _counted_events(events: Any) -> tuple[dict[str, Any], ...]:
+    """The stored events a recap counts from: a retracted event is not a fact, as in the recap."""
+    retracted = {
+        e["payload"]["target_event_id"] for e in events if e["payload"]["type"] == "retraction"
+    }
+    return tuple(e for e in events if e["event_id"] not in retracted)
+
+
+def _sentence_recounts(
+    events: tuple[dict[str, Any], ...],
+    piece: catch_me_up.CatchMeUp,
+    home: str,
+    sentence: str,
+    metrics: tuple[str, ...],
+) -> bool:
+    """A sentence with figures has them in the order of its metrics, each the recount of that
+    metric. A sentence with no figure (a named event) has nothing to recount."""
+    # the request's minute is a time, checked against the events by the cut, not a figure
+    figures = extract_numbers(sentence.replace(f"After {piece.minute} minutes,", ""))
+    expected = [float(recompute(events, m, piece.cut_sequence, home=home)) for m in metrics]
+    return not figures or figures == expected
+
+
 class MatchWorkflow:
     def __init__(
         self,
@@ -1025,16 +1048,10 @@ class MatchWorkflow:
         piece = catch_me_up.build(ctx, minute)
         if piece is None:
             return None  # held (a correction before the cut) or over the word limit
-        events = tuple(ctx.events)
+        events = _counted_events(ctx.events)
         for sentence, metrics in piece.sentences:
-            recounted = {
-                float(recompute(events, metric, piece.cut_sequence, home=ctx.home))
-                for metric in metrics
-            }
-            # the request's minute is a time, checked against the events by the cut, not a figure
-            figures = sentence.replace(f"After {piece.minute} minutes,", "")
-            if any(number not in recounted for number in extract_numbers(figures)):
-                return None  # a number that no quoted metric recounts: nothing airs
+            if not _sentence_recounts(events, piece, ctx.home, sentence, metrics):
+                return None  # a figure that the quoted metrics do not recount: nothing airs
         data = {
             "feed": "catch_me_up",
             "minute": piece.minute,
