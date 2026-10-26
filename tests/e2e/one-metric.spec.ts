@@ -81,8 +81,7 @@ test('One metric: possession is followed, and the shell hands the api its api na
   });
   await f.click('#fan-pop .fm-k[data-k="poss"]');
   await expect(f.locator('#fan-metric .mk')).toContainText('Possession');
-  const seen = await page.evaluate(() => (window as any).__personas as string[]);
-  expect(seen).toContain('metric:possession_share');
-  expect(seen).not.toContain('metric:poss');
+  await expect.poll(() => page.evaluate(() => ((window as any).__personas as string[]).includes('metric:possession_share'))).toBe(true);
+  expect(await page.evaluate(() => (window as any).__personas as string[])).not.toContain('metric:poss');
   expect(errs).toEqual([]);
 });
