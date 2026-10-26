@@ -293,6 +293,9 @@ class WorkflowConfig:
     # the template feeds aired on this match: () by default; the match service turns on
     # LIVE_FEED_LINES (AB#471), so the library and its evals keep their lines as they were
     feed_lines: tuple[str, ...] = ()
+    # the workflow writes the full-time recaps itself (AB#499). The match service turns this on
+    # where no recap function sees the match end (direct and memory); eventhubs keeps the function
+    recap_at_full_time: bool = False
     # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
     orchestrator: str = field(
         default_factory=lambda: os.environ.get("MATCHCAST_ORCHESTRATOR", "af")
@@ -766,6 +769,7 @@ class MatchWorkflow:
                 await self._run_moment(ctx, task)
         await self._write_feed_lines(event)
         await self._air_half_time(event)
+        await self._recap_at_full_time(event)
         self._note_aired(event)
 
     async def _write_feed_lines(self, event: dict[str, Any]) -> None:
@@ -1448,52 +1452,77 @@ class MatchWorkflow:
     ) -> dict[str, dict[str, Any]]:
         """Write, verify and store one recap per persona; a failing sentence is dropped."""
         async with self._lock:
-            a = self.agents
-            ctx = self._ctx()
-            todo = [p for p in personas if force or self.store.get_recap(self.sk, p) is None]
-            if todo:
-                moments = recap_mod.pick_moments(ctx)
-                tools = InProcessTools(ctx, ctx.state.max_sequence)
-                try:
-                    claims = recap_mod.final_claims(ctx, tools)
-                except ToolError as error:
-                    self._agent(
-                        "fallback_used",
-                        a.analyst,
-                        "recap",
-                        fallback_reason="tool_error",
-                        tool=error.tool,
-                    )
-                    raise WorkflowError("recap_unavailable", str(error)) from error
-                packets = [c for c, _ in claims]
-                for packet, call_id in claims:
-                    validate(packet)
-                    self.store.put_claim(
-                        self.sk,
-                        packet,
-                        {
-                            "moment_id": "recap",
-                            "agent": a.analyst.agent_id,
-                            "created_at": _stamp(self._clock()),
-                            "tool_call_ids": [call_id],
-                            "formula_inputs": {"metric": packet["metric"], "tool": "get_metrics"},
-                        },
-                    )
-                    self._agent(
-                        "claim_created",
-                        a.analyst,
-                        packet["claim_id"],
-                        metric=packet["metric"],
-                        value=packet["value"],
-                        tool_call_ids=[call_id],
-                        recap=True,
-                    )
-                for persona in todo:
-                    await self._recap_persona(ctx, persona, packets, moments)  # type: ignore[arg-type]
-                self.hub.publish(
-                    "recap_ready", f"recap:{self.stream['match_id']}", {"personas": todo}
+            return await self._write_recap(personas, force=force)
+
+    async def _recap_at_full_time(self, event: dict[str, Any]) -> None:
+        """With ``recap_at_full_time``, the end of period 2 writes the recaps (AB#499): no recap
+        function sees the match end there. Extra time is not covered (the function writes it on
+        eventhubs). A replayed boundary writes nothing, since recap() skips the personas it has.
+        A failed recap of any kind is logged and the match goes on. The boundary is not
+        checkpointed, so a narrow catch would replay it on every batch and hold the match at full
+        time. The recap route can write the recap later."""
+        if not self.config.recap_at_full_time:
+            return
+        payload = event["payload"]
+        if not (
+            payload["type"] == "period_boundary"
+            and payload.get("boundary") == "ended"
+            and event["clock"]["period"] == FULL_TIME_PERIOD
+        ):
+            return
+        try:
+            await self._write_recap()
+        except Exception:  # best effort: see the docstring
+            logger.exception("full-time recap for %s not written", self.sk)
+
+    async def _write_recap(
+        self, personas: tuple[str, ...] = ("casual", "analyst", "broadcast"), *, force: bool = False
+    ) -> dict[str, dict[str, Any]]:
+        """The recap body; the caller holds the match lock."""
+        a = self.agents
+        ctx = self._ctx()
+        todo = [p for p in personas if force or self.store.get_recap(self.sk, p) is None]
+        if todo:
+            moments = recap_mod.pick_moments(ctx)
+            tools = InProcessTools(ctx, ctx.state.max_sequence)
+            try:
+                claims = recap_mod.final_claims(ctx, tools)
+            except ToolError as error:
+                self._agent(
+                    "fallback_used",
+                    a.analyst,
+                    "recap",
+                    fallback_reason="tool_error",
+                    tool=error.tool,
                 )
-            return {p: r for p in personas if (r := self.store.get_recap(self.sk, p))}
+                raise WorkflowError("recap_unavailable", str(error)) from error
+            packets = [c for c, _ in claims]
+            for packet, call_id in claims:
+                validate(packet)
+                self.store.put_claim(
+                    self.sk,
+                    packet,
+                    {
+                        "moment_id": "recap",
+                        "agent": a.analyst.agent_id,
+                        "created_at": _stamp(self._clock()),
+                        "tool_call_ids": [call_id],
+                        "formula_inputs": {"metric": packet["metric"], "tool": "get_metrics"},
+                    },
+                )
+                self._agent(
+                    "claim_created",
+                    a.analyst,
+                    packet["claim_id"],
+                    metric=packet["metric"],
+                    value=packet["value"],
+                    tool_call_ids=[call_id],
+                    recap=True,
+                )
+            for persona in todo:
+                await self._recap_persona(ctx, persona, packets, moments)  # type: ignore[arg-type]
+            self.hub.publish("recap_ready", f"recap:{self.stream['match_id']}", {"personas": todo})
+        return {p: r for p in personas if (r := self.store.get_recap(self.sk, p))}
 
     async def half_time(self) -> dict[str, Any] | None:
         """Write and verify the half-time piece once the first half has ended (CREW-7.4).

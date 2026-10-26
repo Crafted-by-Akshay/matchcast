@@ -57,7 +57,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app import budget
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 from app.call import CallSocket
-from app.pipeline import Pipeline
+from app.pipeline import Pipeline, pipeline_mode
 from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
 from app.voice import (
@@ -473,6 +473,7 @@ class Registry:
                 approval_mode=info.get("approval_mode", "auto"),
                 hold_booth=bool(info.get("hold_booth", True)),
                 feed_lines=LIVE_FEED_LINES,
+                recap_at_full_time=pipeline_mode() != "eventhubs",
             )
             live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
@@ -732,6 +733,7 @@ def build_router(registry: Registry) -> APIRouter:
                 approval_mode=body.approval_mode,
                 hold_booth=body.hold_booth,
                 feed_lines=LIVE_FEED_LINES,
+                recap_at_full_time=pipeline_mode() != "eventhubs",
             )
             cut = ModelCut()
             players = body.roster.get("players")
