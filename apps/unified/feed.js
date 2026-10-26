@@ -45,6 +45,15 @@ const CM = (() => {
     (s) => 'The shape is all we can read so far.',
     (s) => 'Watch who wins the next possession and how they use it.',
   ];
+  // the newest action is a shot: the count in the window and the chance's own xG, both from the events
+  const FILL_SHOT_PBP = [
+    (s) => s.club + ' have ' + s.shots + ' shot' + (s.shots === 1 ? '' : 's') + ' in the last two minutes.',
+    (s) => 'Last chance: xG ' + f2(s.xg) + ' for ' + s.club + '.',
+  ];
+  const FILL_SHOT_COLOUR = [
+    (s) => 'The chance was worth ' + f2(s.xg) + ' xG.',
+    (s) => 'Keep an eye on the next ball into the box.',
+  ];
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
   const club = (ti) => (ti === 0 ? names.home : names.away);
@@ -116,7 +125,7 @@ const CM = (() => {
     for (const ev of batch || []) {
       if (ev.minute == null) continue;
       const ti = idx(ev.team);
-      events.push({ minute: +ev.minute, type: ev.type, ti, player: ev.player || null });
+      events.push({ minute: +ev.minute, type: ev.type, ti, player: ev.player || null, xg: +ev.xg || 0 });
       if (ev.type === 'goal' && ti >= 0) score[ti]++;
       if (ev.type === 'full_time') over = true;
       const line = lineOf(ev, ti);
@@ -149,15 +158,23 @@ const CM = (() => {
       return;
     }
     const ti = last.ti;
-    const passes = events.filter((e) => e.ti === ti && e.type === 'pass' && last.minute - e.minute <= 2).length;
-    const s = { club: club(ti), who: last.player || null, score: score.join('–'), home: names.home, away: names.away, at: Math.floor(last.minute), passes };
+    const inWindow = (type) => events.filter((e) => e.ti === ti && e.type === type && last.minute - e.minute <= 2).length;
+    const passes = inWindow('pass');
+    const s = { club: club(ti), who: last.player || null, score: score.join('–'), home: names.home, away: names.away, at: Math.floor(last.minute), passes, shots: inWindow('shot'), xg: last.xg };
+    // an attack (a shot, or a run of three passes) lifts the booth's voice; a quiet stretch stays calm
+    const tone = last.type === 'shot' || passes >= 3 ? 'hot' : '';
+    if (last.type === 'shot') {   // the newest action is a shot: its count and its chance, which the Watch line already gave
+      push({ minute: s.at, kind: 'filler', speaker: 'pbp', tone, text: FILL_SHOT_PBP[k % 2](s) });
+      push({ minute: s.at, kind: 'filler', speaker: 'colour', tone, text: FILL_SHOT_COLOUR[k % 2](s) });
+      return;
+    }
     if (passes === 0) {
       push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_QUIET_PBP[k % 2](s) });
       push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_QUIET_COLOUR[k % 2](s) });
       return;
     }
-    push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_PBP[k](s) });
-    push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_COLOUR[k](s) });
+    push({ minute: s.at, kind: 'filler', speaker: 'pbp', tone, text: FILL_PBP[k](s) });
+    push({ minute: s.at, kind: 'filler', speaker: 'colour', tone, text: FILL_COLOUR[k](s) });
   };
   setInterval(() => fill(), FILL_TICK_MS);
 

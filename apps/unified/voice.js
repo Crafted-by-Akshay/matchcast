@@ -30,6 +30,8 @@ const VC = (() => {
       if (!v && !lang.startsWith('en')) { done(); return; }   // no voice yet (Chrome fills the list late) or none for this language: caption only
       source = 'browser'; onChange();
       const u = new SpeechSynthesisUtterance(it.text); u.lang = lang; if (v) u.voice = v;
+      // the browser fallback has no SSML: the tone sets the pace and the pitch, so an attack is faster and higher than a pass
+      u.rate = it.tone === 'big' ? 1.12 : it.tone === 'hot' ? 1.06 : 0.97; u.pitch = it.tone === 'big' ? 1.2 : it.tone === 'hot' ? 1.1 : 1;
       u.onend = u.onerror = done; window.speechSynthesis.speak(u);
     };
     // Azure Speech (token from the api) when it is there, otherwise the browser voice; one voice per role and language

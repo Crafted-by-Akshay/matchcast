@@ -273,6 +273,54 @@ test('a corner as the newest action is not a build-up: with no pass in the windo
   expect(out.map((l) => l.text).join(' '), 'no build-up or possession claim without a pass').not.toMatch(/build-up|keep the ball|passes/);
 });
 
+test('a shot as the newest action gets a hot shot line: the shot count and the chance, not a build-up', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('shot', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 2, type: 'shot', team: 'H', player: 'Ben', fate: 'save', xg: 0.3 }], []);
+    CM.fill(Date.now() + 9000);
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text, tone: l.tone }));
+  });
+  expect(out.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out[0].text, 'the shot count is counted from the events').toContain('Ridgeview have 1 shot in the last two minutes.');
+  expect(out.map((l) => l.tone), 'an attack lifts the booth: both lines are hot').toEqual(['hot', 'hot']);
+});
+
+test('a build-up of three passes lifts the fill, and a quiet fill stays calm', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('build', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 1.5, type: 'pass', team: 'H', player: 'Ben' }, { minute: 2, type: 'pass', team: 'H', player: 'Cal' }], []);
+    CM.fill(Date.now() + 9000);
+    const hot = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.tone);
+    CM.reset('calm', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }], []);
+    CM.fill(Date.now() + 9000);
+    const calm = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.tone);
+    return { hot, calm };
+  });
+  expect(out.hot, 'a run of three passes is hot on both voices').toEqual(['hot', 'hot']);
+  expect(out.calm, 'a single pass is calm').toEqual(['', '']);
+});
+
+test('the browser voice speaks an attack faster and higher than a pass, with no Azure voice', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(async () => {
+    const spoken: { rate: number; pitch: number }[] = [];
+    const synth = window.speechSynthesis as any;
+    synth.speak = (u: any) => { spoken.push({ rate: u.rate, pitch: u.pitch }); setTimeout(() => u.onend && u.onend(), 0); };
+    VC.set(true);
+    VC.say('A pass.', { id: 'tone-calm', tone: '' });
+    await new Promise((r) => setTimeout(r, 400));
+    VC.say('A shot.', { id: 'tone-hot', tone: 'hot' });
+    await new Promise((r) => setTimeout(r, 400));
+    return spoken;
+  });
+  expect(out.length, 'both lines were spoken by the browser voice').toBe(2);
+  expect(out[1].rate, 'a hot line is faster').toBeGreaterThan(out[0].rate);
+  expect(out[1].pitch, 'a hot line is higher').toBeGreaterThan(out[0].pitch);
+});
+
 test('a team-less event such as half-time does not stop the fill: it counts from the last team action', async ({ page }) => {
   await openShell(page, 'analyst', '?seed=2026');
   const out = await page.evaluate(() => {
