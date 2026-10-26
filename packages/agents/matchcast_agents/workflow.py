@@ -7,6 +7,7 @@ a hash-chained audit record (ADR-0013: lines carry verdicts and approvals).
 
 import asyncio
 import copy
+import logging
 import os
 import re
 import time
@@ -107,6 +108,9 @@ ESCALATED_CODES = ("number_mismatch", "unknown_player", "unknown_source", "stale
 RUNDOWN_KEEP = 400
 # how often the stall timer looks at the clock: a silent feed replans too, not only on an event
 STALL_CHECK_S = 5.0
+# the final period: its ended boundary is full time, and the stall timer stops there
+FULL_TIME_PERIOD = 2
+logger = logging.getLogger(__name__)
 # the contract version of the crew frames (crew_ledger, crew_spawn); the audit stays on 1.1.0
 CREW_SCHEMA_VERSION = "1.3.0"
 # a specialist's report status, as the crew_spawn frame names it
@@ -321,7 +325,7 @@ class MatchWorkflow:
         # wall time since the last verified line; it starts with the first event
         self._stall = StallClock(clock=stall_clock)
         self._stall_started = False
-        self._stall_task: asyncio.Task[None] | None = None
+        self._stall_task: asyncio.Task[None] | None = None  # the timer; it stops at full time
         self._replans = 0  # numbers the replan moments, so two replans never share an id
         self._plan: str | None = None  # the last storyline the stall replan chose; recorded only
         self._vision_lines = 0
@@ -529,6 +533,7 @@ class MatchWorkflow:
         """Validate the whole batch first (all or nothing), then process each event in order."""
         self.validate_batch(events)
         async with self._lock:
+            self._start_stall_timer()  # a resumed workflow may see no new event: the timer runs
             await self._catch_up()
             for event in events:
                 if self.store.add_event(self.sk, event):
@@ -635,10 +640,7 @@ class MatchWorkflow:
         self.store.put_state(self.sk, state)
         self.hub.publish("state", f"state:{state.revision}", self._state_json(state))
         ctx = self._ctx()
-        if not self._stall_started:
-            self._stall.note_line()  # the clock starts with the match, not with the workflow
-            self._stall_started = True
-            self._stall_task = asyncio.get_running_loop().create_task(self._stall_watch())
+        self._start_stall_timer()
         self._replan_if_stalled(ctx, event)
         if self.config.orchestrator == "af":
             from .af_graph import run_event  # Agent Framework is imported only when selected
@@ -660,16 +662,50 @@ class MatchWorkflow:
         ):
             self._stall.note_line()
 
+    def _start_stall_timer(self) -> None:
+        """Starts the stall clock and its timer once: the clock starts with the match."""
+        if self._stall_started:
+            return
+        self._stall.note_line()
+        self._stall_started = True
+        self._stall_task = asyncio.get_running_loop().create_task(self._stall_watch())
+
+    def _match_over(self) -> bool:
+        """Full time has passed: the final period's ended boundary is stored."""
+        return any(
+            e["payload"]["type"] == "period_boundary"
+            and e["payload"].get("boundary") == "ended"
+            and e["clock"]["period"] >= FULL_TIME_PERIOD
+            for e in self.store.events(self.sk)
+        )
+
     async def _stall_watch(self) -> None:
         """The stall timer (CREW-1.2): wall time passes whether or not an event arrives, so a
-        silent feed replans after 60 s too. It takes the same lock as an event, so a replan never
-        interleaves with a run."""
+        silent feed replans after 60 s too. It stops at full time, and a failed look is logged
+        and the timer goes on."""
         while True:
             await asyncio.sleep(STALL_CHECK_S)
-            async with self._lock:
-                events = self.store.events(self.sk)
-                if events:
-                    self._replan_if_stalled(self._ctx(), events[-1])
+            try:
+                if not await self._stall_tick():
+                    return
+            except Exception:
+                logger.exception("stall timer look failed; the timer keeps running")
+
+    async def _stall_tick(self) -> bool:
+        """One look at the stall clock, under the match lock so a replan never interleaves with a
+        run. Returns False once full time has passed."""
+        async with self._lock:
+            if self._match_over():
+                return False
+            events = self.store.events(self.sk)
+            if events:
+                self._replan_if_stalled(self._ctx(), events[-1])
+        return True
+
+    def close(self) -> None:
+        """Stops the stall timer. The timer also stops by itself at full time."""
+        if self._stall_task is not None:
+            self._stall_task.cancel()
 
     def _replan_if_stalled(self, ctx: MatchContext, event: dict[str, Any]) -> None:
         """CREW-1.2: after a stall the Showrunner chooses a storyline from shared memory and
