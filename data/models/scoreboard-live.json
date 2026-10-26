@@ -1,0 +1,125 @@
+{
+  "arms": {
+    "crew_no_verifier": {
+      "accuracy": {
+        "numbers_aired": 4,
+        "wrong_numbers_aired": 0,
+        "wrong_rate": 0.0
+      },
+      "catch_rate": {
+        "caught": 0,
+        "produced": 0,
+        "rate": null,
+        "seeded": 0
+      },
+      "cost": {
+        "agent_calls": 881,
+        "answered_by_rules": 0,
+        "basis": "model calls through the budget, one per complete() call (the SDK may retry one request inside a call). Refused and failed calls, rejected answers and open circuits fell back to the rules (answered_by_rules). No price applied here.",
+        "budget_refused": 0,
+        "max_calls": 300,
+        "model_calls": 39,
+        "model_calls_per_line": 4.3333,
+        "model_errors": 0
+      },
+      "label": "Crew without Verifier (workflow, Verifier check bypassed)",
+      "latency_ms": {
+        "moments": 1,
+        "p50": 3.028,
+        "p95": 3.028,
+        "total": 74022.565
+      },
+      "lines_aired": 9,
+      "mode": "live",
+      "run_id": "0a03a7cfafbb",
+      "wrong_claim_ids": [],
+      "wrong_claim_ids_stated": [],
+      "wrong_lines_aired": 0
+    },
+    "full_crew": {
+      "accuracy": {
+        "numbers_aired": 0,
+        "wrong_numbers_aired": 0,
+        "wrong_rate": null
+      },
+      "catch_rate": {
+        "caught": 0,
+        "produced": 0,
+        "rate": null,
+        "seeded": 0
+      },
+      "cost": {
+        "agent_calls": 872,
+        "answered_by_rules": 0,
+        "basis": "model calls through the budget, one per complete() call (the SDK may retry one request inside a call). Refused and failed calls, rejected answers and open circuits fell back to the rules (answered_by_rules). No price applied here.",
+        "budget_refused": 0,
+        "max_calls": 300,
+        "model_calls": 39,
+        "model_calls_per_line": 6.5,
+        "model_errors": 0
+      },
+      "label": "Full crew (workflow with Verifier, rules mode)",
+      "latency_ms": {
+        "moments": 1,
+        "p50": 3.313,
+        "p95": 3.313,
+        "total": 88001.635
+      },
+      "lines_aired": 6,
+      "mode": "live",
+      "run_id": "976ea4e8c869",
+      "wrong_claim_ids": [],
+      "wrong_claim_ids_stated": [],
+      "wrong_lines_aired": 0
+    },
+    "single_agent": {
+      "accuracy": {
+        "numbers_aired": 3,
+        "wrong_numbers_aired": 0,
+        "wrong_rate": 0.0
+      },
+      "catch_rate": {
+        "caught": 0,
+        "produced": 0,
+        "rate": null,
+        "seeded": 0
+      },
+      "cost": {
+        "agent_calls": 2,
+        "answered_by_rules": 0,
+        "basis": "model calls through the budget, one per complete() call (the SDK may retry one request inside a call). Refused and failed calls, rejected answers and open circuits fell back to the rules (answered_by_rules). No price applied here.",
+        "budget_refused": 0,
+        "max_calls": 300,
+        "model_calls": 2,
+        "model_calls_per_line": 1.0,
+        "model_errors": 0
+      },
+      "label": "Single agent (one pass per shot or goal, no Verifier, no routing)",
+      "latency_ms": {
+        "moments": 1,
+        "p50": 6319.525,
+        "p95": 6319.525,
+        "total": 6356.958
+      },
+      "lines_aired": 2,
+      "mode": "live",
+      "run_id": "cc3bb26bbcad",
+      "wrong_claim_ids": [],
+      "wrong_claim_ids_stated": [],
+      "wrong_lines_aired": 0
+    }
+  },
+  "events_sha256": "8a70dada510b2fcee9b4aa2743b89629cc476b50769efc297a9a0e35b3ee3efb",
+  "fixture": "N001",
+  "kind": "crew_live_run",
+  "match_id": "m-arg-bra-2026-4-7-17-00-15-5-4-1-lowblock-4-2-3-1-balanced",
+  "max_calls_per_arm": 300,
+  "run_date": "2026-10-26",
+  "run_id": "948330f559b5",
+  "seed": 2026,
+  "seed_rate": 0.25,
+  "teams": [
+    "ARG",
+    "BRA"
+  ]
+}
