@@ -1,8 +1,10 @@
 """Watch-mode personas (AGT-6): five different lines per goal, limits, and no foreign names."""
 
+import pytest
 from conftest import run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
-from matchcast_agents.personas import max_chars, max_numbers, valid
+from matchcast_agents.messages import DraftLine
+from matchcast_agents.personas import FEED_ONLY, max_chars, max_numbers, valid
 from matchcast_agents.verify.checks import extract_numbers
 
 
@@ -220,3 +222,11 @@ def test_the_booth_waits_for_the_producer_unless_the_match_turns_hold_off(match)
         "published",
     }
     assert held["booth:pbp"] == {"verified"} and held["booth:colour"] == {"verified"}
+
+
+@pytest.mark.parametrize("persona", ["ticker", "audio_description"])
+def test_a_viewer_cannot_ask_for_a_feed_only_persona(persona: str) -> None:
+    assert not valid(persona)  # the viewer route refuses it: no line would ever come
+    assert persona in FEED_ONLY
+    line = DraftLine(line_id="x", claim_ids=(), persona=persona, text="t", max_chars=140)
+    assert line.persona == persona  # the Verifier's packet still carries it

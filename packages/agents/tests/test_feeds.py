@@ -45,11 +45,19 @@ def test_only_feed_personas_map_to_a_feed(persona: str) -> None:
     assert feed_for(persona) is None
 
 
-@pytest.mark.parametrize("key", ["audio_description", "catch_me_up", "half_time", "ticker"])
+@pytest.mark.parametrize("key", ["catch_me_up", "half_time"])
 def test_feeds_without_a_writer_have_no_persona(key: str) -> None:
     feed = next(f for f in FEEDS if f.key == key)
     assert feed.persona is None
     assert key not in DERIVED_PERSONAS
+
+
+@pytest.mark.parametrize("key", ["audio_description", "ticker"])
+def test_the_writers_of_audio_and_ticker_are_derived_personas(key: str) -> None:
+    feed = next(f for f in FEEDS if f.key == key)
+    assert feed.persona == key
+    assert feed.persona in DERIVED_PERSONAS
+    assert lane_for(key) == "derived"
 
 
 def test_a_raw_viewer_alias_is_not_a_persona() -> None:
@@ -65,8 +73,13 @@ def test_limits_come_from_the_stories() -> None:
     assert by_key["audio_description"].min_gap_ms == 2_000  # speaks only in gaps of 2 s
 
 
-def test_only_persona_backed_feeds_air_as_derived_lines_today() -> None:
-    assert {feed.key for feed in FEEDS if feed.persona} == {"casual", "analyst"}
+def test_the_persona_backed_feeds_are_the_derived_lanes() -> None:
+    assert {feed.key for feed in FEEDS if feed.persona} == {
+        "casual",
+        "analyst",
+        "audio_description",
+        "ticker",
+    }
 
 
 @pytest.mark.parametrize("persona", sorted(BOOTH))

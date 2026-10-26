@@ -6,13 +6,14 @@ line waits for the producer, and a derived line that fails repair is dropped.
 Three lanes decide what a verified line does next:
 
 - booth: the two commentary voices. They wait in the producer queue in producer mode.
-- derived: the fan feeds that have a persona today (casual, analyst). They never wait for
-  a person, and a line that fails repair is dropped, not escalated (CREW-4.3).
+- derived: the fan feeds that have a persona (casual, analyst, and the feed-only ticker and
+  audio description). They never wait for a person, and a line that fails repair is dropped,
+  not escalated (CREW-4.3).
 - queue: every other persona (broadcast, the watch modes, anything malformed). These keep
   today's behaviour and fail closed: they wait for the producer in any mode but auto.
 
-The other four feeds (audio description, catch-me-up, half-time, ticker) have no persona yet,
-so no line can be tagged with them. The half-time writer is in half_time.py (CREW-7.4); it
+The other two feeds (catch-me-up and half-time) have no persona yet, so no line can be tagged with
+them. The half-time writer is in half_time.py (CREW-7.4); it
 joins DERIVED_PERSONAS when the workflow and feed stream wire it in.
 """
 
@@ -37,6 +38,9 @@ class Feed:
     min_gap_ms: int | None = None  # silence needed before a spoken line (audio description)
 
 
+AUDIO_PERSONA = "audio_description"  # the describer (CREW-7.2)
+TICKER_PERSONA = "ticker"  # the data-only ticker (CREW-7.5)
+
 FEEDS: tuple[Feed, ...] = (
     Feed(
         "casual",
@@ -52,10 +56,10 @@ FEEDS: tuple[Feed, ...] = (
         max_chars=max_chars("analyst"),
         max_numbers=max_numbers("analyst"),
     ),
-    Feed("audio_description", "Audio description", None, min_gap_ms=2_000),
+    Feed("audio_description", "Audio description", AUDIO_PERSONA, min_gap_ms=2_000),
     Feed("catch_me_up", "Catch me up", None, max_words=280),
     Feed("half_time", "Half-time explainer", None, max_seconds=90),
-    Feed("ticker", "News ticker", None),  # fixed templates only, no free text
+    Feed("ticker", "News ticker", TICKER_PERSONA),  # fixed templates only, no free text
 )
 
 FEED_KEYS = frozenset(feed.key for feed in FEEDS)
