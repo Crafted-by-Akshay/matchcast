@@ -20,15 +20,26 @@ test('Make it yours: the mode panel names the viewer\'s choice and follows each 
 
   await expect(f.locator('#fan-pop .fm-h')).toContainText('Make it yours');
   const now = f.locator('#fan-pop .fm-now');
+
+  // the line names whatever is chosen, so each step picks its mode first rather than assuming the starting one
+  await f.click('#fan-pop .fm-b[data-m="analyst"]');
   await expect(now).toContainText('Analyst');
 
   await f.click('#fan-pop .fm-b[data-m="metric"]');
   await expect(now).toContainText('One metric');
   await expect(now).toContainText('xG');
 
+  // closing and reopening the popover redraws it: the heading and the line must come back with the choice
+  await f.click('#fan-pop .fm-x');
+  await f.click('#fan-chip');
+  await expect(f.locator('#fan-pop .fm-h')).toContainText('Make it yours');
+  await expect(now).toContainText('One metric');
+
+  // the club's name comes from its own button, so the test does not fix which side is which
   await f.click('#fan-pop .fm-b[data-m="club"]');
+  const second = await f.locator('#fan-pop .fm-c[data-c="1"]').textContent();
   await f.click('#fan-pop .fm-c[data-c="1"]');
   await expect(now).toContainText('My club');
-  await expect(now).toContainText('Brazil');
+  await expect(now).toContainText(second!.trim());
   expect(errs).toEqual([]);
 });

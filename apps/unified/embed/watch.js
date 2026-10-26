@@ -298,7 +298,12 @@ const MC_API_METRICS = ['xg'];
   const st = document.createElement('style');
   st.textContent = '#fan-pop .fm-now{margin:2px 0 8px;font:600 12px/1.35 var(--f-body,system-ui,sans-serif);color:#8CC2FF}';
   document.head.appendChild(st);
-  const shown = (sel) => { const e = document.querySelector('#fan-pop ' + sel + '[aria-pressed="true"]'); return e ? e.textContent.trim() : ''; };
+  const shown = (sel) => {
+    const e = document.querySelector('#fan-pop ' + sel + '[aria-pressed="true"]');
+    if (!e) return '';
+    const c = e.cloneNode(true); c.querySelectorAll('.fm-planned').forEach((x) => x.remove());   // a Planned language reads as its name, not "Español Planned"
+    return c.textContent.trim();
+  };
   const now = () => {
     const mode = document.querySelector('#fan-pop .fm-b[aria-pressed="true"] b');
     const sel = document.querySelector('#fan-pop .fm-sel');
@@ -318,7 +323,7 @@ const MC_API_METRICS = ['xg'];
     const line = document.createElement('p'); line.className = 'fm-now'; line.setAttribute('aria-live', 'polite');
     head.after(line);
   };
-  const draw = () => { ensure(); const el = document.querySelector('#fan-pop .fm-now'); if (el) el.textContent = now(); };
+  const draw = () => { ensure(); const el = document.querySelector('#fan-pop .fm-now'), text = now(); if (el && el.textContent !== text) el.textContent = text; };   // an unchanged line is not rewritten, so aria-live does not re-announce it
   const go = setInterval(() => {
     const pop = document.getElementById('fan-pop');
     if (!pop || !pop.querySelector('.fm-h')) return;
@@ -326,8 +331,9 @@ const MC_API_METRICS = ['xg'];
     draw();
     pop.addEventListener('click', () => setTimeout(draw, 0));   // the picker's handlers run first, then the line reads the new choice
     pop.addEventListener('change', draw);
-    // only the pressed state is watched: writing the line never re-triggers this observer
-    new MutationObserver(draw).observe(pop, { attributes: true, attributeFilter: ['aria-pressed'], subtree: true });
+    // the picker rebuilds the popover on open and on shell messages (childList), and a mode change flips aria-pressed.
+    // draw() writes the line only when its text changes, so this observer does not loop on its own writes
+    new MutationObserver(draw).observe(pop, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
   }, 300);
 })();
 

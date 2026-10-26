@@ -75,7 +75,7 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 
 | Control | Values | Effect |
 | --- | --- | --- |
-| Watch mode | Casual, Analyst, My club, Player focus, One metric | Persona sent to the agents; layout and density |
+| Watch mode | Casual, Analyst, My club, Player focus, One metric | Persona sent to the agents; layout and density. The popover is headed "Make it yours" and names the current choice in one line |
 | My club | one of the two clubs | Lines framed from that club's angle |
 | Player focus | any player on the pitch | Lines lead with that player; their name tag is highlighted |
 | One metric | xG (the api follows it); the other picker metrics are Planned | Only that metric's lines |
