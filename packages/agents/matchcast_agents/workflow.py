@@ -23,9 +23,11 @@ from opentelemetry import trace
 from . import catch_me_up
 from . import half_time as half_time_mod
 from . import recap as recap_mod
+from .audio_description import MAX_LAG_MS, Window, gaps, spoken_span
 from .context import MatchContext
-from .feed_lines import ticker_drafts
+from .feed_lines import audio_line, audio_placements, ctx_at, ticker_drafts
 from .feeds import (
+    AUDIO_PERSONA,
     TICKER_PERSONA,
     drops_on_failed_repair,
     feed_for,
@@ -48,7 +50,7 @@ from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .storyline import FALLBACK_PLAN, StorylineBook, pick_plan
 from .tools import InProcessTools, ToolCall, ToolError
-from .verify.checks import recompute
+from .verify.checks import FRESH_MS, recompute
 from .verify.text import extract_numbers
 from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
@@ -57,9 +59,37 @@ if TYPE_CHECKING:
     from .live.knowledge import TalkKnowledge
 
 STATS_DESK_BUDGET_S = 2.0
-# the template feeds a live match airs. The audio description is written (feed_lines.py) but not
-# aired: a later booth line can land inside it, so it waits for the speak-time check (Planned)
-LIVE_FEED_LINES = ("ticker",)
+# the template feeds a live match airs
+LIVE_FEED_LINES = ("ticker", "audio_description")
+# a description's commentary window is read up to this long after its event
+FEED_HORIZON_MS = MAX_LAG_MS + 5_000
+# booth lines that may still be spoken: anything but a rejected, killed or abstained line
+SILENT_STATUSES = ("rejected", "killed", "abstained")
+
+
+def commentary_spans(lines: list[LineRecord], at_by_id: dict[str, int]) -> list[tuple[int, int]]:
+    """Where the booth's lines are or may be spoken, as (start, end) in match milliseconds.
+
+    The play-by-play speaks at its moment's event time. The colour line speaks after it, so it
+    starts when the play-by-play ends (workflow._verify_line's order: colour reacts to the call).
+    """
+    booth = [
+        line
+        for line in lines
+        if line.persona in BOOTH
+        and line.status not in SILENT_STATUSES
+        and line.moment_id.removeprefix("m-") in at_by_id
+    ]
+    spans: list[tuple[int, int]] = []
+    free_at: dict[str, int] = {}
+    for line in sorted(booth, key=lambda ln: (ln.moment_id, BOOTH.index(ln.persona))):
+        start = max(at_by_id[line.moment_id.removeprefix("m-")], free_at.get(line.moment_id, 0))
+        span = spoken_span(start, line.text)
+        free_at[line.moment_id] = span[1]
+        spans.append(span)
+    return spans
+
+
 MINUTE_MENTION = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)  # "minute 12": a log minute
 
 TALK_PHRASES = {
@@ -440,6 +470,14 @@ class MatchWorkflow:
         self._specialists = default_registry()
         self._restore()
         self.killed_feeds: set[str] = set()  # the desk's per-feed kills, from the audit chain
+        # audio descriptions held until no booth line can still overlap them: (draft, claims,
+        # speak_at_ms, ends_at_ms). Held in memory: a restart drops them, so they do not air.
+        self._pending_audio: list[tuple[DraftLine, list[dict[str, Any]], int, int]] = []
+        # every description's (speak, end) span, held or aired: a new one is placed around them
+        self._audio_spans: list[tuple[int, int]] = []
+        # the events whose description holds a span (held or aired): placing a new description
+        # leaves them where they are, so a re-placed one cannot push the new one out of its gap
+        self._described: set[str] = set()
         self._restore_feed_state()
         self.stats = {
             "events": 0,
@@ -729,45 +767,137 @@ class MatchWorkflow:
         self._note_aired(event)
 
     async def _write_feed_lines(self, event: dict[str, Any]) -> None:
-        """This event's ticker line (AB#471), backed by claims the Verifier recounts.
+        """The feed lines of this event: the ticker (AB#471) and the audio description (AB#454).
 
-        It goes through the same Verifier and air gate as every line. A refusal is dropped at once:
-        a template line has no repair. The audio description is not aired here (see
-        LIVE_FEED_LINES).
+        Template lines, each backed by claims the Verifier recounts, through the same Verifier and
+        air gate as every line. A refusal is dropped at once: a template line has no repair.
+
+        A description is held until an event at or after its end has arrived. By then every booth
+        line that could overlap it is written, so it airs only where no booth line is speaking.
         """
-        if TICKER_PERSONA not in self.config.feed_lines:
+        at_ms = int(event["event_time_ms"])
+        await self._air_held_audio(at_ms)
+        eid = event["event_id"]
+        ctx = self._ctx()
+        if TICKER_PERSONA in self.config.feed_lines:
+            written = {ln.line_id for ln in self.store.lines(self.sk)}
+            for draft, claims in ticker_drafts(ctx, eid):
+                if draft.line_id not in written:
+                    await self._air_feed_line(ctx, eid, draft, claims)
+        if AUDIO_PERSONA in self.config.feed_lines:
+            self._hold_audio(ctx, event)
+
+    def _hold_audio(self, ctx: MatchContext, event: dict[str, Any]) -> None:
+        """Place this event's description in a commentary gap and hold it until it is checked."""
+        eid = event["event_id"]
+        line_id = f"line-audio-{eid}"
+        written = {ln.line_id for ln in self.store.lines(self.sk)}
+        held = {draft.line_id for draft, *_ in self._pending_audio}
+        if line_id in written or line_id in held:
+            return
+        windows = self._commentary_windows(ctx, event)
+        placing = replace(
+            ctx, events=tuple(e for e in ctx.events if e["event_id"] not in self._described)
+        )
+        placed = {d.source_event_id: d for d in audio_placements(placing, windows)}
+        if eid not in placed:
+            return
+        draft, claims = audio_line(ctx, placed[eid])
+        _, length = spoken_span(0, draft.text)
+        speak = placed[eid].speak_at_ms
+        self._described.add(eid)
+        self._audio_spans.append((speak, speak + length))
+        self._pending_audio.append((draft, claims, speak, speak + length))
+
+    async def _air_held_audio(self, at_ms: int) -> None:
+        """Air each held description whose window has ended, unless it no longer may.
+
+        A description is skipped when a booth line speaks in its window, or when the engine took
+        its event back (a retraction or a correction stored by now). Each item leaves the hold when
+        it is due, so it is tried once: a failure is logged and the description is dropped, rather
+        than raised again on every later event.
+        """
+        due = [p for p in self._pending_audio if p[3] <= at_ms]
+        if not due:
             return
         ctx = self._ctx()
-        eid = event["event_id"]
-        ticker = f"line-ticker-{eid}"
-        written = {ln.line_id for ln in self.store.lines(self.sk)}
-        drafts = [pair for pair in ticker_drafts(ctx, eid) if pair[0].line_id == ticker]
-        for draft, claims in drafts:
-            if draft.line_id in written or not claims:
+        busy = self._booth_spans(ctx)
+        taken_back = {
+            e["payload"]["target_event_id"]
+            for e in ctx.events
+            if e["payload"]["type"] in ("retraction", "correction")
+        }
+        for item in due:
+            self._pending_audio.remove(item)
+            draft, claims, speak, ends = item
+            eid = draft.line_id.removeprefix("line-audio-")
+            speaking = [span for span in busy if span[0] < ends and speak < span[1]]
+            if eid in taken_back or speaking:
                 continue
-            task = ProducerTask(
-                moment_id=f"f-{eid}",
-                match_id=self.stream["match_id"],
-                event_ids=(eid,),
-                up_to_sequence=event["stream_sequence"],
-                priority=3,
-                personas=(draft.persona,),
-                reason="feed",
+            # The claims were valued at the description's own cut, so the revisions stored since are
+            # not staleness: judged at that cut. The 30 s bound still applies to the airing time.
+            cut = claims[0]["snapshot"]["event_time_ms"]
+            judged = (
+                ctx
+                if ctx.state.event_time_ms - cut > FRESH_MS
+                else ctx_at(ctx, claims[0]["max_evidence_sequence"])
             )
-            for claim in claims:
-                validate(claim)
-                self.store.put_claim(
-                    self.sk,
-                    claim,
-                    {
-                        "moment_id": task.moment_id,
-                        "agent": self.agents.narrator.agent_id,
-                        "created_at": _stamp(self._clock()),
-                        "tool_call_ids": [],
-                        "formula_inputs": {},
-                    },
+            try:
+                await self._air_feed_line(
+                    judged, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
                 )
-            await self._verify_line(ctx, task, claims, draft, attempt=1)
+            except Exception:
+                logger.exception("held description %s failed to air; it is dropped", draft.line_id)
+
+    async def _air_feed_line(
+        self,
+        ctx: MatchContext,
+        eid: str,
+        draft: DraftLine,
+        claims: list[dict[str, Any]],
+        timing: dict[str, int] | None = None,
+    ) -> None:
+        """Store a template line's claims, then send it through the Verifier like any line."""
+        if not claims:
+            return
+        event = next(e for e in ctx.events if e["event_id"] == eid)
+        task = ProducerTask(
+            moment_id=f"f-{eid}",
+            match_id=self.stream["match_id"],
+            event_ids=(eid,),
+            up_to_sequence=event["stream_sequence"],
+            priority=3,
+            personas=(draft.persona,),
+            reason="feed",
+        )
+        for claim in claims:
+            validate(claim)
+            self.store.put_claim(
+                self.sk,
+                claim,
+                {
+                    "moment_id": task.moment_id,
+                    "agent": self.agents.narrator.agent_id,
+                    "created_at": _stamp(self._clock()),
+                    "tool_call_ids": [],
+                    "formula_inputs": {},
+                },
+            )
+        await self._verify_line(ctx, task, claims, draft, attempt=1, timing=timing)
+
+    def _booth_spans(self, ctx: MatchContext) -> list[tuple[int, int]]:
+        """Where the booth's lines are or may be spoken (see commentary_spans)."""
+        at_by_id = {e["event_id"]: int(e["event_time_ms"]) for e in ctx.events}
+        return commentary_spans(list(self.store.lines(self.sk)), at_by_id)
+
+    def _commentary_windows(self, ctx: MatchContext, event: dict[str, Any]) -> list[Window]:
+        """The commentary gaps up to the feed horizon after an event, from the booth's lines so far.
+
+        A later booth line can still land in a gap read here; the check when a description is due
+        (_air_held_audio) is what keeps it from talking over the commentary.
+        """
+        spans = [*self._booth_spans(ctx), *self._audio_spans]
+        return gaps(spans, end_ms=int(event["event_time_ms"]) + FEED_HORIZON_MS)
 
     def _note_aired(self, event: dict[str, Any]) -> None:
         """A verified line of this event's moment aired: the match is quiet no longer."""
@@ -1749,6 +1879,7 @@ class MatchWorkflow:
         *,
         attempt: int,
         repair_of: str | None = None,
+        timing: dict[str, int] | None = None,
     ) -> None:
         a = self.agents
         record = LineRecord(
@@ -1775,6 +1906,7 @@ class MatchWorkflow:
             mode="rules" if draft.origin == "template" else "live",  # what wrote this very line
             routed_by=task.routed_by,
             why=task.why,
+            **(timing or {}),
         )
         verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
         verdict = await self._screen(draft, verdict)
