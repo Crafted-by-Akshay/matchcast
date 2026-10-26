@@ -7,12 +7,15 @@ limits of a base voice; the argument decides what the line is about.
 import re
 
 BASE = ("casual", "analyst", "broadcast")
-PATTERN = (
-    r"^(casual|analyst|broadcast|my-club:[A-Za-z0-9._-]{1,64}|"
-    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour)|"
-    r"half_time)$"
-)  # half_time (CREW-7.4) is written by the workflow, never asked for by a viewer
+_VIEWER = (
+    r"casual|analyst|broadcast|my-club:[A-Za-z0-9._-]{1,64}|"
+    r"player-focus:[A-Za-z0-9._-]{1,64}|one-metric:[a-z_]{1,32}|booth:(?:pbp|colour)"
+)
+PATTERN = rf"^({_VIEWER})$"  # what a viewer may ask for
+FEED_ONLY = ("half_time",)  # written by the workflow (CREW-7.4), never asked for by a viewer
+PACKET_PATTERN = rf"^({_VIEWER}|{'|'.join(FEED_ONLY)})$"  # what a DraftLine may carry
 _VALID = re.compile(PATTERN)
+_PACKET = re.compile(PACKET_PATTERN)
 # the base voice whose character limit a persona uses
 VOICE = {
     "my-club": "casual",
@@ -38,6 +41,11 @@ def valid(persona: str) -> bool:
     return bool(_VALID.match(persona))
 
 
+def packet_valid(persona: str) -> bool:
+    """A persona a DraftLine may carry: a viewer's persona or a feed-only one."""
+    return bool(_PACKET.match(persona))
+
+
 def known(persona: str, clubs: dict[str, str], names: dict[str, str]) -> bool:
     """A valid persona that points at something real in this match."""
     if not valid(persona):
@@ -49,8 +57,6 @@ def known(persona: str, clubs: dict[str, str], names: dict[str, str]) -> bool:
         return arg in names
     if kind == "one-metric":
         return arg in WATCH_METRICS
-    if kind == "half_time":
-        return False  # a feed the workflow writes, not a voice a viewer can pick
     return True  # booth:pbp and booth:colour are always real
 
 

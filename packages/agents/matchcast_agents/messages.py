@@ -4,9 +4,9 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from .personas import PATTERN
+from .personas import PACKET_PATTERN
 
-Persona = Annotated[str, StringConstraints(pattern=PATTERN)]
+Persona = Annotated[str, StringConstraints(pattern=PACKET_PATTERN)]
 Priority = Literal[1, 2, 3]
 VerdictName = Literal["verified", "review", "rejected"]
 ReasonCode = Literal[

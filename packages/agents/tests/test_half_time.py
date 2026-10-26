@@ -321,5 +321,7 @@ def test_a_wrong_count_on_a_claim_fails_the_numbers_check() -> None:
 
 
 def test_the_half_time_persona_is_written_but_never_asked_for() -> None:
-    assert personas.valid("half_time")
+    assert personas.FEED_ONLY == ("half_time",)
+    assert personas.packet_valid("half_time")  # a DraftLine may carry it
+    assert not personas.valid("half_time")  # a viewer may not ask for it
     assert not personas.known("half_time", {}, {})
