@@ -1,11 +1,23 @@
 // ---- unified shell hook: Watch ----
 MCS.view = 'watch';
 MCS.progress('Loading the stadium and players');
+// First-load budget: on a high-density screen the 3D pass (with bloom) draws at pixel ratio 1 until the first verified line is on screen
+// (or 20 s, whichever comes first), then returns to the ratio the engine chose. Looks softer for those first seconds, changes nothing else.
+const MCRes = (() => {
+  let full = 0, timer = 0;
+  const R = () => { try { return window.__mc.composer.renderer; } catch (e) { return null; } };
+  const set = (k) => { const r = R(); if (r) { r.setPixelRatio(k); window.__mc.composer.setPixelRatio(k); } };
+  return {
+    low() { const r = R(); if (!r || full || r.getPixelRatio() <= 1) return; full = r.getPixelRatio(); set(1); timer = setTimeout(() => MCRes.full(), 20000); },
+    full() { clearTimeout(timer); if (!full) return; const k = full; full = 0; set(k); }
+  };
+})();
 (() => {
   const Q = new URLSearchParams(location.search);
   const ready = setInterval(() => {
     if (!window.__mc || !players.length || !$('load').hidden || !MCS.clubs.ready) return;
     clearInterval(ready);
+    MCRes.low();
     MCS.progress('Setting up the squads and kits');
     if (Q.has('seed')) { MCS.apply(Q); kickOff(); MCS.started(); }
     $('kick').addEventListener('click', () => MCS.started());
@@ -231,6 +243,7 @@ MCS.progress('Loading the stadium and players');
     const d = e.data || {};
     if (d.src !== 'matchcast-shell' || d.type !== 'pulse') return;
     const c = d.card, i = kept.findIndex((x) => x.id === c.id);
+    if (c && c.verdict === 'verified') MCRes.full();   // the first verified line is up: draw at full sharpness
     if (i >= 0) kept[i] = c; else kept.push(c);
     while (kept.length > 10) { const o = kept.shift(); const el = cards.get(o.id + 'mcx-log'); if (el) el.remove(); cards.delete(o.id + 'mcx-log'); }
     draw(c, live, true); draw(c, log, false);
