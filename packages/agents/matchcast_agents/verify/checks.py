@@ -6,11 +6,11 @@ from typing import Any
 
 from .. import history_metrics as history
 from ..context import MatchContext
+from ..match_shares import SHARE_METRICS
+from ..match_shares import recount as recount_match_share
 from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
 from ..personas import max_numbers
-from ..match_shares import SHARE_METRICS
-from ..match_shares import recount as recount_match_share
 from ..specialists.rhythm import recount_share
 from ..state import counted
 from ..vision import VISION_METRICS, agreement, pass_facts, vision_value

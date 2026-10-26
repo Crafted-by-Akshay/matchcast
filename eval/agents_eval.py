@@ -156,7 +156,8 @@ def _independent_share(events: list[dict[str, Any]], metric: str, team: str, upt
     done = [
         ev["payload"]
         for ev in events
-        if ev["stream_sequence"] <= upto and ev["payload"]["type"] not in ("correction", "retraction")
+        if ev["stream_sequence"] <= upto
+        and ev["payload"]["type"] not in ("correction", "retraction")
     ]
     if metric == "possession_share":
         on_ball = Counter(p["team_id"] for p in done if p["type"] in ("pass", "carry"))
@@ -164,7 +165,9 @@ def _independent_share(events: list[dict[str, Any]], metric: str, team: str, upt
         return round(100 * on_ball[team] / total) if total else 0
     completed = sum(p["type"] == "pass" and p["team_id"] == team for p in done)
     lost = sum(
-        p["type"] == "possession_change" and p["from_team_id"] == team and p["cause"] == "loose_ball"
+        p["type"] == "possession_change"
+        and p["from_team_id"] == team
+        and p["cause"] == "loose_ball"
         for p in done
     )
     return round(100 * completed / (completed + lost)) if completed + lost else 0
@@ -302,9 +305,7 @@ def eval_booth(match: dict[str, Any], factory: AgentsFactory) -> dict[str, Any]:
     asyncio.run(flow.ingest(match["events"]))
     ctx = flow._ctx()
     drafts = [
-        ln
-        for ln in flow.store.lines(flow.sk)
-        if ln.persona == "booth:colour" and not ln.repair_of
+        ln for ln in flow.store.lines(flow.sk) if ln.persona == "booth:colour" and not ln.repair_of
     ]
     generic = sum(is_generic(ctx, ln.text) for ln in drafts)
     return {

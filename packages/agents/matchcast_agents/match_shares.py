@@ -55,7 +55,7 @@ def pass_accuracy(events: list[dict[str, Any]], team: str, upto: int) -> int:
 
 
 def recount(metric: str, events: list[dict[str, Any]], upto: int) -> int:
-    """Recount a ``possession_share:<team>`` or ``pass_accuracy:<team>`` claim from stored events."""
+    """Recount a ``possession_share:<team>`` or ``pass_accuracy:<team>`` claim from the events."""
     name, team = metric.split(":", 1)
     if name == POSSESSION:
         return possession_share(events, team, upto)

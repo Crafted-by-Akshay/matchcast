@@ -53,7 +53,8 @@ def metrics_for(ctx: MatchContext, task: ProducerTask, event: dict[str, Any]) ->
         if task.reason == "colour"
         else counts.get(task.reason, ())
     )
-    # a priority-1 moment also carries each team's match-to-date possession and pass accuracy (AB#373); they come last, so they yield to the moment's own counts
+    # a priority-1 moment also carries each team's match-to-date possession and pass accuracy
+    # (AB#373); they come last, so they yield to the moment's own counts
     shares = [f"{m}:{t}" for t in (ctx.home, ctx.away) for m in (POSSESSION, PASS_ACCURACY)]
     return [m.format(t=team, h=ctx.home, a=ctx.away) for m in names] + (
         shares if task.priority == 1 else []
@@ -158,7 +159,8 @@ class AnalystRules:
                 )
             )
 
-        # the moment's own counts first, then the Rhythm and History claims, then each team's match-to-date shares (AB#373),
+        # the moment's own counts first, then the Rhythm and History claims, then each team's
+        # match-to-date shares (AB#373),
         # which never take a slot from those
         for metric in counts:
             add(metric)

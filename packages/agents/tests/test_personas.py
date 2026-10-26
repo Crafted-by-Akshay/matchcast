@@ -239,6 +239,9 @@ def test_one_metric_shares_quote_a_percent_of_their_team(match) -> None:
     assert known("one-metric:pass_accuracy", match["teams"], match["names"])
     flow = flow_with(match, ["one-metric:pass_accuracy", "one-metric:possession_share"])
     lines = flow.store.lines(flow.sk)
-    for persona, label in (("one-metric:pass_accuracy", "Pass accuracy:"), ("one-metric:possession_share", "Possession:")):
+    for persona, label in (
+        ("one-metric:pass_accuracy", "Pass accuracy:"),
+        ("one-metric:possession_share", "Possession:"),
+    ):
         mine = [ln.text for ln in lines if ln.persona == persona]
         assert mine and all(t.startswith(label) and t.count("%") == 2 for t in mine), mine

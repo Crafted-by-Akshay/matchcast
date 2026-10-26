@@ -1,17 +1,42 @@
-"""Match-to-date shares the Analyst cites and the Verifier recounts (AB#373): possession and pass accuracy."""
+"""Match-to-date shares the Analyst cites and the Verifier recounts (AB#373)."""
 
 from matchcast_agents.match_shares import pass_accuracy, possession_share, recount
 
 
 def ev(seq: int, payload: dict) -> dict:
-    return {"stream_sequence": seq, "event_id": f"e{seq}", "event_time_ms": seq * 1000, "payload": payload}
+    return {
+        "stream_sequence": seq,
+        "event_id": f"e{seq}",
+        "event_time_ms": seq * 1000,
+        "payload": payload,
+    }
 
 
-PASS_HOME = {"type": "pass", "team_id": "home", "player_id": "home1", "recipient_player_id": "home2"}
-PASS_AWAY = {"type": "pass", "team_id": "away", "player_id": "away1", "recipient_player_id": "away2"}
+PASS_HOME = {
+    "type": "pass",
+    "team_id": "home",
+    "player_id": "home1",
+    "recipient_player_id": "home2",
+}
+PASS_AWAY = {
+    "type": "pass",
+    "team_id": "away",
+    "player_id": "away1",
+    "recipient_player_id": "away2",
+}
 CARRY_HOME = {"type": "carry", "team_id": "home", "player_id": "home2"}
-LOSS_HOME = {"type": "possession_change", "from_team_id": "home", "to_team_id": "away", "cause": "loose_ball"}
-TACKLE_WIN = {"type": "possession_change", "from_team_id": "home", "to_team_id": "away", "cause": "tackle"}
+LOSS_HOME = {
+    "type": "possession_change",
+    "from_team_id": "home",
+    "to_team_id": "away",
+    "cause": "loose_ball",
+}
+TACKLE_WIN = {
+    "type": "possession_change",
+    "from_team_id": "home",
+    "to_team_id": "away",
+    "cause": "tackle",
+}
 
 
 def test_pass_accuracy_is_completed_passes_over_completed_plus_lost_on_a_pass() -> None:
