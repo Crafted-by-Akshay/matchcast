@@ -49,7 +49,7 @@ from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .storyline import FALLBACK_PLAN, StorylineBook, pick_plan
 from .tools import InProcessTools, ToolCall, ToolError
-from .verify.checks import recompute
+from .verify.checks import FRESH_MS, recompute
 from .verify.text import extract_numbers
 from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
@@ -832,12 +832,17 @@ class MatchWorkflow:
             speaking = [span for span in busy if span[0] < ends and speak < span[1]]
             if eid in taken_back or speaking:
                 continue
-            # checked at the description's own cut, as its claims were valued: a later event that
-            # is not about it would otherwise make the claims stale and the line abstained
-            at_cut = ctx_at(ctx, claims[0]["max_evidence_sequence"])
+            # The claims were valued at the description's own cut, so the revisions stored since are
+            # not staleness: judged at that cut. The 30 s bound still applies to the airing time.
+            cut = claims[0]["snapshot"]["event_time_ms"]
+            judged = (
+                ctx
+                if ctx.state.event_time_ms - cut > FRESH_MS
+                else ctx_at(ctx, claims[0]["max_evidence_sequence"])
+            )
             try:
                 await self._air_feed_line(
-                    at_cut, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
+                    judged, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
                 )
             except Exception:
                 logger.exception("held description %s failed to air; it is dropped", draft.line_id)

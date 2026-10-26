@@ -217,3 +217,19 @@ def test_a_dense_match_loses_no_described_line_to_the_freshness_check(match) -> 
     assert "abstained" not in audio.values(), sorted(
         i for i, s in audio.items() if s == "abstained"
     )
+
+
+def test_a_description_aired_more_than_30_seconds_after_its_cut_is_abstained(match) -> None:
+    # e4 (a tackle at 17.9 s) is held until the first event at or after its end. That event is
+    # 40 s later than the fixture's, so the description would talk about a tackle 40 s past
+    late = copy.deepcopy(match)
+    for event in late["events"][4:]:
+        event["event_time_ms"] += 40_000
+        event["clock"]["period_elapsed_ms"] += 40_000
+    flow = flow_with(late, personas=("casual", "analyst"))
+    flow.config.feed_lines = ("ticker", "audio_description")
+    run(flow.ingest(late["events"][:4]))
+    assert "line-audio-e4" in {draft.line_id for draft, *_ in flow._pending_audio}
+    run(flow.ingest(late["events"][:5]))
+    status = {ln.line_id: ln.status for ln in flow.store.lines(flow.sk)}
+    assert status.get("line-audio-e4") == "abstained"
