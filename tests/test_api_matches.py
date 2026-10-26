@@ -1113,3 +1113,40 @@ def test_the_scoreboard_is_three_rules_arms_and_is_labelled_rules(client: TestCl
     # the same events on the same day give the same scoreboard (the cache, and a rerun)
     again = client.get("/v1/matches/match-short/scoreboard", params=Q).json()
     assert again["arms"]["full_crew"]["accuracy"] == board["arms"]["full_crew"]["accuracy"]
+
+
+def test_catch_me_up_is_a_read_that_recounts_and_is_not_published(client: TestClient) -> None:
+    """GET catch-me-up returns the recap at a minute and sends nothing to the streams."""
+    create(client)
+    post_all(client)
+    url = "/v1/matches/match-short/catch-me-up"
+    recap = client.get(url, params={**Q, "minute": 30})
+    assert recap.status_code == 200
+    body = recap.json()
+    assert body["text"].startswith("Score so far:") and body["word_count"] <= 280
+    flow = client.app.state.matches.flows[("short", "match-short")]
+    assert not [e for e in flow.hub.history() if e.event == "catch_me_up"]
+
+
+def test_catch_me_up_is_held_when_the_desk_has_killed_the_feed(client: TestClient) -> None:
+    create(client)
+    post_all(client)
+    flow = client.app.state.matches.flows[("short", "match-short")]
+    flow.killed_feeds.add("catch_me_up")
+    url = "/v1/matches/match-short/catch-me-up"
+    assert client.get(url, params={**Q, "minute": 30}).status_code == 404
+
+
+def test_catch_me_up_reads_are_rate_limited_per_session(client: TestClient, monkeypatch) -> None:
+    create(client)
+    post_all(client)
+    monkeypatch.setattr(matches, "CATCH_ME_UP_PER_MINUTE", 2)
+    url = "/v1/matches/match-short/catch-me-up"
+    codes = [client.get(url, params={**Q, "minute": 30}).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+
+
+def test_catch_me_up_minute_is_bounded(client: TestClient) -> None:
+    create(client)
+    url = "/v1/matches/match-short/catch-me-up"
+    assert client.get(url, params={**Q, "minute": -1}).status_code == 422
