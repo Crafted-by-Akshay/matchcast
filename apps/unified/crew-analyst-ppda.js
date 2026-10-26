@@ -115,6 +115,7 @@ const ALP = (() => {
     if (!r || !el) return;
     const s = series(r), cl = [r.names.home, r.names.away], g = geo(s), t = Math.min(Math.max(0, b), s.B - 1), status = statusText(cl, s, t);
     el.querySelectorAll('[data-playhead]').forEach((l) => { l.setAttribute('x1', g.X(t).toFixed(2)); l.setAttribute('x2', g.X(t).toFixed(2)); });
+    const svg = el.querySelector('svg[data-map="ppda"]'); if (svg) svg.setAttribute('aria-label', 'PPDA by club, simulated match. ' + status);
     const out = el.querySelector('[data-ppda-status]'); if (out) out.textContent = status;
     const sc = el.querySelector('[data-ppda-scrub]'); if (sc) { sc.value = String(t); sc.setAttribute('aria-valuetext', status); }
   }

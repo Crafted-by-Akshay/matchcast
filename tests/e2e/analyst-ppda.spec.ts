@@ -57,6 +57,31 @@ test('the scrubber moves to the first block, where both clubs have a PPDA', asyn
   await expect(panel.locator('[data-ppda-status]')).toContainText("0–5'");
   await expect(panel.locator('[data-ppda-status]')).toContainText('Harbor City 2.00 (2 passes allowed, 1 ball wins in its zone)');
   await expect(panel.locator('[data-ppda-status]')).toContainText('Thames Rovers 1.00');
+  // the chart's accessible name follows the block too, not only the status line
+  await expect(page.locator('#al svg[data-map="ppda"]')).toHaveAttribute('aria-label', /0–5'/);
+});
+
+test('Play with reduced motion jumps to the latest block', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await block3d(page);
+  await openShell(page, 'analyst', '?crew=1');
+  await seedMatch(page);
+  const panel = page.locator('#al [data-panel="ppda"]');
+  await panel.locator('[data-ppda-scrub]').evaluate((el: HTMLInputElement) => { el.value = '0'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await expect(panel.locator('[data-ppda-status]')).toContainText("0–5'");
+  await panel.locator('[data-ppda-play]').click();
+  await expect(panel.locator('[data-ppda-status]')).toContainText("5–10'");
+});
+
+test('Play walks through the blocks over the match, first block then latest', async ({ page }) => {
+  await block3d(page);
+  await openShell(page, 'analyst', '?crew=1');
+  await seedMatch(page);
+  const panel = page.locator('#al [data-panel="ppda"]');
+  await panel.locator('[data-ppda-play]').click();
+  // the first block shows as soon as Play starts; the latest block follows once PLAY_MS (9 s) has run
+  await expect(panel.locator('[data-ppda-status]')).toContainText("0–5'");
+  await expect(panel.locator('[data-ppda-status]')).toContainText("5–10'", { timeout: 15_000 });
 });
 
 test('window.MC.analysis draws PPDA into a card and cites the passes and ball wins of the block', async ({ page }) => {
