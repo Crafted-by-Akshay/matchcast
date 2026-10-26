@@ -27,10 +27,12 @@ def with_full_time(match):
     last = max(e["stream_sequence"] for e in match["events"])
     second_start = copy.deepcopy(started)
     second_start.update(event_id=f"e{last + 1}", stream_sequence=last + 1)
+    second_start.update(emitted_at="2026-10-22T10:10:00.000Z")
     second_start["clock"] = {"period": 2, "period_elapsed_ms": 0}
     second_start["event_time_ms"] = 600_000
     full_time = copy.deepcopy(ended)
     full_time.update(event_id=f"e{last + 2}", stream_sequence=last + 2)
+    full_time.update(emitted_at="2026-10-22T10:20:00.000Z")
     full_time["clock"] = {"period": 2, "period_elapsed_ms": 600_000}
     full_time["event_time_ms"] = 1_200_000
     return match["events"] + [second_start, full_time]
@@ -72,10 +74,13 @@ def test_a_replayed_full_time_writes_no_recap_again(match) -> None:
     flow = flow_with(match, personas=("casual", "analyst"))
     flow.config.recap_at_full_time = True
     events = with_full_time(match)
+    writes = counted_writes(flow)
     run(flow.ingest(events))
     recaps = {p: flow.store.get_recap(flow.sk, p) for p in ("casual", "analyst")}
+    assert all(recaps.values()), "the first full time must write the recaps this replay checks"
     audit = len(flow.store.audit_records(flow.sk))
     run(flow._recap_at_full_time(events[-1]))
+    assert len(writes) == 2  # the hook ran again, and recap() wrote nothing new
     assert {p: flow.store.get_recap(flow.sk, p) for p in recaps} == recaps
     assert len(flow.store.audit_records(flow.sk)) == audit
 
@@ -102,10 +107,14 @@ def test_a_failed_recap_does_not_stop_the_match(match, error) -> None:
     flow = flow_with(match, personas=("casual", "analyst"))
     flow.config.recap_at_full_time = True
 
+    calls = []
+
     async def down(*args, **kwargs):
+        calls.append(1)
         raise error
 
     flow._write_recap = down
     events = with_full_time(match)
     run(flow.ingest(events))  # no error reaches the caller, whatever the recap raised
+    assert len(calls) == 1, "the full-time hook must have reached the recap"
     assert flow.store.get_state(flow.sk).max_sequence == max(e["stream_sequence"] for e in events)
