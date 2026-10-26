@@ -30,12 +30,12 @@ def test_the_piece_cites_only_first_half_events(make_workflow, match) -> None:
     assert piece["cut_sequence"] == 137
 
 
-def second_half_events(match):
-    """Two period-2 goals after full time, copied from a real goal so the payload is valid."""
+def second_half_events(match, count=2):
+    """Period-2 goals after full time, copied from a real goal so the payload is valid."""
     goal = next(e for e in match["events"] if e["payload"]["type"] == "goal")
     last = match["events"][-1]["stream_sequence"]
     later = []
-    for offset in (1, 2):
+    for offset in range(1, count + 1):
         seq = last + offset
         later.append(
             {
@@ -77,3 +77,11 @@ def test_the_verifier_view_holds_no_later_events_truth_or_storylines(make_workfl
         assert max(e["stream_sequence"] for e in view.events) <= 137
         assert view.truth == ()
         assert "storylines" not in view.extra and "vision_passes" not in view.extra
+
+
+def test_later_events_do_not_make_the_half_time_lines_stale(make_workflow, match) -> None:
+    # more later revisions than the freshness limit: a state built from the whole match drops lines
+    flow = make_workflow()
+    run(flow.ingest([*match["events"], *second_half_events(match, count=10)]))
+    piece = run(flow.half_time())
+    assert piece["lines_dropped"] == 0
