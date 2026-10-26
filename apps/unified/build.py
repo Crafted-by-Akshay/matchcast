@@ -375,6 +375,11 @@ NATIONAL = [
     ("BRA", "Brazil", "#F2C400", "mexico"),
 ]
 NATIONAL_SEED = 2026
+# The default match must show something. The venue fixture's tactics were a 5-4-1 low block for Argentina, which gave 0 to 2 shots
+# a half-time in most seeds; an open 4-3-3 balanced v 4-3-3 balanced on the same seed gives about 17 shots and 2 goals in 90 minutes
+# (measured on the runner's 0.02 s step). Tactics are a fixture setting, not engine calibration. tests/e2e/lively-default.spec.ts guards it.
+NATIONAL_FORMATIONS = ("4-3-3", "4-3-3")
+NATIONAL_STYLES = ("balanced", "balanced")
 
 
 def national_clubs():
@@ -425,8 +430,8 @@ def national_fixtures(season):
             "stIndex": MSI_STADIUM[home["stadium"]],
             "setup": setup,
             "history": history,
-            "formations": venue["formations"],
-            "styles": venue["styles"],
+            "formations": list(NATIONAL_FORMATIONS),
+            "styles": list(NATIONAL_STYLES),
             "result": None,
         }
     ]
