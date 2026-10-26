@@ -151,8 +151,8 @@ const ALV = (() => {
     if (hs !== headSig) { headSig = hs; sel.innerHTML = cl ? cl.map((c, i) => '<option value="' + i + '"' + (i === f ? ' selected' : '') + '>' + esc(c) + '</option>').join('') : ''; sel.disabled = !cl; }
     let body;
     if (!cl) body = '<section class="wide"><p class="empty">Pick a fixture to see its live view.</p></section>';
-    else body = feedPanel(r) + controlPanel(r, cl, f) + ALX.panel(r, cl, f) + passPanel(r, cl, f) + storyPanel(r, cl, f);
-    if (body !== bodySig) { bodySig = body; hostEl.querySelector('#al-body').innerHTML = body; }
+    else body = feedPanel(r) + controlPanel(r, cl, f) + ALX.panel(r, cl, f, null, hostEl) + passPanel(r, cl, f) + storyPanel(r, cl, f);
+    if (body !== bodySig) { bodySig = body; ALX.setHtml(hostEl.querySelector('#al-body'), body); }
     ALX.mounted(hostEl);   // the shot replay (crew-analyst-shots.js) draws into the fresh svg, or starts after a tap
   }
   // which of the live view and the console shows; the console iframe is created only when asked for

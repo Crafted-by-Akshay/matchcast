@@ -47,7 +47,8 @@ test('tap a shot: the build-up plays back, then the shot is labelled with its ou
   await expect(panel.locator('svg [data-replay] [data-pass]')).toHaveCount(3);
   await expect(panel.locator('svg [data-replay] [data-ball]')).toHaveCount(1);
   // the outcome label appears once the ball reaches the shot
-  await expect(panel.locator('svg [data-replay] text')).toHaveText(/Goal · xG 0\.31/, { timeout: 10_000 });
+  await expect(panel.locator('svg [data-replay] text')).toHaveText(/Goal · xG 0\.31/);
+  await expect(panel.locator('svg [data-replay] text')).toHaveAttribute('opacity', '1', { timeout: 10_000 });
   await expect(status).toContainText('Goal');
   expect(errs).toEqual([]);
 });
@@ -93,6 +94,13 @@ test('keyboard: focus stays on the same shot after Enter, and the status is a li
   await page.keyboard.press('Enter');
   await expect(first).toBeFocused();
   await expect(page.locator('#al [data-replay-status]')).toHaveAttribute('role', 'status');
+  // a new batch redraws the live view on its next tick; focus stays on the same shot through the redraw
+  await page.evaluate(() => { (window as any).__btn = document.querySelector('#al .xg-list [data-shot-pick]'); });
+  await page.evaluate(() => {
+    AG.onWatch('k', [{ minute: 13, type: 'pass', team: 'a', player: 'T. Marsh', to: 'R. Lee', x0: 30, y0: 30, x1: 40, y1: 30 }], []);
+  });
+  await expect.poll(() => page.evaluate(() => !(window as any).__btn.isConnected), { timeout: 5_000 }).toBe(true);
+  await expect(first).toBeFocused();
 });
 
 test('a new batch of events mid-replay carries the replay on, not the final frame', async ({ page }) => {
@@ -101,12 +109,16 @@ test('a new batch of events mid-replay carries the replay on, not the final fram
   await seedBuildUp(page);
   const panel = page.locator('#al [data-panel="shots"]');
   await panel.locator('[data-shots] button').first().click();
+  await page.evaluate(() => { (window as any).__g = document.querySelector('#al svg[data-map="shots"] [data-replay]'); });
   await page.evaluate(() => {
     AG.onWatch('k', [{ minute: 13, type: 'pass', team: 'a', player: 'T. Marsh', to: 'R. Lee', x0: 30, y0: 30, x1: 40, y1: 30 }], []);
   });
+  // the live view redraws on its tick (the body changed); the new layer must carry the replay on, not show the shot at once
+  await expect.poll(() => page.evaluate(() => !(window as any).__g.isConnected), { timeout: 5_000 }).toBe(true);
   await expect(panel.locator('[data-replay-status]')).toContainText('Replaying');
+  await expect(panel.locator('svg [data-replay] text')).toHaveAttribute('opacity', '0');
+  await expect(panel.locator('svg [data-replay] text')).toHaveAttribute('opacity', '1', { timeout: 10_000 });
   await expect(panel.locator('svg [data-replay] [data-pass]')).toHaveCount(3);
-  await expect(panel.locator('svg [data-replay] text')).toHaveText(/Goal · xG 0\.31/, { timeout: 10_000 });
   await expect(panel.locator('[data-replay-status]')).toContainText('3 passes in this build-up');
 });
 
@@ -123,6 +135,9 @@ test('more than eight build-up passes: the replay draws the last eight and says 
   await panel.locator('[data-shots] button').first().click();
   await expect(panel.locator('[data-replay-status]')).toContainText('Showing the last 8 of 9 passes');
   await expect(panel.locator('svg [data-replay] [data-pass]')).toHaveCount(8);
+  // the last eight of the nine: the first drawn pass starts at x 31 (the second pass), the last ends at x 39
+  await expect(panel.locator('svg [data-replay] [data-pass]').first()).toHaveAttribute('x1', '31.0');
+  await expect(panel.locator('svg [data-replay] [data-pass]').last()).toHaveAttribute('x2', '39.0');
 });
 
 test('window.MC.analysis draws the shot map into a card with citations, and says Planned for kinds not built', async ({ page }) => {
@@ -140,4 +155,25 @@ test('window.MC.analysis draws the shot map into a card with citations, and says
   expect(out.planned.status).toBe('planned');
   expect(out.dots).toBe(1);
   await expect(page.locator('#card-test [data-replay-status]')).toHaveAttribute('role', 'status');
+});
+
+test('a card replays on tap, and a second card keeps its own state', async ({ page }) => {
+  await block3d(page);
+  await openShell(page, 'analyst', '?crew=1');
+  await seedBuildUp(page);
+  await page.evaluate(() => {
+    for (const id of ['card-a', 'card-b']) { const d = document.createElement('div'); d.id = id; document.body.appendChild(d); }
+    (window as any).MC.analysis.render('shot_map', {}, document.getElementById('card-a'));
+    (window as any).MC.analysis.render('shot_map', { team: 'away' }, document.getElementById('card-b'));
+  });
+  const a = page.locator('#card-a'), b = page.locator('#card-b');
+  await expect(a.locator('[data-shots] button')).toHaveCount(2);
+  await expect(b.locator('[data-shots] button')).toHaveCount(1);
+  await a.locator('[data-shots] button').first().click();
+  await expect(a.locator('[data-replay-status]')).toContainText('3 passes in this build-up');
+  await expect(a.locator('svg [data-replay] text')).toHaveAttribute('opacity', '1', { timeout: 10_000 });
+  // card b shows only the away shot and has no replay of card a's shot
+  await expect(b.locator('svg [data-replay] text')).toHaveCount(0);
+  await expect(b.locator('svg [data-replay] [data-pass]')).toHaveCount(0);
+  await expect(b.locator('[data-replay-status]')).not.toContainText('Replay:');
 });

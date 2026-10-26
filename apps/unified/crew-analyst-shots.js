@@ -4,7 +4,8 @@
    other side's last pass or turnover, within 20 seconds; the replay draws the last eight of them. Chance bands are this view's own cut-offs, not the engine's.
    The match is the browser simulator, so the panel says Simulated.
    window.MC.analysis.render(kind, params, container) draws the same panel into any container for the Ask lane (kind "shot_map"; other kinds are
-   Planned until their view lands). Params are optional: team ("home", "away" or a club name) and window ({from, to} in match minutes). */
+   Planned until their view lands). Params are optional: team ("home", "away" or a club name) and window ({from, to} in match minutes).
+   Each panel (the live view, and each card) keeps its own selection and replay, so two panels never share one. */
 const ALX = (() => {
   const BEFORE_MIN = 1 / 3;   // 20 seconds; event minutes are rounded to 0.1 (MCC.event), so the build-up is read by its place in the log
   const MAX_PASSES = 8;
@@ -15,6 +16,7 @@ const ALX = (() => {
     + '<circle cx="52.5" cy="34" r="9.15" fill="none" stroke="var(--line)" stroke-width="0.5"/>'
     + '<rect x="0.5" y="13.85" width="16.5" height="40.3" fill="none" stroke="var(--line)" stroke-width="0.5"/><rect x="88" y="13.85" width="16.5" height="40.3" fill="none" stroke="var(--line)" stroke-width="0.5"/>'
     + '<rect x="0.5" y="24.85" width="5.5" height="18.3" fill="none" stroke="var(--line)" stroke-width="0.5"/><rect x="99" y="24.85" width="5.5" height="18.3" fill="none" stroke="var(--line)" stroke-width="0.5"/>';
+  // the live view styles its own panels under #al (crew-analyst.js); a card carries the same look under [data-mc-analysis]
   const css = '#al .xg-list,[data-mc-analysis] .xg-list{list-style:none;margin:8px 0 0;padding:0;max-height:16em;overflow-y:auto}'
     + '#al .xg-list li,[data-mc-analysis] .xg-list li{border-top:1px solid var(--line);padding:0}#al .xg-list li:first-child,[data-mc-analysis] .xg-list li:first-child{border-top:0}'
     + '#al .xg-list button,[data-mc-analysis] .xg-list button{width:100%;text-align:left;border:0;border-radius:0;background:transparent;min-height:36px;padding:6px 4px;font:inherit;font-size:12px;color:var(--text,inherit)}'
@@ -23,11 +25,28 @@ const ALX = (() => {
     + '[data-replay] [data-pass]{stroke:var(--side);stroke-width:0.8;stroke-linecap:round}'
     + '[data-replay] [data-ball]{fill:#fff;stroke:var(--side);stroke-width:0.4}'
     + '[data-replay] [data-ring]{fill:none;stroke:var(--warn);stroke-width:0.5}'
-    + '[data-replay] text{font:600 3px var(--font,system-ui,sans-serif);fill:var(--text)}';
+    + '[data-replay] text{font:600 3px var(--font,system-ui,sans-serif);fill:var(--text)}'
+    + '[data-mc-analysis]{font:13px/1.45 var(--font,system-ui,sans-serif);color:var(--text)}'
+    + '[data-mc-analysis] section{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r,12px);padding:10px 12px}'
+    + '[data-mc-analysis] h3{margin:0 0 6px;font-size:13px}[data-mc-analysis] h3 small{font-weight:400;color:var(--muted);font-size:12px}'
+    + '[data-mc-analysis] .m{color:var(--muted);font-size:12px}[data-mc-analysis] .empty{color:var(--muted)}'
+    + '[data-mc-analysis] svg{display:block;width:100%;height:auto;max-width:100%}'
+    + '[data-mc-analysis] [data-side="0"]{--side:var(--accent)}[data-mc-analysis] [data-side="1"]{--side:var(--hot)}'
+    + '[data-mc-analysis] .key{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}[data-mc-analysis] .key span{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--side);color:var(--text)}'
+    + '[data-mc-analysis] [data-fav="1"]{font-weight:700}';
 
-  let sel = -1, selEvents = null, replay = false, token = 0, styled = false;
-  let playKey = '', playT0 = 0;
-  const cards = new WeakMap();   // container -> params, for the Ask lane's cards
+  let styled = false;
+  const states = new WeakMap(), cards = new WeakMap();   // per panel: its selection and replay; per card container: its params
+  const detached = { sel: -1, selEvents: null, replay: false, token: 0, playKey: '', playT0: 0 };   // only before the live view exists
+  // the live view is keyed by #al; a card by its container
+  const keyOf = (root) => root || document.getElementById('al');
+  function stateFor(root) {
+    const k = keyOf(root);
+    if (!k) return detached;
+    let s = states.get(k);
+    if (!s) { s = { sel: -1, selEvents: null, replay: false, token: 0, playKey: '', playT0: 0 }; states.set(k, s); }
+    return s;
+  }
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const f2 = (x) => (+x || 0).toFixed(2);
   const mn = (m) => Math.floor(+m || 0) + "'";
@@ -99,17 +118,16 @@ const ALX = (() => {
     g.querySelectorAll('[data-ring], text').forEach((o) => o.setAttribute('opacity', done ? '1' : '0'));
   }
   function setStatus(g, text) { const sec = g.closest('section'), s = sec && sec.querySelector('[data-replay-status]'); if (s) s.textContent = text; }
-  function cancel() { token++; }
   // t0 is when the replay started, so a redraw part-way through (a new batch of events) carries on from the same moment
-  function play(g, r, i, t0) {
-    const tok = token, total = passesOf(r, i).length * PASS_MS + END_MS;
+  function play(g, r, i, s, t0) {
+    const tok = s.token, total = passesOf(r, i).length * PASS_MS + END_MS;
     setStatus(g, 'Replaying the build-up.');
     const step = (now) => {
-      if (tok !== token) return;
-      const el = Math.min(now - t0, total);
+      if (tok !== s.token) return;
+      const el = Math.max(0, Math.min(now - t0, total));
       place(g, r, i, el);
       if (el < total) requestAnimationFrame(step);
-      else { playKey = ''; setStatus(g, statusFor(r, i)); }
+      else { s.playKey = ''; setStatus(g, statusFor(r, i)); }
     };
     requestAnimationFrame(step);
   }
@@ -119,26 +137,27 @@ const ALX = (() => {
     const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st); styled = true;
   }
   // the panel, a string like the rest of the live view. Its svg replay layer is filled by mounted(), after the view is in the page
-  function panel(r, cl, f, params) {
+  function panel(r, cl, f, params, root) {
     ensureStyle();
+    const s = stateFor(root);
     let h = '<section data-panel="shots"><h3>xG shot map <small>Simulated · tap a shot to replay its build-up</small></h3>';
     const idx = shots(r, params);
     if (!idx.length) return h + '<p class="empty">No shots yet.</p></section>';
     const n = [0, 0], xg = [0, 0]; let goals = 0, saves = 0;
-    for (const i of idx) { const e = r.events[i], s = sideOf(r, e.team); n[s]++; xg[s] += +e.data.xg || 0; if (e.data.fate === 'goal') goals++; else if (e.data.fate === 'save') saves++; }
+    for (const i of idx) { const e = r.events[i], sd = sideOf(r, e.team); n[sd]++; xg[sd] += +e.data.xg || 0; if (e.data.fate === 'goal') goals++; else if (e.data.fate === 'save') saves++; }
     const sum = 'Shot map, simulated match. ' + idx.length + ' shots: ' + cl[0] + ' ' + n[0] + ', ' + cl[1] + ' ' + n[1] + '. Total xG ' + cl[0] + ' ' + f2(xg[0]) + ', ' + cl[1] + ' ' + f2(xg[1]) + '. '
       + goals + (goals === 1 ? ' goal' : ' goals') + '. Dot size is the shot\'s xG; filled is a goal, half filled a save, hollow off target. Tap a shot to replay its build-up.';
     const dots = idx.map((i) => {
-      const e = r.events[i], d = e.data, s = sideOf(r, e.team), op = d.fate === 'goal' ? 1 : d.fate === 'save' ? 0.5 : 0.12;
-      return '<circle data-shot-pick="' + i + '" data-fate="' + esc(d.fate || 'miss') + '"' + (d.fate === 'save' ? ' stroke-dasharray="1 0.7"' : '') + ' data-xg="' + f2(d.xg) + '" data-side="' + s + '"' + fav(s, f)
+      const e = r.events[i], d = e.data, sd = sideOf(r, e.team), op = d.fate === 'goal' ? 1 : d.fate === 'save' ? 0.5 : 0.12;
+      return '<circle data-shot-pick="' + i + '" data-fate="' + esc(d.fate || 'miss') + '"' + (d.fate === 'save' ? ' stroke-dasharray="1 0.7"' : '') + ' data-xg="' + f2(d.xg) + '" data-side="' + sd + '"' + fav(sd, f)
         + ' cx="' + Math.max(0, Math.min(105, +d.x)).toFixed(1) + '" cy="' + Math.max(0, Math.min(68, +d.y)).toFixed(1) + '" r="' + (1 + 4.2 * Math.sqrt(Math.max(0, +d.xg || 0))).toFixed(2)
-        + '" fill="var(--side)" fill-opacity="' + op + '" stroke="var(--side)" stroke-width="' + (s === f ? 0.9 : 0.4) + '"><title>' + esc(mn(e.minute) + ' ' + (e.player || '') + ' xG ' + f2(d.xg) + ' ' + (d.fate || '')) + '</title></circle>';
+        + '" fill="var(--side)" fill-opacity="' + op + '" stroke="var(--side)" stroke-width="' + (sd === f ? 0.9 : 0.4) + '"><title>' + esc(mn(e.minute) + ' ' + (e.player || '') + ' xG ' + f2(d.xg) + ' ' + (d.fate || '')) + '</title></circle>';
     }).join('');
     const list = idx.map((i) => {
-      const e = r.events[i], d = e.data, s = sideOf(r, e.team);
-      return '<li><button type="button" data-shot-pick="' + i + '" data-side="' + s + '" aria-pressed="' + (i === sel) + '">' + esc(mn(e.minute)) + ' <b>' + esc(e.player || '') + '</b> · ' + esc(cl[s]) + ' · xG ' + f2(d.xg) + ' · ' + fateOf(d) + ' · ' + band(+d.xg || 0) + '</button></li>';
+      const e = r.events[i], d = e.data, sd = sideOf(r, e.team);
+      return '<li><button type="button" data-shot-pick="' + i + '" data-side="' + sd + '" aria-pressed="' + (i === s.sel) + '">' + esc(mn(e.minute)) + ' <b>' + esc(e.player || '') + '</b> · ' + esc(cl[sd]) + ' · xG ' + f2(d.xg) + ' · ' + fateOf(d) + ' · ' + band(+d.xg || 0) + '</button></li>';
     }).join('');
-    const st = sel >= 0 && r.events[sel] && r.events[sel].type === 'shot' && idx.includes(sel) ? statusFor(r, sel) : IDLE;
+    const st = s.sel >= 0 && r.events[s.sel] && r.events[s.sel].type === 'shot' && idx.includes(s.sel) ? statusFor(r, s.sel) : IDLE;
     h += '<div class="key"><span data-side="0"' + fav(0, f) + '>' + esc(cl[0]) + ' · ' + n[0] + ' shots · xG ' + f2(xg[0]) + '</span><span data-side="1"' + fav(1, f) + '>' + esc(cl[1]) + ' · ' + n[1] + ' shots · xG ' + f2(xg[1]) + '</span></div>'
       + '<svg data-map="shots" viewBox="0 0 105 68" role="img" aria-label="' + esc(sum) + '">' + PITCH + '<g data-replay></g>' + dots + '</svg>'
       + '<p class="m" data-replay-status role="status">' + esc(st) + '</p>'
@@ -147,42 +166,52 @@ const ALX = (() => {
     return h + '</section>';
   }
 
-  // after a view is in the page: draw the shot's replay layer. A redraw during a replay resumes it; a tap starts it again; otherwise the finished state
+  // replaces a panel's html. Keyboard focus on a shot and the list's scroll position survive the redraw
+  function setHtml(root, html) {
+    const f = document.activeElement, k = f && root.contains(f) && f.hasAttribute && f.hasAttribute('data-shot-pick') ? f.getAttribute('data-shot-pick') : null;
+    const before = root.querySelector('.xg-list'), top = before ? before.scrollTop : 0;
+    root.innerHTML = html;
+    const after = root.querySelector('.xg-list');
+    if (after) after.scrollTop = top;
+    if (k !== null) { const b = root.querySelector('.xg-list [data-shot-pick="' + k + '"]'); if (b) b.focus(); }
+  }
+
+  // after a panel is in the page: draw the shot's replay layer. A redraw during a replay resumes it; a tap starts it again; otherwise the finished state
   function mounted(root) {
     const g = root && root.querySelector('svg[data-map="shots"] [data-replay]');
     const r = typeof AG !== 'undefined' ? AG.run : null;
     if (!g) return;
-    if (r && selEvents !== r.events) { sel = -1; selEvents = null; }
-    if (!r || sel < 0 || !r.events[sel] || r.events[sel].type !== 'shot') { cancel(); g.innerHTML = ''; return; }
-    if (!replay && g.dataset.run === r.key && g.dataset.shot === String(sel)) return;   // already showing (or still playing)
-    const again = replay, now = performance.now(), key = r.key + ':' + sel, total = passesOf(r, sel).length * PASS_MS + END_MS;
-    replay = false;
-    g.dataset.run = r.key; g.dataset.shot = String(sel);
-    layers(g, r, sel);
-    cancel();
+    const s = stateFor(root), params = cards.get(keyOf(root)) || {};
+    if (r && s.selEvents !== r.events) { s.sel = -1; s.selEvents = null; }
+    if (!r || s.sel < 0 || !r.events[s.sel] || r.events[s.sel].type !== 'shot' || !shots(r, params).includes(s.sel)) { s.token++; g.innerHTML = ''; return; }
+    if (!s.replay && g.dataset.run === r.key && g.dataset.shot === String(s.sel)) return;   // already showing (or still playing)
+    const again = s.replay, now = performance.now(), key = r.key + ':' + s.sel, total = passesOf(r, s.sel).length * PASS_MS + END_MS;
+    s.replay = false;
+    g.dataset.run = r.key; g.dataset.shot = String(s.sel);
+    layers(g, r, s.sel);
+    s.token++;
     if (!reduced()) {
-      if (again) { playKey = key; playT0 = now; play(g, r, sel, now); return; }
-      if (playKey === key && now - playT0 < total) { play(g, r, sel, playT0); return; }
+      if (again) { s.playKey = key; s.playT0 = now; play(g, r, s.sel, s, now); return; }
+      if (s.playKey === key && now - s.playT0 < total) { play(g, r, s.sel, s, s.playT0); return; }
     }
-    place(g, r, sel, total);
+    place(g, r, s.sel, total);
   }
 
-  // a tap or Enter on a shot (dot or list button). The view redraws and this shot's replay starts; keyboard focus returns to the same shot
+  // a tap or Enter on a shot (dot or list button). The panel redraws and this shot's replay starts
   function pick(i, root) {
     const r = typeof AG !== 'undefined' ? AG.run : null;
     if (!r || !r.events[i]) return;
-    const keyboard = !!(document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute('data-shot-pick'));
-    sel = i; selEvents = r.events; replay = true;
+    const s = stateFor(root);
+    s.sel = i; s.selEvents = r.events; s.replay = true;
     if (root) renderInto(root, cards.get(root) || {});
     else if (typeof ALV !== 'undefined') ALV.render();
-    if (keyboard) { const b = (root || document.getElementById('al') || document).querySelector('.xg-list [data-shot-pick="' + i + '"]'); if (b) b.focus(); }
   }
-  // a card in the Ask lane (or any container): the same panel, with the params it was drawn with
+  // a card (any container): the same panel, drawn with the params it was asked for
   function renderInto(root, params) {
     const r = typeof AG !== 'undefined' ? AG.run : null;
     ensureStyle();
     if (!r) { root.textContent = 'Needs the live match first.'; return; }
-    root.innerHTML = panel(r, [r.names.home, r.names.away], 0, params);
+    setHtml(root, panel(r, [r.names.home, r.names.away], 0, params, root));
     mounted(root);
   }
 
@@ -204,12 +233,12 @@ const ALX = (() => {
       const r = typeof AG !== 'undefined' ? AG.run : null;
       container.setAttribute('data-mc-analysis', kind);
       cards.set(container, params || {});
-      if (!r) { renderInto(container, params); return { kind, status: 'empty', citations: [] }; }
-      renderInto(container, params);
+      renderInto(container, params || {});
+      if (!r) return { kind, status: 'empty', citations: [] };
       const ids = shots(r, params).map((i) => r.events[i].id);
       return { kind, status: ids.length ? 'ok' : 'empty', citations: ids };
     }
   };
 
-  return { panel, mounted, pick, buildUp, shots };
+  return { panel, mounted, setHtml, pick, buildUp, shots };
 })();
