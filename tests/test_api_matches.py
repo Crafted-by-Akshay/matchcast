@@ -10,6 +10,7 @@ from app.matches import wanted_on_stream
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 from matchcast_agents.grading import SEED_RATE
+from matchcast_agents.grading_live import events_digest
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.personas import BOOTH
 from matchcast_contracts import validate
@@ -1034,6 +1035,24 @@ def test_a_recorded_benchmark_sits_beside_the_rules_arms(
     assert recorded["label"].startswith("Recorded live benchmark: M001, seed 2026")
     assert recorded["label"].endswith("not this match")
     assert recorded["arms"]["full_crew"]["run_id"] == "full_crew-live"
+
+
+def test_a_recording_of_these_events_says_same_events_as_this_match(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    # the recording ran on the stored events, so its digest is this match's digest: the route says
+    # so, and the digest comes from the same input the export route returns
+    create(client)
+    post_all(client)
+    stored = client.get("/v1/matches/match-short/scoreboard/input", params=Q).json()
+    digest = events_digest(stored["events"])
+    teams = FIXTURE["teams"].values()
+    monkeypatch.setenv(
+        "MATCHCAST_SCOREBOARD_LIVE_RUN", recording(tmp_path, teams, events_sha256=digest)
+    )
+    recorded = client.get("/v1/matches/match-short/scoreboard", params=Q).json()["recorded"]
+    assert recorded["same_events"] is True
+    assert recorded["label"] == "Recorded live run live0001, 2026-10-25, same events as this match"
 
 
 def test_a_recording_of_another_fixture_is_not_shown(
