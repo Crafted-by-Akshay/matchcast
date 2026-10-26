@@ -185,20 +185,22 @@ const LV = (() => {
   // CREW-7.3: the catch-me-up recap as of a minute, GET /v1/matches/{id}/catch-me-up?session_id&minute (docs/architecture/12-api.md). A read: the api sends nothing to the streams.
   // Answers {state} and never throws: ok (the whole recap), held (404: a correction before the cut, a desk kill or a recap that did not recount; not an error), limited (429, wait_s from Retry-After),
   // error (422 or anything else) or none (no api or no match yet). The minute is clamped to the route's 0-200 here, so a bad minute never reaches the api.
-  const catchMeUp = async (minute) => {
-    const r = run, m = Math.max(0, Math.min(200, Math.floor(+minute) || 0));
-    if (!r || !r.created || !api()) return { state: 'none', minute: m };
+  // With lang (the viewer's language, not English) the route may add variants[lang], the Verifier-checked translation: it comes back as `translated` (null when the route sent none, so the page says Showing English); `text` stays the English recap.
+  const catchMeUp = async (minute, lng) => {
+    const r = run, m = Math.max(0, Math.min(200, Math.floor(+minute) || 0)), l = window.MC_LANGS.includes(lng) ? lng : 'en';   // only the ten feed languages (ADR-0023) go on the wire; the route answers 422 to any other
+    if (!r || !r.created || !api()) return { state: 'none', minute: m, lang: l };
     const opts = { headers: { Accept: 'application/json' }, cache: 'no-store' };
     try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) opts.signal = AbortSignal.timeout(8000); } catch (e) { /* no timeout support */ }
     let res;
-    try { res = await fetch(url('/v1/matches/' + encodeURIComponent(r.id) + '/catch-me-up', { minute: m }), opts); } catch (e) { return { state: 'error', minute: m }; }
-    if (res.status === 404) return { state: 'held', minute: m };
-    if (res.status === 429) return { state: 'limited', minute: m, wait_s: Math.max(5, Math.min(600, +res.headers.get('Retry-After') || 60)) };
-    if (!res.ok) return { state: 'error', minute: m };
-    let j; try { j = await res.json(); } catch (e) { return { state: 'error', minute: m }; }
-    if (!j || j.feed !== 'catch_me_up' || typeof j.text !== 'string' || !j.text) return { state: 'error', minute: m };
+    try { res = await fetch(url('/v1/matches/' + encodeURIComponent(r.id) + '/catch-me-up', l === 'en' ? { minute: m } : { minute: m, lang: l }), opts); } catch (e) { return { state: 'error', minute: m, lang: l }; }
+    if (res.status === 404) return { state: 'held', minute: m, lang: l };
+    if (res.status === 429) return { state: 'limited', minute: m, lang: l, wait_s: Math.max(5, Math.min(600, +res.headers.get('Retry-After') || 60)) };
+    if (!res.ok) return { state: 'error', minute: m, lang: l };
+    let j; try { j = await res.json(); } catch (e) { return { state: 'error', minute: m, lang: l }; }
+    if (!j || j.feed !== 'catch_me_up' || typeof j.text !== 'string' || !j.text) return { state: 'error', minute: m, lang: l };
+    const tr = l !== 'en' && j.variants && typeof j.variants[l] === 'string' && j.variants[l] ? j.variants[l] : null;   // a translation only when the route returned a checked variants[lang]
     const ids = Array.isArray(j.source_event_ids) ? new Set(j.source_event_ids.map(String)) : null;   // the recount's evidence: the Verified line only shows when the route returned it
-    return { state: 'ok', minute: Number.isFinite(+j.minute) ? Math.max(0, Math.min(200, Math.floor(+j.minute))) : m, text: j.text, word_count: Number.isFinite(+j.word_count) ? Math.max(0, Math.floor(+j.word_count)) : null, events: ids ? ids.size : null };
+    return { state: 'ok', lang: l, translated: tr, minute: Number.isFinite(+j.minute) ? Math.max(0, Math.min(200, Math.floor(+j.minute))) : m, text: j.text, word_count: Number.isFinite(+j.word_count) ? Math.max(0, Math.floor(+j.word_count)) : null, events: ids ? ids.size : null };
   };
   // the server's audit records for this match (EXP-12), and the same check the server's verifyChain does (packages/contracts/src/audit.ts)
   const GENESIS = '0'.repeat(64);
