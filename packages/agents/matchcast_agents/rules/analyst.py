@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..context import MatchContext
+from ..match_shares import POSSESSION, SHARE_METRICS
 from ..messages import ProducerTask
 from ..metrics_spec import derivation_version
 from ..specialists.rhythm import share_percent
@@ -52,7 +53,12 @@ def metrics_for(ctx: MatchContext, task: ProducerTask, event: dict[str, Any]) ->
         if task.reason == "colour"
         else counts.get(task.reason, ())
     )
-    return [m.format(t=team, h=ctx.home, a=ctx.away) for m in names]
+    # a priority-1 moment also carries each team's match-to-date possession (AB#373); it comes
+    # last, so it yields to the moment's own counts
+    shares = [f"{POSSESSION}:{t}" for t in (ctx.home, ctx.away)]
+    return [m.format(t=team, h=ctx.home, a=ctx.away) for m in names] + (
+        shares if task.priority == 1 else []
+    )
 
 
 class ClaimResult(BaseModel):
@@ -96,24 +102,29 @@ class AnalystRules:
         event = ctx.event(task.event_ids[0])
         assert event is not None
         metrics = metrics or metrics_for(ctx, task, event)
+        shares = [m for m in metrics if m.partition(":")[0] in SHARE_METRICS]
+        if task.priority != 1:  # a share is a priority-1 claim, on the live menu too
+            shares = []
+        counts = [m for m in metrics if m.partition(":")[0] not in SHARE_METRICS][:MAX_CLAIMS]
         snapshot = ctx.state.snapshot()
         if self._tool_call is not None:  # MATCHCAST_TOOLS=mcp: the same lookup over an MCP client
             if "get_metrics" in self._failing:
                 raise ToolError("get_metrics", "unavailable")
             mcp = McpMetrics(self._tool_call, ctx, task.up_to_sequence)
-            call_id, result = await mcp.get_metrics(metrics[:MAX_CLAIMS])
+            call_id, result = await mcp.get_metrics(counts + shares)
         else:
             tools = InProcessTools(ctx, task.up_to_sequence, fail=self._failing)
             call_id, result = tools.get_metrics(
-                metrics[:MAX_CLAIMS]
+                counts + shares
             )  # ToolError: no claim, never a guess
-        claims = []
-        for index, metric in enumerate(metrics[:MAX_CLAIMS], start=1):
+        claims: list[ClaimResult] = []
+
+        def add(metric: str) -> None:
             value = result["values"][metric]["value"]
             if (
                 self._corrupt
                 and not repair
-                and not claims
+                and metric.partition(":")[0] not in SHARE_METRICS  # a share may not reach a line
                 and snapshot["event_time_ms"] >= self._corrupt_after_ms
             ):
                 value += 1  # seeded bad claim: the Verifier must catch it and the repair fix it
@@ -122,7 +133,7 @@ class AnalystRules:
                 "kind": "claim",
                 "schema_version": "1.1.0",
                 "stream": ctx.stream,
-                "claim_id": f"claim-{task.moment_id}-{index}",
+                "claim_id": f"claim-{task.moment_id}-{len(claims) + 1}",
                 "source": {
                     "type": "interval",
                     "from_event_time_ms": 0,
@@ -149,9 +160,18 @@ class AnalystRules:
                     },
                 )
             )
+
+        # the moment's own counts first, then the Rhythm and History claims, then each team's
+        # match-to-date shares (AB#373),
+        # which never take a slot from those
+        for metric in counts:
+            add(metric)
         for extra in (self._meetings, self._rhythm):
             if len(claims) < MAX_CLAIMS and (claim := extra(ctx, task, len(claims) + 1)):
                 claims.append(claim)
+        for metric in shares:  # a share of nothing (no on-ball action yet) is not a claim
+            if result["values"][metric]["value"]:
+                add(metric)
         return claims
 
     @staticmethod

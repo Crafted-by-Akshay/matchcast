@@ -53,6 +53,8 @@ Pass quality (CREW-2.4, AB#491, `matchcast_agents/passes.py`) is a deterministic
 
 Rhythm weights on-ball actions (passes and carries) and pass tempo at 0.6 of the index, and territory, pressure, shots and turnovers won at 0.4. The engine emits no possession time, so possession is the share of on-ball actions. The sides swap at half time, the usual convention; the fixture has only one period, so the swap is not checked against engine data.
 
+Possession (AB#373, `match_shares.py`) is a match-to-date share the Analyst cites on priority-1 moments, one per side: the team's percent of the on-ball actions (passes and carries) to date. It is not a time in possession, which the engine does not record. The Verifier recounts it from the stored events up to the claim, so a share that disagrees with the log is refused like any count. A share with nothing to divide (no on-ball action yet) is not cited. Pass accuracy was built and then dropped: the engine logs every loss of the ball as a loose-ball turnover, so it cannot tell a failed pass from any other loss.
+
 ## 3. Workflow graph (Microsoft Agent Framework)
 
 Exported image: [img/2-agent-workflow.png](img/2-agent-workflow.png) (regenerate with `scripts/export_diagrams.sh`).
@@ -146,7 +148,7 @@ All tools are served by `services/mcp` over Streamable HTTP; until a shared stor
 | `get_metrics` | match_id, up_to_sequence, names[] as `<metric>:<team_id>` (`window_s`, `player_id` are **Planned**) | values with units and `derivation_version` | counts from the match state, xG from `xg.py` |
 | `get_evidence` | claim_id (plus `session_id`, `up_to_sequence`) | source events, tool calls, formula inputs | Tables `claims`, `events` |
 | `get_replay_clip` | event_id (plus `session_id`, `up_to_sequence`) | event window ±5 s for the explain replay | Table `events` |
-| `predict_danger` | event_id (plus `session_id`, `up_to_sequence`) | `score` (a ranking score for a same-team shot within 10 s, not a probability), model version and AUC, `unset_inputs`, limits | ONNX `data/models/danger/v1` (override with `MATCHCAST_DANGER_MODEL`); contract events lack xg, phase and kind, so those inputs are unset and the card shows held-out AUC 0.884 with overconfident top scores. Needs onnxruntime; an image without it refuses the call. The mcp image has no Dockerfile yet (**Planned**) |
+| `predict_danger` | event_id (plus `session_id`, `up_to_sequence`) | `score` (a ranking score for a same-team shot within 10 s, not a probability), model version and AUC, `unset_inputs`, limits | ONNX `data/models/danger/v1` (override with `MATCHCAST_DANGER_MODEL`); contract events lack xg, phase and kind, so those inputs are unset and the card shows held-out AUC 0.967 with overconfident top scores. Needs onnxruntime; an image without it refuses the call. The mcp image has no Dockerfile yet (**Planned**) |
 | `predict_danger` | match_id, event_id | probability of a shot within 10 s, model version | **Planned** (needs the danger model, ONNX from Blob `models/danger/`) |
 | `query_season` | sql (SELECT only), limit ≤ 1,000 | rows, columns, sql_hash, elapsed_ms | DuckDB over Blob `season/v1/*.parquet` |
 | `describe_views` | none | allowed views and columns | DuckDB catalogue |
@@ -156,7 +158,7 @@ Copilot Agent Mode uses the same server through the external route (Easy Auth), 
 
 ## 7. Model access
 
-- Endpoint `FOUNDRY_PROJECT_ENDPOINT`, deployment `FOUNDRY_MODEL_DEPLOYMENT=gpt-6-luna`, embeddings `FOUNDRY_EMBEDDING_DEPLOYMENT=text-embedding-3-small`. Auth with `id-matchcast` (role Azure AI User). No API key.
+- Endpoint `FOUNDRY_PROJECT_ENDPOINT`, deployment `FOUNDRY_MODEL_DEPLOYMENT=gpt-5-mini`, embeddings `FOUNDRY_EMBEDDING_DEPLOYMENT=text-embedding-3-small`. Auth with `id-matchcast` (role Azure AI User). No API key.
 - Output format: JSON Schema structured output generated from the packet models. If the deployment rejects structured output, use JSON mode and validate; invalid JSON counts as a failure.
 - Budgets per call: 20 s timeout; 1 retry on 429 honouring `Retry-After`; circuit breaker opens after 3 failures in 60 s, half-opens after 30 s.
 - Every call logs `gen_ai.usage.input_tokens` and `output_tokens` (see [15-observability.md](15-observability.md)).

@@ -10,8 +10,9 @@ const CM = (() => {
   const f2 = (x) => (+x || 0).toFixed(2);
   const trim = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
   const seenApi = new Set();
-  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playTi = -1, playFrom = 0, persona = 'casual', changed = () => {}, lastPushAt = 0, fillN = 0, filledAt = -1, over = false;
-  // the booth's dead-air fill: after FILL_MS (4 s) of real time with no line, a play-by-play line and a colour line drawn from the match state
+  let items = [], events = [], seen = new Set(), score = [0, 0], names = null, n = 0, lastLine = -99, playAt = -1, playTi = -1, playFrom = 0, persona = 'casual', changed = () => {}, lastPushAt = 0, fillN = 0, over = false;
+  // the booth's dead-air fill: after FILL_MS (4 s) of real time with no line, a play-by-play line and a colour line drawn from the match state,
+  // and again once FILL_MS has passed since the last line while the silence lasts (the tick is FILL_TICK_MS, so the gap is 4 to 6 s)
   const FILL_MS = 4000, FILL_TICK_MS = 2000;
   // four phrasings a turn, so the exchange does not repeat line for line. Only counts, the score and the named player from the events (s: club, who, score, home, away, at, passes)
   const FILL_PBP = [
@@ -25,6 +26,33 @@ const CM = (() => {
     (s) => 'That is the shape to watch: who moves first when the ball comes back.',
     (s) => 'The score is ' + s.home + ' ' + s.score + ' ' + s.away + '.',
     (s) => s.club + ' have made ' + s.passes + ' passes in the last two minutes.',
+  ];
+  // before any action: the kick-off score and the shape are the only facts, so no player is named
+  const FILL_START_PBP = [
+    (s) => 'Still ' + s.home + ' ' + s.score + ' ' + s.away + '.',
+    (s) => 'Both sides are settling in: ' + s.home + ' and ' + s.away + '.',
+  ];
+  const FILL_START_COLOUR = [
+    (s) => 'The shape is all we can read so far.',
+    (s) => 'Watch who takes the first possession and how they play it.',
+  ];
+  // the newest team action has no pass in its window (a shot, a corner, a change): a build-up would claim a possession the match has not shown, so the booth reads the score
+  const FILL_QUIET_PBP = [
+    (s) => 'Still ' + s.home + ' ' + s.score + ' ' + s.away + '.',
+    (s) => s.club + ' have not put a pass together in the last two minutes.',
+  ];
+  const FILL_QUIET_COLOUR = [
+    (s) => 'The shape is all we can read so far.',
+    (s) => 'Watch who wins the next possession and how they use it.',
+  ];
+  // the newest action is a shot: the count in the window and the chance's own xG, both from the events
+  const FILL_SHOT_PBP = [
+    (s) => s.club + ' have ' + s.shots + ' shot' + (s.shots === 1 ? '' : 's') + ' in the last two minutes.',
+    (s) => 'Last chance: xG ' + f2(s.xg) + ' for ' + s.club + '.',
+  ];
+  const FILL_SHOT_COLOUR = [
+    (s) => 'The chance was worth ' + f2(s.xg) + ' xG.',
+    (s) => 'Keep an eye on the next ball into the box.',
   ];
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
@@ -97,7 +125,7 @@ const CM = (() => {
     for (const ev of batch || []) {
       if (ev.minute == null) continue;
       const ti = idx(ev.team);
-      events.push({ minute: +ev.minute, type: ev.type, ti, player: ev.player || null });
+      events.push({ minute: +ev.minute, type: ev.type, ti, player: ev.player || null, xg: +ev.xg || 0 });
       if (ev.type === 'goal' && ti >= 0) score[ti]++;
       if (ev.type === 'full_time') over = true;
       const line = lineOf(ev, ti);
@@ -117,18 +145,36 @@ const CM = (() => {
   };
 
   // a quiet stretch of real time gets the booth exchange: the newest action and the score give the facts, and the phrasing turns over
-  // it speaks once per new action, stops after full time, and skips an action with no team (the fill would name the wrong side)
+  // it speaks once FILL_MS after the last line, for as long as the silence lasts, stops after full time, and skips an action with no team (the fill would name the wrong side)
   const fill = (now = Date.now()) => {
-    if (!names || over || !events.length || events.length === filledAt || now - lastPushAt < FILL_MS) return;
-    const last = events[events.length - 1];
-    if (last.ti < 0) return;
-    filledAt = events.length;
-    const ti = last.ti;
-    const passes = events.filter((e) => e.ti === ti && e.type === 'pass' && last.minute - e.minute <= 2).length;
-    const s = { club: club(ti), who: last.player || null, score: score.join('–'), home: names.home, away: names.away, at: Math.floor(last.minute), passes };
+    if (!names || over || now - lastPushAt < FILL_MS) return;
     const k = fillN++ % FILL_PBP.length;
-    push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_PBP[k](s) });
-    push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_COLOUR[k](s) });
+    // the newest action with a team: the kick-off is not an action, and a team-less event (half-time) has no side to count
+    const last = [...events].reverse().find((e) => e.type !== 'kickoff' && e.ti >= 0);
+    if (!last) {   // no action yet: the kick-off score is the whole fact
+      const s = { home: names.home, away: names.away, score: score.join('–') };
+      push({ minute: 0, kind: 'filler', speaker: 'pbp', text: FILL_START_PBP[k % FILL_START_PBP.length](s) });
+      push({ minute: 0, kind: 'filler', speaker: 'colour', text: FILL_START_COLOUR[k % FILL_START_COLOUR.length](s) });
+      return;
+    }
+    const ti = last.ti;
+    const inWindow = (type) => events.filter((e) => e.ti === ti && e.type === type && last.minute - e.minute <= 2).length;
+    const passes = inWindow('pass');
+    const s = { club: club(ti), who: last.player || null, score: score.join('–'), home: names.home, away: names.away, at: Math.floor(last.minute), passes, shots: inWindow('shot'), xg: last.xg };
+    // an attack (a shot, or a run of three passes) lifts the booth's voice; a quiet stretch stays calm
+    const tone = last.type === 'shot' || passes >= 3 ? 'hot' : '';
+    if (last.type === 'shot') {   // the newest action is a shot: its count and its chance, which the Watch line already gave
+      push({ minute: s.at, kind: 'filler', speaker: 'pbp', tone, text: FILL_SHOT_PBP[k % 2](s) });
+      push({ minute: s.at, kind: 'filler', speaker: 'colour', tone, text: FILL_SHOT_COLOUR[k % 2](s) });
+      return;
+    }
+    if (passes === 0) {
+      push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_QUIET_PBP[k % 2](s) });
+      push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_QUIET_COLOUR[k % 2](s) });
+      return;
+    }
+    push({ minute: s.at, kind: 'filler', speaker: 'pbp', tone, text: FILL_PBP[k](s) });
+    push({ minute: s.at, kind: 'filler', speaker: 'colour', tone, text: FILL_COLOUR[k](s) });
   };
   setInterval(() => fill(), FILL_TICK_MS);
 
@@ -150,7 +196,7 @@ const historyLine = (names) => {
   const last = m ? ' Last meeting: ' + m.date + ', ' + names.home + ' ' + m.score + ' ' + names.away + ' (' + m.competition + ').' : '';
   return { minute: 0, kind: 'buildup', speaker: 'colour', text: 'Real results: ' + h.played + ' meetings, ' + names.home + ' ' + h.home_wins + ' wins, ' + h.draws + ' draws, ' + names.away + ' ' + h.away_wins + ' wins.' + last };
 };
-const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playTi = -1; playFrom = 0; n = 0; filledAt = -1; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); const hl = historyLine(names); if (hl) push(hl); } };
+const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playTi = -1; playFrom = 0; n = 0; fillN = 0; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); const hl = historyLine(names); if (hl) push(hl); } };
   // the feed the views draw: newest last, each with its label
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers, speaker: x.speaker || (x.source === 'live' || x.kind === 'summary' ? 'colour' : 'pbp') }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under

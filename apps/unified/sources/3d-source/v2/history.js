@@ -12,7 +12,7 @@ const hxPct = (x) => Math.round(x * 100) + '%';
 const hxHome = () => { const c = SET.st.country; return hxN(HX.a).n === c ? 0 : hxN(HX.b).n === c ? 1 : -1; };
 const hxGap = () => hxN(HX.a).elo - hxN(HX.b).elo + [HX.data.elo.home, -HX.data.elo.home, 0][hxHome() < 0 ? 2 : hxHome()];
 // ---- history: P(win/draw/loss) for an Elo gap, from the ordered-logit fit to 30,000+ internationals since 1990 ----
-function hxWDL(gap) { const F = HX.data.wdlFit, s = (x) => 1 / (1 + Math.exp(-x)); const w = s(F.a * gap / 100 - F.c), l = s(-F.a * gap / 100 - F.c); return [w, 1 - w - l, l]; }
+function hxWDL(gap) { const F = HX.data.wdlFit, s = (x) => 1 / (1 + DM.exp(-x)); const w = s(F.a * gap / 100 - F.c), l = s(-F.a * gap / 100 - F.c); return [w, 1 - w - l, l]; }
 // ---- head-to-head from a's point of view, any order; null when they never met ----
 function hxH2H(a, b) {
   const D = HX.data; const ia = typeof a === 'number' ? a : D.nations.findIndex((x) => x.n === a), ib = typeof b === 'number' ? b : D.nations.findIndex((x) => x.n === b);
@@ -26,15 +26,15 @@ function hxH2H(a, b) {
 // still to come after each minute (goal file). Red cards: each costs the side ~30% of its rate and lifts the
 // opponent ~30% (an assumption from published studies; the dataset has no card data). Draw/win/loss weights are
 // rescaled so minute 0 reproduces the historical prior exactly.
-const hxPois = (l, n) => { let p = Math.exp(-l); const o = [p]; for (let k = 1; k <= n; k++) { p *= l / k; o.push(p); } return o; };
+const hxPois = (l, n) => { let p = DM.exp(-l); const o = [p]; for (let k = 1; k <= n; k++) { p *= l / k; o.push(p); } return o; };
 function hxOutcome(la, lb, s0, s1) { const A = hxPois(la, 12), B = hxPois(lb, 12); let w = 0, d = 0, l = 0; for (let x = 0; x <= 12; x++) for (let y = 0; y <= 12; y++) { const p = A[x] * B[y], g = s0 + x - (s1 + y); if (g > 0) w += p; else if (g < 0) l += p; else d += p; } return [w, d, l]; }
 function hxLive() {
-  const D = HX.data, G = D.goals, gap = hxGap(); let la = Math.exp(G.g0 + G.g1 * gap / 100), lb = Math.exp(G.g0 - G.g1 * gap / 100);
+  const D = HX.data, G = D.goals, gap = hxGap(); let la = DM.exp(G.g0 + G.g1 * gap / 100), lb = DM.exp(G.g0 - G.g1 * gap / 100);
   if (!HX.prior) { HX.prior = hxWDL(gap); const p0 = hxOutcome(la, lb, 0, 0); HX.kappa = HX.prior.map((x, i) => x / p0[i]); }
   if (!S.started) return HX.prior.slice();
   const mn = clamp(ENV.minute, 0, 90), c = D.goalCdf, i = Math.floor(mn); const done = c[i] + (c[Math.min(90, i + 1)] - c[i]) * (mn - i);
   const left = S.over ? 0 : Math.max(ENV.minute >= 90 ? 0.004 : 0.01, 1 - done); const ra = STATS.reds[0], rb = STATS.reds[1];
-  la *= left * Math.pow(0.7, ra) * Math.pow(1.3, rb); lb *= left * Math.pow(0.7, rb) * Math.pow(1.3, ra);
+  la *= left * DM.pow(0.7, ra) * DM.pow(1.3, rb); lb *= left * DM.pow(0.7, rb) * DM.pow(1.3, ra);
   const o = hxOutcome(la, lb, S.score[0], S.score[1]).map((x, j) => x * HX.kappa[j]); const t = o[0] + o[1] + o[2]; return o.map((x) => x / t);
 }
 // ---- team strength from Elo: the favourite keeps the elite baseline, the underdog loses 5*(gap/100)^1.12 rating points (max 30) ----
@@ -42,7 +42,7 @@ function hxLive() {
 // simulating headless matches until the engine's win/draw/loss rates matched the historical curve (see REPORT.md).
 const HX_ATTR = [['vmax', 0.17, 6.2, 9.4], ['acc', 0.08, 3.2, 5.6], ['agil', 0.02, 0.7, 1.2], ['passS', 1 / 30, 0.4, 1], ['shotS', 1 / 28, 0.25, 1], ['ctrl', 1 / 32, 0.4, 1], ['tackle', 1 / 30, 0.3, 1], ['drib', 1 / 26, 0.15, 1]];
 function hxStrength() {
-  const gap = hxOn() ? (HX.force ?? hxGap()) : 0; const pen = Math.min(HX.cap, HX.k * Math.pow(Math.abs(gap) / 100, HX.p)); const d = hxOn() ? (gap >= 0 ? [0, -pen] : [-pen, 0]) : [0, 0];
+  const gap = hxOn() ? (HX.force ?? hxGap()) : 0; const pen = Math.min(HX.cap, HX.k * DM.pow(Math.abs(gap) / 100, HX.p)); const d = hxOn() ? (gap >= 0 ? [0, -pen] : [-pen, 0]) : [0, 0];
   for (const p of players) {
     if (!p.hxBase) p.hxBase = Object.fromEntries(HX_ATTR.map(([k]) => [k, p[k]]).concat([['rating', p.rating]]));
     const dr = d[p.ti]; for (const [k, c, lo, hi] of HX_ATTR) p[k] = dr ? clamp(p.hxBase[k] + dr * c, lo, hi) : p.hxBase[k]; p.rating = Math.round(p.hxBase.rating + dr);

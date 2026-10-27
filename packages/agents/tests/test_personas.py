@@ -230,3 +230,14 @@ def test_a_viewer_cannot_ask_for_a_feed_only_persona(persona: str) -> None:
     assert persona in FEED_ONLY
     line = DraftLine(line_id="x", claim_ids=(), persona=persona, text="t", max_chars=140)
     assert line.persona == persona  # the Verifier's packet still carries it
+
+
+def test_one_metric_shares_quote_a_percent_of_their_team(match) -> None:
+    from matchcast_agents.personas import WATCH_METRICS, known
+
+    assert "possession_share" in WATCH_METRICS
+    assert known("one-metric:possession_share", match["teams"], match["names"])
+    flow = flow_with(match, ["one-metric:possession_share"])
+    lines = flow.store.lines(flow.sk)
+    mine = [ln.text for ln in lines if ln.persona == "one-metric:possession_share"]
+    assert mine and all(t.startswith("Possession:") and t.count("%") == 2 for t in mine), mine

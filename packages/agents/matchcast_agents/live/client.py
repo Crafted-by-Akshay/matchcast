@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from matchcast_shared import telemetry
+
 from ..resilience import ModelError, ModelRateLimited, ModelTimeout
 
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
@@ -117,21 +119,29 @@ class FoundryModelClient:
             if self._loop is not None:
                 self._client = self._build(self._endpoint)
             self._loop = loop
-        try:
-            response = await self._client.chat.completions.create(
-                model=self.deployment,
-                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                # Reasoning models (gpt-5-mini) reject max_tokens and any non-default temperature,
-                # and count their hidden reasoning against the completion budget.
-                max_completion_tokens=max_tokens + REASONING_HEADROOM,
-                reasoning_effort=reasoning_effort(),
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {"name": "answer", "schema": schema, "strict": True},
-                },
-            )
-        except Exception as error:  # noqa: BLE001 - mapped to the resilience vocabulary
-            raise _map(error) from error
+        with telemetry.chat_span(self.deployment) as span:
+            try:
+                response = await self._client.chat.completions.create(
+                    model=self.deployment,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    # Reasoning models (gpt-5-mini) reject max_tokens and any non-default
+                    # temperature, and count their hidden reasoning against the completion budget.
+                    max_completion_tokens=max_tokens + REASONING_HEADROOM,
+                    reasoning_effort=reasoning_effort(),
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {"name": "answer", "schema": schema, "strict": True},
+                    },
+                )
+            except Exception as error:  # noqa: BLE001 - mapped to the resilience vocabulary
+                raise _map(error) from error
+            if response.usage:
+                telemetry.record_usage(
+                    span, response.usage.prompt_tokens, response.usage.completion_tokens
+                )
         self.usage.calls += 1
         if response.usage:
             self.usage.prompt_tokens += response.usage.prompt_tokens

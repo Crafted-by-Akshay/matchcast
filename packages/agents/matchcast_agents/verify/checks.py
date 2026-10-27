@@ -6,6 +6,8 @@ from typing import Any
 
 from .. import history_metrics as history
 from ..context import MatchContext
+from ..match_shares import SHARE_METRICS
+from ..match_shares import recount as recount_match_share
 from ..messages import Check, DraftLine, ReasonCode
 from ..metrics_spec import METRIC_UNITS, TOLERANCE, derivation_version
 from ..personas import max_numbers
@@ -129,6 +131,10 @@ def check_numbers(ctx: MatchContext, line: DraftLine, claims: list[dict[str, Any
                 return Check(
                     name="numbers", passed=False, detail=f"{claim['metric']} has no history here"
                 )
+        elif name in SHARE_METRICS:  # a match-to-date share, recounted from the stored events
+            expected = recount_match_share(
+                claim["metric"], ctx.events, claim["max_evidence_sequence"]
+            )
         elif name == "rhythm_share":  # the rhythm's share over the window the claim names
             expected = recount_share(
                 ctx.events, claim["metric"], claim["max_evidence_sequence"], ctx.home, ctx.away

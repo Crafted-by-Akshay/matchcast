@@ -285,10 +285,15 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
   window.__mcxCards = { kept, redraw: () => { for (const c of kept) { const el = cards.get(c.id + 'mcx-log'); if (el) { el.innerHTML = html(c); el.querySelector('[data-why]').onclick = () => why(el, c); el.querySelector('[data-how]').onclick = () => MCS.send({ type: 'trace', id: c.id }); el.classList.toggle('mine', mine(c)); } } } };
 })();
 
+// the One metric picker keys the api follows, and the api name each one sends (personas.WATCH_METRICS names the api side). Any other picker key is Watch's own stat and sends no persona the api accepts.
+// Nothing enforces this list against WATCH_METRICS yet: a key may be added here only if the api follows it.
+const MC_API_METRICS = ['xg', 'poss'];
+const MC_API_NAME = { xg: 'xg', poss: 'possession_share' };
+
 // ---- EXP-4: personalisation. The last watch mode is kept in localStorage and restored; the mode goes to the shell, and so to the api, as the viewer's persona.
 (() => {
   const KEY = 'mcx-mode';
-  const persona = () => FAN.mode === 'club' ? 'club:' + TEAMS[FAN.club].key : FAN.mode === 'player' && FAN.player ? 'player:' + FAN.player.name : FAN.mode === 'metric' ? 'metric:' + FAN.metric : FAN.mode;
+  const persona = () => FAN.mode === 'club' ? 'club:' + TEAMS[FAN.club].key : FAN.mode === 'player' && FAN.player ? 'player:' + FAN.player.name : FAN.mode === 'metric' ? 'metric:' + (MC_API_NAME[FAN.metric] || FAN.metric) : FAN.mode;
   const tell = () => { MCS.send({ type: 'persona', persona: persona(), lang: FAN.lang }); if (window.__mcxCards) window.__mcxCards.redraw(); };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: FAN.mode, club: FAN.club, metric: FAN.metric, lang: FAN.lang, player: FAN.player ? FAN.player.name : null })); } catch (e) { /* storage may be blocked */ } };
   const _set = fanSet;
@@ -300,9 +305,81 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
     try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { saved = null; }   // the shell's Fan / Analyst switch may have written it while Watch loaded
     if (saved && FAN_MODES.some((m) => m[0] === saved.mode)) {
       const p = saved.player ? players.find((q) => q.name === saved.player) : null;
-      _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric: FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
+      const metric = saved.mode === 'metric' && !MC_API_METRICS.includes(saved.metric) ? MC_API_METRICS[0] : FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric;
+      _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
     }
     tell();
+  }, 300);
+})();
+
+// ---- One metric: the picker marks the metrics the api does not follow as Planned, and a choice of one of them falls back to xG (MC_API_METRICS).
+(() => {
+  const _pick = fanSet;
+  fanSet = function (o, why) {
+    const mode = o && o.mode != null ? o.mode : FAN.mode;   // a call that sets only the metric, or only the language, still counts while One metric is on
+    if (mode === 'metric' && !MC_API_METRICS.includes((o && o.metric) || FAN.metric)) o = Object.assign({}, o, { metric: MC_API_METRICS[0] });
+    _pick(o, why);
+  };
+  const mark = () => document.querySelectorAll('.fm-k').forEach((b) => {
+    const api = MC_API_METRICS.includes(b.dataset.k);
+    b.disabled = !api;
+    if (!api && !b.querySelector('.fm-planned')) b.insertAdjacentHTML('beforeend', ' <small class="fm-planned">Planned</small>');
+  });
+  const st = document.createElement('style');
+  st.textContent = '.fm-k:disabled{opacity:.55;cursor:not-allowed}';
+  document.head.appendChild(st);
+  const go = setInterval(() => {
+    const pop = document.getElementById('fan-pop'), intro = document.getElementById('fan-intro');
+    if (!pop || !intro) return;
+    clearInterval(go);
+    // the metric row appears when One metric is picked, and redraws on a language change; the pre-kick intro card has its own picker
+    const obs = new MutationObserver(mark);
+    obs.observe(pop, { childList: true, subtree: true });
+    obs.observe(intro, { childList: true, subtree: true });
+  }, 300);
+})();
+
+// ---- Make it yours: the mode popover says what the viewer is watching in one line. The controls below it set the choice (fanSet); this only reads them back.
+(() => {
+  const st = document.createElement('style');
+  st.textContent = '#fan-pop .fm-now{margin:2px 0 8px;font:600 12px/1.35 var(--f-body,system-ui,sans-serif);color:#8CC2FF}';
+  document.head.appendChild(st);
+  const shown = (sel) => {
+    const e = document.querySelector('#fan-pop ' + sel + '[aria-pressed="true"]');
+    if (!e) return '';
+    const c = e.cloneNode(true); c.querySelectorAll('.fm-planned').forEach((x) => x.remove());   // a Planned language reads as its name, not "Español Planned"
+    return c.textContent.trim();
+  };
+  const now = () => {
+    const mode = document.querySelector('#fan-pop .fm-b[aria-pressed="true"] b');
+    const sel = document.querySelector('#fan-pop .fm-sel');
+    const parts = [mode ? mode.textContent : ''];
+    if (FAN.mode === 'club') parts.push(shown('.fm-c'));
+    if (FAN.mode === 'player' && sel && sel.value) parts.push(sel.options[sel.selectedIndex].text.replace(/^\d+ · /, ''));
+    if (FAN.mode === 'metric') parts.push(shown('.fm-k'));
+    parts.push(shown('.fm-l'));
+    return parts.filter(Boolean).join(' · ');
+  };
+  // the picker redraws its own rows (a mode change adds a row), so the heading and the line are put back each time before they are read
+  const ensure = () => {
+    const pop = document.getElementById('fan-pop'), head = pop && pop.querySelector('.fm-h');
+    if (!head || !head.firstChild) return;
+    if (head.firstChild.textContent !== 'Make it yours') head.firstChild.textContent = 'Make it yours';   // written only when it differs, so the childList observer cannot loop
+    if (pop.querySelector('.fm-now')) return;
+    const line = document.createElement('p'); line.className = 'fm-now'; line.setAttribute('aria-live', 'polite');
+    head.after(line);
+  };
+  const draw = () => { ensure(); const el = document.querySelector('#fan-pop .fm-now'), text = now(); if (el && el.textContent !== text) el.textContent = text; };   // an unchanged line is not rewritten, so aria-live does not re-announce it
+  const go = setInterval(() => {
+    const pop = document.getElementById('fan-pop');
+    if (!pop || !pop.querySelector('.fm-h')) return;
+    clearInterval(go);
+    draw();
+    pop.addEventListener('click', () => setTimeout(draw, 0));   // the picker's handlers run first, then the line reads the new choice
+    pop.addEventListener('change', draw);
+    // the picker rebuilds the popover on open and on shell messages (childList), and a mode change flips aria-pressed.
+    // draw() writes the line only when its text changes, so this observer does not loop on its own writes
+    new MutationObserver(draw).observe(pop, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
   }, 300);
 })();
 

@@ -232,6 +232,132 @@ test('a quiet stretch gets a booth exchange drawn from the match state, and not 
   expect(out.after).toBe(2);
 });
 
+test('a silence that goes on gets a fresh booth exchange every 4 s, and no line repeats its last one', async ({ page }) => {
+  // the analyst view is open, so Watch's own batches do not reach the feed while the test drives it
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('long', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }], []);
+    // the gate runs on real time: a fill inside 4 s of the last line is held, one after 4 s is let through
+    const counts: number[] = [];
+    const filled = () => CM.view().filter((l: any) => l.kind === 'filler').length;
+    CM.fill(Date.now() + 5000);
+    counts.push(filled());
+    CM.fill(Date.now() + 3000);
+    counts.push(filled());
+    CM.fill(Date.now() + 4000);
+    counts.push(filled());
+    CM.fill(Date.now() + 4000);
+    counts.push(filled());
+    const fillers = CM.view().filter((l: any) => l.kind === 'filler');
+    const bySpeaker = (who: string) => fillers.filter((l: any) => l.speaker === who).map((l: any) => l.text);
+    return { counts, pbp: bySpeaker('pbp'), colour: bySpeaker('colour') };
+  });
+  expect(out.counts, 'one exchange, held inside 4 s, then one exchange per 4 s').toEqual([2, 2, 4, 6]);
+  // each voice is checked on its own: the two voices interleave, so a line is only compared with the last line from the same voice
+  for (const texts of [out.pbp, out.colour]) {
+    for (let i = 1; i < texts.length; i++) expect(texts[i], 'the booth does not repeat its own last line').not.toBe(texts[i - 1]);
+  }
+});
+
+test('a corner as the newest action is not a build-up: with no pass in the window the booth reads the score', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('corner', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 2, type: 'corner', team: 'A' }], []);
+    CM.fill(Date.now() + 9000);
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text }));
+  });
+  expect(out.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out[0].text, 'the score, not a count of passes Thames Rovers never made').toContain('Ridgeview 0–0 Thames Rovers');
+  expect(out.map((l) => l.text).join(' '), 'no build-up or possession claim without a pass').not.toMatch(/build-up|keep the ball|passes/);
+});
+
+test('a shot as the newest action gets a hot shot line: the shot count and the chance, not a build-up', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('shot', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 2, type: 'shot', team: 'H', player: 'Ben', fate: 'save', xg: 0.3 }], []);
+    CM.fill(Date.now() + 9000);
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text, tone: l.tone }));
+  });
+  expect(out.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out[0].text, 'the shot count is counted from the events').toContain('Ridgeview have 1 shot in the last two minutes.');
+  expect(out.map((l) => l.tone), 'an attack lifts the booth: both lines are hot').toEqual(['hot', 'hot']);
+});
+
+test('a build-up of three passes lifts the fill, and a quiet fill stays calm', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('build', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 1.5, type: 'pass', team: 'H', player: 'Ben' }, { minute: 2, type: 'pass', team: 'H', player: 'Cal' }], []);
+    CM.fill(Date.now() + 9000);
+    const hot = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.tone);
+    CM.reset('calm', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }], []);
+    CM.fill(Date.now() + 9000);
+    const calm = CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.tone);
+    return { hot, calm };
+  });
+  expect(out.hot, 'a run of three passes is hot on both voices').toEqual(['hot', 'hot']);
+  expect(out.calm, 'a single pass is calm').toEqual(['', '']);
+});
+
+test('the browser voice speaks an attack faster and higher than a pass, with no Azure voice', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(async () => {
+    const spoken: { rate: number; pitch: number }[] = [];
+    const synth = window.speechSynthesis as any;
+    synth.speak = (u: any) => { spoken.push({ rate: u.rate, pitch: u.pitch }); setTimeout(() => u.onend && u.onend(), 0); };
+    VC.set(true);
+    VC.say('A pass.', { id: 'tone-calm', tone: '' });
+    await new Promise((r) => setTimeout(r, 400));
+    VC.say('A shot.', { id: 'tone-hot', tone: 'hot' });
+    await new Promise((r) => setTimeout(r, 400));
+    return spoken;
+  });
+  expect(out.length, 'both lines were spoken by the browser voice').toBe(2);
+  expect(out[1].rate, 'a hot line is faster').toBeGreaterThan(out[0].rate);
+  expect(out[1].pitch, 'a hot line is higher').toBeGreaterThan(out[0].pitch);
+});
+
+test('a team-less event such as half-time does not stop the fill: it counts from the last team action', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('half', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 1, type: 'pass', team: 'H', player: 'Ana' }, { minute: 45, type: 'half_time' }], []);
+    CM.fill(Date.now() + 9000);
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.speaker);
+  });
+  expect(out, 'the booth still talks after half-time, on both voices').toEqual(['pbp', 'colour']);
+});
+
+test('before any action the booth talks from the kick-off score, and names no player', async ({ page }) => {
+  // the analyst view is open, so Watch's own batches do not reach the feed while the test drives it
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('start', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fill(Date.now() + 9000);   // nine seconds of real time, and not one event yet
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => ({ speaker: l.speaker, text: l.text }));
+  });
+  expect(out.map((l) => l.speaker), 'a play-by-play line, then a colour line').toEqual(['pbp', 'colour']);
+  expect(out[0].text, 'the score is the kick-off score').toContain('Ridgeview 0–0 Thames Rovers');
+  expect(out[0].text, 'no play is counted before one happens').not.toMatch(/passes|build-up/);
+});
+
+test('a kick-off event alone is not a build-up: the booth still talks from the kick-off score', async ({ page }) => {
+  // the analyst view is open, so Watch's own batches do not reach the feed while the test drives it
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('kick2', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.fromWatch([{ minute: 0, type: 'kickoff', team: 'H' }], []);   // Watch's first batch carries the kick-off, with its team
+    CM.fill(Date.now() + 9000);
+    return CM.view().filter((l: any) => l.kind === 'filler').map((l: any) => l.text);
+  });
+  expect(out[0], 'the score, not a build-up of zero passes').toContain('Ridgeview 0–0 Thames Rovers');
+  expect(out.join(' '), 'no build-up claim before the first pass').not.toMatch(/build-up|passes/);
+});
+
 test('a live booth line keeps the speaker its persona gives it', async ({ page }) => {
   await openShell(page, 'watch', '?seed=2026');
   // one synchronous step: the Watch frame may reset the feed between awaits, so the lines are read straight after they are added

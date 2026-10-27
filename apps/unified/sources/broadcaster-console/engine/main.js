@@ -8,6 +8,70 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
+// Deterministic maths for the engine. The native trigonometric, exp, log, pow and hypot functions (and the power operator) may round their
+// last bit differently in each browser version, and the match is chaotic: one changed bit can change the score. These use only
+// + - * / and sqrt, which IEEE 754 fixes exactly, so one seed gives one match in every browser. Error is about 1e-13 (absolute
+// for sin and cos, relative for exp, log and pow) over the ranges the engine uses, far finer than play or the calibration can see.
+const DM = (() => {
+  const PI = 3.141592653589793, HALF_PI = 1.5707963267948966, LN2 = 0.6931471805599453, TAN_EIGHTH = 0.41421356237309515;
+  // sine and cosine of r in [-pi/4, pi/4] by Taylor series (terms to r^17 and r^16: error below 1e-17)
+  const sinR = (r) => { const r2 = r * r; let t = r, s = r; for (let n = 2; n <= 16; n += 2) { t = -t * r2 / (n * (n + 1)); s += t; } return s; };
+  const cosR = (r) => { const r2 = r * r; let t = 1, s = 1; for (let n = 2; n <= 16; n += 2) { t = -t * r2 / ((n - 1) * n); s += t; } return s; };
+  // x = k * pi/2 + r: k picks the quadrant
+  const sin = (x) => { const k = Math.round(x / HALF_PI), r = x - k * HALF_PI, q = ((k % 4) + 4) % 4; return q === 0 ? sinR(r) : q === 1 ? cosR(r) : q === 2 ? -sinR(r) : -cosR(r); };
+  const cos = (x) => { const k = Math.round(x / HALF_PI), r = x - k * HALF_PI, q = ((k % 4) + 4) % 4; return q === 0 ? cosR(r) : q === 1 ? -sinR(r) : q === 2 ? -cosR(r) : sinR(r); };
+  const tan = (x) => sin(x) / cos(x);
+  // atan: a series on |u| <= tan(pi/8), reached by atan(t) = pi/4 + atan((t - 1) / (t + 1)) and atan(t) = pi/2 - atan(1 / t)
+  const atanS = (u) => { const u2 = u * u; let t = u, s = u; for (let n = 3; n <= 41; n += 2) { t = -t * u2; s += t / n; } return s; };
+  const atan = (t) => t < 0 ? -atan(-t) : t > 1 ? HALF_PI - atan(1 / t) : t > TAN_EIGHTH ? PI / 4 + atanS((t - 1) / (t + 1)) : atanS(t);
+  const atan2 = (y, x) => {
+    if (x !== x || y !== y) return NaN;
+    if (x > 0) return atan(y / x);
+    if (x < 0) return (y < 0 || Object.is(y, -0)) ? atan(y / x) - PI : atan(y / x) + PI;
+    if (y === 0) return Object.is(x, -0) ? (Object.is(y, -0) ? -PI : PI) : y;   // signed zeros, as the native function
+    return y > 0 ? HALF_PI : -HALF_PI;
+  };
+  const asin = (x) => (x >= -1 && x <= 1 ? atan2(x, Math.sqrt(1 - x * x)) : NaN);
+  const acos = (x) => (x >= -1 && x <= 1 ? atan2(Math.sqrt(1 - x * x), x) : NaN);
+  // exp: x = n ln2 + r with |r| <= ln2 / 2; the scale by 2^n is exact (a power of two)
+  const exp = (x) => {
+    if (x > 709.8) return Infinity;
+    if (x < -745.2) return 0;
+    const n = Math.round(x / LN2), r = x - n * LN2;
+    let t = 1, s = 1;
+    for (let k = 1; k <= 18; k++) { t = t * r / k; s += t; }
+    for (let k = 0; k < Math.abs(n); k++) s = n > 0 ? s * 2 : s / 2;
+    return s;
+  };
+  // log: x = m 2^e with m in [1/sqrt2, sqrt2); ln m = 2 atanh((m - 1) / (m + 1))
+  const log = (x) => {
+    if (!(x > 0)) return x === 0 ? -Infinity : NaN;
+    if (x === Infinity) return Infinity;
+    let m = x, e = 0;
+    while (m > 1.4142135623730951) { m /= 2; e++; }
+    while (m < 0.7071067811865476) { m *= 2; e--; }
+    const s = (m - 1) / (m + 1), s2 = s * s;
+    let t = s, sum = s;
+    for (let n = 3; n <= 25; n += 2) { t *= s2; sum += t / n; }
+    return 2 * sum + e * LN2;
+  };
+  // pow: whole-number exponents by repeated squaring (the same steps on every machine); the rest through exp and log
+  const pow = (x, y) => {
+    if (y === 0) return 1;
+    if (Number.isInteger(y)) {
+      let r = 1, b = x, n = Math.abs(y);
+      while (n > 0) { if (n % 2 === 1) r *= b; b *= b; n = Math.floor(n / 2); }
+      return y < 0 ? 1 / r : r;
+    }
+    if (x === 0) return y > 0 ? 0 : Infinity;
+    if (x < 0) return NaN;
+    return exp(y * log(x));
+  };
+  const hypot = (a, b, c = 0) => Math.sqrt(a * a + b * b + c * c);
+  const sq = (x) => x * x;
+  return { sin, cos, tan, asin, acos, atan, atan2, exp, log, pow, hypot, sq };
+})();
+
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -18,7 +82,7 @@ const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(s
 // visual-only randomness (head scans): its own stream, so drawing a frame never changes what the match does
 let vseed = 90210;
 const vrnd = () => { vseed |= 0; vseed = vseed + 0x6D2B79F5 | 0; let t = Math.imul(vseed ^ vseed >>> 15, 1 | vseed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-const gauss = () => { let u = 0, v = 0; while (u === 0) u = rnd(); v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+const gauss = () => { let u = 0, v = 0; while (u === 0) u = rnd(); v = rnd(); return Math.sqrt(-2 * DM.log(u)) * DM.cos(2 * Math.PI * v); };
 const V2 = (x, z) => new THREE.Vector2(x, z);
 
 /*@@WORLD@@*/
@@ -302,7 +366,7 @@ const crowdU = { uTime: { value: 0 }, uHype: { value: 0 } };
     return { parts, centre, count: 0 };
   };
   // looks come from a hash of the fan's index, not from rnd, so the seeded match stream is unchanged
-  const hash01 = (i, s) => { const x = Math.sin(i * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); };
+  const hash01 = (i, s) => { const x = DM.sin(i * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); };
   const m4 = new THREE.Matrix4(), hair4 = new THREE.Matrix4(), col = new THREE.Color();
   let gi = 0;
   const allChunks = [];
@@ -366,15 +430,15 @@ for (const [x, z] of [[-76, -58], [76, -58], [76, 58], [-76, 58]]) {
 
 // ============ BALL PHYSICS ============
 const BR = 0.11, G = 9.81, KD = 0.0135, KM = 0.0012; // KD, KM at sea-level air (1.225 kg/m3)
-const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BR * 1.12, 28, 18), new THREE.MeshStandardMaterial({ roughness: 0.45, map: canvasTex(512, 256, (g, w, h) => { g.fillStyle = '#F7F8FA'; g.fillRect(0, 0, w, h); g.fillStyle = '#1B2230'; for (let i = 0; i < 14; i++) { const x = (i % 7) * w / 7 + (i > 6 ? w / 14 : 0), y = i > 6 ? h * 0.72 : h * 0.3; g.beginPath(); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; g.lineTo(x + Math.cos(a) * 26, y + Math.sin(a) * 26); } g.fill(); } g.fillStyle = '#2F7BEA'; g.fillRect(0, h * 0.48, w, 6); }) }));
+const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BR * 1.12, 28, 18), new THREE.MeshStandardMaterial({ roughness: 0.45, map: canvasTex(512, 256, (g, w, h) => { g.fillStyle = '#F7F8FA'; g.fillRect(0, 0, w, h); g.fillStyle = '#1B2230'; for (let i = 0; i < 14; i++) { const x = (i % 7) * w / 7 + (i > 6 ? w / 14 : 0), y = i > 6 ? h * 0.72 : h * 0.3; g.beginPath(); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; g.lineTo(x + DM.cos(a) * 26, y + DM.sin(a) * 26); } g.fill(); } g.fillStyle = '#2F7BEA'; g.fillRect(0, h * 0.48, w, 6); }) }));
 ballMesh.castShadow = true; scene.add(ballMesh);
 const ball = { p: new THREE.Vector3(52.5, BR, 34), v: new THREE.Vector3(), w: new THREE.Vector3(), held: null, inNet: false, last: null };
 const _t = new THREE.Vector3();
 const POSTS = [[0, 30.28], [0, 37.72], [105, 30.28], [105, 37.72]];
 function ballPhysics(b, dt, events) {
   // drag acts on the ball's speed relative to the air; thin or warm air (altitude) lowers both drag and swerve
-  const wE = b.p.y > 1.5 ? 0.75 : 0.45; const wvx = Math.cos(ENV.windDir) * ENV.wind * wE, wvz = Math.sin(ENV.windDir) * ENV.wind * wE;
-  const rx = b.v.x - wvx, ry = b.v.y, rz = b.v.z - wvz; const sp = Math.hypot(rx, ry, rz); const kd = KD * ENV.rhoRatio;
+  const wE = b.p.y > 1.5 ? 0.75 : 0.45; const wvx = DM.cos(ENV.windDir) * ENV.wind * wE, wvz = DM.sin(ENV.windDir) * ENV.wind * wE;
+  const rx = b.v.x - wvx, ry = b.v.y, rz = b.v.z - wvz; const sp = DM.hypot(rx, ry, rz); const kd = KD * ENV.rhoRatio;
   if (sp > 0 && (b.p.y > BR + 0.01 || Math.abs(b.v.y) > 0.05)) { b.v.x -= kd * sp * rx * dt; b.v.y -= kd * sp * ry * dt; b.v.z -= kd * sp * rz * dt; } else if (sp > 0) { b.v.x -= KD * 0.6 * sp * b.v.x * dt; b.v.z -= KD * 0.6 * sp * b.v.z * dt; }
   _t.crossVectors(b.w, b.v).multiplyScalar(KM * ENV.rhoRatio * dt); b.v.add(_t);
   const air = b.p.y > BR + 0.005 || b.v.y > 0.05;
@@ -389,7 +453,7 @@ function ballPhysics(b, dt, events) {
     else {
       // rolling resistance: a damp skin of water makes it zip, standing water or snow holds it up
       const film = clamp(ENV.wet / 0.8, 0, 1); const roll = lerp(1, 0.72, film) * (1 + 2.6 * ENV.puddle) * (1 + 1.8 * clamp(ENV.snow / 3, 0, 1)) * (ENV.frozen ? 0.85 : 1);
-      b.v.y = 0; const hs = Math.hypot(b.v.x, b.v.z); const dec = (0.42 + 0.03 * hs) * roll * dt;
+      b.v.y = 0; const hs = DM.hypot(b.v.x, b.v.z); const dec = (0.42 + 0.03 * hs) * roll * dt;
       if (hs > dec) { b.v.x *= (hs - dec) / hs; b.v.z *= (hs - dec) / hs; } else { b.v.x = 0; b.v.z = 0; }
       b.w.multiplyScalar(Math.max(0, 1 - 2.5 * dt));
     }
@@ -397,9 +461,9 @@ function ballPhysics(b, dt, events) {
   b.w.multiplyScalar(Math.max(0, 1 - 0.25 * dt));
   // posts and crossbar
   for (const [px, pz] of POSTS) {
-    if (b.p.y < 2.5 + BR) { const dx = b.p.x - px, dz = b.p.z - pz, d = Math.hypot(dx, dz); if (d < BR + 0.06 && d > 0) { const nx = dx / d, nz = dz / d; const vn = b.v.x * nx + b.v.z * nz; if (vn < 0) { b.v.x -= 1.6 * vn * nx; b.v.z -= 1.6 * vn * nz; if (events) events.post = true; } b.p.x = px + nx * (BR + 0.061); b.p.z = pz + nz * (BR + 0.061); } }
+    if (b.p.y < 2.5 + BR) { const dx = b.p.x - px, dz = b.p.z - pz, d = DM.hypot(dx, dz); if (d < BR + 0.06 && d > 0) { const nx = dx / d, nz = dz / d; const vn = b.v.x * nx + b.v.z * nz; if (vn < 0) { b.v.x -= 1.6 * vn * nx; b.v.z -= 1.6 * vn * nz; if (events) events.post = true; } b.p.x = px + nx * (BR + 0.061); b.p.z = pz + nz * (BR + 0.061); } }
   }
-  for (const gx of [0, 105]) if (b.p.z > 30.28 && b.p.z < 37.72) { const dx = b.p.x - gx, dy = b.p.y - 2.5, d = Math.hypot(dx, dy); if (d < BR + 0.06 && d > 0) { const nx = dx / d, ny = dy / d; const vn = b.v.x * nx + b.v.y * ny; if (vn < 0) { b.v.x -= 1.6 * vn * nx; b.v.y -= 1.6 * vn * ny; if (events) events.bar = true; } b.p.x = gx + nx * (BR + 0.061); b.p.y = 2.5 + ny * (BR + 0.061); } }
+  for (const gx of [0, 105]) if (b.p.z > 30.28 && b.p.z < 37.72) { const dx = b.p.x - gx, dy = b.p.y - 2.5, d = DM.hypot(dx, dy); if (d < BR + 0.06 && d > 0) { const nx = dx / d, ny = dy / d; const vn = b.v.x * nx + b.v.y * ny; if (vn < 0) { b.v.x -= 1.6 * vn * nx; b.v.y -= 1.6 * vn * ny; if (events) events.bar = true; } b.p.x = gx + nx * (BR + 0.061); b.p.y = 2.5 + ny * (BR + 0.061); } }
   // net
   if (b.inNet) {
     const gx = b.inNet - 1; const back = gx === 105 ? 107 : -2;
@@ -420,34 +484,34 @@ function solveGround(from, to, arrive) {
   let lo = 2, hi = 34;
   for (let i = 0; i < 18; i++) {
     const v0 = (lo + hi) / 2; const tr = simulate(from, D.clone().multiplyScalar(v0), new THREE.Vector3(), 6, 1 / 40);
-    let hit = tr.find((s) => Math.hypot(s.p.x - from.x, s.p.z - from.z) >= d);
+    let hit = tr.find((s) => DM.hypot(s.p.x - from.x, s.p.z - from.z) >= d);
     if (!hit || hit.v < arrive) lo = v0; else hi = v0;
   }
   return D.multiplyScalar((lo + hi) / 2);
 }
 function solveLofted(from, to, angDeg, spinSide) {
-  const dx = to.x - from.x, dz = to.z - from.z; const d = Math.hypot(dx, dz); const a = angDeg * Math.PI / 180;
+  const dx = to.x - from.x, dz = to.z - from.z; const d = DM.hypot(dx, dz); const a = angDeg * Math.PI / 180;
   const H = new THREE.Vector3(dx / d, 0, dz / d); let lo = 4, hi = 40;
   const w = new THREE.Vector3(0, spinSide || 0, 0);
   for (let i = 0; i < 18; i++) {
-    const v0 = (lo + hi) / 2; const v = H.clone().multiplyScalar(v0 * Math.cos(a)); v.y = v0 * Math.sin(a);
-    const tr = simulate(from, v, w, 7, 1 / 40); let land = tr.find((s, k) => k > 3 && s.p.y <= BR + 0.02); const reach = land ? Math.hypot(land.p.x - from.x, land.p.z - from.z) : 999;
+    const v0 = (lo + hi) / 2; const v = H.clone().multiplyScalar(v0 * DM.cos(a)); v.y = v0 * DM.sin(a);
+    const tr = simulate(from, v, w, 7, 1 / 40); let land = tr.find((s, k) => k > 3 && s.p.y <= BR + 0.02); const reach = land ? DM.hypot(land.p.x - from.x, land.p.z - from.z) : 999;
     if (reach < d) lo = v0; else hi = v0;
   }
-  const v0 = (lo + hi) / 2; const v = H.clone().multiplyScalar(v0 * Math.cos(a)); v.y = v0 * Math.sin(a); return { v, w };
+  const v0 = (lo + hi) / 2; const v = H.clone().multiplyScalar(v0 * DM.cos(a)); v.y = v0 * DM.sin(a); return { v, w };
 }
 function solveShot(from, tgt, speed, curl) {
   // aim yaw/pitch so the ball crosses the goal plane at tgt (x is goal line)
-  let yaw = Math.atan2(tgt.z - from.z, tgt.x - from.x), pitch = 0.08;
+  let yaw = DM.atan2(tgt.z - from.z, tgt.x - from.x), pitch = 0.08;
   const w = new THREE.Vector3(0, curl, 0);
   for (let it = 0; it < 6; it++) {
-    const v = new THREE.Vector3(Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch)).multiplyScalar(speed);
+    const v = new THREE.Vector3(DM.cos(yaw) * DM.cos(pitch), DM.sin(pitch), DM.sin(yaw) * DM.cos(pitch)).multiplyScalar(speed);
     const tr = simulate(from, v, w, 2.5, 1 / 120); const dir = Math.sign(tgt.x - from.x);
     const s = tr.find((q) => (q.p.x - tgt.x) * dir >= 0); if (!s) { pitch += 0.05; continue; }
-    const ez = tgt.z - s.p.z, ey = tgt.y - s.p.y; const dist = Math.hypot(tgt.x - from.x, tgt.z - from.z);
-    yaw += Math.atan2(ez, dist) * dir; pitch += Math.atan2(ey, dist);
+    const ez = tgt.z - s.p.z, ey = tgt.y - s.p.y; const dist = DM.hypot(tgt.x - from.x, tgt.z - from.z);
+    yaw += DM.atan2(ez, dist) * dir; pitch += DM.atan2(ey, dist);
   }
-  return { v: new THREE.Vector3(Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch)).multiplyScalar(speed), w };
+  return { v: new THREE.Vector3(DM.cos(yaw) * DM.cos(pitch), DM.sin(pitch), DM.sin(yaw) * DM.cos(pitch)).multiplyScalar(speed), w };
 }
 
 /*@@WORLDVIS@@*/
@@ -456,7 +520,7 @@ const players = []; const officials = [];
 let NAT_WALK = 1.35, NAT_RUN = 3.4;
 const tq = new THREE.Quaternion(), te = new THREE.Euler(), qa = new THREE.Quaternion();
 const rot = (b, x, y, z) => { if (!b) return; tq.setFromEuler(te.set(x, y, z)); b.quaternion.multiply(tq); };
-function amplify(b, rest, k) { if (!b) return; qa.copy(rest).invert().multiply(b.quaternion); if (qa.w < 0) { qa.x = -qa.x; qa.y = -qa.y; qa.z = -qa.z; qa.w = -qa.w; } const w = clamp(qa.w, -1, 1); const s = Math.sqrt(1 - w * w); if (s < 1e-4) return; const ang = 2 * Math.acos(w) * k; const ns = Math.sin(ang / 2) / s; qa.set(qa.x * ns, qa.y * ns, qa.z * ns, Math.cos(ang / 2)); b.quaternion.copy(rest).multiply(qa); }
+function amplify(b, rest, k) { if (!b) return; qa.copy(rest).invert().multiply(b.quaternion); if (qa.w < 0) { qa.x = -qa.x; qa.y = -qa.y; qa.z = -qa.z; qa.w = -qa.w; } const w = clamp(qa.w, -1, 1); const s = Math.sqrt(1 - w * w); if (s < 1e-4) return; const ang = 2 * DM.acos(w) * k; const ns = DM.sin(ang / 2) / s; qa.set(qa.x * ns, qa.y * ns, qa.z * ns, DM.cos(ang / 2)); b.quaternion.copy(rest).multiply(qa); }
 
 const STATS = { xg: [0, 0], shots: [0, 0], poss: [0, 0], passes: [0, 0], done: [0, 0], goals: [], fouls: [0, 0], yellows: [0, 0], reds: [0, 0], offsides: [0, 0], onTarget: [0, 0] };
 // teams change ends at half-time: S.flip mirrors which end each side attacks
@@ -614,8 +678,8 @@ const arFor = (x, y) => (y < 34 ? (x > 52.5 ? 'ar1' : null) : (x <= 52.5 ? 'ar2'
 const S = { t: 0, clock: 0, mclock: 0, mscale: 9, half: 1, stop: [2, 4], hold: null, over: false, ht: false, envAcc: 0, lastLogMin: -1, score: [0, 0], speed: 1, paused: false, started: false, cam: 'broadcast', names: 'all', owner: null, poss: 0,
   restart: { type: 'kickoff', team: 0, spot: V2(52.5, 34), taker: null, wait: 2.0 }, intended: null, traj: null, trajT: 0, passInfo: null, shotInfo: null, lastTouch: null, celebrate: 0, follow: null, focus: null };
 const teamOf = (ti) => players.filter((p) => p.ti === ti && !p.off);
-const fwd = (p) => V2(Math.sin(p.yaw), Math.cos(p.yaw));
-const right = (p) => V2(-Math.cos(p.yaw), Math.sin(p.yaw));
+const fwd = (p) => V2(DM.sin(p.yaw), DM.cos(p.yaw));
+const right = (p) => V2(-DM.cos(p.yaw), DM.sin(p.yaw));
 const bp2 = () => V2(ball.p.x, ball.p.z);
 
 function say(line) { $('cap2').textContent = $('cap1').textContent; $('cap1').textContent = line; $('capclk').textContent = minuteLabel(); }
@@ -644,7 +708,7 @@ function trajectory() {
 function timeToReach(p, pt) {
   const d = p.pos2.distanceTo(pt); const v = p.vmax * (0.7 + 0.3 * p.stamina);
   const toward = d > 0.01 ? (p.vel.x * (pt.x - p.pos2.x) + p.vel.y * (pt.y - p.pos2.y)) / d : 0;
-  const ang = Math.acos(clamp(fwd(p).dot(V2(pt.x - p.pos2.x, pt.y - p.pos2.y).normalize()), -1, 1));
+  const ang = DM.acos(clamp(fwd(p).dot(V2(pt.x - p.pos2.x, pt.y - p.pos2.y).normalize()), -1, 1));
   return 0.18 + d / v + Math.max(0, v - toward) / (2 * p.acc) + ang * 0.12;
 }
 function interceptFor(p, maxH) {
@@ -665,15 +729,15 @@ const XG = { b0: -1.464609, b1: 1.413822, b2: -0.089141, scale: 0.9 };
 // tuned action weights (docs/simulator.md); a `tune` query parameter overrides them for calibration runs only, e.g. ?tune=passBias:0.5,shotThr:0.05
 const TUNE = { passBias: 1.5, shotThr: 0.06, longShot: 0.05, holdScale: 1.5, boxFoul: 0.65, skillCD: 1.25 };
 try { for (const kv of (new URLSearchParams(location.search).get('tune') || '').split(',')) { const [k, v] = kv.split(':'); if (k in TUNE && v !== undefined) TUNE[k] = +v; if (k === 'xgScale') XG.scale = +v; } } catch (e) { /* no query string */ }
-const sig = (z) => 1 / (1 + Math.exp(-z));
+const sig = (z) => 1 / (1 + DM.exp(-z));
 function xgAt(pos, goal) {
-  const dx = Math.abs(goal.x - pos.x), dy = pos.y - 34; const dist = Math.hypot(dx, dy);
-  let ang = Math.atan2(7.32 * dx, dx * dx + dy * dy - 3.66 * 3.66); if (ang < 0) ang += Math.PI;
+  const dx = Math.abs(goal.x - pos.x), dy = pos.y - 34; const dist = DM.hypot(dx, dy);
+  let ang = DM.atan2(7.32 * dx, dx * dx + dy * dy - 3.66 * 3.66); if (ang < 0) ang += Math.PI;
   return sig(XG.b0 + XG.b1 * ang + XG.b2 * dist);
 }
 // the shot's fate is drawn from the play stream, then the strike is aimed to match it: finisher and keeper ratings move the logit by at most +/-0.5
 function shotFate(p, gk, xg, pen) {
-  const lg = Math.log(xg / (1 - xg)) + 0.5 * clamp((p.shotS - 0.6) / 0.4, -1, 1) - 0.5 * clamp(((gk && gk.ctrl) || 0.8) - 0.8, -0.2, 0.2) / 0.2;
+  const lg = DM.log(xg / (1 - xg)) + 0.5 * clamp((p.shotS - 0.6) / 0.4, -1, 1) - 0.5 * clamp(((gk && gk.ctrl) || 0.8) - 0.8, -0.2, 0.2) / 0.2;
   const pg = pen ? 0.76 : clamp(sig(lg) * XG.scale, 0.005, 0.95), u = rnd();
   return u < pg ? 'goal' : u < pg + (pen ? 0.17 : 0.2) ? 'save' : 'miss';
 }
@@ -688,7 +752,7 @@ function decide(p) {
   const tc = p.T.tac ? p.T.tac.cur : STYLES.balanced; const phase = p.T.tac ? phaseOf(p.ti) : 'progression'; const wide = Math.abs(me.y - 34) > 17 && own.x > 74;
   let press = 99; for (const o of teamOf(1 - p.ti)) press = Math.min(press, o.pos2.distanceTo(me));
   // shooting
-  const angle = Math.abs(Math.atan2(me.y - 34, Math.abs(goal.x - me.x)));
+  const angle = Math.abs(DM.atan2(me.y - 34, Math.abs(goal.x - me.x)));
   const xg = clamp(xgAt(me, goal) * (press < 2 ? 0.7 : 1), 0.005, 0.75);
   const od = p.orders && p.orders.k;
   if (!p.gk && od === 'shoot' && dGoal < 32 && press > 1.5 && rnd() < 0.3) return { type: 'shot', xg };
@@ -778,7 +842,7 @@ function strike(p) {
     dataEvent('pass', { team: p.T.key, player: p.name, to: q.name, kind: S.passInfo.kind, phase: phaseOf(p.ti), formation: p.T.tac.form, quality: pq, difficulty: (S.passInfo.diff = passDifficulty(p, q, tgt, plan, press, weak)), distM: +plan.d.toFixed(1), stamina: +p.stamina.toFixed(2) });
   }
   // execution error: rotate direction, scale power
-  const ang = gauss() * err; const c = Math.cos(ang), s = Math.sin(ang); const vx = v.x * c - v.z * s, vz = v.x * s + v.z * c; v.x = vx; v.z = vz; v.multiplyScalar(1 + gauss() * err * 0.8); v.y += gauss() * err * 2;
+  const ang = gauss() * err; const c = DM.cos(ang), s = DM.sin(ang); const vx = v.x * c - v.z * s, vz = v.x * s + v.z * c; v.x = vx; v.z = vz; v.multiplyScalar(1 + gauss() * err * 0.8); v.y += gauss() * err * 2;
   ball.v.copy(v); ball.w.copy(w); ball.p.copy(from); S.owner = null; ball.last = p; S.lastTouch = p; p.touchCD = 0.35; S.traj = null;
   // the body carries on through the ball after a full strike instead of stopping dead
   p.vel.copy(fwd(p).multiplyScalar(1.2 + 2.2 * (p.act.P || 0.8))); p.tgt.copy(p.pos2.clone().addScaledVector(fwd(p), 1.5 + 2 * (p.act.P || 0.8)));
@@ -788,7 +852,7 @@ function strike(p) {
 // ---- touches, control, tackles, blocks ----
 function tryControl(p, dist, h) {
   S.offSet = null;
-  const rel = Math.hypot(ball.v.x - p.vel.x, ball.v.z - p.vel.y);
+  const rel = DM.hypot(ball.v.x - p.vel.x, ball.v.z - p.vel.y);
   const pOk = clamp(1.04 - Math.max(0, rel - 9) / 26, 0.35, 0.995) * (0.9 + 0.1 * p.ctrl) * (h > 1 ? 0.8 : h > 0.5 ? 0.9 : 1) * (1 - 0.13 * clamp(ENV.slick, 0, 1) - 0.12 * ENV.puddle - (ENV.vis < 200 ? 0.05 : 0));
   if (rnd() < pOk) {
     const f = fwd(p); const pushDir = p.vel.length() > 1 ? p.vel.clone().normalize() : f;
@@ -796,8 +860,8 @@ function tryControl(p, dist, h) {
     gainBall(p);
   } else {
     // heavy touch: ball squirts away
-    const a = Math.atan2(ball.v.z, ball.v.x) + gauss() * 1.1; const sp = rel * (0.25 + rnd() * 0.25);
-    ball.v.set(Math.cos(a) * sp, Math.abs(gauss()) * 1.2, Math.sin(a) * sp); S.owner = null; ball.last = p; S.lastTouch = p; S.traj = null;
+    const a = DM.atan2(ball.v.z, ball.v.x) + gauss() * 1.1; const sp = rel * (0.25 + rnd() * 0.25);
+    ball.v.set(DM.cos(a) * sp, Math.abs(gauss()) * 1.2, DM.sin(a) * sp); S.owner = null; ball.last = p; S.lastTouch = p; S.traj = null;
   }
   p.touchCD = 0.25;
 }
@@ -842,7 +906,7 @@ function contacts(dt) {
     const blind = !S.owner && S.passInfo && S.t - S.passInfo.t < 0.3 && p.ti !== S.passInfo.from.ti;
     // slide tackle foot
     if (p.act?.type === 'slide' && !p.act.hit) { const sf = p.pos2.clone().addScaledVector(fwd(p), 1.1); if (S.owner && S.owner.ti !== p.ti && sf.distanceTo(bpos) > 0.75 && sf.distanceTo(S.owner.pos2) < 0.8) { p.act.hit = true; foul(p, S.owner, 'slide'); return; }
-      if (sf.distanceTo(bpos) < 0.7 && h < 0.6) { p.act.hit = true; S.offSet = null; const a = p.yaw + gauss() * 0.6; ball.v.set(Math.sin(a) * (5 + rnd() * 4), 0.6, Math.cos(a) * (5 + rnd() * 4)); if (S.owner) { say(p.name + ' slides in and wins it cleanly.'); const o = S.owner; o.act = { type: 'stumble', t: 0, dur: 0.7 }; } S.owner = null; ball.last = p; S.lastTouch = p; S.traj = null; p.touchCD = 0.5; continue; } }
+      if (sf.distanceTo(bpos) < 0.7 && h < 0.6) { p.act.hit = true; S.offSet = null; const a = p.yaw + gauss() * 0.6; ball.v.set(DM.sin(a) * (5 + rnd() * 4), 0.6, DM.cos(a) * (5 + rnd() * 4)); if (S.owner) { say(p.name + ' slides in and wins it cleanly.'); const o = S.owner; o.act = { type: 'stumble', t: 0, dur: 0.7 }; } S.owner = null; ball.last = p; S.lastTouch = p; S.traj = null; p.touchCD = 0.5; continue; } }
     if (S.owner && S.owner.ti !== p.ti) continue; // challenges on an owned ball are tackles
     // receiving / loose ball
     if (!blind && h < 0.85 && dFoot < 0.55 + 0.2 * p.ctrl) { tryControl(p, dFoot, h); continue; }
@@ -890,8 +954,8 @@ function challenges(dt) {
         const tStyle = fwd(d).dot(o.pos2.clone().sub(d.pos2).normalize()) > 0.6 ? 'block' : 'poke'; const tFoot = right(d).dot(bp2().sub(d.pos2)) > 0 ? 1 : -1;
         if (rnd() < pf) { d.act = { type: 'poke', t: 0, dur: 0.55, style: tStyle, foot: tFoot }; foul(d, o, behind ? 'from behind' : rnd() < 0.2 ? 'pull' : 'trip'); return; }
         d.act = { type: 'poke', t: 0, dur: 0.55, style: tStyle, foot: tFoot };
-        const a = Math.atan2(ball.p.z - d.pos2.y, ball.p.x - d.pos2.x) + gauss() * 0.7; const sp = 3 + rnd() * 4;
-        ball.v.set(Math.cos(a) * sp, 0.3, Math.sin(a) * sp); S.owner = null; ball.last = d; S.lastTouch = d; S.traj = null; d.touchCD = 0.2; o.touchCD = 0.35;
+        const a = DM.atan2(ball.p.z - d.pos2.y, ball.p.x - d.pos2.x) + gauss() * 0.7; const sp = 3 + rnd() * 4;
+        ball.v.set(DM.cos(a) * sp, 0.3, DM.sin(a) * sp); S.owner = null; ball.last = d; S.lastTouch = d; S.traj = null; d.touchCD = 0.2; o.touchCD = 0.35;
         if (rnd() < 0.4) say(d.name + ' nicks it off ' + surname(o.name) + '.');
         return;
       } else if (rnd() < dt * 0.6) { d.beaten = 0.8; } // sold the dummy
@@ -939,7 +1003,7 @@ function think(p) {
   const depth = clamp((slot.x - 14) / 40, 0, 1); let x = back + depth * span;
   const width = att ? 1.05 * tc.width : 0.72 * (tc.line < 0.3 ? 0.92 : 1); let z = 34 + (slot.y - 34) * width + (bo.y - 34) * (att ? 0.2 : 0.38);
   // personal wander so nobody moves in lockstep
-  x += Math.sin(S.t * 0.13 * p.cadence + p.phase) * 2.2; z += Math.cos(S.t * 0.11 + p.phase * 1.7) * 2.4;
+  x += DM.sin(S.t * 0.13 * p.cadence + p.phase) * 2.2; z += DM.cos(S.t * 0.11 + p.phase * 1.7) * 2.4;
   if (att) {
     // full-backs overlap on their side, forwards stay onside and make runs in behind
     if (['LB', 'RB', 'LWB', 'RWB'].includes(r) && Math.sign(slot.y - 34) === Math.sign(bo.y - 34) && bo.x > 50) x += 12;
@@ -1012,7 +1076,7 @@ function moveBody(p, dt) {
   // backpedal / side-step limits when watching the ball
   const moveDir = dist > 0.001 ? to.multiplyScalar(1 / dist) : V2(0, 0);
   const lookDir = p.lookAt ? p.lookAt.clone().sub(p.pos2).normalize() : fwd(p);
-  const rel = Math.acos(clamp(moveDir.dot(lookDir), -1, 1));
+  const rel = DM.acos(clamp(moveDir.dot(lookDir), -1, 1));
   // short repositioning is done by shuffling sideways or backwards while facing play; thresholds have hysteresis so the
   // stance never flickers between frames
   let stance = 'fwd'; const ps0 = p.stance || 'fwd';
@@ -1023,16 +1087,16 @@ function moveBody(p, dt) {
   // velocity steering with turn-rate and accel limits (momentum)
   const sp = p.vel.length(); const desired = moveDir.clone().multiplyScalar(want);
   if (sp > 0.5 && want > 0.5) {
-    const cur = Math.atan2(p.vel.y, p.vel.x), tgtA = Math.atan2(desired.y, desired.x); const dA = wrapA(tgtA - cur);
+    const cur = DM.atan2(p.vel.y, p.vel.x), tgtA = DM.atan2(desired.y, desired.x); const dA = wrapA(tgtA - cur);
     const omega = p.agil * 10 / (1 + 0.55 * sp) * Math.sqrt(grip);
     const turn = clamp(dA, -omega * dt, omega * dt);
     const nsp = Math.abs(dA) > 1.2 ? Math.max(0, sp - 9 * grip * dt) : sp; // hard cuts need braking
     // planting a foot to cut at speed on a slick surface: sometimes the standing leg goes
     if (Math.abs(dA) > 1.0 && sp > 5 && !p.act && p.ti !== undefined && rnd() < dt * 1.6 * Math.max(0, ENV.slick - 0.15)) { p.act = { type: 'stumble', t: 0, dur: 0.9 }; dataEvent('slip', { player: p.name, team: p.T.key, speed: +sp.toFixed(1) }); if (rnd() < 0.5) say(surname(p.name) + ' loses his footing on the ' + (ENV.snow > 1 ? 'snow' : 'wet surface') + '.'); }
-    const a = cur + turn; p.vel.set(Math.cos(a) * nsp, Math.sin(a) * nsp);
+    const a = cur + turn; p.vel.set(DM.cos(a) * nsp, DM.sin(a) * nsp);
   }
   const vs = p.vel.length(); const along = vs > 0.01 ? p.vel.clone().normalize() : moveDir.clone();
-  const target = Math.abs(wrapA(Math.atan2(desired.y, desired.x) - Math.atan2(along.y, along.x))) < 1.2 ? want : 0;
+  const target = Math.abs(wrapA(DM.atan2(desired.y, desired.x) - DM.atan2(along.y, along.x))) < 1.2 ? want : 0;
   const accMax = ((p.acc * tired) * Math.sqrt(Math.max(0.08, 1 - vs / (p.vmax * 1.02))) + 0.6) * grip; const decMax = 7.5 * grip;
   let nv = vs < target ? Math.min(target, vs + accMax * dt) : Math.max(target, vs - decMax * dt);
   if (vs < 0.05 && want > 0) { p.vel.copy(moveDir).multiplyScalar(Math.min(want, accMax * dt)); }
@@ -1047,7 +1111,7 @@ function moveBody(p, dt) {
   const strain = 1 + 0.9 * ENV.heat + 0.45 * ENV.altF + (ENV.temp < 2 ? 0.08 : 0) + 0.1 * clamp(ENV.puddle + ENV.snow / 4, 0, 1);
   p.cap = Math.max(0.4, (p.cap ?? 1) - s2 * dt * (S.mscale || 1) * 0.000016 * strain * (0.7 + 0.5 * (p.work ?? 0.9)) / p.staminaMax);
   // short-term: sprints burn hard, jogging burns slowly, walking recovers toward the ceiling
-  if (s2 > 5.5) p.stamina -= dt * (0.004 + 0.045 * ((s2 - 5.5) / 3) ** 2) * strain / p.staminaMax;
+  if (s2 > 5.5) p.stamina -= dt * (0.004 + 0.045 * DM.sq((s2 - 5.5) / 3)) * strain / p.staminaMax;
   else if (s2 > 2.2) p.stamina -= dt * 0.0012 * strain / p.staminaMax;
   else p.stamina += dt * 0.012 * p.staminaMax / (1 + 0.6 * ENV.heat + 0.5 * ENV.altF);
   p.stamina = clamp(Math.min(p.stamina, p.cap), 0.12, 1);
@@ -1056,8 +1120,8 @@ function moveBody(p, dt) {
   if (!p.vSm) p.vSm = p.vel.clone(); p.vSm.lerp(p.vel, clamp(dt * 7, 0, 1)); const sv = p.vSm.length();
   p.goingF = p.goingF ? sv > 0.7 : sv > 1.2;
   let wantYaw = p.yaw;
-  if (p.goingF) { const my = Math.atan2(p.vSm.x, p.vSm.y); const ly = Math.atan2(lookDir.x, lookDir.y); wantYaw = stance === 'back' ? ly : stance === 'side' ? my + clamp(wrapA(ly - my), -1.1, 1.1) * 0.75 : my; }
-  else if (p.lookAt) { const ly = Math.atan2(lookDir.x, lookDir.y); if (Math.abs(wrapA(ly - p.yaw)) > (p.turnIn ? 0.12 : 0.55)) { wantYaw = ly; p.turnIn = true; } else p.turnIn = false; } // small angles are taken by the head and torso
+  if (p.goingF) { const my = DM.atan2(p.vSm.x, p.vSm.y); const ly = DM.atan2(lookDir.x, lookDir.y); wantYaw = stance === 'back' ? ly : stance === 'side' ? my + clamp(wrapA(ly - my), -1.1, 1.1) * 0.75 : my; }
+  else if (p.lookAt) { const ly = DM.atan2(lookDir.x, lookDir.y); if (Math.abs(wrapA(ly - p.yaw)) > (p.turnIn ? 0.12 : 0.55)) { wantYaw = ly; p.turnIn = true; } else p.turnIn = false; } // small angles are taken by the head and torso
   if (p.faceYaw !== undefined) wantYaw = p.faceYaw;
   const wy = (s2 > 6 ? 7 : 11) * (p.agil || 1); const err = wrapA(wantYaw - p.yaw);
   p.yawV = (p.yawV || 0) + (wy * wy * err - 2 * wy * (p.yawV || 0)) * dt; const lim = (s2 > 6 ? 3.4 : 6.2) * (p.agil || 1);
@@ -1145,12 +1209,12 @@ function animate(p, dt) {
   const B = p.bones;
   for (const n in B) B[n].quaternion.copy(p.rest[n]);
   // ---- procedural gait: cadence, stride and joint curves all scale with speed ----
-  const spd = Math.hypot(vf, vl); const back = vf < -0.4 && Math.abs(vf) > Math.abs(vl);
+  const spd = DM.hypot(vf, vl); const back = vf < -0.4 && Math.abs(vf) > Math.abs(vl);
   const moving = clamp((spd - 0.15) / 0.5, 0, 1);
   const steps = clamp(1.45 + 0.35 * spd, 1.5, 4.5) * p.cadence; // steps per second
   p.gph = (p.gph + dt * steps * 0.5 * (back ? -1 : 1) * moving + 1) % 1;
   const run = clamp((spd - 2.0) / 1.2, 0, 1), sprint = clamp((spd - 5.5) / 2.5, 0, 1);
-  const tau = Math.PI * 2; const bump = (x, c, w) => { let d = Math.abs(x - c); d = Math.min(d, 1 - d); return Math.exp(-(d * d) / (2 * w * w)); };
+  const tau = Math.PI * 2; const bump = (x, c, w) => { let d = Math.abs(x - c); d = Math.min(d, 1 - d); return DM.exp(-(d * d) / (2 * w * w)); };
   const fx = spd > 0.05 ? Math.abs(vf) / spd : 1, lx = spd > 0.05 ? vl / spd : 0; // share of forward vs sideways stepping
   const hipC = lerp(0.04, lerp(0.22, 0.5, sprint), run) * moving, hipA = lerp(0.36, lerp(0.5, 0.78, sprint), run) * moving * p.stride;
   const kSt = lerp(0.22, 0.55, run), kSw = lerp(1.0, lerp(1.55, 2.15, sprint), run), kSwC = lerp(0.72, 0.64, run);
@@ -1162,7 +1226,7 @@ function animate(p, dt) {
   const wW = clamp(1 - (spd - 1.8) / 2.7, 0, 1), wS = clamp((spd - 4.5) / 3, 0, 1), wR = 1 - wW - wS;
   const curve = (key, ph) => (wW > 0 ? wW * keyed(GAIT.walk[key], ph) : 0) + (wR > 0 ? wR * keyed(GAIT.run[key], ph) : 0) + (wS > 0 ? wS * keyed(GAIT.sprint[key], ph) : 0);
   for (const [side, off, sg] of [['Left', 0, 1], ['Right', 0.5, -1]]) {
-    const ps = (p.gph + off) % 1; const c = Math.cos(tau * ps); const D = Math.PI / 180;
+    const ps = (p.gph + off) % 1; const c = DM.cos(tau * ps); const D = Math.PI / 180;
     const hipD = curve('hip', ps) * D * p.stride, kneeD = curve('knee', ps) * D, ankD = curve('ank', ps) * D;
     const flex = hipD * moving * fx; const knee = kneeD * moving * lerp(1, 0.7, 1 - fx) + 0.05 + cr * 0.55;
     const abd = moving * (1 - fx) * 0.3 * c * lx * sg; // side-stepping: swing legs out and in
@@ -1171,7 +1235,7 @@ function animate(p, dt) {
     rot(B[side + 'Foot'], -ankD * moving - cr * 0.12, 0, 0);
     if (B[side + 'ToeBase']) rot(B[side + 'ToeBase'], -Math.max(0, -ankD) * 0.6 * moving, 0, 0);
     // arms counter-swing the opposite leg; elbows bend more as speed rises
-    const armA = lerp(0.2, lerp(0.6, 1.05, wS), run) * moving * p.armSwing * fx; const ca = Math.cos(tau * (ps - 0.5));
+    const armA = lerp(0.2, lerp(0.6, 1.05, wS), run) * moving * p.armSwing * fx; const ca = DM.cos(tau * (ps - 0.5));
     rot(B[side + 'Arm'], -(armA * ca) + lerp(0.02, 0.18, run) * moving, 0, sg * (cr * 0.35 + 0.05 * run));
     rot(B[side + 'ForeArm'], -(lerp(0.32, lerp(1.5, 1.65, wS), run) * (moving * 0.75 + 0.25) + 0.3 * cr + armA * 0.3 * Math.max(0, ca)), 0, 0);
     rot(B[side + 'Hand'], 0, 0, sg * 0.1);
@@ -1180,30 +1244,30 @@ function animate(p, dt) {
     if (side === 'Left') liftL = c;
   }
   // pelvis yaw/roll with the stride, shoulders counter-rotate, bounce handled by the ground solver
-  const yawP = 0.12 * moving * liftL * lerp(1, 0.7, run) * fx; const rollP = 0.05 * moving * Math.sin(tau * p.gph * 2) * (1 - run * 0.5);
+  const yawP = 0.12 * moving * liftL * lerp(1, 0.7, run) * fx; const rollP = 0.05 * moving * DM.sin(tau * p.gph * 2) * (1 - run * 0.5);
   rot(B.Hips, cr * 0.15, yawP, rollP);
   rot(B.Spine, (lerp(0.04, 0.12, run) + 0.1 * wS) * moving + cr * 0.25, -yawP * 0.6, -rollP * 0.6); rot(B.Spine1, 0, -yawP * 0.5, 0); rot(B.Spine2, 0, -yawP * 0.4, 0);
   rot(B.Neck, -(lerp(0.04, 0.14, run) * moving + cr * 0.25) * 0.5, yawP * 0.5, 0);
   // idle breathing and weight shifts so nobody stands like a statue
-  const idle = 1 - moving; const br = Math.sin(S.t * 1.6 + p.phase);
-  rot(B.Spine2, 0.015 * br * idle, 0, 0); rot(B.Hips, 0, 0, 0.035 * Math.sin(S.t * 0.35 + p.phase) * idle);
+  const idle = 1 - moving; const br = DM.sin(S.t * 1.6 + p.phase);
+  rot(B.Spine2, 0.015 * br * idle, 0, 0); rot(B.Hips, 0, 0, 0.035 * DM.sin(S.t * 0.35 + p.phase) * idle);
   // dejected after conceding: head down, shoulders slumped; keeper shakes his head
   p.sadW = lerp(p.sadW, p.sad > 0 ? 1 : 0, clamp(dt * 3, 0, 1));
   if (p.sadW > 0.01) { rot(B.Spine1, 0.2 * p.sadW, 0, 0); rot(B.Head, 0.5 * p.sadW, 0, 0); rot(B.LeftShoulder, 0, 0, -0.1 * p.sadW); rot(B.RightShoulder, 0, 0, 0.1 * p.sadW); }
-  if (p.shake > 0) rot(B.Head, 0, Math.sin(S.t * 9) * 0.35 * Math.min(1, p.shake), 0);
+  if (p.shake > 0) rot(B.Head, 0, DM.sin(S.t * 9) * 0.35 * Math.min(1, p.shake), 0);
   // posture: lean into acceleration and speed, roll into turns, personal carriage
   rot(B.Spine, clamp(p.lean + p.accF * 0.035 + v * 0.022 + (p.stamina < 0.35 && v < 1 ? 0.35 : 0), -0.25, 0.6), 0, 0);
   rot(B.Hips, 0, 0, clamp(-p.accL * 0.028, -0.32, 0.32));
   rot(B.RightArm, 0, 0, -p.armOut); rot(B.LeftArm, 0, 0, p.armOut);
   // torso and head track the ball
   if (p.lookAt) {
-    const la = Math.atan2(p.lookAt.x - p.pos2.x, p.lookAt.y - p.pos2.y); let d = wrapA(la - p.yaw);
+    const la = DM.atan2(p.lookAt.x - p.pos2.x, p.lookAt.y - p.pos2.y); let d = wrapA(la - p.yaw);
     p.scanT -= dt; if (p.scanT < 0) { p.scanT = 2 + vrnd() * 4; p.scan = 0.6; }
-    if (p.scan > 0) { p.scan -= dt; d += Math.sin((0.6 - p.scan) / 0.6 * Math.PI) * 1.2 * (p.i % 2 ? 1 : -1) * p.scanF; }
+    if (p.scan > 0) { p.scan -= dt; d += DM.sin((0.6 - p.scan) / 0.6 * Math.PI) * 1.2 * (p.i % 2 ? 1 : -1) * p.scanF; }
     const tw = clamp(d, -1.0, 1.0); rot(B.Spine1, 0, tw * 0.35, 0); rot(B.Spine2, 0, tw * 0.25, 0); rot(B.Neck, 0, clamp(d - tw * 0.6, -0.8, 0.8) * 0.5, 0); rot(B.Head, p.headUp + (ball.p.y > 3 ? -0.25 : 0.08), clamp(d - tw * 0.6, -0.8, 0.8) * 0.5, 0);
   }
   // calling for the ball
-  if (p.call > 0) { p.call -= dt; const u = Math.sin(clamp(p.call, 0, 1) * Math.PI); rot(B.RightArm, 0, 0.3 * u, -2.3 * u); }
+  if (p.call > 0) { p.call -= dt; const u = DM.sin(clamp(p.call, 0, 1) * Math.PI); rot(B.RightArm, 0, 0.3 * u, -2.3 * u); }
   // tired: hands on hips when standing still
   if (p.stamina < 0.4 && v < 0.5 && !p.gk) { rot(B.RightArm, 0, -0.3, -0.55); rot(B.LeftArm, 0, 0.3, 0.55); rot(B.RightForeArm, 0, 1.4, 0); rot(B.LeftForeArm, 0, -1.4, 0); }
   if (p.gk && p.holding) { rot(B.RightArm, 0, 1.2, -0.3); rot(B.LeftArm, 0, -1.2, 0.3); rot(B.RightForeArm, 0, 0.6, 0); rot(B.LeftForeArm, 0, -0.6, 0); }
@@ -1218,7 +1282,7 @@ function animate(p, dt) {
       // two-footed jump: load the knees, take off, arch the back in the air, snap the forehead through at the peak, land soft
       resetB(p, B, LOWER); resetB(p, B, ARMS);
       const load = u < 0.18 ? ease(u / 0.18) : u < 0.3 ? 1 - ease((u - 0.18) / 0.12) : u > 0.82 ? ease((u - 0.82) / 0.1) * (1 - ease(clamp((u - 0.92) / 0.08, 0, 1))) : 0;
-      const air = u > 0.25 && u < 0.85 ? Math.sin((u - 0.25) / 0.6 * Math.PI) : 0;
+      const air = u > 0.25 && u < 0.85 ? DM.sin((u - 0.25) / 0.6 * Math.PI) : 0;
       p.model.position.y = (a.h ?? 0.5) * air;
       const arch = u < 0.5 ? ease(clamp((u - 0.2) / 0.3, 0, 1)) : 1 - ease(clamp((u - 0.5) / 0.12, 0, 1)); const snap = u < 0.5 ? 0 : ease(clamp((u - 0.5) / 0.12, 0, 1)) * (1 - ease(clamp((u - 0.7) / 0.3, 0, 1)));
       rot(B.Spine, -0.3 * arch + 0.4 * snap + 0.25 * load, 0, 0); rot(B.Spine1, -0.12 * arch + 0.16 * snap, 0, 0); rot(B.Neck, -0.2 * arch + 0.25 * snap, 0, 0);
@@ -1227,8 +1291,8 @@ function animate(p, dt) {
       // keeper dive: push off the near-side leg, body stretched long, both hands leading to the ball, top leg tucked, then recover
       resetB(p, B, LOWER); resetB(p, B, ARMS);
       const sd = a.side || 1; const lie = ease(clamp(u / 0.3, 0, 1)) * (1 - ease(clamp((u - 0.72) / 0.28, 0, 1)));
-      const crouch0 = u < 0.12 ? Math.sin(u / 0.12 * Math.PI / 2) * (1 - lie) : 0;
-      p.model.rotateZ(-sd * 1.38 * lie); p.model.position.y = Math.max(0.04, Math.sin(clamp(u / 0.42, 0, 1) * Math.PI) * (a.high ? 0.95 : 0.42)) * (u < 0.72 ? 1 : 1 - ease((u - 0.72) / 0.28));
+      const crouch0 = u < 0.12 ? DM.sin(u / 0.12 * Math.PI / 2) * (1 - lie) : 0;
+      p.model.rotateZ(-sd * 1.38 * lie); p.model.position.y = Math.max(0.04, DM.sin(clamp(u / 0.42, 0, 1) * Math.PI) * (a.high ? 0.95 : 0.42)) * (u < 0.72 ? 1 : 1 - ease((u - 0.72) / 0.28));
       const r = right(p); p.model.position.x += r.x * sd * 0.55 * lie; p.model.position.z += r.y * sd * 0.55 * lie;
       // arms: the dive-side arm goes over the head, the other reaches across so both palms meet the ball
       const reach = lie; const near = sd > 0 ? 'Right' : 'Left', far = sd > 0 ? 'Left' : 'Right'; const ns = sd > 0 ? -1 : 1;
@@ -1252,12 +1316,12 @@ function animate(p, dt) {
       rot(B[top + 'Arm'], -0.5 * lie, 0, -ls * 0.9 * lie); rot(B[top + 'ForeArm'], -0.6 * lie, 0, 0);
     } else if (a.type === 'skill') {
       // skill moves: shoulder-drop feint, step-over, chop, Marseille roulette, drag-back, elastico
-      const sd = a.side, k = Math.sin(u * Math.PI); const L = sd > 0 ? 'Right' : 'Left'; const lsg = sd > 0 ? 1 : -1;
-      if (a.move === 'feint') { const z = Math.sin(u * Math.PI * 2) * 0.32; rot(B.Spine, 0.12 * k, -sd * 0.25 * Math.sin(u * Math.PI * 2), -sd * z); rot(B.Hips, 0, 0, -sd * z * 0.4); }
-      else if (a.move === 'stepover') { const ph = u * Math.PI * 2; rot(B[L + 'UpLeg'], -0.7 * k, 0, lsg * 0.45 * Math.sin(ph)); rot(B[L + 'Leg'], 0.9 * k, 0, 0); rot(B.Spine, 0.15 * k, 0, sd * 0.22 * Math.sin(ph)); }
+      const sd = a.side, k = DM.sin(u * Math.PI); const L = sd > 0 ? 'Right' : 'Left'; const lsg = sd > 0 ? 1 : -1;
+      if (a.move === 'feint') { const z = DM.sin(u * Math.PI * 2) * 0.32; rot(B.Spine, 0.12 * k, -sd * 0.25 * DM.sin(u * Math.PI * 2), -sd * z); rot(B.Hips, 0, 0, -sd * z * 0.4); }
+      else if (a.move === 'stepover') { const ph = u * Math.PI * 2; rot(B[L + 'UpLeg'], -0.7 * k, 0, lsg * 0.45 * DM.sin(ph)); rot(B[L + 'Leg'], 0.9 * k, 0, 0); rot(B.Spine, 0.15 * k, 0, sd * 0.22 * DM.sin(ph)); }
       else if (a.move === 'roulette') { const sp = ease(u); p.model.rotateY(-sd * Math.PI * 2 * sp); resetB(p, B, LOWER); rot(B[L + 'UpLeg'], -0.45 * k, 0, 0); rot(B[L + 'Leg'], 0.55 * k, 0, 0); rot(B[L + 'Foot'], -0.35 * k, 0, 0); const o = L === 'Right' ? 'Left' : 'Right'; rot(B[o + 'Leg'], 0.35 * k, 0, 0); rot(B[o + 'UpLeg'], -0.2 * k, 0, 0); rot(B.Spine, 0.18 * k, 0, 0); }
-      else if (a.move === 'dragback') { const s1 = ease(clamp(u / 0.35, 0, 1)) * (1 - ease(clamp((u - 0.55) / 0.3, 0, 1))); const pull = clamp((u - 0.3) / 0.35, 0, 1); resetB(p, B, LOWER); rot(B[L + 'UpLeg'], -0.75 * s1 + 0.35 * Math.sin(pull * Math.PI) * s1, 0, 0); rot(B[L + 'Leg'], 0.2 * s1, 0, 0); rot(B[L + 'Foot'], -0.55 * s1, 0, 0); const o = L === 'Right' ? 'Left' : 'Right'; rot(B[o + 'Leg'], 0.35 * s1, 0, 0); rot(B[o + 'UpLeg'], -0.25 * s1, 0, 0); rot(B.Spine, -0.1 * s1, 0, 0); }
-      else if (a.move === 'elastico') { const fl = Math.sin(u * Math.PI * 2); resetB(p, B, LOWER); rot(B[L + 'UpLeg'], -0.5 * k, lsg * 0.6 * fl, 0); rot(B[L + 'Leg'], 0.4 * k, 0, 0); rot(B[L + 'Foot'], 0, lsg * 0.5 * fl, 0); const o = L === 'Right' ? 'Left' : 'Right'; rot(B[o + 'Leg'], 0.3 * k, 0, 0); rot(B.Spine, 0.15 * k, 0, -sd * 0.15 * fl); }
+      else if (a.move === 'dragback') { const s1 = ease(clamp(u / 0.35, 0, 1)) * (1 - ease(clamp((u - 0.55) / 0.3, 0, 1))); const pull = clamp((u - 0.3) / 0.35, 0, 1); resetB(p, B, LOWER); rot(B[L + 'UpLeg'], -0.75 * s1 + 0.35 * DM.sin(pull * Math.PI) * s1, 0, 0); rot(B[L + 'Leg'], 0.2 * s1, 0, 0); rot(B[L + 'Foot'], -0.55 * s1, 0, 0); const o = L === 'Right' ? 'Left' : 'Right'; rot(B[o + 'Leg'], 0.35 * s1, 0, 0); rot(B[o + 'UpLeg'], -0.25 * s1, 0, 0); rot(B.Spine, -0.1 * s1, 0, 0); }
+      else if (a.move === 'elastico') { const fl = DM.sin(u * Math.PI * 2); resetB(p, B, LOWER); rot(B[L + 'UpLeg'], -0.5 * k, lsg * 0.6 * fl, 0); rot(B[L + 'Leg'], 0.4 * k, 0, 0); rot(B[L + 'Foot'], 0, lsg * 0.5 * fl, 0); const o = L === 'Right' ? 'Left' : 'Right'; rot(B[o + 'Leg'], 0.3 * k, 0, 0); rot(B.Spine, 0.15 * k, 0, -sd * 0.15 * fl); }
       else { rot(B.Spine, 0.25 * k, 0, sd * 0.3 * k); rot(B.LeftLeg, 0.4 * k, 0, 0); rot(B.RightLeg, 0.4 * k, 0, 0); }
       rot(B.LeftArm, 0, 0, 0.55 * k); rot(B.RightArm, 0, 0, -0.55 * k);
     } else if (a.type === 'poke') {
@@ -1269,28 +1333,28 @@ function animate(p, dt) {
       rot(B[Sp + 'UpLeg'], -0.45 * s, 0, 0); rot(B[Sp + 'Leg'], 0.75 * s, 0, 0); rot(B[Sp + 'Foot'], -0.3 * s, 0, 0);
       rot(B.Spine, 0.32 * s, 0, 0); rot(B.Hips, 0.12 * s, 0, 0); rot(B.LeftArm, -0.2 * s, 0, 0.75 * s); rot(B.RightArm, -0.2 * s, 0, -0.75 * s);
     } else if (a.type === 'stumble') {
-      const s = ease(clamp(u / 0.25, 0, 1)) * (1 - ease(clamp((u - 0.55) / 0.45, 0, 1))); rot(B.Spine, 0.5 * s, 0, 0.18 * s * Math.sin(u * 9)); rot(B.RightArm, -0.4 * s, 0, -1.0 * s); rot(B.LeftArm, -0.3 * s, 0, 0.8 * s); rot(B.LeftLeg, 0.3 * s, 0, 0); rot(B.RightLeg, 0.3 * s, 0, 0);
+      const s = ease(clamp(u / 0.25, 0, 1)) * (1 - ease(clamp((u - 0.55) / 0.45, 0, 1))); rot(B.Spine, 0.5 * s, 0, 0.18 * s * DM.sin(u * 9)); rot(B.RightArm, -0.4 * s, 0, -1.0 * s); rot(B.LeftArm, -0.3 * s, 0, 0.8 * s); rot(B.LeftLeg, 0.3 * s, 0, 0); rot(B.RightLeg, 0.3 * s, 0, 0);
     } else if (a.type === 'throw' || a.type === 'throwReady' || a.type === 'carry') {
       // throw-in (Law 15): ball taken back behind the head with both hands, back arched, then whipped forward over the head;
       // keepers use the same over-arm action to roll or throw it out
       resetB(p, B, ARMS);
       let lift, bend, arch, fwdA;
       if (a.type === 'carry') { lift = 0; bend = 1.3; arch = 0; fwdA = 0.95; }
-      else if (a.type === 'throwReady') { lift = 1; bend = 1.6; arch = -0.12 - 0.04 * Math.sin(S.t * 2); fwdA = 0; }
+      else if (a.type === 'throwReady') { lift = 1; bend = 1.6; arch = -0.12 - 0.04 * DM.sin(S.t * 2); fwdA = 0; }
       else { const back = u < 0.45 ? ease(u / 0.45) : 1 - ease(clamp((u - 0.45) / 0.2, 0, 1)); const rel = ease(clamp((u - 0.42) / 0.22, 0, 1)) * (1 - ease(clamp((u - 0.75) / 0.25, 0, 1)) * 0.6);
         lift = 1 - 0.55 * rel; bend = 1.6 * back + 0.1; arch = -0.35 * back + 0.38 * rel; fwdA = 0.9 * rel; }
       for (const [sd, sg] of [['Left', 1], ['Right', -1]]) { rot(B[sd + 'Arm'], -(0.9 + 1.75 * lift) + 0.4 * fwdA * (1 - lift), 0, sg * (0.3 + 0.15 * lift)); rot(B[sd + 'ForeArm'], -bend, 0, 0); }
       rot(B.Spine, arch, 0, 0); rot(B.Spine1, arch * 0.5, 0, 0);
     } else if (a.type === 'celebrate') {
-      const up = 0.5 + 0.5 * Math.sin(S.t * 2 + p.phase);
-      if (a.style === 'plane') { rot(B.RightArm, 0, 0, -1.45); rot(B.LeftArm, 0, 0, 1.45); p.model.rotateZ(Math.sin(S.t * 1.5) * 0.18); }
+      const up = 0.5 + 0.5 * DM.sin(S.t * 2 + p.phase);
+      if (a.style === 'plane') { rot(B.RightArm, 0, 0, -1.45); rot(B.LeftArm, 0, 0, 1.45); p.model.rotateZ(DM.sin(S.t * 1.5) * 0.18); }
       else if (a.style === 'slide') { const k2 = ease(clamp(u / 0.2, 0, 1)); p.model.position.y = -0.38 * k2; p.model.rotateX(-0.35 * k2); rot(B.LeftLeg, 1.9 * k2, 0, 0); rot(B.RightLeg, 1.9 * k2, 0, 0); rot(B.LeftUpLeg, 0.2 * k2, 0, 0); rot(B.RightUpLeg, 0.2 * k2, 0, 0); rot(B.RightArm, 0, 0, -2.4); rot(B.LeftArm, 0, 0, 2.4); rot(B.Spine, -0.35, 0, 0); }
-      else { rot(B.RightArm, 0, 0, -2.3 * up); rot(B.LeftArm, 0, 0, 2.3 * up); p.model.position.y = Math.max(0, Math.sin(S.t * 8 + p.phase)) * 0.28; }
+      else { rot(B.RightArm, 0, 0, -2.3 * up); rot(B.LeftArm, 0, 0, 2.3 * up); p.model.position.y = Math.max(0, DM.sin(S.t * 8 + p.phase)) * 0.28; }
     } else if (a.type === 'fall') {
       // fouled: legs taken, a stumbling step, hands go out to break the fall, a moment down on the turf, then push back up
       resetB(p, B, LOWER); resetB(p, B, ARMS);
       const lie = ease(clamp((u - 0.04) / 0.18, 0, 1)) * (1 - ease(clamp((u - 0.7) / 0.3, 0, 1)));
-      const up = u > 0.7 ? Math.sin(clamp((u - 0.7) / 0.3, 0, 1) * Math.PI) : 0;
+      const up = u > 0.7 ? DM.sin(clamp((u - 0.7) / 0.3, 0, 1) * Math.PI) : 0;
       p.model.rotateX(1.47 * lie); p.model.position.y = 0.04 * lie;
       rot(B.LeftUpLeg, -0.25 * lie - 0.9 * up, 0, 0.05); rot(B.RightUpLeg, 0.1 * lie - 0.3 * up, 0, -0.05); rot(B.LeftLeg, 0.5 * lie + 1.3 * up, 0, 0); rot(B.RightLeg, 1.0 * lie + 0.6 * up, 0, 0);
       rot(B.LeftFoot, 0.5 * lie, 0, 0); rot(B.RightFoot, 0.5 * lie, 0, 0);
@@ -1306,8 +1370,8 @@ function animate(p, dt) {
       // referee and assistant signals: an arm held straight along the direction of the decision (IFAB Law 5 signals)
       const s = ease(clamp(u * 4, 0, 1)) * (1 - ease(clamp((u - 0.82) / 0.18, 0, 1))); resetB(p, B, ARMS);
       const dir = a.dir || fwd(p); const fz = fwd(p), rz = right(p); const c = dir.x * fz.x + dir.y * fz.y, sn = dir.x * rz.x + dir.y * rz.y; const el = 1.5 + (a.up || 0);
-      const ang = Math.atan2(Math.abs(sn), c); // 0 = straight ahead, pi/2 = to the side
-      const flex = el * Math.cos(clamp(ang, 0, Math.PI / 2)), abd = el * Math.sin(clamp(ang, 0, Math.PI / 2));
+      const ang = DM.atan2(Math.abs(sn), c); // 0 = straight ahead, pi/2 = to the side
+      const flex = el * DM.cos(clamp(ang, 0, Math.PI / 2)), abd = el * DM.sin(clamp(ang, 0, Math.PI / 2));
       if (a.both) { rot(B.RightArm, -1.45 * s, 0, -0.3 * s); rot(B.LeftArm, -1.45 * s, 0, 0.3 * s); }
       else if (sn >= 0) rot(B.RightArm, -flex * s, 0, -abd * s); else rot(B.LeftArm, -flex * s, 0, abd * s);
     } else if (a.type === 'despair') {
@@ -1321,7 +1385,7 @@ function animate(p, dt) {
     for (const n of ['LeftFoot', 'RightFoot', 'LeftToeBase', 'RightToeBase']) lo = Math.min(lo, B[n].getWorldPosition(gv).y - p.model.position.y - p.footRest[n] * p.scale);
     const gTgt = p.model.position.y - clamp(lo, -0.4, 0.3);
     // the pelvis height follows the solved contact through a light filter so switching support feet never pops the body
-    p.gY = p.gY === undefined || dt <= 0 || dt > 0.2 ? gTgt : p.gY + (gTgt - p.gY) * (1 - Math.exp(-dt * 26)); p.model.position.y = Math.max(p.gY, gTgt - 0.03);
+    p.gY = p.gY === undefined || dt <= 0 || dt > 0.2 ? gTgt : p.gY + (gTgt - p.gY) * (1 - DM.exp(-dt * 26)); p.model.position.y = Math.max(p.gY, gTgt - 0.03);
   }
   if (p.label) { const show = S.names === 'all' || (S.owner === p) || (S.names === 'ball' && S.follow === p); p.label.visible = show; }
 }
@@ -1349,7 +1413,7 @@ function inertialize(p, dt, B, a) {
     p.iKey = key;
   }
   if (p.iOff) {
-    p.iT += dt; const w = Math.exp(-p.iT / p.iTau);
+    p.iT += dt; const w = DM.exp(-p.iT / p.iTau);
     if (w < 0.01) p.iOff = null;
     else {
       for (const n of names) { _qa.copy(_qid).slerp(p.iOff[n], w); B[n].quaternion.premultiply(_qa); }
@@ -1368,7 +1432,7 @@ function ownerControl(p, dt) {
   const b = bp2(); const dist = p.pos2.distanceTo(b);
   if (dist > 2.6 && !p.holding) { S.owner = null; return; }
   if (p.holding) {
-    ball.p.set(p.pos2.x + Math.sin(p.yaw) * 0.35, 1.05, p.pos2.y + Math.cos(p.yaw) * 0.35); ball.v.set(0, 0, 0);
+    ball.p.set(p.pos2.x + DM.sin(p.yaw) * 0.35, 1.05, p.pos2.y + DM.cos(p.yaw) * 0.35); ball.v.set(0, 0, 0);
     p.holdT -= dt; p.tgt.copy(p.pos2); p.urg = 0.3; p.lookAt = V2(52.5, 34);
     if (p.holdT <= 0) {
       p.holding = false; const plan = decide(p); const q = plan.q || teamOf(p.ti).find((x) => x.pos === 'CB');
@@ -1387,7 +1451,7 @@ function ownerControl(p, dt) {
     const kd = aim.clone().sub(bc).normalize(); const off = KOFF[p.act.kind] || KOFF.instep;
     const stand = bc.clone().addScaledVector(kd, -off[0]).addScaledVector(V2(-kd.y, kd.x), -off[1] * p.act.foot);
     p.tgt.copy(stand); p.urg = 0.9; p.lookAt = bc.clone().addScaledVector(kd, 3); p.watch = false;
-    if (!p.act.struck) { p.kWarp = true; p.vel.copy(stand.clone().sub(p.pos2).multiplyScalar(1 / tr)); if (p.vel.length() > 9) p.vel.setLength(9); p.yaw += clamp(wrapA(Math.atan2(kd.x, kd.y) - p.yaw) * Math.min(1, dt / tr), -12 * dt, 12 * dt); }
+    if (!p.act.struck) { p.kWarp = true; p.vel.copy(stand.clone().sub(p.pos2).multiplyScalar(1 / tr)); if (p.vel.length() > 9) p.vel.setLength(9); p.yaw += clamp(wrapA(DM.atan2(kd.x, kd.y) - p.yaw) * Math.min(1, dt / tr), -12 * dt, 12 * dt); }
     if (!p.act.struck && p.act.t / p.act.dur >= p.act.strikeAt) { p.act.struck = true; if (p.act.onStrike) p.act.onStrike(); else if (p.pos2.distanceTo(b) < 2.1 && ball.p.y < 1.0) strike(p); else { p.act = null; S.kickAbort = (S.kickAbort || 0) + 1; } }
     return;
   }
@@ -1534,7 +1598,7 @@ function throwIn(R, tk, dt) {
   }
   if (R.phase === 'ready') {
     ball.p.set(tk.pos2.x - f.x * 0.12, 2.12, tk.pos2.y - f.y * 0.12); ball.v.set(0, 0, 0);
-    tk.faceYaw = Math.atan2(0, inward); tk.tgt.copy(R.spot); tk.pos2.lerp(R.spot, clamp(dt * 3, 0, 1));
+    tk.faceYaw = DM.atan2(0, inward); tk.tgt.copy(R.spot); tk.pos2.lerp(R.spot, clamp(dt * 3, 0, 1));
     R.wait -= dt; if (R.wait > 0 || S.celebrate > 0) return true;
     const opts = teamOf(R.team).filter((q) => q !== tk && !q.gk && q.pos2.distanceTo(tk.pos2) < 22).sort((a, b) => (laneSafety(tk.pos2, b.pos2, R.team) - laneSafety(tk.pos2, a.pos2, R.team)) + (a.pos2.distanceTo(tk.pos2) - b.pos2.distanceTo(tk.pos2)) * 0.05);
     R.q = opts[0] || teamOf(R.team).filter((q) => q !== tk && !q.gk).sort((a, b) => a.pos2.distanceTo(tk.pos2) - b.pos2.distanceTo(tk.pos2))[0];
@@ -1578,7 +1642,7 @@ function restartFormation() {
 // ============ GOALKEEPER SHOT REACTION ============
 function keeperReact(dt) {
   if (S.owner || S.restart || S.dead) return;
-  const sp = Math.hypot(ball.v.x, ball.v.z); if (sp < 9) return;
+  const sp = DM.hypot(ball.v.x, ball.v.z); if (sp < 9) return;
   for (const gk of players.filter((q) => q.gk)) {
     const og = ownGoal(gk.ti); const toward = (og.x - ball.p.x) * ball.v.x > 0; if (!toward || Math.abs(ball.p.x - og.x) > 30) continue;
     if (gk.act?.type === 'dive') continue;
@@ -1607,7 +1671,7 @@ function officiate(dt) {
       else if (R.type === 'goalkick') o.tgt = V2(gx + sx * 38, 34 + (R.spot.y < 34 ? 10 : -10)); }
     if (o.role !== 'ref' && R && R.type === 'penalty') { const gx = R.spot.x < 52.5 ? 0 : 105; if ((gx === 105) === (o.role === 'ar1')) o.tgt = V2(gx, o.role === 'ar1' ? 21 : 47); }
     if (o.role === 'ref' && S.owner) { const ow = S.owner; const away = o.pos2.clone().sub(ow.pos2); const dd = away.length(); if (dd < 9) { const side = V2(-ow.vel.y, ow.vel.x); if (side.length() < 0.1) side.copy(away); side.normalize(); if (side.dot(away) < 0) side.negate(); o.tgt = o.pos2.clone().addScaledVector(side, 9 - dd + 2); o.urg = 0.96; } }
-    if (o.act && o.act.type === 'signal') { const ya = Math.atan2(o.act.dir.x, o.act.dir.y); const a1 = ya + 1.05, a2 = ya - 1.05; o.faceYaw = Math.abs(wrapA(a1 - o.yaw)) < Math.abs(wrapA(a2 - o.yaw)) ? a1 : a2; o.tgt = o.pos2.clone(); }
+    if (o.act && o.act.type === 'signal') { const ya = DM.atan2(o.act.dir.x, o.act.dir.y); const a1 = ya + 1.05, a2 = ya - 1.05; o.faceYaw = Math.abs(wrapA(a1 - o.yaw)) < Math.abs(wrapA(a2 - o.yaw)) ? a1 : a2; o.tgt = o.pos2.clone(); }
     if (o.act) { o.act.t += dt; if (o.act.t >= o.act.dur) { o.act = null; o.faceYaw = undefined; } }
     moveBody(o, dt); animate(o, dt);
   }
@@ -1644,14 +1708,14 @@ function director(dt) {
 function updateCamera(dt) {
   if (S.cam === 'debug') return;
   const b = W(ball.p.x, ball.p.y, ball.p.z); let P, L, fov = 30, w = 2.2;
-  if (!S.started) { const a = S.t * 0.1; P = new THREE.Vector3(Math.cos(a) * 80, 24 + 6 * Math.sin(S.t * 0.2), Math.sin(a) * 62); L = new THREE.Vector3(0, 2, 0); fov = 40; }
+  if (!S.started) { const a = S.t * 0.1; P = new THREE.Vector3(DM.cos(a) * 80, 24 + 6 * DM.sin(S.t * 0.2), DM.sin(a) * 62); L = new THREE.Vector3(0, 2, 0); fov = 40; }
   else if (S.focus && S.celebrate > 0) { const f = S.focus; const fw = W(f.pos2.x, 0, f.pos2.y); const yf = fwd(f); P = new THREE.Vector3(fw.x + yf.x * 7 + 3, 2.6, fw.z + yf.y * 7 + 3); L = new THREE.Vector3(fw.x, 1.3, fw.z); fov = 34; w = 3; }
   else if (S.cam === 'broadcast' || S.cam === 'dynamic') {
     const D = director(dt); const f = D.f;
     if (S.cam === 'broadcast') {
       // TV gantry on the main stand: it barely moves, it pans and zooms. Zoom frames the players around the ball.
       const port = camera.aspect < 1; P = new THREE.Vector3(f.x * (port ? 0.9 : 0.3), port ? 46 : 21, port ? f.z + 44 : 64); L = new THREE.Vector3(f.x, 0.5, f.z);
-      const dist = P.distanceTo(L); const hf = 2 * Math.atan(D.W / 2 / dist); fov = port ? clamp(D.W * 1.05, 34, 62) : clamp(2 * Math.atan(Math.tan(hf / 2) / camera.aspect) * 180 / Math.PI, 9, 58); w = 1.4;
+      const dist = P.distanceTo(L); const hf = 2 * DM.atan(D.W / 2 / dist); fov = port ? clamp(D.W * 1.05, 34, 62) : clamp(2 * DM.atan(DM.tan(hf / 2) / camera.aspect) * 180 / Math.PI, 9, 58); w = 1.4;
     } else {
       // FIFA-style dynamic cam: lower and closer, sits a little behind the attack and leans towards goal
       const d = S.owner ? dirOf(S.owner.ti) : dirOf(S.poss); const back = 10 + D.W * 0.25;
@@ -1788,7 +1852,7 @@ function frame(dt, draw) {
   const unblend = alpha < 1 && !(typeof VIS !== 'undefined' && VIS.on) ? blendTo(alpha) : null;   // Vision scores the pixels against the exact simulated positions, so it draws unblended
   for (const p of players) if (!p.off) animate(p, sim);
   // ball render: roll from displacement
-  const bw = W(ball.p.x, ball.p.y, ball.p.z); const mv = bw.clone().sub(ballMesh.position); const hd = Math.hypot(mv.x, mv.z);
+  const bw = W(ball.p.x, ball.p.y, ball.p.z); const mv = bw.clone().sub(ballMesh.position); const hd = DM.hypot(mv.x, mv.z);
   if (hd > 1e-4 && hd < 5) ballMesh.rotateOnWorldAxis(new THREE.Vector3(mv.z, 0, -mv.x).normalize(), hd / BR);
   ballMesh.position.copy(bw);
   ledAcc += dt; if (ledAcc > 1 / 30) { drawLED(ledAcc * (S.paused ? 0 : 1)); ledAcc = 0; }
@@ -1807,7 +1871,7 @@ function start() {
   $('kick').onclick = kickOff;
   renderer.setAnimationLoop(loop);
 }
-window.__mc = { DIRC, passageScore, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY, crowd };
+window.__mc = { DIRC, passageScore, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY, crowd, setFormation: (ti, name) => applyFormation(ti, name), movePlayer: (i, dx, dy) => { const p = players[i]; p.slot = V2(clamp(p.slot.x + dx, 2, 103), clamp(p.slot.y + dy, 2, 66)); } };
 
 /*@@SETUP@@*/
 // ============ LOAD ============

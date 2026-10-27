@@ -15,7 +15,10 @@ LABELS = {
     "tackles_won": "Tackles won",
     "fouls": "Fouls",
     "xg": "xG",
+    "possession_share": "Possession",
 }
+# the share metrics read as a percent of the team's total, so the line shows a % sign
+PERCENT_METRICS = frozenset({"possession_share"})
 
 
 # The colour voice in rules mode: a stock reading with no number, so there is nothing to verify.
@@ -282,6 +285,8 @@ class NarratorRules:
             parts = [
                 f"{ctx.club_name(c['metric'].split(':', 1)[1])} {c['value']:.2f}"
                 if c["units"] == "ratio"
+                else f"{ctx.club_name(c['metric'].split(':', 1)[1])} {int(c['value'])}%"
+                if arg in PERCENT_METRICS
                 else f"{ctx.club_name(c['metric'].split(':', 1)[1])} {int(c['value'])}"
                 for c in matched
             ]

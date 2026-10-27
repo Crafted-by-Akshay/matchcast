@@ -376,7 +376,7 @@ NATIONAL = [
 ]
 NATIONAL_SEED = 2026
 # The default match must show something. The venue fixture's tactics were a 5-4-1 low block for Argentina, which gave 0 to 2 shots
-# a half-time in most seeds; an open 4-3-3 balanced v 4-3-3 balanced on the same seed gives 14 shots and goals at 21' and 27' (one seed, not a calibration claim)
+# a half-time in most seeds; an open 4-3-3 balanced v 4-3-3 balanced on the same seed gives 13 shots and one goal at 34' (one seed, not a calibration claim)
 # (measured on the runner's 0.02 s step). Tactics are a fixture setting, not engine calibration. tests/e2e/lively-default.spec.ts guards it.
 NATIONAL_FORMATIONS = ("4-3-3", "4-3-3")
 NATIONAL_STYLES = ("balanced", "balanced")
@@ -490,6 +490,10 @@ def build(out_root):
     write(out_root + "broadcast/index.html", build_broadcast())
     write(out_root + "analyst/index.html", build_analyst())
     copy_data(out_root + "analyst/data/")
+    # what-if clips (whatif/clips, written by services/simulation/run.cjs and whatif/build_index.py)
+    os.makedirs(out_root + "analyst/data/whatif", exist_ok=True)
+    for f in glob.glob(U + "whatif/clips/*.json"):
+        shutil.copy(f, out_root + "analyst/data/whatif/" + os.path.basename(f))
     os.makedirs(out_root + "shared", exist_ok=True)
     shutil.copy(W + "players.json", out_root + "shared/players.json")
     shutil.copy(W + "intl.json", out_root + "shared/intl.json")
@@ -535,7 +539,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "highlights.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
+        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "highlights.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst-shots.js", "crew-analyst-momentum.js", "crew-analyst-ppda.js", "crew-analyst-progressive.js", "crew-analyst-shape.js", "crew-analyst-radar.js", "maps.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)
