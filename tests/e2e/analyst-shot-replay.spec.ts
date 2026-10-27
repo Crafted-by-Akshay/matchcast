@@ -147,7 +147,7 @@ test('window.MC.analysis draws the shot map into a card with citations, and says
   const out = await page.evaluate(() => {
     const div = document.createElement('div'); div.id = 'card-test'; document.body.appendChild(div);
     const res = (window as any).MC.analysis.render('shot_map', { team: 'home' }, div);
-    const planned = (window as any).MC.analysis.render('pass_network', {}, document.createElement('div'));   // not built yet (ppda is)
+    const planned = (window as any).MC.analysis.render('radar', {}, document.createElement('div'));   // not built yet (the maps are)
     return { res, planned, dots: div.querySelectorAll('circle[data-xg]').length };
   });
   expect(out.res.status).toBe('ok');

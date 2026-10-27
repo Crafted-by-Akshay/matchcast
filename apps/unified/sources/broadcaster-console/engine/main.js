@@ -1807,7 +1807,7 @@ function start() {
   $('kick').onclick = kickOff;
   renderer.setAnimationLoop(loop);
 }
-window.__mc = { DIRC, passageScore, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY, crowd };
+window.__mc = { DIRC, passageScore, STADIUMS, climateOf, ENV, initEnv, updateEnv, SET: () => SET, kickOff, openSetup, S, players, officials, ball, stepSim, STATS, animate, frame, camera, scene, composer, BODY, crowd, setFormation: (ti, name) => applyFormation(ti, name), movePlayer: (i, dx, dy) => { const p = players[i]; p.slot = V2(clamp(p.slot.x + dx, 2, 103), clamp(p.slot.y + dy, 2, 66)); } };
 
 /*@@SETUP@@*/
 // ============ LOAD ============
