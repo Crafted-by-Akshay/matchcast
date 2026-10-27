@@ -343,6 +343,38 @@ def build_broadcast():
 
 # ---------- Analyst: the enterprise console (same build as enterprise-console/build.py)
 # plus the shell hook
+# FIX-06 / FIX-07 / FIX-08: the console's copy. The console runs rules here (its model path needs a host capability this site does not have),
+# its Watch links go to the Watch app beside it, and its saved items are kept in this browser, not shared.
+# Each pair asserts how many times it occurs, so a source change fails the build instead of shipping stale copy.
+ANALYST_COPY = [
+    ("https://claude.ai/artifact/SSjrndFyoFUViaVZ6TzyFX", "../watch/index.html", 2),
+    ("Demo: Claude via artifact sampling when granted, rules otherwise · Production: Azure AI Foundry Agent Service",
+     "Rules answers in this console · Production: the live agent api runs Producer, Analyst, Narrator and Verifier on Azure AI Foundry", 1),
+    ("Agents may call Claude when the viewer grants it (production: Azure AI Foundry).",
+     "Agents answer from rules in this console. The live agent api runs the Foundry models.", 1),
+    ("Shared with your organisation", "Saved on this device", 3),
+    ("Shared with your team", "Saved on this device", 1),
+    ("Clips are shared with your organisation.", "Clips are saved on this device.", 1),
+    ("Saved queries are shared with your organisation and logged in the audit trail.",
+     "Saved queries are kept on this device.", 1),
+    ("Foundry-ready agents", "console agents", 2),
+]
+
+
+def analyst_copy(text):
+    for old, new, n in ANALYST_COPY:
+        found = text.count(old)
+        assert found == n, "analyst copy: expected " + str(n) + " of " + repr(old[:60]) + ", found " + str(found)
+        text = text.replace(old, new)
+    # the console's own label for its model path: Claude only exists in the artifact host, so the copy says Model
+    text = re.sub(r"\bClaude\b", "Model", text)
+    text = re.sub(r"\bnot granted\b(?! in this view| here)", "not available here", text)
+    text = re.sub(r"not granted (in this view|here)", "not available in this console", text)
+    text = re.sub(r"when (it is granted|the viewer grants it|granted)", "when available", text)
+    text = re.sub(r"\bis granted\b", "is available", text)
+    return text
+
+
 def build_analyst():
     pages = sorted(glob.glob(AS + "pages/*.js")) + sorted(glob.glob(U + "analyst-pages/*.js"))
     js = (
@@ -353,7 +385,7 @@ def build_analyst():
         + r(EMB + "analyst.js")
         + "\n"
     )
-    return r(AS + "head.html") + '<script>\n"use strict";\n' + js + "</script>\n"
+    return analyst_copy(r(AS + "head.html") + '<script>\n"use strict";\n' + js + "</script>\n")
 
 
 # same stadium order as the 3D engine's STADIUMS

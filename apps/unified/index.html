@@ -132,6 +132,9 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .hl dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px}
 .hl dt{color:var(--muted)}
 .hl dd{margin:0}
+.hl-empty{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;color:var(--muted)}
+.hl-empty[hidden]{display:none}
+.hl-empty p{margin:0;flex:1 1 220px}
 .recap button{min-height:44px;min-width:44px;margin-right:8px}
 
 /* ---- agents: one pipeline for the three views, drawn by the shell (no iframe) ---- */
@@ -408,6 +411,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <section class="hl" id="hl" role="region" aria-label="Match highlights" hidden>
   <div class="hl-bar"><h2>Highlights</h2><span class="rm" id="hl-n"></span><button id="hl-3d" type="button" hidden>Play all in 3D</button><button id="hl-play" type="button">Play</button><button id="hl-skip" type="button">Skip</button><button id="hl-close" type="button">Close</button></div>
   <div id="hl-list"></div>
+  <div class="hl-empty" id="hl-empty" hidden><p>No highlights yet. Cards are written when Watch reaches full time, so Play and Skip stay off until there is a moment to show.</p><button id="hl-back" type="button">Back to Watch</button></div>
   <p class="rm">Simulated: the rules write these cards. The score, passes, shots and xG on each card are counted twice from the match events. The 3D clips play on the Broadcast desk from Watch's frames held in this page.</p>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -520,6 +524,7 @@ $('hl-play').onclick = () => {
 };
 $('hl-skip').onclick = () => hlShow(HLS.i + 1);
 $('hl-close').onclick = () => { hlStop(); $('hl').hidden = true; };
+$('hl-back').onclick = () => { $('hl').hidden = true; show('watch'); };
 $('hl-open').onclick = () => { RECAP.closed = true; paintRecap(); $('hl').hidden = false; paintHighlights(); hlShow(HLS.i < 0 ? 0 : HLS.i); };
 function paintHighlights() {
   const cards = HL.cards(), list = $('hl-list');
@@ -528,6 +533,10 @@ function paintHighlights() {
   const shown = cards.length;
   $('hl-n').textContent = shown + (shown === 1 ? ' moment' : ' moments') + (HL.more ? ' · ' + HL.more + ' more not shown (the panel keeps the first ' + (shown + HL.held) + ' by priority)' : '') + (HL.held ? ' · ' + HL.held + ' held: did not recount' : '');
   list.textContent = '';
+  // no moments (none yet, or the match changed): Play and Skip have nothing to move through, so they are off and the panel says why
+  const none = !cards.length;
+  $('hl-play').disabled = none; $('hl-skip').disabled = none; $('hl-empty').hidden = !none;
+  if (none) hlStop();
   for (const c of cards) {
     const art = document.createElement('article'); art.className = 'hl-card'; art.setAttribute('aria-current', 'false');
     const put = (tag, text, cls) => { const el = document.createElement(tag); if (cls) el.className = cls; el.textContent = text; art.append(el); };
