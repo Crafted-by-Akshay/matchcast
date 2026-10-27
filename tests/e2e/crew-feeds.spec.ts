@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// AB#450: the Watch feed picker (flag ?crew=1). Casual, Analyst and Catch me up are live; the other three are Planned. Lines come from CREW.state.feeds
+// AB#450: the Watch feed picker (flag ?crew=1). All six feeds are live; a feed with no lines yet says it is waiting. Lines come from CREW.state.feeds
 // (the Simulated fixture until the orchestration frames land) through the shell's postMessage bus. Wall-clock timing is meaningless under
 // software GL, so every wait polls for state, never for a duration. Honesty: fixture lines are labelled Simulated and carry no Verifier tick.
 const LABELS = ['Casual', 'Analyst', 'Audio description', 'Catch me up', 'Half-time explainer', 'News ticker'];
@@ -30,7 +30,7 @@ test('with ?crew=0 nothing is added: no picker, style, body class or iframe para
   expect(await f.evaluate(() => { const b = document.getElementById('mc-two')!; b.hidden = false; return getComputedStyle(b).display; })).not.toBe('none');
 });
 
-test('feed picker: six labelled choices, Planned tags, waiting copy, Simulated lines with a minute and no tick, saved choice', async ({ page }) => {
+test('feed picker: six labelled choices, no Planned tags, waiting copy, Simulated lines with a minute and no tick, saved choice', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   const f = await open(page);
@@ -39,19 +39,19 @@ test('feed picker: six labelled choices, Planned tags, waiting copy, Simulated l
   const radios = group.getByRole('radio');
   expect(await radios.count()).toBe(6);
   for (let i = 0; i < 6; i++) await expect(radios.nth(i)).toContainText(LABELS[i]);
-  expect(await group.locator('.fp-tag:visible').count()).toBe(3);
+  expect(await group.locator('.fp-tag:visible').count()).toBe(0);
   await expect(radios.nth(0).locator('.fp-tag')).toHaveCount(0);
   await expect(radios.nth(1).locator('.fp-tag')).toHaveCount(0);
-  await expect(radios.nth(2).locator('.fp-tag')).toHaveText('Planned');
+  await expect(radios.nth(2).locator('.fp-tag')).toHaveCount(0);
   await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
   const card = f.locator('#mc-feedlines');
   await expect(card).toContainText('waiting for a moment');
   expect(await f.locator('#mc-trust').count(), 'the Verifier chip stays').toBe(1);
   await expect(radios.nth(3).locator('.fp-tag')).toHaveCount(0);
-  // a Planned feed is listed but cannot be chosen (AB#373): it must not look like a running control
-  await expect(radios.nth(2)).toBeDisabled();
-  await expect(radios.nth(2)).toHaveAttribute('aria-disabled', 'true');
-  expect(await radios.nth(2).getAttribute('aria-checked')).toBe('false');
+  await radios.nth(2).click();
+  await expect(radios.nth(2)).toHaveAttribute('aria-checked', 'true');
+  await expect(card).toContainText('waiting for a moment');
+  expect(await card.locator('li').count()).toBe(0);
   await radios.nth(0).click();
   await page.evaluate(() => CREW.play(23));
   const line = card.locator('li').first();
@@ -125,8 +125,8 @@ test('feed picker: the two-voice panel steps aside only while the picked feed is
   await page.evaluate(() => CREW.play(23));
   await expect(f.locator('#mc-feedlines li').first()).toBeVisible({ timeout: 60_000 });
   expect(await disp(), 'a live feed with lines replaces the panel').toBe('none');
-  await group.getByRole('radio', { name: /Catch me up/ }).click();
-  expect(await disp(), 'a Planned feed leaves the panel').not.toBe('none');
+  await group.getByRole('radio', { name: /Audio description/ }).click();
+  expect(await disp(), 'a live feed with no lines yet leaves the panel').not.toBe('none');
   await group.getByRole('radio', { name: /Casual/ }).click();
   expect(await disp()).toBe('none');
   await page.evaluate(() => CREW.reset());
