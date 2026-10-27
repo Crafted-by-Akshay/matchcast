@@ -8,10 +8,10 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-// Deterministic maths for the engine. Math.sin, cos, tan, asin, acos, atan, atan2, exp, log, pow and hypot may round their
+// Deterministic maths for the engine. The native trigonometric, exp, log, pow and hypot functions (and the power operator) may round their
 // last bit differently in each browser version, and the match is chaotic: one changed bit can change the score. These use only
-// + - * / and sqrt, which IEEE 754 fixes exactly, so one seed gives one match in every browser. Absolute error is about 1e-13 for
-// |x| < 1000, far finer than play or the calibration can see.
+// + - * / and sqrt, which IEEE 754 fixes exactly, so one seed gives one match in every browser. Error is about 1e-13 (absolute
+// for sin and cos, relative for exp, log and pow) over the ranges the engine uses, far finer than play or the calibration can see.
 const DM = (() => {
   const PI = 3.141592653589793, HALF_PI = 1.5707963267948966, LN2 = 0.6931471805599453, TAN_EIGHTH = 0.41421356237309515;
   // sine and cosine of r in [-pi/4, pi/4] by Taylor series (terms to r^17 and r^16: error below 1e-17)
@@ -25,12 +25,14 @@ const DM = (() => {
   const atanS = (u) => { const u2 = u * u; let t = u, s = u; for (let n = 3; n <= 41; n += 2) { t = -t * u2; s += t / n; } return s; };
   const atan = (t) => t < 0 ? -atan(-t) : t > 1 ? HALF_PI - atan(1 / t) : t > TAN_EIGHTH ? PI / 4 + atanS((t - 1) / (t + 1)) : atanS(t);
   const atan2 = (y, x) => {
+    if (x !== x || y !== y) return NaN;
     if (x > 0) return atan(y / x);
     if (x < 0) return (y < 0 || Object.is(y, -0)) ? atan(y / x) - PI : atan(y / x) + PI;
-    return y > 0 ? HALF_PI : y < 0 ? -HALF_PI : 0;
+    if (y === 0) return Object.is(x, -0) ? (Object.is(y, -0) ? -PI : PI) : y;   // signed zeros, as the native function
+    return y > 0 ? HALF_PI : -HALF_PI;
   };
-  const asin = (x) => atan2(x, Math.sqrt(1 - x * x));
-  const acos = (x) => atan2(Math.sqrt(1 - x * x), x);
+  const asin = (x) => (x >= -1 && x <= 1 ? atan2(x, Math.sqrt(1 - x * x)) : NaN);
+  const acos = (x) => (x >= -1 && x <= 1 ? atan2(Math.sqrt(1 - x * x), x) : NaN);
   // exp: x = n ln2 + r with |r| <= ln2 / 2; the scale by 2^n is exact (a power of two)
   const exp = (x) => {
     if (x > 709.8) return Infinity;
@@ -56,7 +58,7 @@ const DM = (() => {
   // pow: whole-number exponents by repeated squaring (the same steps on every machine); the rest through exp and log
   const pow = (x, y) => {
     if (y === 0) return 1;
-    if (Number.isInteger(y) && Math.abs(y) <= 1024) {
+    if (Number.isInteger(y)) {
       let r = 1, b = x, n = Math.abs(y);
       while (n > 0) { if (n % 2 === 1) r *= b; b *= b; n = Math.floor(n / 2); }
       return y < 0 ? 1 / r : r;

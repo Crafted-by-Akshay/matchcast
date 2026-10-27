@@ -10,7 +10,7 @@ SOURCES = Path(__file__).resolve().parent.parent / "apps" / "unified" / "sources
 WATCH = SOURCES / "3d-source" / "v2"
 BROADCAST = SOURCES / "broadcaster-console" / "engine"
 # browsers round these differently and the match is chaotic: the engine uses DM.* (top of main.js)
-NATIVE_TRIG = re.compile(r"Math\.(sin|cos|tan|asin|acos|atan|atan2|exp|log|pow|hypot)\(|\*\*")
+NATIVE_TRIG = re.compile(r"Math\.(sin|cos|tan|asin|acos|atan|atan2|exp|log|pow|hypot)\b|\*\*")
 
 
 def test_copies_exist():
