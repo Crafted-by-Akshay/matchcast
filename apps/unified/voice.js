@@ -77,8 +77,8 @@ const VC = (() => {
     g.cancelScheduledValues(t); g.setTargetAtTime(Math.max(peak, g.value), t, 0.3);   // a lift never pulls an eruption back down
     clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(BED, crowd.ctx.currentTime, 1.5); }, 3000);
   };
-  const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
+  const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } const synth = window.speechSynthesis; if (typeof synth?.cancel === 'function') synth.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
   // a new match from Watch: the lines queued or speaking, and the caption, belong to the match before. Their audio stops here; the next line is the new match's (FIX-01)
-  const clear = () => { gen++; queue = []; busy = false; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); clearTimeout(hide); if (bar) bar.hidden = true; onChange(); };
+  const clear = () => { gen++; queue = []; busy = false; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } const synth = window.speechSynthesis; if (typeof synth?.cancel === 'function') synth.cancel(); clearTimeout(hide); if (bar) bar.hidden = true; onChange(); };
   return { load, say, set, clear, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get level() { return crowd ? crowd.g.gain.value : 0; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();
