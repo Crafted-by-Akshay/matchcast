@@ -245,7 +245,7 @@ def test_danger_features_follow_the_cards_feature_order() -> None:
     ]
     row, unset = danger.features(event, earlier, card)
     by_name = dict(zip(card["features"], row, strict=True))
-    assert len(row) == len(card["features"])
+    assert session.get_inputs()[0].shape[1] == len(card["features"])  # the ONNX input is as wide as the card
     assert by_name["passes_prev_10s"] == 1.0  # the pass 25 s ago is outside
     assert by_name["type=shot"] == 1.0 and by_name["x"] == 90.0 and by_name["xg"] == -1.0
     assert by_name["phase="] == 1.0 and "xg" in unset
