@@ -24,15 +24,17 @@ const VC = (() => {
     if (it.audio) { const a = playing = new Audio(it.audio); a.onended = a.onerror = done; a.play().catch(done); return; }
     const lang = LOCALE[it.lang] || 'en-GB';
     const browser = () => {
-      if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') { done(); return; }
+      const synth = window.speechSynthesis;
+      if (!synth || typeof synth.getVoices !== 'function' || typeof synth.speak !== 'function' || typeof SpeechSynthesisUtterance === 'undefined') { done(); return; }
       // the browser's voice for this language; with none here, a non-English line is shown but not read in another voice
-      const all = window.speechSynthesis.getVoices(), v = all.find((x) => x.lang.replace('_', '-') === lang) || all.find((x) => x.lang.slice(0, 2) === lang.slice(0, 2));
+      let all; try { all = synth.getVoices(); } catch (e) { done(); return; }
+      const v = all.find((x) => x.lang.replace('_', '-') === lang) || all.find((x) => x.lang.slice(0, 2) === lang.slice(0, 2));
       if (!v && !lang.startsWith('en')) { done(); return; }   // no voice yet (Chrome fills the list late) or none for this language: caption only
       source = 'browser'; onChange();
       const u = new SpeechSynthesisUtterance(it.text); u.lang = lang; if (v) u.voice = v;
       // the browser fallback has no SSML: the tone sets the pace and the pitch, so an attack is faster and higher than a pass
       u.rate = it.tone === 'big' ? 1.12 : it.tone === 'hot' ? 1.06 : 0.97; u.pitch = it.tone === 'big' ? 1.2 : it.tone === 'hot' ? 1.1 : 1;
-      u.onend = u.onerror = done; window.speechSynthesis.speak(u);
+      u.onend = u.onerror = done; try { synth.speak(u); } catch (e) { done(); }
     };
     // Azure Speech (token from the api) when it is there, otherwise the browser voice; one voice per role and language
     if (typeof SPX === 'undefined') { browser(); return; }
