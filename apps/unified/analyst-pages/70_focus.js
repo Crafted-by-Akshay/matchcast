@@ -47,7 +47,7 @@ function drawLive(el, arg) {
   const rows = [
     ['Expected goals (xG)', 'Chance quality. Each shot counts for the share of goals it would be expected to score, summed.', pair(liveOr(sv('xg', 0), H.xg), liveOr(sv('xg', 1), A.xg), (v) => (v == null ? '–' : fmt(v, 2)))],
     ['Shots', 'Attempts at goal, home – away.', pair(liveOr(sv('shots', 0), H.shots), liveOr(sv('shots', 1), A.shots), n)],
-    ['Possession', 'Share of the match with the ball.', pair(liveOr(sv('poss', 0), H.poss), liveOr(sv('poss', 1), A.poss), (v) => (v == null ? '–' : v + '%'))],
+    ['Possession', 'Share of ball time, rounded to a whole percent. Live: Watch\'s clock. Recorded run: the season file.', pair(liveOr(sv('poss', 0), H.poss), liveOr(sv('poss', 1), A.poss), (v) => (v == null ? '–' : v + '%'))],
     ['Passes completed', 'Completed passes, home – away.', pair(liveOr(sv('done', 0), H.done), liveOr(sv('done', 1), A.done), n)],
     ['PPDA', 'Passes allowed per defensive action. Lower means a higher press. Only in the recorded run, so a dash while Watch is live.', f ? '–' : pair(H.ppda, A.ppda, n)],
   ];

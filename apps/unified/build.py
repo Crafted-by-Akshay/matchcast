@@ -34,6 +34,13 @@ def r(p):
     return open(p, encoding="utf-8").read()
 
 
+# The full-time recap (fanmodes.js) said a 0-4 result was "about right" whenever the xG were within 0.3. Level chances
+# only mean a draw is fair; for a win by two or more the margin owes more to finishing than to chances, and a one-goal win is about what the chances suggest.
+RECAP_OLD = "xw < 0 ? 'the chances were close to even, so the result is about right' : w === xw"
+RECAP_NEW = (
+    "xw < 0 ? (w < 0 ? 'the chances were close to even, so the draw is a fair reflection' : Math.abs(a - b) > 1 ? 'the chances were close to even, so the margin owes more to finishing than to chance quality' : 'the chances were close to even, so the win is about what the chances suggest') : w === xw"
+)
+
 # EXP-4, ADR-0023: Watch's picker marks a language as live when the api checks it (langs.js), else Planned.
 LANG_OLD = "+ n + '</button>').join('')"
 LANG_NEW = (
@@ -131,6 +138,7 @@ def build_watch():
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
     main = sub(main, LANG_OLD, LANG_NEW, "watch language labels")
+    main = sub(main, RECAP_OLD, RECAP_NEW, "watch recap on lopsided scores")
     # EXP-5: a typed question goes to the shell (the agents), not to a stand-in model
     main = sub(main, ASK_OLD, ASK_NEW, "watch ask")
     # EXP-4: passes carry start and end positions (metres) so the shell can send the contract's pass event
@@ -241,6 +249,7 @@ def build_broadcast():
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "broadcast intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "broadcast half chips")
     main = sub(main, LANG_OLD, LANG_NEW, "broadcast language labels")
+    main = sub(main, RECAP_OLD, RECAP_NEW, "broadcast recap on lopsided scores")
     main = sub(main, "bcNewMatch(q.get('seed'));", "bcEmbedStart(q);", "broadcast start")
     # the desk writes rules templates in Spanish and Hindi only (ADR-0023 keeps the other feed languages English on the desk); Tamil drafts are dropped (embed/bclang.js writes and re-checks es and hi)
     # the fixture's clubs are read before the desk's TEAMS literal is used, so the first render names them (embed/boot-clubs.js)
