@@ -26,6 +26,8 @@ test('analyst live maps page: the second half adds to the first half when the cl
   });
   // 280 first-half samples and 60 second-half samples; before the fix the second half cleared the first
   await expect.poll(() => f.evaluate('LIVE.frames.length')).toBe(280 + 60);
+  // the second half is on the same whole-minute timeline as the maps: the last first-half sample (2879 s), then 2880 s
+  expect(await f.evaluate('LIVE.frames.slice(279, 282).map((s) => s.t)')).toEqual([2879, 2880, 2881]);
   await expect(f.locator('#lv-body')).toContainText('Live from Watch');
   await expect(f.locator('#lv-body svg')).toHaveCount(6, { timeout: 30_000 });
   expect(errs).toEqual([]);

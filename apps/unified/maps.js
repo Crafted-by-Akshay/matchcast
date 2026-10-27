@@ -3,12 +3,12 @@
 // window.MC.analysis.render(kind, params, container) draws "heatmap" (params {team: "home" | "away" | "player", player?}),
 // "pass_network" ({team}) or "avg_positions" into container, for the live match. Simulated, one match at a time.
 const MAPS = (() => {
-  const S = { key: null, roster: null, frames: [], events: [], seen: new Set(), last: -1, halfEnd: 0 };
+  const S = { key: null, roster: null, frames: [], events: [], seen: new Set(), last: -1, halfEnd: 0, brk: null };
   const HALF_CLOCK = 45 * 60;   // Watch sets the clock to 45:00 when the second half starts (setup.js)
   const LINES = '<rect x="0" y="0" width="105" height="68" fill="none" stroke="#ffffffaa" stroke-width=".5"/><line x1="52.5" y1="0" x2="52.5" y2="68" stroke="#ffffffaa" stroke-width=".5"/><circle cx="52.5" cy="34" r="9.15" fill="none" stroke="#ffffffaa" stroke-width=".5"/>';
   const COL = ['#75AADB', '#F2C400'];   // home, away (the roster's teams take these colours in order)
   const key = (s) => [s.h, s.a, s.seed, s.st, s.month, s.kick, s.half].join('|');
-  const reset = (k) => { S.key = k; S.roster = null; S.frames = []; S.events = []; S.seen = new Set(); S.last = -1; S.halfEnd = 0; };
+  const reset = (k) => { S.key = k; S.roster = null; S.frames = []; S.events = []; S.seen = new Set(); S.last = -1; S.halfEnd = 0; S.brk = null; };
 
   function start(setup, roster) { reset(key(setup)); S.roster = roster; }
   function frame(setup, f) {
@@ -20,8 +20,10 @@ const MAPS = (() => {
     if (order < S.last) { const roster = S.roster; reset(k); S.roster = roster; }   // the clock went back within a half: a new kick-off in the same setup (the roster stays)
     S.last = order;
     if (half === 1) S.halfEnd = sec;
-    // t: one match timeline in seconds (the second half follows the first), so a view can count by minute
-    const t = half === 1 ? sec : (S.halfEnd || HALF_CLOCK) + Math.max(0, sec - HALF_CLOCK);
+    // t: one match timeline in seconds, so a view can count by minute. The second half starts at the first whole minute after the
+    // first half's last sample (never on it), and keeps that start: a late first sample does not move the minutes after it
+    if (half === 2 && S.brk == null) S.brk = S.halfEnd ? (Math.floor(S.halfEnd / 60) + 1) * 60 : HALF_CLOCK;
+    const t = half === 1 ? sec : S.brk + Math.max(0, sec - HALF_CLOCK);
     S.frames.push({ t, f: half - 1, p: f.players.map((q) => [q[0], q[1]]) });
   }
   function events(setup, batch) {
@@ -37,7 +39,7 @@ const MAPS = (() => {
   // the live match in the shape the drawing reads
   function match() {
     const r = S.roster; if (!r || !S.frames.length) return null;
-    return { home: r.teams[0], away: r.teams[1], pids: r.players.map((p, i) => ({ name: p.name, team: p.team, num: i < 11 ? i + 1 : i - 10 })), frames: S.frames, events: S.events };
+    return { home: r.teams[0], away: r.teams[1], pids: r.players.map((p, i) => ({ name: p.name, team: p.team, num: i < 11 ? i + 1 : i - 10 })), frames: S.frames, events: S.events, brk: S.brk == null ? null : S.brk / 60 };
   }
   // the attacking-direction position of player i in a frame: each side attacks toward x = 105
   const atk = (fr, i) => { const q = fr.p[i]; if (!q) return null; const flip = i < 11 ? fr.f === 1 : fr.f === 0; return flip ? [105 - q[0], 68 - q[1]] : q; };

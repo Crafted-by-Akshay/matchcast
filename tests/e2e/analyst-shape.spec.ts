@@ -41,7 +41,7 @@ test('the defensive line, width and compactness are counted per minute, labelled
   await seedPositions(page, 240);
   const panel = page.locator('#al [data-panel="shape"]');
   await expect(panel).toContainText('Simulated');
-  await expect(panel.locator('[data-shape-status]')).toContainText('Minute 4: Harbor City line 40 m, width 40 m, compactness 20 m; Thames Rovers line 40 m, width 40 m, compactness 20 m.');
+  await expect(panel.locator('[data-shape-status]')).toContainText("5': Harbor City line 40 m, width 40 m, compactness 20 m; Thames Rovers line 40 m, width 40 m, compactness 20 m.");
   // the pitch: all 22 players and both lines at the playhead minute
   await expect(page.locator('#al svg[data-map="shape"] g[data-dots] circle')).toHaveCount(22);
   await expect(page.locator('#al svg[data-map="shape"] line.sh-line')).toHaveCount(2);
@@ -56,8 +56,8 @@ test('the scrubber moves the minute, and the pitch and charts follow it', async 
   const panel = page.locator('#al [data-panel="shape"]');
   await expect(panel.locator('[data-shape-scrub]')).toHaveAttribute('max', '4');
   await panel.locator('[data-shape-scrub]').evaluate((el: HTMLInputElement) => { el.value = '2'; el.dispatchEvent(new Event('input', { bubbles: true })); });
-  await expect(panel.locator('[data-shape-status]')).toContainText('Minute 2: Harbor City line 40 m');
-  await expect(page.locator('#al svg[data-map="shape"]')).toHaveAttribute('aria-label', /minute 2/);
+  await expect(panel.locator('[data-shape-status]')).toContainText("3': Harbor City line 40 m");
+  await expect(page.locator('#al svg[data-map="shape"]')).toHaveAttribute('aria-label', /at 3'/);
   await expect(panel.locator('[data-charts] [data-playhead]')).toHaveCount(2);
 });
 
@@ -69,8 +69,8 @@ test('Play walks the minutes from the start, and ends on the latest minute', asy
   await seedPositions(page, 240);
   const panel = page.locator('#al [data-panel="shape"]');
   await panel.locator('[data-shape-play]').click();
-  await expect(panel.locator('[data-shape-status]')).toContainText('Minute 0:');
-  await expect(panel.locator('[data-shape-status]')).toContainText('Minute 4:', { timeout: 15_000 });
+  await expect(panel.locator('[data-shape-status]')).toContainText("1':");
+  await expect(panel.locator('[data-shape-status]')).toContainText("5':", { timeout: 15_000 });
 });
 
 test('reduced motion: Play goes straight to the latest minute', async ({ page }) => {
@@ -82,7 +82,7 @@ test('reduced motion: Play goes straight to the latest minute', async ({ page })
   const panel = page.locator('#al [data-panel="shape"]');
   await panel.locator('[data-shape-scrub]').evaluate((el: HTMLInputElement) => { el.value = '0'; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await panel.locator('[data-shape-play]').click();
-  await expect(panel.locator('[data-shape-status]')).toContainText('Minute 4:', { timeout: 1_000 });
+  await expect(panel.locator('[data-shape-status]')).toContainText("5':", { timeout: 1_000 });
 });
 
 test('window.MC.analysis draws the shape into a card, with no citations, and says so before a match has positions', async ({ page }) => {
@@ -103,5 +103,5 @@ test('window.MC.analysis draws the shape into a card, with no citations, and say
   });
   expect(out2.status).toBe('ok');   // positions are there, and the card cites no events
   expect(out2.citations).toEqual([]);
-  await expect(page.locator('#shape-card2 [data-shape-status]')).toContainText('Minute 1:');
+  await expect(page.locator('#shape-card2 [data-shape-status]')).toContainText("2':");
 });

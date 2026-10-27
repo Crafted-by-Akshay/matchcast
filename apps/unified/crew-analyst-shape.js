@@ -75,12 +75,18 @@ const ALS = (() => {
       }
     });
     const mins = acc.map((row) => row.map((a) => (a.n ? { line: a.line / a.n, width: a.width / a.n, comp: a.comp / a.n } : null)));
-    return { T, mins, last };
+    return { T, mins, last, brk: m.brk };   // brk: the minute the second half's clock starts at 45:00 (maps.js)
   }
   const round = (v) => (v == null ? '–' : Math.round(v) + ' m');
+  // a minute as a broadcaster says it: the first half 1' to 45', added time 45+k'; the second half from its kick-off 2nd half 45'
+  const minuteName = (t, brk) => {
+    if (brk == null || t < brk) return t < 45 ? (t + 1) + "'" : '45+' + (t - 44) + "'";
+    const c = 45 + (t - brk);
+    return c < 90 ? '2nd half ' + c + "'" : '2nd half 90+' + (c - 89) + "'";
+  };
   const statusText = (cl, sr, t) => {
     const part = (k) => { const v = sr.mins[k][t]; return cl[k] + ' line ' + round(v && v.line) + ', width ' + round(v && v.width) + ', compactness ' + round(v && v.comp); };
-    return 'Minute ' + t + ': ' + part(0) + '; ' + part(1) + '.';
+    return minuteName(t, sr.brk) + ': ' + part(0) + '; ' + part(1) + '.';
   };
   // the defensive line across the pitch, in real coordinates: side 0 attacks toward 105 in the first half, side 1 in the second
   const lineX = (s, fr, L) => ((s === 0 ? fr.f === 1 : fr.f === 0) ? 105 - L : L);
@@ -94,7 +100,7 @@ const ALS = (() => {
       const x = lineX(s, fr, v.line).toFixed(1);
       return '<line class="sh-line" data-side="' + s + '" x1="' + x + '" y1="0" x2="' + x + '" y2="68"/>';
     }).join('');
-    return '<svg data-map="shape" viewBox="0 0 105 68" role="img" aria-label="' + esc('Players and defensive lines at minute ' + t + ', simulated match. ' + statusText(sideCl, sr, t)) + '">' + PITCH + lines + '<g data-dots>' + dots + '</g></svg>';
+    return '<svg data-map="shape" viewBox="0 0 105 68" role="img" aria-label="' + esc('Players and defensive lines at ' + minuteName(t, sr.brk) + ', simulated match. ' + statusText(sideCl, sr, t)) + '">' + PITCH + lines + '<g data-dots>' + dots + '</g></svg>';
   }
   // one small chart over the minutes for a field of the series
   function chart(sr, field, t, label) {

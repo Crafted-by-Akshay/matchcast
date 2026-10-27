@@ -19,7 +19,7 @@ window.addEventListener('message', (e) => {
     if (order < LIVE.last) { const roster = LIVE.roster; liveReset(key); LIVE.roster = roster; }   // a new kick-off in the same half; the roster stays
     LIVE.last = order;
     if (half === 1) LIVE.halfEnd = sec;
-    const t = half === 1 ? sec : (LIVE.halfEnd || LIVE_HALF_CLOCK) + Math.max(0, sec - LIVE_HALF_CLOCK);   // one match timeline
+    const t = half === 1 ? sec : (LIVE.halfEnd ? (Math.floor(LIVE.halfEnd / 60) + 1) * 60 : LIVE_HALF_CLOCK) + Math.max(0, sec - LIVE_HALF_CLOCK);   // one match timeline; the second half starts at the first whole minute after the first half's last sample
     LIVE.frames.push({ t, f: half - 1, p: d.frame.players.map((q) => [q[0], q[1]]) });
   }
   if (d.type === 'live-batch' && Array.isArray(d.batch)) {
@@ -42,7 +42,6 @@ function liveMatch() {
 }
 
 function liveBody(m) {
-  const minutes = Math.floor((LIVE.frames.length ? LIVE.frames[LIVE.frames.length - 1].t : 0) / 60);
   if (!m.frames.length) return '<div class="empty">Waiting for kick-off in Watch. Each match second adds a position sample, and the maps fill in.</div>';
   const idx = (k) => m.pids.map((p, i) => (p.team === k ? i : -1)).filter((i) => i >= 0);
   const pass = (k) => mcNetwork(m, k);
@@ -52,7 +51,7 @@ function liveBody(m) {
     '<div class="s6">' + card('Average positions', 'Each player’s average spot so far, attacking →', avg) + '</div>' +
     '<div class="s6">' + card('Pass network', 'Passes so far (three or more between a pair)', '<div class="grid"><div class="s6">' + pass(m.home) + '</div><div class="s6">' + pass(m.away) + '</div></div>') + '</div>' +
     '<div class="s12">' + card('Player heatmap', 'Pick a player. Stay is how far, on average, he strays from his average spot.', '<label class="field">Player<select id="lv-sel">' + m.pids.map((p, i) => '<option value="' + i + '"' + (i === HM.p ? ' selected' : '') + '>' + esc(p.num + ' ' + p.name + ' · ' + clubName(p.team)) + '</option>').join('') + '</select></label><div id="lv-player" style="margin-top:10px">' + hmPlayer(m, HM.p) + '</div>') + '</div>' +
-    '<p class="note">Live from Watch · ' + minutes + '′ sampled · ' + LIVE.events.length + ' events · simulated match, synthetic squads</p></div>';
+    '<p class="note">Live from Watch · ' + LIVE.frames.length + ' positions sampled, one per match second · ' + LIVE.events.length + ' events · simulated match, synthetic squads</p></div>';
 }
 
 // the player picker keeps its choice when the maps redraw
