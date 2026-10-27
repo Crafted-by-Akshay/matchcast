@@ -2,7 +2,7 @@
 
 This is the beat-by-beat plan for the judge video. It matches `docs/video-script.md` and `docs/submission/shot-list.md` on the rules (under two minutes, so end by 1:58) and adds what is live today; if they disagree, fix the other two, not this one.
 
-Each beat names the screen, what the viewer should see, and the one claim it supports. For a repeatable match use the runner's fixture URL (`node services/simulation/run.cjs --seeds 2026 --url`; seed 2026 is `/watch/index.html?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM`, goals at 18.4 and 22.4 since the fixed-step fix in #223, first match after page load). `?seed=2026` alone gives a different fixture. Confirm on the dry run: see `docs/judge/filming-seeds.md`. If a beat is not working on the day, cut it; do not narrate it. All clubs, players and events are synthetic.
+Each beat names the screen, what the viewer should see, and the one claim it supports. For a repeatable match use the runner's fixture URL (`node services/simulation/run.cjs --seeds 2026 --url`; seed 2026 is `/watch/index.html?seed=2026&half=45&st=1&month=3&h=NAV&a=LOM`, goals at 4.2 and 17.0 on main after #463 (re-measured 27 Oct), first match after page load). `?seed=2026` alone gives a different fixture. Confirm on the dry run: see `docs/judge/filming-seeds.md`. If a beat is not working on the day, cut it; do not narrate it. All clubs, players and events are synthetic.
 
 | # | Time | Screen | What happens | What to say | Judging criterion |
 | --- | --- | --- | --- | --- | --- |
