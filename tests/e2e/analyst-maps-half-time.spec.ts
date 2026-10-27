@@ -20,8 +20,8 @@ test('analyst maps: the second half adds to the first half when the clock goes b
     return { samples: M.samples, t: M.match().frames.slice(279, 282).map((f: { t: number }) => f.t) };
   }, { setup: SETUP, roster: ROSTER, names: NAMES });
   expect(samples.samples).toBe(280 + 100);
-  // one timeline for the minute views: the second half starts where the first ended (2879 s), then runs on
-  expect(samples.t).toEqual([2879, 2879, 2880]);
+  // one timeline for the minute views: the last first-half sample (2879 s), then the second half from a whole minute (2880 s)
+  expect(samples.t).toEqual([2879, 2880, 2881]);
   expect(errs).toEqual([]);
 });
 
