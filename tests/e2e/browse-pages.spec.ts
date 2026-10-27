@@ -93,6 +93,20 @@ test('Matches search, team, matchday and sort filters change the results', async
   expect(teamResults.length).toBeGreaterThan(0);
   expect(teamResults.every((text) => text.includes('Harbor City'))).toBe(true);
 
+  await page.locator('#lib-md').selectOption({ label: 'Matchday 1' });
+  const combinedResults = await page.locator('#lib-grid .match-open').allTextContents();
+  const combinedMatchdays = await page.locator('#lib-grid .mmeta').allTextContents();
+  expect(combinedResults.length).toBeGreaterThan(0);
+  expect(combinedResults.length).toBeLessThan(teamResults.length);
+  expect(combinedResults.every((text) => text.includes('Harbor City'))).toBe(true);
+  expect(combinedMatchdays.every((text) => text.startsWith('Matchday 1'))).toBe(true);
+  await page.locator('#lib-sort').selectOption('goals');
+  const combinedGoals = (await page.locator('#lib-grid .sc').allTextContents())
+    .map((score) => score.match(/(\d+)\s*[–-]\s*(\d+)/))
+    .filter((match): match is RegExpMatchArray => !!match)
+    .map((match) => Number(match[1]) + Number(match[2]));
+  expect(combinedGoals).toEqual([...combinedGoals].sort((a, b) => b - a));
+
   await page.locator('#lib-team').selectOption('');
   await page.locator('#lib-md').selectOption({ label: 'Matchday 1' });
   const dayResults = await page.locator('#lib-grid .mmeta').allTextContents();
