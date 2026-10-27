@@ -10,7 +10,7 @@ async function openWhatIf(page: Page) {
   return f;
 }
 
-// The published N001 clips (whatif/clips/index.json, built by build_index.py); the untouched run carries the browser disclosure.
+// The published N001 clips (whatif/clips/index.json, built by build_index.py); the untouched run is the simulator's own re-run.
 test('analyst what-if: a paired re-run plays on the pitch and says it is a simulated estimate', async ({ page }) => {
   const errs = collectErrors(page);
   const f = await openWhatIf(page);
@@ -25,6 +25,6 @@ test('analyst what-if: a paired re-run plays on the pitch and says it is a simul
   await f.locator('#wi-view').selectOption('over');
   await expect(f.locator('#wi-body svg')).toHaveCount(1);
   await expect(f.locator('#pg')).toContainText('Simulated estimates, not facts');
-  await expect(f.locator('#pg')).toContainText('reference browser');
+  await expect(f.locator('#pg')).toContainText('same seed plays the fixture twice');
   expect(errs).toEqual([]);
 });

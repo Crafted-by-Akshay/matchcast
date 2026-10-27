@@ -245,7 +245,7 @@ function fanRingMesh() {
 function fanFrame() {
   FAN.fr++; const p = FAN.mode === 'player' ? FAN.player : null;
   if (!fanRing) fanRing = fanRingMesh();
-  fanRing.visible = !!(p && !p.off && S.started); if (fanRing.visible) { const c = new THREE.Color(p.T.css); fanRing.userData.m1.color.copy(c); fanRing.userData.m2.color.copy(c); const w = W(p.pos2.x, 0.035, p.pos2.y); fanRing.position.copy(w); const s = 1 + 0.08 * Math.sin(S.t * 5); fanRing.scale.set(s, 1, s); }
+  fanRing.visible = !!(p && !p.off && S.started); if (fanRing.visible) { const c = new THREE.Color(p.T.css); fanRing.userData.m1.color.copy(c); fanRing.userData.m2.color.copy(c); const w = W(p.pos2.x, 0.035, p.pos2.y); fanRing.position.copy(w); const s = 1 + 0.08 * DM.sin(S.t * 5); fanRing.scale.set(s, 1, s); }
   if (p && !p.off && S.follow !== p) S.follow = p;
   if (FAN.mode === 'analyst' && $('tk').textContent === 'PASS' && S.passInfo) { const ts = $('ts'); if (!ts.textContent.includes('difficulty')) ts.textContent += ' · difficulty ' + fanPassDiff(S.passInfo); }
   fanCasualClose();
