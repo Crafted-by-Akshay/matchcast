@@ -149,3 +149,9 @@ test('a paused Watch repeats its clock; the clip keeps only the frames that move
   HL.finish();
   assert.equal(HL.cards()[0].frames.length, 2);
 });
+
+test('a pass with a missing or NaN position gives no last-pass distance', () => {
+  const HL = load();
+  HL.add([pass(9.5, 'ARG', 'Messi', { x0: NaN, y0: 34, x1: 60, y1: 34 }), goal(10, 'ARG', 'Lautaro')]);
+  assert.doesNotMatch(HL.cards()[0].technique, /Last pass/);
+});

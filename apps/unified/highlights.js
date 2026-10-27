@@ -65,7 +65,7 @@ const HL = (() => {
     const goals = (k) => evs.slice(0, k + 1).filter((x) => x.type === 'goal');
     const scoreAt = (k) => [0, 1].map((t) => goals(k).filter((x) => x.side === t).length);
     const shotsOf = (k) => before(k, (x) => x.type === 'shot' && x.side === s);
-    const lastPass = before(idx, (x) => x.type === 'pass' && x.side === s && x.minute >= m - 1 && typeof x.x0 === 'number' && typeof x.x1 === 'number' && typeof x.y0 === 'number' && typeof x.y1 === 'number').pop() || null;
+    const lastPass = before(idx, (x) => x.type === 'pass' && x.side === s && x.minute >= m - 1 && Number.isFinite(x.x0) && Number.isFinite(x.x1) && Number.isFinite(x.y0) && Number.isFinite(x.y1)).pop() || null;
     // a goal's shot: the scorer's own last shot in the minute before the goal, else the side's; no such record means no shot type
     const recent = (x) => x.type === 'shot' && x.side === s && x.minute >= m - 1 && x.minute <= m;
     const shot = c.kind === 'goal' ? evs.slice(0, idx + 1).reverse().find((x) => recent(x) && x.player === e.player) || evs.slice(0, idx + 1).reverse().find(recent) || null : e;
