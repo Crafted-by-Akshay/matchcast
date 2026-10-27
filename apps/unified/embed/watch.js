@@ -285,6 +285,10 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
   window.__mcxCards = { kept, redraw: () => { for (const c of kept) { const el = cards.get(c.id + 'mcx-log'); if (el) { el.innerHTML = html(c); el.querySelector('[data-why]').onclick = () => why(el, c); el.querySelector('[data-how]').onclick = () => MCS.send({ type: 'trace', id: c.id }); el.classList.toggle('mine', mine(c)); } } } };
 })();
 
+// the One metric picker keys that personas.WATCH_METRICS also names (today only xg). Any other picker key is Watch's own stat and sends no persona the api accepts.
+// Nothing enforces this list against WATCH_METRICS yet: a key may be added here only if the api follows it.
+const MC_API_METRICS = ['xg'];
+
 // ---- EXP-4: personalisation. The last watch mode is kept in localStorage and restored; the mode goes to the shell, and so to the api, as the viewer's persona.
 (() => {
   const KEY = 'mcx-mode';
@@ -300,9 +304,37 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
     try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { saved = null; }   // the shell's Fan / Analyst switch may have written it while Watch loaded
     if (saved && FAN_MODES.some((m) => m[0] === saved.mode)) {
       const p = saved.player ? players.find((q) => q.name === saved.player) : null;
-      _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric: FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
+      const metric = saved.mode === 'metric' && !MC_API_METRICS.includes(saved.metric) ? MC_API_METRICS[0] : FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric;
+      _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
     }
     tell();
+  }, 300);
+})();
+
+// ---- One metric: the picker marks the metrics the api does not follow as Planned, and a choice of one of them falls back to xG (MC_API_METRICS).
+(() => {
+  const _pick = fanSet;
+  fanSet = function (o, why) {
+    const mode = o && o.mode != null ? o.mode : FAN.mode;   // a call that sets only the metric, or only the language, still counts while One metric is on
+    if (mode === 'metric' && !MC_API_METRICS.includes((o && o.metric) || FAN.metric)) o = Object.assign({}, o, { metric: MC_API_METRICS[0] });
+    _pick(o, why);
+  };
+  const mark = () => document.querySelectorAll('.fm-k').forEach((b) => {
+    const api = MC_API_METRICS.includes(b.dataset.k);
+    b.disabled = !api;
+    if (!api && !b.querySelector('.fm-planned')) b.insertAdjacentHTML('beforeend', ' <small class="fm-planned">Planned</small>');
+  });
+  const st = document.createElement('style');
+  st.textContent = '.fm-k:disabled{opacity:.55;cursor:not-allowed}';
+  document.head.appendChild(st);
+  const go = setInterval(() => {
+    const pop = document.getElementById('fan-pop'), intro = document.getElementById('fan-intro');
+    if (!pop || !intro) return;
+    clearInterval(go);
+    // the metric row appears when One metric is picked, and redraws on a language change; the pre-kick intro card has its own picker
+    const obs = new MutationObserver(mark);
+    obs.observe(pop, { childList: true, subtree: true });
+    obs.observe(intro, { childList: true, subtree: true });
   }, 300);
 })();
 

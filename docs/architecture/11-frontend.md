@@ -80,7 +80,7 @@ All messages are `{ type, v: 1, sk, payload }`. The shell accepts engine message
 | Watch mode | Casual, Analyst, My club, Player focus, One metric | Persona sent to the agents; layout and density |
 | My club | one of the two clubs | Lines framed from that club's angle |
 | Player focus | any player on the pitch | Lines lead with that player; their name tag is highlighted |
-| One metric | xG, pass quality, pressure, speed, control | Only that metric's lines |
+| One metric | xG (the api follows it); the other picker metrics are Planned | Only that metric's lines |
 | Language | English, Spanish, Hindi | Captions, voice, Ask and Talk replies |
 | Voice | on or off | TTS playback |
 | Playback | 0.25x to 2x | Live passages; quiet spells always fast-forward |

@@ -54,6 +54,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - The shell posts one card per agent line to Watch (`type: 'pulse'`). Watch shows it for 12 s, keeps the last 10 in a scrollable log, and marks each with the Verifier's tick (green) or an amber dot, plus a 'Rules fallback' chip when the in-page rules wrote it. 'Why?' lists the cited events; the 3D replay with highlights is Planned.
 - Casual shows the plain line and no chips; the other modes show the full line with chips. Player focus leads the line with the player's name; My club accents the club's cards.
 - The watch mode is saved in localStorage (`mcx-mode`) and restored on reload. It is sent to the shell as the persona (`casual`, `analyst`, `club:<key>`, `player:<name>`, `metric:<name>`), and `live.js` reopens the api stream for it.
+- One metric sends a persona only for a metric the api follows (`MC_API_METRICS` in `embed/watch.js`: the picker keys that `personas.WATCH_METRICS` also names; today xG only). The other metrics in the picker are Planned and cannot be chosen, and a saved or default choice of one of them falls back to xG. Covered by `tests/e2e/one-metric.spec.ts`.
 - The language picker labels as Planned any language the api does not check. The ten feed languages are checked (ADR-0023); Watch's own list may still show Planned entries.
 
 ## Live maps and What if (Analyst nav, "This match")
