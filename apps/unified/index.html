@@ -516,7 +516,8 @@ function paintHighlights() {
   const cards = HL.cards(), list = $('hl-list');
   $('hl-open').hidden = !cards.length || current !== 'watch';
   $('hl-3d').hidden = !HL.plan().length;
-  $('hl-n').textContent = cards.length + (cards.length === 1 ? ' moment' : ' moments') + (HL.more ? ' · ' + HL.more + ' more not shown (the panel keeps the first ' + cards.length + ' by priority)' : '') + (HL.held ? ' · ' + HL.held + ' held: did not recount' : '');
+  const shown = cards.length;
+  $('hl-n').textContent = shown + (shown === 1 ? ' moment' : ' moments') + (HL.more ? ' · ' + HL.more + ' more not shown (the panel keeps the first ' + (shown + HL.held) + ' by priority)' : '') + (HL.held ? ' · ' + HL.held + ' held: did not recount' : '');
   list.textContent = '';
   for (const c of cards) {
     const art = document.createElement('article'); art.className = 'hl-card'; art.setAttribute('aria-current', 'false');
@@ -532,6 +533,7 @@ function paintHighlights() {
     list.append(art);
   }
   if (HLS.i >= cards.length) HLS.i = -1;
+  if (HLS.i >= 0) list.children[HLS.i].setAttribute('aria-current', 'true');   // a repaint keeps the card that is playing marked
 }
 const frameOf = (view) => FR[view] && FR[view].el;
 

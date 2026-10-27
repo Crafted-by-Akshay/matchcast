@@ -50,7 +50,7 @@ if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and c
   };
   // start(seconds, rate): play back from `seconds` ago at `rate` (1 or 0.5). Returns false when the buffer is shorter than a second.
   const start = (sec, rate) => {
-    if (BUF.length < 2 || window.MCClipOn) return false;   // a highlight clip is playing: the instant replay waits for it
+    if (BUF.length < 2 || window.MCClipOn) return false;   // a highlight clip is playing: a click on the instant replay does nothing until the clip ends
     clearInterval(timer);
     const nowT = BUF[BUF.length - 1].at, from = Math.max(BUF[0].at, nowT - sec * 1000);
     const clip = BUF.filter((b) => b.at >= from);
