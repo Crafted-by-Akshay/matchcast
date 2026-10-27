@@ -533,7 +533,7 @@ function paintHighlights() {
   const shown = cards.length;
   $('hl-n').textContent = shown + (shown === 1 ? ' moment' : ' moments') + (HL.more ? ' · ' + HL.more + ' more not shown (the panel keeps the first ' + (shown + HL.held) + ' by priority)' : '') + (HL.held ? ' · ' + HL.held + ' held: did not recount' : '');
   list.textContent = '';
-  // no moments (none yet, or the match changed): Play and Skip have nothing to move through, so they are off and the panel says why
+  // no moments yet: Play and Skip have nothing to move through, so they are off and the panel says why
   const none = !cards.length;
   $('hl-play').disabled = none; $('hl-skip').disabled = none; $('hl-empty').hidden = !none;
   if (none) hlStop();
