@@ -3,6 +3,7 @@ import { collectErrors, openShell, viewFrame } from './helpers';
 
 // One metric (watch mode): only the metrics the api follows (personas.WATCH_METRICS) can be chosen. Any other metric is Watch's own local stat,
 // its persona would be dropped by the api, so it is Planned and the mode falls back to xG.
+const API = ['xg', 'poss'];   // the keys MC_API_METRICS in embed/watch.js lists
 
 async function openWatch(page: Page): Promise<Frame> {
   await openShell(page, 'watch');
@@ -16,7 +17,7 @@ async function expectPicker(f: Frame, scope: string) {
   const keys = await f.evaluate((s) => [...document.querySelectorAll<HTMLButtonElement>(`${s} .fm-k`)].map((b) => ({ k: b.dataset.k!, disabled: b.disabled, planned: !!b.querySelector('.fm-planned') })), scope);
   expect(keys.find((x) => x.k === 'xg'), `${scope}: xG is in the picker`).toBeTruthy();
   for (const x of keys) {
-    if (x.k === 'xg') expect(x.disabled, `${scope}: xG can be chosen`).toBe(false);
+    if (API.includes(x.k)) expect(x.disabled, `${scope}: ${x.k} can be chosen`).toBe(false);
     else expect({ k: x.k, disabled: x.disabled, planned: x.planned }, `${scope}: a metric the api does not follow is Planned and cannot be chosen`).toEqual({ k: x.k, disabled: true, planned: true });
   }
 }
@@ -57,4 +58,30 @@ test('One metric: a saved choice of an unfollowed metric is restored as xG', asy
   await expect(f.locator('#fan-chip')).toContainText(/One metric/);
   await expect(f.locator('#fan-metric .mk')).toBeVisible();
   await expect.poll(() => f.evaluate(() => document.querySelector('#fan-metric .mk')?.textContent ?? ''), { timeout: 20_000, message: 'the restored One metric choice falls back to xG' }).toMatch(/^xG/);
+});
+
+declare const LV: any;
+
+test('One metric: possession is followed, and the shell hands the api its api name', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errs = collectErrors(page);
+  const f = await openWatch(page);
+  await f.evaluate(() => (document.getElementById('kick') as HTMLElement).click());
+  await expect(f.locator('#fan-chip')).toBeVisible({ timeout: 60_000 });
+  if (await f.evaluate(() => (document.getElementById('fan-pop') as HTMLElement).hidden)) await f.click('#fan-chip');
+  await f.click('#fan-pop .fm-b[data-m="metric"]');
+  await expectPicker(f, '#fan-pop');
+
+  // the shell passes each persona on to the api stream (persona-stream.spec.ts); record what Watch hands it
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as any).__personas = seen;
+    const persona = LV.persona;
+    LV.persona = (p: string, lang: string) => { seen.push(p); return persona(p, lang); };
+  });
+  await f.click('#fan-pop .fm-k[data-k="poss"]');
+  await expect(f.locator('#fan-metric .mk')).toContainText('Possession');
+  await expect.poll(() => page.evaluate(() => ((window as any).__personas as string[]).includes('metric:possession_share'))).toBe(true);
+  expect(await page.evaluate(() => (window as any).__personas as string[])).not.toContain('metric:poss');
+  expect(errs).toEqual([]);
 });
