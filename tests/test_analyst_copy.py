@@ -58,3 +58,8 @@ def test_strict_build_allows_the_host_labels(no_entries):
     out = build.analyst_copy(CLAUDE + "'downloads not granted'")
     assert "'downloads not granted'" in out
     assert "Claude" not in out
+
+
+def test_sub_stops_the_build_on_a_missing_match():
+    with pytest.raises(SystemExit, match="lbl: expected 1 match, found 0"):
+        build.sub("abc", "x", "y", "lbl")

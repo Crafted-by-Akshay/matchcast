@@ -378,7 +378,8 @@ ANALYST_COPY = [
 ]
 # the model word the console still shows (a label or comment), counted in the source so a new occurrence stops the build
 CLAUDE_WORDS = 27  # the Claude words the console source holds after the entries above; a change here means the source changed
-# host-capability labels that only show when the artifact host grants the capability; they are not copy this site makes
+# host-capability labels: 'downloads not granted' renders only when window.claude exists (the artifact host); this site has no window.claude,
+# so the page shows 'browser downloads' instead. The label is exempt only because the host branch is unreachable here.
 HOST_LABELS = ("download capability granted", "downloads not granted")
 
 

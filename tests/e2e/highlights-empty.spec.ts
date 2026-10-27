@@ -16,6 +16,7 @@ test('highlights: with no moments, Play and Skip are disabled and Back to Watch 
     paintHighlights();
   });
   await expect(page.locator('#hl-empty')).toBeVisible();
+  await expect(page.locator('#hl-empty')).toContainText('No highlights yet');
   await expect(page.locator('#hl-play')).toBeDisabled();
   await expect(page.locator('#hl-skip')).toBeDisabled();
   await expect(page.locator('#hl-3d')).toBeHidden();
