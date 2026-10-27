@@ -1,5 +1,5 @@
 import { test, expect, type Frame, type Page } from './fixtures';
-import { collectErrors, openShell, ready, stepSim, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, stepSim, viewFrame, openView } from './helpers';
 
 // Top-level consts of the shell and the Analyst frame, so they are not on window.
 declare const AG: any; declare const MCC: any; declare const D: any;
@@ -32,7 +32,7 @@ test('Watch kicks off with the shared setup and plays the fixture clubs', async 
 });
 
 test('Analyst opens the season and routes to the shared fixture', async () => {
-  await page.click('#tab-analyst');
+  await openView(page, 'analyst');
   await expect(page.locator('#al'), 'the Analyst opens on its live view by default, with no spinner').toBeVisible();
   await expect(page.locator('#v-analyst .wait')).toBeHidden();
   await page.click('#al-full');   // the console (the 28-match season) is one click behind "Full console"
@@ -45,7 +45,7 @@ test('Analyst opens the season and routes to the shared fixture', async () => {
 });
 
 test('Broadcast starts on the shared seed and clubs', async () => {
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   const s = await bc.evaluate(() => { const m = (window as any).__mc; return { seed: String(m.SET().seed), teams: [0, 1].map((t) => m.players.find((q: any) => q.ti === t).T.club) }; });
@@ -65,7 +65,7 @@ test('Watch events reach the agents, the audit chain verifies and the Agents tab
   expect(run.events).toBeGreaterThan(0); expect(run.claims).toBeGreaterThan(0);
   const chain = await page.evaluate(() => MCC.verify());
   expect(chain.ok && chain.count > 0, 'audit chain should verify').toBe(true);
-  await page.keyboard.press('4');
+  await page.keyboard.press('6');
   await expect(page.locator('#v-agents')).toBeVisible();
   expect(await page.locator('#ag-claims tr[data-id]').count()).toBeGreaterThan(0);
   await expect(page.locator('#ag-prov dl')).toBeVisible();
@@ -93,7 +93,7 @@ test('a fixture change reloads Watch with the new seed; New match in Broadcast m
   await page.selectOption('#fx', other!);
   const newSeed = await page.evaluate(async (id) => (await fetch('shared/fixtures.json').then((r) => r.json())).find((x: any) => x.id === id).setup.seed, other);
   await expect.poll(async () => (await page.$$eval('#v-watch iframe', (x) => x.map((i: any) => i.getAttribute('src'))))[0] ?? '', { timeout: 60_000, message: 'Watch iframe never got the new fixture seed' }).toContain('seed=' + newSeed);
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   // wait for the reloaded desk (new document, new seed), not the previous one that is still attached while it navigates
   await expect.poll(async () => { const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url())); return f ? f.evaluate((n) => { const m = (window as any).__mc; return !!(m && m.S.started && String(m.SET().seed) === String(n)); }, newSeed).catch(() => false) : false; }, { timeout: 240_000, intervals: [2000], message: 'Broadcast never restarted on the new fixture' }).toBe(true);
   const bc = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;

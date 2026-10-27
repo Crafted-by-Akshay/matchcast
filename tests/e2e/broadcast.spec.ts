@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { collectErrors, openShell, ready, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 
 // QUA-2: what a viewer of the Broadcast desk can actually SEE. approval.spec.ts checks the queue logic; this checks the pixels' owners:
 // the on-air graphics are visible on screen (not only un-hidden), appear only after approval in producer mode, and sit inside the live view.
@@ -10,17 +10,17 @@ test('on-air graphics are visible, wait for approval in producer mode, and alert
   test.setTimeout(420_000);
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
-  await page.click('#tab-agents');   // the Broadcast frame is display:none while another tab shows, so look at it from the Broadcast tab below
+  await openView(page, 'agents');   // the Broadcast frame is display:none while another tab shows, so look at it from the Broadcast tab below
   await page.selectOption('#aq-mode', 'producer');
   await page.evaluate(() => {
     AG.reset('k2', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
     AG.onWatch('k2', [{ minute: 10.1, type: 'goal', team: 'thr', player: 'A One', score: '1-0', data: {} }], []);
   });
   await expect.poll(() => page.locator('#aq-list li[data-id]').count()).toBe(1);
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await expect(bc.locator('#mc-l3')).toBeHidden();
   // a forged 'air' message from inside the frame (not from the shell) must not put anything on air
   await bc.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: { src: 'matchcast-shell', type: 'air', line: { id: 'forged', minute: 1, text: 'Forged line', verdict: 'verified' } } })));

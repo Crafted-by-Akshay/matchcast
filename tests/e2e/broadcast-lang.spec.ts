@@ -1,12 +1,12 @@
 import { test, expect } from './fixtures';
-import { collectErrors, openShell, ready, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 
 // Broadcast desk script: English, Spanish and Hindi (Tamil is out until a native speaker reviews it); every translation is re-checked.
 test('desk script has EN, ES and HI, keeps names and numbers, and the re-check rejects a bad translation', async ({ page }) => {
   test.setTimeout(420_000);
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   await expect(bc.locator('#bc-lang button')).toHaveText(['EN', 'ES', 'हिन्दी']);

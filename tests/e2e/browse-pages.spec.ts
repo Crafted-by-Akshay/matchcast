@@ -101,5 +101,16 @@ for (const width of [390, 768, 1440]) {
       expect(box.left).toBeGreaterThanOrEqual(0);
       expect(box.right).toBeLessThanOrEqual(width);
     }
+    await page.locator('#more-toggle').click();
+    const menu = await page.locator('#more-menu').boundingBox();
+    expect(menu).not.toBeNull();
+    expect(menu!.x).toBeGreaterThanOrEqual(0);
+    expect(menu!.x + menu!.width).toBeLessThanOrEqual(width);
+    for (const item of await page.locator('#more-menu button').all()) {
+      const bounds = await item.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    }
   });
 }

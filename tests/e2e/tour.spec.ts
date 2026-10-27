@@ -40,13 +40,15 @@ test('tour: ?tour=1 opens it, and number keys never switch views while it is ope
   await expect(d).toContainText('Step 1 of 5');
 });
 
-test('shortcuts: keys 1 to 4 pressed inside a view switch the shell view', async ({ page }) => {
+test('shortcuts: keys 1 to 6 pressed inside a view switch the shell view', async ({ page }) => {
   await page.route('**/watch/index.html*', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body><input id="n"><button id="b">x</button></body></html>' }));
   await openShell(page, 'watch');
   const f = await viewFrame(page, 'watch');
   await expect.poll(() => f.evaluate(() => document.readyState)).toBe('complete');
   await f.locator('#b').focus();
   await page.keyboard.press('4');
+  await expect(page.locator('#v-analyst')).toBeVisible();
+  await page.keyboard.press('6');
   await expect(page.locator('#v-agents')).toBeVisible();
   await page.goto('/index.html#watch');
   const g = await viewFrame(page, 'watch');

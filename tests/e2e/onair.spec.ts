@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { collectErrors, openShell, ready, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 
 // Broadcast keeps a log of lines that reached air and exports it as overlay JSON with a SHA-256 shown on screen.
 declare const AG: any;
@@ -10,10 +10,10 @@ test('on-air log lists only approved lines and exports JSON whose hash matches t
   test.setTimeout(420_000);
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
-  await page.click('#tab-agents');
+  await openView(page, 'agents');
   await page.selectOption('#aq-mode', 'producer');
   await page.evaluate(() => {
     AG.reset('k3', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' });
@@ -23,7 +23,7 @@ test('on-air log lists only approved lines and exports JSON whose hash matches t
   await expect.poll(() => page.locator('#aq-list li[data-id]').count()).toBe(2);
   // approve the first, kill the second
   await page.evaluate(() => { const [a, b] = AG.run.claims.filter((c: any) => c.approval === 'pending'); AG.approve(a.id, 'Sam Producer'); AG.kill(b.id, 'Sam Producer', 'test'); });
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await expect(bc.locator('#mc-onair-n')).toHaveText('1 line on air');
   // a forged message from inside the frame, and a repeat of the real one, change nothing
   await bc.evaluate(() => { window.postMessage({ src: 'matchcast-shell', type: 'air', line: { id: 'forged', minute: 1, text: 'forged', verdict: 'verified' } }, '*'); });

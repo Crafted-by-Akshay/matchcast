@@ -1,5 +1,5 @@
 import { test, expect, fakeSpeechSdk } from './fixtures';
-import { collectErrors, openShell, ready, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 
 // EXP-8/EXP-16: Azure Speech through the api's short-lived token. The api and the SDK are faked; the browser voice stays the fallback and keeps its label.
 declare const VC: any, SPX: any, AG: any, answerAsk: any;
@@ -47,7 +47,7 @@ test('speech: Azure push-to-talk fills Ask the producer; a verified answer is sp
   const errs = collectErrors(page);
   await page.addInitScript(fakeSpeechSdk);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   await page.evaluate(() => { SPX.listen = async () => 'who is on the ball'; });
@@ -92,7 +92,7 @@ test('speech: Broadcast Ask the producer shows and speaks a verified answer; an 
   const errs = collectErrors(page);
   await page.addInitScript(fakeSpeechSdk);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   await expect.poll(() => bc.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);
@@ -118,7 +118,7 @@ test('speech: Broadcast Ask shows the rate-limit message and only the newest que
   test.setTimeout(420_000);
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   await expect.poll(() => bc.evaluate(() => !!(window as any).__mc?.S.started), { timeout: 240_000 }).toBe(true);

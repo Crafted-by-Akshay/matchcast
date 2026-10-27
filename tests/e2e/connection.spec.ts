@@ -1,6 +1,6 @@
 import { test, expect, type Page } from './fixtures';
 import { createServer, type Server } from 'node:http';
-import { collectErrors } from './helpers';
+import { collectErrors, openView } from './helpers';
 
 // Ported from apps/unified/tests/connection.cjs (EXP-1). A mock api records what the shell sends.
 // Cases: live (pill 'Live agents', contract events reach the api, its claim shows), fallback (api answers 503: 'Rules fallback'), offline (no api).
@@ -149,7 +149,7 @@ test('the Broadcast desk says the same agents state as the shell pill', async ({
   const api = await mock('ok');
   await drive(page, api.url);
   await expect(pill(page)).toHaveText('Live agents', { timeout: 20_000 });
-  await page.locator('#tab-broadcast').click();
+  await openView(page, 'broadcast');
   await page.waitForFunction(() => document.getElementById('v-broadcast')!.classList.contains('ready'), null, { timeout: 240_000 });
   const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;
   const words: Record<string, string> = { 'Live agents': 'Agents: live from the api', 'Rules fallback': 'Agents: api did not answer, rules in this page', 'Offline (simulated)': 'Agents: rules in this page (no api connected)' };

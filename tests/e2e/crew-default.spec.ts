@@ -94,7 +94,7 @@ test('the Crew button opens the Agents tab at the Crew section, by keyboard, and
   await btn.focus();
   await expect(btn).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.locator('#tab-agents')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#more-toggle')).toHaveAttribute('aria-label', 'More, current page: Agents');
   await expect(page.locator('#crew-tree')).toBeVisible();
   await expect(page.locator('#crew-score')).toBeVisible();
   await expect(page.locator('#ct-h')).toBeFocused();
@@ -112,7 +112,7 @@ test('Crew button at 320 px: visible, tappable, no sideways scroll, and it opens
   expect(b!.height, 'a tap target of at least 44 px').toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await btn.click();
-  await expect(page.locator('#tab-agents')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#more-toggle')).toHaveAttribute('aria-label', 'More, current page: Agents');
   await expect(page.locator('#crew-tree')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll on the Agents tab').toBe(true);
 });

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { collectErrors, openShell, ready, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 
 // EXP polish: the Broadcast view and the Agents tab work at 390 px: no sideways scroll, tap targets of at least 44 px (24 px for links inside text), panels stack.
 test('Broadcast view at 390 px: no horizontal scroll and 44 px tap targets on every desk tab', async ({ page }) => {
@@ -7,7 +7,7 @@ test('Broadcast view at 390 px: no horizontal scroll and 44 px tap targets on ev
   const errs = collectErrors(page);
   await page.setViewportSize({ width: 390, height: 800 });
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   const small: string[] = [], wide: string[] = [];
