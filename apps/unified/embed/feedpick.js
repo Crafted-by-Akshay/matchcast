@@ -102,7 +102,8 @@
     const sig = DEFS.map((d) => d.key + d.label + d.live).join('|');
     if (sig !== built) {
       built = sig;
-      grp.innerHTML = DEFS.map((d) => '<button type="button" role="radio" data-key="' + esc(d.key) + '">' + esc(d.label) + (d.live ? '' : '<span class="fp-tag">Planned</span>') + '</button>').join('');
+      // a Planned feed is listed but cannot be chosen: it must not look like a running control (AB#373)
+      grp.innerHTML = DEFS.map((d) => '<button type="button" role="radio" data-key="' + esc(d.key) + '"' + (d.live ? '' : ' disabled aria-disabled="true"') + '>' + esc(d.label) + (d.live ? '' : '<span class="fp-tag">Planned</span>') + '</button>').join('');
     }
     grp.querySelectorAll('button').forEach((b) => { const sel = b.dataset.key === pick; b.setAttribute('aria-checked', String(sel)); b.tabIndex = sel ? 0 : -1; });
   };
@@ -157,9 +158,11 @@
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     if (!step && e.key !== 'Home' && e.key !== 'End') return;
     e.preventDefault();
-    const i = DEFS.findIndex((d) => d.key === pick);
-    const n = e.key === 'Home' ? 0 : e.key === 'End' ? DEFS.length - 1 : (i + step + DEFS.length) % DEFS.length;
-    choose(DEFS[n].key, true); focusPick();
+    // a Planned feed is disabled, so the keys step over it and End lands on the last live feed (AB#373)
+    const live = DEFS.map((d, k) => (d.live ? k : -1)).filter((k) => k >= 0);
+    const at = live.indexOf(DEFS.findIndex((d) => d.key === pick));
+    const pos = e.key === 'Home' ? 0 : e.key === 'End' ? live.length - 1 : (at + step + live.length) % live.length;
+    choose(DEFS[live[pos]].key, true); focusPick();
   });
 
   window.addEventListener('message', (e) => {
