@@ -32,9 +32,9 @@ const prCl = (x, a, b) => (x < a ? a : x > b ? b : x);
 const prZone = (y) => (y < 22.67 ? 'left' : y > 45.33 ? 'right' : 'centre');
 const prOwnX = (ti, x) => (sideOf(ti) === 0 ? x : 105 - x), prOwnY = (ti, y) => (sideOf(ti) === 0 ? y : 68 - y);
 const prLive = (ti) => players.filter((p) => p.ti === ti && !p.off);
-const prHs = () => Math.pow((SET.half || 3) / 3, PRK.he); // half-length scaling of chance creation (see TIME BASES)
+const prHs = () => DM.pow((SET.half || 3) / 3, PRK.he); // half-length scaling of chance creation (see TIME BASES)
 const prBase = () => Math.min(PRK.g90max, PRK.g90 * prHs()) / 90; // goals per team per match minute with no other information
-const prShotBase = () => Math.min(14, PRK.s90 * Math.pow((SET.half || 3) / 3, PRK.se)) / 90;
+const prShotBase = () => Math.min(14, PRK.s90 * DM.pow((SET.half || 3) / 3, PRK.se)) / 90;
 // minutes of the match left on the clock: what is left of this half plus the next, with added time once it is announced (2' and 3' until then)
 function prLeft() {
   if (S.over) return 0; const mn = S.mclock / 60; if (!S.started) return 95;
@@ -59,17 +59,17 @@ function prRates(ov) {
     const eR = base * Math.max(Wr, 1), eS = sb * Math.max(Wr, 1), eM = base * Math.max(pm, 1);
     const fR = (thR + PRK.k * eR) / ((1 + PRK.k) * eR), fS = (sR + PRK.k * eS) / ((1 + PRK.k) * eS), fM = (thA + PRK.k2 * eM) / ((1 + PRK.k2) * eM);
     const f = {
-      form: prCl(Math.pow(fR, PRK.w.fR) * Math.pow(fS, PRK.w.fS) * Math.pow(fM, PRK.w.fM), 0.45, 2.6),
-      rating: Math.exp(PRK.rt * (A.r - B.r)),
-      terr: Math.exp(PRK.terr * ((EX.terr ? EX.terr[ti] : 0.5) - 0.5)),
-      mom: Math.exp(PRK.mom * (ti === 0 ? 1 : -1) * (EX.mom || 0) / 100),
-      fat: prCl(Math.exp(PRK.fat * ((A.sA - B.sA) + (A.sD - B.sD)) / 2), 0.75, 1.35),
-      men: Math.pow(0.7, 11 - A.n) * Math.pow(1.3, 11 - B.n),
+      form: prCl(DM.pow(fR, PRK.w.fR) * DM.pow(fS, PRK.w.fS) * DM.pow(fM, PRK.w.fM), 0.45, 2.6),
+      rating: DM.exp(PRK.rt * (A.r - B.r)),
+      terr: DM.exp(PRK.terr * ((EX.terr ? EX.terr[ti] : 0.5) - 0.5)),
+      mom: DM.exp(PRK.mom * (ti === 0 ? 1 : -1) * (EX.mom || 0) / 100),
+      fat: prCl(DM.exp(PRK.fat * ((A.sA - B.sA) + (A.sD - B.sD)) / 2), 0.75, 1.35),
+      men: DM.pow(0.7, 11 - A.n) * DM.pow(1.3, 11 - B.n),
       state: (A.tac.chasing ? PRK.chase : 1) * (B.tac.chasing ? 1.1 : 1) * (A.tac.protecting ? PRK.prot : 1) * (B.tac.protecting ? 0.85 : 1),
       style: A.tc && B.tc ? prCl((1 + 0.25 * (A.tc.tempo - 0.6)) * (1 + 0.2 * (B.tc.line - 0.5)) * (1 + 0.12 * (A.tc.press - 0.5)), 0.8, 1.25) : 1,
-      prior: pri ? Math.pow(Math.max(0.02, pri[ti === 0 ? 0 : 2]) / Math.max(0.02, pri[ti === 0 ? 2 : 0]), PRK.pri / 2) : 1,
+      prior: pri ? DM.pow(Math.max(0.02, pri[ti === 0 ? 0 : 2]) / Math.max(0.02, pri[ti === 0 ? 2 : 0]), PRK.pri / 2) : 1,
     };
-    let lam = base, lp = base; for (const k in f) { const v = k === 'form' ? f[k] : Math.pow(f[k], PRK.w[k] ?? 1); lam *= v; if (k !== 'form' && k !== 'terr' && k !== 'mom') lp *= v; } if (ov.mul) { lam *= ov.mul[ti]; lp *= ov.mul[ti]; }
+    let lam = base, lp = base; for (const k in f) { const v = k === 'form' ? f[k] : DM.pow(f[k], PRK.w[k] ?? 1); lam *= v; if (k !== 'form' && k !== 'terr' && k !== 'mom') lp *= v; } if (ov.mul) { lam *= ov.mul[ti]; lp *= ov.mul[ti]; }
     out.lam[ti] = lam; out.lp[ti] = lp; out.f[ti] = f; out.rec[ti] = { shots: sR, xg: xR, win: Wr, r: A.r, sD: B.sD, sA: A.sA, thR, thA, fR, fS, fM };
   }
   return out;
@@ -79,33 +79,33 @@ function prRates(ov) {
 // reverts to its persistent rate (ratings, men on the pitch, game state, style, fatigue, prior):  μi = λi·min(left, Tr) + λpi·max(0, left − Tr)
 function prResult(R, left) {
   if (S.over || left <= 0) { const d = S.score[0] - S.score[1]; return { home: d > 0 ? 1 : 0, draw: d === 0 ? 1 : 0, away: d < 0 ? 1 : 0 }; }
-  const T = Math.min(left, PRK.Tr), a = R.lam[0] * T + R.lp[0] * (left - T), b = R.lam[1] * T + R.lp[1] * (left - T), N = 10; let h = 0, d = 0, w = 0, pa = Math.exp(-a);
-  for (let x = 0; x <= N; x++) { let pb = Math.exp(-b); for (let y = 0; y <= N; y++) { const p = pa * pb, g = S.score[0] + x - S.score[1] - y; if (g > 0) h += p; else if (g < 0) w += p; else d += p; pb *= b / (y + 1); } pa *= a / (x + 1); }
+  const T = Math.min(left, PRK.Tr), a = R.lam[0] * T + R.lp[0] * (left - T), b = R.lam[1] * T + R.lp[1] * (left - T), N = 10; let h = 0, d = 0, w = 0, pa = DM.exp(-a);
+  for (let x = 0; x <= N; x++) { let pb = DM.exp(-b); for (let y = 0; y <= N; y++) { const p = pa * pb, g = S.score[0] + x - S.score[1] - y; if (g > 0) h += p; else if (g < 0) w += p; else d += p; pb *= b / (y + 1); } pa *= a / (x + 1); }
   const t = h + d + w; return { home: h / t, draw: d / t, away: w / t };
 }
-function prNext(lam, H) { const L = lam[0] + lam[1]; const none = Math.exp(-L * H); const any = 1 - none; return { home: L > 0 ? lam[0] / L * any : 0, away: L > 0 ? lam[1] / L * any : 0, none }; }
+function prNext(lam, H) { const L = lam[0] + lam[1]; const none = DM.exp(-L * H); const any = 1 - none; return { home: L > 0 ? lam[0] / L * any : 0, away: L > 0 ? lam[1] / L * any : 0, none }; }
 // readable reasons: the largest multipliers for a side, in football words
 function prWhy(R, ti) {
   const f = R.f[ti], c = R.rec[ti], o = [], T = prT(ti);
-  if (c.win >= 5 && Math.abs(Math.log(f.form)) > 0.04) o.push([Math.abs(Math.log(f.form)), c.shots ? T + ' have ' + c.shots + ' shot' + (c.shots > 1 ? 's' : '') + ' and ' + c.xg.toFixed(2) + ' xG in the last ' + Math.round(c.win) + '\'' : T + ' have not had a shot in ' + Math.round(c.win) + '\'']);
-  if (Math.abs(Math.log(f.men)) > 0.05) o.push([Math.abs(Math.log(f.men)), f.men < 1 ? T + ' are a man down' : T + ' have the extra man']);
-  if (Math.abs(Math.log(f.state)) > 0.05) o.push([Math.abs(Math.log(f.state)), TEAMS[ti].tac.chasing ? T + ' are chasing the game with a higher line' : TEAMS[ti].tac.protecting ? T + ' have dropped deep to protect the lead' : 'the other side\'s game plan is opening space for ' + T]);
-  if (Math.abs(Math.log(f.rating)) > 0.06) o.push([Math.abs(Math.log(f.rating)), T + (f.rating > 1 ? ' have the stronger XI' : ' have the weaker XI') + ' (avg rating ' + c.r.toFixed(1) + ')']);
-  if (Math.abs(Math.log(f.terr * f.mom)) > 0.06) o.push([Math.abs(Math.log(f.terr * f.mom)), T + (f.terr * f.mom > 1 ? ' own the territory' : ' are pinned back') + ' (' + Math.round((EX.terr ? EX.terr[ti] : 0.5) * 100) + '% field tilt)']);
-  if (Math.abs(Math.log(f.fat)) > 0.05) o.push([Math.abs(Math.log(f.fat)), f.fat > 1 ? T + ' are the fresher side (forwards ' + prP(c.sA) + ' v ' + prT(1 - ti) + '\'s back line ' + prP(c.sD) + ')' : T + ' are tiring faster (forwards at ' + prP(c.sA) + ')']);
-  if (Math.abs(Math.log(f.prior)) > 0.05) o.push([Math.abs(Math.log(f.prior)), 'the Elo prior ' + (f.prior > 1 ? 'favours ' : 'is against ') + T]);
+  if (c.win >= 5 && Math.abs(DM.log(f.form)) > 0.04) o.push([Math.abs(DM.log(f.form)), c.shots ? T + ' have ' + c.shots + ' shot' + (c.shots > 1 ? 's' : '') + ' and ' + c.xg.toFixed(2) + ' xG in the last ' + Math.round(c.win) + '\'' : T + ' have not had a shot in ' + Math.round(c.win) + '\'']);
+  if (Math.abs(DM.log(f.men)) > 0.05) o.push([Math.abs(DM.log(f.men)), f.men < 1 ? T + ' are a man down' : T + ' have the extra man']);
+  if (Math.abs(DM.log(f.state)) > 0.05) o.push([Math.abs(DM.log(f.state)), TEAMS[ti].tac.chasing ? T + ' are chasing the game with a higher line' : TEAMS[ti].tac.protecting ? T + ' have dropped deep to protect the lead' : 'the other side\'s game plan is opening space for ' + T]);
+  if (Math.abs(DM.log(f.rating)) > 0.06) o.push([Math.abs(DM.log(f.rating)), T + (f.rating > 1 ? ' have the stronger XI' : ' have the weaker XI') + ' (avg rating ' + c.r.toFixed(1) + ')']);
+  if (Math.abs(DM.log(f.terr * f.mom)) > 0.06) o.push([Math.abs(DM.log(f.terr * f.mom)), T + (f.terr * f.mom > 1 ? ' own the territory' : ' are pinned back') + ' (' + Math.round((EX.terr ? EX.terr[ti] : 0.5) * 100) + '% field tilt)']);
+  if (Math.abs(DM.log(f.fat)) > 0.05) o.push([Math.abs(DM.log(f.fat)), f.fat > 1 ? T + ' are the fresher side (forwards ' + prP(c.sA) + ' v ' + prT(1 - ti) + '\'s back line ' + prP(c.sD) + ')' : T + ' are tiring faster (forwards at ' + prP(c.sA) + ')']);
+  if (Math.abs(DM.log(f.prior)) > 0.05) o.push([Math.abs(DM.log(f.prior)), 'the Elo prior ' + (f.prior > 1 ? 'favours ' : 'is against ') + T]);
   return o.sort((a, b) => b[0] - a[0]).slice(0, 2).map((x) => x[1]);
 }
 // ---- danger zone: where a side's attacks have come from (decayed, with a prior) and the full-back each flank runs at ----
 function prDanger(R) {
   const ti = R.lam[0] >= R.lam[1] ? 0 : 1, j = 1 - ti, w = { left: 3, centre: 4, right: 3 }, n = { left: 0, centre: 0, right: 0 };
-  for (const a of PR.att) if (a.ti === ti) { const k = Math.exp(-(PR.pm - a.pm) / 15) * (a.shot ? 2 : a.box ? 1.5 : 1); w[a.zone] += PRK.dzK * k; n[a.zone] += k > 0.3 ? 1 : 0; }
+  for (const a of PR.att) if (a.ti === ti) { const k = DM.exp(-(PR.pm - a.pm) / 15) * (a.shot ? 2 : a.box ? 1.5 : 1); w[a.zone] += PRK.dzK * k; n[a.zone] += k > 0.3 ? 1 : 0; }
   // matchups: our wide attacker on that flank against the opponent defender covering it (their right side is our left)
   const mu = {}; const D = prLive(j).filter((p) => roleCat(p.pos) === 1), A = prLive(ti).filter((p) => roleCat(p.pos) >= 2);
   for (const z of ['left', 'right']) {
     const yc = z === 'left' ? 10 : 58; const near = (L, flip) => L.slice().sort((a, b) => Math.abs((flip ? 68 - a.slot.y : a.slot.y) - yc) - Math.abs((flip ? 68 - b.slot.y : b.slot.y) - yc))[0];
     const fb = near(D, true), at = near(A, false); if (!fb || !at) continue;
-    const m = prCl((1 + 0.5 * (0.75 - fb.stamina)) * Math.exp(0.02 * (at.rating - fb.rating)), 0.85, 1.25); w[z] *= m; mu[z] = { fb, at, m };
+    const m = prCl((1 + 0.5 * (0.75 - fb.stamina)) * DM.exp(0.02 * (at.rating - fb.rating)), 0.85, 1.25); w[z] *= m; mu[z] = { fb, at, m };
   }
   const t = w.left + w.centre + w.right; const P = { left: w.left / t, centre: w.centre / t, right: w.right / t };
   const zone = P.left >= P.centre && P.left >= P.right ? 'left' : P.right >= P.centre ? 'right' : 'centre'; const M = mu[zone];
@@ -123,7 +123,7 @@ function prKeys(R) {
     const stp = p.gk ? 30 + 0.6 * (p.rating - 60) + 0.5 * (R.lam[1 - p.ti] / R.base) * 6 : (c === 1 ? 1 : c === 2 ? 0.7 : 0.25) * (40 * p.tackle + 0.4 * (p.rating - 60)) * legs + 5 * x.tk - 6 * x.fo;
     const best = [['threat', thr, x.sh ? x.sh + ' shot' + (x.sh > 1 ? 's' : '') + ', ' + x.xg.toFixed(2) + ' xG' + (x.g ? ', ' + x.g + ' goal' + (x.g > 1 ? 's' : '') : '') : 'shooting ' + Math.round(p.shotS * 100) + ', dribbling ' + Math.round(p.drib * 100)],
       ['creator', cre, (s.passes ? (s.comp || 0) + '/' + s.passes + ' passes' : 'passing ' + Math.round(p.passS * 100)) + (x.kp ? ', ' + x.kp + ' shot-creating' : '')],
-      ['stopper', stp, p.gk ? 'last line against ' + prT(1 - p.ti) + '\'s ' + prP(1 - Math.exp(-R.lam[1 - p.ti] * 10)) + ' 10\' threat' : (x.tk ? x.tk + ' ball' + (x.tk > 1 ? 's' : '') + ' won, ' : '') + 'tackling ' + Math.round(p.tackle * 100)]].sort((a, b) => b[1] - a[1])[0];
+      ['stopper', stp, p.gk ? 'last line against ' + prT(1 - p.ti) + '\'s ' + prP(1 - DM.exp(-R.lam[1 - p.ti] * 10)) + ' 10\' threat' : (x.tk ? x.tk + ' ball' + (x.tk > 1 ? 's' : '') + ' won, ' : '') + 'tackling ' + Math.round(p.tackle * 100)]].sort((a, b) => b[1] - a[1])[0];
     out.push({ name: p.name, num: p.num, ti: p.ti, pos: p.pos, role: best[0], score: Math.round(prCl(best[1], 0, 100)), why: prS(p) + ' (' + p.pos + ', ' + p.rating + '): ' + best[2] + (p.stamina < 0.5 ? ', but legs going at ' + prP(p.stamina) : ''), p });
   }
   out.sort((a, b) => b.score - a.score); const pick = [], seen = { threat: 0, creator: 0, stopper: 0 };
@@ -132,14 +132,14 @@ function prKeys(R) {
 }
 // ---- card risk: each player's foul rate (team rate shared by role, tackling, legs and his own record) × P(card | foul) ----
 function prCards(H) {
-  const fb = PRK.f90 * Math.pow((SET.half || 3) / 3, PRK.fe) / 90, pm = Math.max(PR.pm, 1), out = [];
+  const fb = PRK.f90 * DM.pow((SET.half || 3) / 3, PRK.fe) / 90, pm = Math.max(PR.pm, 1), out = [];
   for (let ti = 0; ti < 2; ti++) {
     const L = prLive(ti).filter((p) => !p.gk); if (!L.length) continue; const tc = TEAMS[ti].tac.cur || {}; const press = tc.press ?? 0.5;
     // team fouls per match minute, shrunk to the base rate with 20 minutes of prior weight (pressing sides foul more)
     const rate = prCl((STATS.fouls[ti] + fb * 20 * (1 + 0.6 * (press - 0.5))) / (pm + 20), fb * 0.4, fb * 4);
     const w = L.map((p) => { const c = roleCat(p.pos); return (c === 1 ? 1.3 : c === 2 ? 1.1 : 0.6) * (1 + 1.5 * (1 - p.tackle)) * (1 + 0.8 * (1 - p.stamina)) * (1 + 1.2 * p.pr.fo + 0.4 * p.pr.sl); }); const ws = w.reduce((a, b) => a + b, 0);
     const cpf = prCl(PRK.cpf + 2 * (tc.foul || 0), 0.15, 0.8);
-    L.forEach((p, i) => { const hz = rate * w[i] / ws * cpf; const pc = 1 - Math.exp(-hz * H);
+    L.forEach((p, i) => { const hz = rate * w[i] / ws * cpf; const pc = 1 - DM.exp(-hz * H);
       out.push({ name: p.name, num: p.num, ti, p: pc, why: prS(p) + ': ' + (p.pr.fo ? p.pr.fo + ' foul' + (p.pr.fo > 1 ? 's' : '') + ' already, ' : '') + (p.pr.sl ? p.pr.sl + ' slide tackle' + (p.pr.sl > 1 ? 's' : '') + ', ' : '') + 'tackling ' + Math.round(p.tackle * 100) + ', ' + prP(p.stamina) + ' stamina' + ((p.yellows || 0) ? '. ON A YELLOW: next card is red' : '') + (tc.foul > 0.02 ? '. ' + prT(ti) + '\'s ' + (TEAMS[ti].tac.style || '') + ' style fouls more' : ''), yel: p.yellows || 0, pl: p }); });
   }
   return out.sort((a, b) => b.p - a.p);
@@ -151,7 +151,7 @@ function prFatigue(H) {
   const out = [];
   for (const p of players) {
     if (p.off || p.gk) continue; const h = PR.stH.get(p) || []; const slope = h.length >= 3 ? (p.stamina - h[0]) / Math.max(1, h.length - 1) : 0; // per match minute
-    const s0 = prCl(PRK.sub0 + 0.035 * ((SET.half || 3) - 3), 0.3, 0.55); const sub = prCl(1 / (1 + Math.exp((p.stamina + PRK.subB * slope - s0) / PRK.subS)) * Math.min(1, H / 10 + 0.3), 0, 1);
+    const s0 = prCl(PRK.sub0 + 0.035 * ((SET.half || 3) - 3), 0.3, 0.55); const sub = prCl(1 / (1 + DM.exp((p.stamina + PRK.subB * slope - s0) / PRK.subS)) * Math.min(1, H / 10 + 0.3), 0, 1);
     out.push({ name: p.name, num: p.num, ti: p.ti, stamina: +p.stamina.toFixed(3), subSoon: sub, why: prS(p) + ' (' + p.pos + ') at ' + prP(p.stamina) + (slope < -0.003 ? ', dropping ' + (Math.abs(slope) * 1000).toFixed(0) / 10 + ' points a minute' : slope > 0.003 ? ', recovering' : '') + (p.xs ? ', ' + p.xs.sprints + ' sprints' : ''), pl: p, slope });
   }
   return out.sort((a, b) => a.stamina - b.stamina);
@@ -163,14 +163,14 @@ function prTactics(R, H, D) {
   const out = [], mn = S.mclock / 60, end = S.half * 45 + (S.stop[S.half - 1] || 2); const ticks = (from) => { let k = 0; for (let m = Math.floor(mn) + 1; m <= Math.min(mn + H, end); m++) if (m >= from) k++; return k; };
   for (let ti = 0; ti < 2; ti++) {
     const tac = TEAMS[ti].tac; if (!tac || !tac.cur) continue; const c = tac.cur, diff = S.score[ti] - S.score[1 - ti], T = prT(ti), j = 1 - ti;
-    const keep = (lamOpp) => Math.exp(-lamOpp * H / 2); // P(the scoreline that triggers the rule survives to the eligible minute)
-    if (!tac.chasing) { const k = ticks(62); let p = 0; if (diff < 0) p = (1 - Math.pow(0.5, k)) * keep(R.lam[ti]); else if (diff === 0) p = (1 - Math.exp(-R.lam[j] * H)) * 0.5 * (1 - Math.pow(0.5, Math.max(0, k - 3)));
+    const keep = (lamOpp) => DM.exp(-lamOpp * H / 2); // P(the scoreline that triggers the rule survives to the eligible minute)
+    if (!tac.chasing) { const k = ticks(62); let p = 0; if (diff < 0) p = (1 - DM.pow(0.5, k)) * keep(R.lam[ti]); else if (diff === 0) p = (1 - DM.exp(-R.lam[j] * H)) * 0.5 * (1 - DM.pow(0.5, Math.max(0, k - 3)));
       const f = ['3-5-2', '3-4-3', '5-3-2', '5-4-1'].includes(tac.form) ? '3-4-3' : diff <= -2 ? '3-4-3' : '4-2-3-1';
       if (p > 0.02) out.push({ ti, kind: 'formation', rule: 'chasing the game', p, text: T + ' chase the game: ' + f + ', press and line up, more runners', why: diff < 0 ? T + ' are ' + -diff + ' down; from 62\' the bench throws men forward (50% a minute)' + (k ? '' : ', not eligible until 62\'') : 'level: only if they concede first' }); }
-    if (!tac.protecting) { const k = ticks(76); let p = 0; if (diff > 0) p = (1 - Math.pow(0.45, k)) * keep(R.lam[j]); else if (diff === 0) p = (1 - Math.exp(-R.lam[ti] * H)) * 0.5 * (1 - Math.pow(0.45, Math.max(0, k - 3)));
+    if (!tac.protecting) { const k = ticks(76); let p = 0; if (diff > 0) p = (1 - DM.pow(0.45, k)) * keep(R.lam[j]); else if (diff === 0) p = (1 - DM.exp(-R.lam[ti] * H)) * 0.5 * (1 - DM.pow(0.45, Math.max(0, k - 3)));
       if (p > 0.02) out.push({ ti, kind: 'shape', rule: 'protecting the lead', p, text: T + ' drop deep and narrow (' + (diff >= 2 ? '4-4-2' : '5-4-1') + ') to see it out', why: diff > 0 ? T + ' lead by ' + diff + '; from 76\' the bench shuts up shop (55% a minute)' : 'level: only if they score first' }); }
-    if (!tac.saving && ENV.heat > 0.75 && c.press > 0.6) { const p = 1 - Math.pow(0.4, ticks(55)); if (p > 0.02) out.push({ ti, kind: 'press', rule: 'heat: pressing less', p, text: T + ' stop pressing so high to save legs in the heat', why: 'heat index ' + ENV.heat.toFixed(2) + ' and a ' + Math.round(c.press * 100) + '% press: unsustainable after 55\'' }); }
-    if (!tac.wet && c.short > 0.6) { const pud = ENV.puddle || 0; const p = pud > 0.35 ? 1 - Math.pow(0.4, Math.max(1, Math.round(H))) : pud > 0.2 ? 0.25 * (pud - 0.2) / 0.15 : 0; if (p > 0.02) out.push({ ti, kind: 'tempo', rule: 'waterlogged: going long', p, text: T + ' abandon the short game and go long', why: 'standing water ' + Math.round(pud * 100) + '% and a short-passing side' }); }
+    if (!tac.saving && ENV.heat > 0.75 && c.press > 0.6) { const p = 1 - DM.pow(0.4, ticks(55)); if (p > 0.02) out.push({ ti, kind: 'press', rule: 'heat: pressing less', p, text: T + ' stop pressing so high to save legs in the heat', why: 'heat index ' + ENV.heat.toFixed(2) + ' and a ' + Math.round(c.press * 100) + '% press: unsustainable after 55\'' }); }
+    if (!tac.wet && c.short > 0.6) { const pud = ENV.puddle || 0; const p = pud > 0.35 ? 1 - DM.pow(0.4, Math.max(1, Math.round(H))) : pud > 0.2 ? 0.25 * (pud - 0.2) / 0.15 : 0; if (p > 0.02) out.push({ ti, kind: 'tempo', rule: 'waterlogged: going long', p, text: T + ' abandon the short game and go long', why: 'standing water ' + Math.round(pud * 100) + '% and a short-passing side' }); }
     if (D && D.ti === ti && D.p > 0.42 && D.mu) out.push({ ti, kind: 'flank', rule: null, p: D.p, text: T + ' keep targeting the ' + D.zone + ' flank', why: D.why });
   }
   return out.sort((a, b) => b.p - a.p);
@@ -266,15 +266,15 @@ function prClaim(kind, subject, claim, p, H, extra) {
 }
 function prResolve(r, ok, note) {
   if (r.resolved !== null) return; r.resolved = !!ok; r.resolvedAt = +S.t.toFixed(2); r.note = note || ''; PR.pend = PR.pend.filter((x) => x !== r);
-  if (r.probs) { const o = r.outcome || 'none'; r.brier3 = ['home', 'away', 'none'].reduce((a, k) => a + (r.probs[k] - (k === o ? 1 : 0)) ** 2, 0); if (r.base3) r.brier3b = ['home', 'away', 'none'].reduce((a, k) => a + (r.base3[k] - (k === o ? 1 : 0)) ** 2, 0); }
+  if (r.probs) { const o = r.outcome || 'none'; r.brier3 = ['home', 'away', 'none'].reduce((a, k) => a + DM.sq(r.probs[k] - (k === o ? 1 : 0)), 0); if (r.base3) r.brier3b = ['home', 'away', 'none'].reduce((a, k) => a + DM.sq(r.base3[k] - (k === o ? 1 : 0)), 0); }
   dataEvent('prediction_result', { id: r.id, kind: r.kind, subject: r.subject, p: r.p, hit: (r.p >= 0.5) === r.resolved, happened: r.resolved, note: r.note }); prEmit(r);
   // Verifier: only a broken model fails (a probability out of range or not summing to 1); a missed rare call is not a fault
   if (!VER.c.pred) VER.c.pred = { ok: 0, bad: 0, note: '' }; const fine = PR.bad === 0 && r.p >= 0 && r.p <= 1;
   vRes('pred', fine, fine ? '' : PR.badNote || 'Claim probability out of range'); PR.bad = 0; prVerRow();
 }
 function predScore() {
-  const g = (L) => { const n = L.length, hits = L.filter((r) => (r.p >= 0.5) === r.resolved).length, br = n ? L.reduce((a, r) => a + (r.p - (r.resolved ? 1 : 0)) ** 2, 0) / n : null; const B = L.filter((r) => r.base != null);
-    return { n, hits, hitRate: n ? hits / n : null, brier: br, meanP: n ? L.reduce((a, r) => a + r.p, 0) / n : null, freq: n ? L.filter((r) => r.resolved).length / n : null, brierBase: B.length ? B.reduce((a, r) => a + (r.base - (r.resolved ? 1 : 0)) ** 2, 0) / B.length : null }; };
+  const g = (L) => { const n = L.length, hits = L.filter((r) => (r.p >= 0.5) === r.resolved).length, br = n ? L.reduce((a, r) => a + DM.sq(r.p - (r.resolved ? 1 : 0)), 0) / n : null; const B = L.filter((r) => r.base != null);
+    return { n, hits, hitRate: n ? hits / n : null, brier: br, meanP: n ? L.reduce((a, r) => a + r.p, 0) / n : null, freq: n ? L.filter((r) => r.resolved).length / n : null, brierBase: B.length ? B.reduce((a, r) => a + DM.sq(r.base - (r.resolved ? 1 : 0)), 0) / B.length : null }; };
   const done = PR.log.filter((r) => r.resolved !== null), byKind = {};
   for (const r of done) (byKind[r.kind] = byKind[r.kind] || []).push(r);
   for (const k in byKind) { const L = byKind[k]; byKind[k] = g(L); const M = L.filter((r) => r.brier3 != null); if (M.length) { byKind[k].brier3 = M.reduce((a, r) => a + r.brier3, 0) / M.length; byKind[k].brier3Base = M.reduce((a, r) => a + r.brier3b, 0) / M.length; } }
@@ -291,12 +291,12 @@ function prSchedule(X) {
   if (PR.pm >= PR.nextNG) { PR.nextNG += 5; const ng = o.nextGoal, any = 1 - ng.none, b = prNext([base, base], H), fav = ng.home >= ng.away ? 0 : 1;
     prClaim('next_goal', 'goal in ' + Math.round(H) + '\'', 'A goal in the next ' + Math.round(H) + '\' (' + TEAMS[0].key + ' ' + prP(ng.home) + ' · ' + TEAMS[1].key + ' ' + prP(ng.away) + '), likeliest ' + prT(fav), any, H, { probs: { home: ng.home, away: ng.away, none: ng.none }, base: 1 - b.none, base3: b, why: ng.why[0] || '' });
     PR.feat.push({ pm: PR.pm, H, left, res: Object.assign({}, o.result), lam: R.lam.slice(), f: R.f.map((f) => Object.assign({}, f)), rc: R.rec.map((f) => Object.assign({}, f)), sc: S.score.slice(), base, rec: PR.log[PR.log.length - 1] }); }
-  if (PR.pm >= PR.nextDZ) { PR.nextDZ += 10; const rate = PRK.ft90 * Math.pow((SET.half || 3) / 3, PRK.fte) / 90; const n = PR.att.filter((a) => a.ti === D.ti && a.ft).length; const r = (n + rate * 15) / (PR.pm + 15); const pAny = 1 - Math.exp(-r * H * PRK.dzAny);
+  if (PR.pm >= PR.nextDZ) { PR.nextDZ += 10; const rate = PRK.ft90 * DM.pow((SET.half || 3) / 3, PRK.fte) / 90; const n = PR.att.filter((a) => a.ti === D.ti && a.ft).length; const r = (n + rate * 15) / (PR.pm + 15); const pAny = 1 - DM.exp(-r * H * PRK.dzAny);
     prClaim('danger', prT(D.ti) + ' ' + D.zone, prT(D.ti) + '\'s next attack into the final third comes down the ' + D.zone + ' within ' + Math.round(H) + '\'', D.p * pAny, H, { ti: D.ti, zone: D.zone, base: pAny / 3, why: D.why }); }
   if (PR.pm >= PR.nextCD) { PR.nextCD += 10; const c = cards[0]; if (c && c.p >= PRK.cardMin) { const avg = cards.reduce((a, x) => a + x.p, 0) / cards.length; prClaim('card', c.name, c.name + ' is booked within ' + Math.round(H) + '\'', c.p, H, { player: c.name, ti: c.ti, base: avg, why: c.why }); } }
   if (PR.pm >= PR.nextSB) { PR.nextSB += 10; const f = fat.find((x) => x.stamina > 0.35); if (f) { prClaim('sub', f.name, f.name + ' hits the substitution threshold (35% stamina) within ' + Math.round(H) + '\'', f.subSoon, H, { player: f.name, ti: f.ti, base: fat.filter((x) => x.stamina > 0.35).reduce((a, x, i, L) => a + x.subSoon / L.length, 0), why: f.why }); } }
-  if (PR.pm >= PR.nextKP) { PR.nextKP += 15; const k = keys.find((x) => x.role === 'threat'); if (k) { const p = k.p, T = prLive(p.ti); const w = (q) => (roleCat(q.pos) === 3 ? 1 : roleCat(q.pos) === 2 ? 0.45 : 0.12) * (0.5 + q.shotS) * (1 + q.pr.sh); const sh = w(p) / T.reduce((a, q) => a + w(q), 0); const sr = sb * Math.sqrt(prCl(R.lam[p.ti] / base, 0.4, 2.5)); const pp = 1 - Math.exp(-PRK.kpC * sr * sh * H);
-    prClaim('key_player', p.name, p.name + ' has a shot within ' + Math.round(H) + '\'', pp, H, { player: p.name, ti: p.ti, base: 1 - Math.exp(-sb * 0.2 * H), why: k.why }); } }
+  if (PR.pm >= PR.nextKP) { PR.nextKP += 15; const k = keys.find((x) => x.role === 'threat'); if (k) { const p = k.p, T = prLive(p.ti); const w = (q) => (roleCat(q.pos) === 3 ? 1 : roleCat(q.pos) === 2 ? 0.45 : 0.12) * (0.5 + q.shotS) * (1 + q.pr.sh); const sh = w(p) / T.reduce((a, q) => a + w(q), 0); const sr = sb * Math.sqrt(prCl(R.lam[p.ti] / base, 0.4, 2.5)); const pp = 1 - DM.exp(-PRK.kpC * sr * sh * H);
+    prClaim('key_player', p.name, p.name + ' has a shot within ' + Math.round(H) + '\'', pp, H, { player: p.name, ti: p.ti, base: 1 - DM.exp(-sb * 0.2 * H), why: k.why }); } }
   for (const t of tac) { if (!t.rule || t.p < 0.25) continue; const key = t.ti + t.rule; if (PR.tacDone[key] && PR.pm < PR.tacDone[key]) continue; PR.tacDone[key] = PR.pm + H; prClaim('tactical', prT(t.ti) + ': ' + t.rule, t.text + ' within ' + Math.round(H) + '\'', t.p, H, { ti: t.ti, rule: t.rule, why: t.why }); }
 }
 // resolve claims whose horizon has run out (false) or whose subject is state-checked (sub threshold)
@@ -351,7 +351,7 @@ function predWhatIf(q) {
   else if (q.change === 'defend_deep') { const d = prCl(amt, 0, 1.5); mul[ti] *= 1 - 0.22 * d; mul[j] *= 1 - 0.18 * d; text = T + ' sit deep'; why.push('fewer bodies forward: ' + T + ' ×' + mul[ti].toFixed(2), 'no space in behind for ' + O + ': ×' + mul[j].toFixed(2) + ' (more territory, worse chances)'); }
   else if (q.change === 'formation') { const f = FORMATIONS[v] ? v : '3-4-3', cur = FORMATIONS[TEAMS[ti].tac.form] || FORMATIONS['4-3-3'];
     const cnt = (F, c) => F.reduce((a, s) => a + (roleCat(s[0]) === c ? 1 : s[0] === 'AM' && c === 3 ? 0.5 : 0), 0); const da = cnt(FORMATIONS[f], 3) - cnt(cur, 3), dd = cnt(FORMATIONS[f], 1) - cnt(cur, 1);
-    mul[ti] *= Math.exp(0.12 * da); mul[j] *= Math.exp(-0.1 * dd); text = T + ' switch to ' + f; why.push((da >= 0 ? '+' : '') + da + ' forward' + (Math.abs(da) === 1 ? '' : 's') + ': ' + T + ' ×' + Math.exp(0.12 * da).toFixed(2), (dd >= 0 ? '+' : '') + dd + ' defender' + (Math.abs(dd) === 1 ? '' : 's') + ': ' + O + ' ×' + Math.exp(-0.1 * dd).toFixed(2)); }
+    mul[ti] *= DM.exp(0.12 * da); mul[j] *= DM.exp(-0.1 * dd); text = T + ' switch to ' + f; why.push((da >= 0 ? '+' : '') + da + ' forward' + (Math.abs(da) === 1 ? '' : 's') + ': ' + T + ' ×' + DM.exp(0.12 * da).toFixed(2), (dd >= 0 ? '+' : '') + dd + ' defender' + (Math.abs(dd) === 1 ? '' : 's') + ': ' + O + ' ×' + DM.exp(-0.1 * dd).toFixed(2)); }
   else if (q.change === 'sub') { const L = prLive(ti).filter((p) => !p.gk); const nm = typeof v === 'string' ? v : v && v.out; const out = (nm && L.find((p) => p.name === nm)) || L.slice().sort((a, b) => a.stamina - b.stamina)[0];
     if (out) { stam.set(out, 1); const dr = v && v.rating ? (v.rating - out.rating) / Math.max(1, L.length + 1) : 0; rt[ti] = dr; text = T + ' bring on fresh legs for ' + prS(out); why.push(prS(out) + ' (' + prP(out.stamina) + ' stamina) replaced at 100%', dr ? 'team rating ' + (dr > 0 ? '+' : '') + dr.toFixed(2) : 'like-for-like rating'); } }
   else text = 'No change';
