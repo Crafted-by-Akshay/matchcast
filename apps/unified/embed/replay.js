@@ -77,3 +77,49 @@ if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and c
   live.addEventListener('click', stop);
   window.MCReplay = { start, stop, get playing() { return RP.on; }, get buffered() { return BUF.length ? (BUF[BUF.length - 1].at - BUF[0].at) / 1000 : 0; } };
 })();
+// ---- highlight clips (Highlights after full time, index.html): the shell sends each moment's Watch frames, and the desk plays them in order
+// at the frames' own pace (four a second; half speed with Slow-mo), with the moment's title, commentary, why and insight. Skip moves on, Stop
+// returns to live. Watch's frames are the source; this desk's pitch draws them, the same way it draws the instant replay above.
+(() => {
+  if (!window.MC_CONSUMER) return;
+  const cap = document.createElement('div');
+  cap.id = 'mc-clip'; cap.setAttribute('role', 'region'); cap.setAttribute('aria-label', 'Highlight'); cap.hidden = true;
+  cap.style.cssText = 'position:absolute;left:10px;right:10px;bottom:10px;z-index:9;max-width:520px;max-height:50%;overflow:auto;padding:8px 10px;background:rgba(10,20,40,.92);border-radius:8px;font:13px/1.4 system-ui,sans-serif;color:#e8eefc';
+  cap.innerHTML = '<div id="mc-clip-k" style="font:600 12px system-ui,sans-serif;opacity:.85"></div>'
+    + '<div id="mc-clip-t" style="font-weight:700;margin:2px 0"></div>'
+    + '<div id="mc-clip-c"></div><div id="mc-clip-w" style="opacity:.9;margin-top:3px"></div><div id="mc-clip-i" style="opacity:.8;margin-top:3px"></div>'
+    + '<div style="display:flex;gap:6px;margin-top:6px"><button type="button" id="mc-clip-skip" style="min-height:44px;padding:4px 10px;border-radius:4px;border:1px solid #3aa0ff;background:#12294a;color:#fff;font:inherit;cursor:pointer">Skip</button>'
+    + '<button type="button" id="mc-clip-stop" style="min-height:44px;padding:4px 10px;border-radius:4px;border:1px solid #ff4d4d;background:#4a1212;color:#fff;font:inherit;cursor:pointer">Stop</button></div>';
+  (document.getElementById('bc-view') || document.body).append(cap);
+  let list = [], k = -1, timer = 0;
+  const endClips = () => { clearTimeout(timer); timer = 0; list = []; k = -1; cap.hidden = true; window.MCReplay.stop(); };
+  const showClip = (i) => {
+    clearTimeout(timer); timer = 0;
+    if (i >= list.length) { endClips(); return; }
+    k = i;
+    const c = list[i], frames = c.frames, slow = document.getElementById('mc-replay-slow');
+    const pace = (slow && slow.checked ? 2 : 1) * 250;   // the frames are about a quarter second apart as Watch sends them; this plays them at that pace, whatever the match speed
+    const text = (id, s) => { document.getElementById(id).textContent = s || ''; };
+    text('mc-clip-k', 'Highlight ' + (i + 1) + ' of ' + list.length); text('mc-clip-t', c.title); text('mc-clip-c', c.commentary);
+    text('mc-clip-w', c.why); text('mc-clip-i', c.insight);
+    if (window.MCReplay.playing) window.MCReplay.stop();   // an instant replay in progress gives way to the clip
+    RP.on = true; cap.hidden = false;
+    let j = 0;
+    const tick = () => {
+      const f = frames[j];
+      CONS.frame = f; CONS.at = performance.now(); CONS.n++;
+      if (S.paused || !S.started) consumerStep(0.016, true);
+      j++;
+      timer = setTimeout(j < frames.length ? tick : () => showClip(i + 1), j < frames.length ? pace : 1500);
+    };
+    tick();
+  };
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (e.source !== window.parent || d.src !== 'matchcast-shell' || d.type !== 'clips') return;
+    list = (d.clips || []).filter((c) => c && Array.isArray(c.frames) && c.frames.length > 1);
+    if (list.length) showClip(0);
+  });
+  document.getElementById('mc-clip-skip').addEventListener('click', () => showClip(k + 1));
+  document.getElementById('mc-clip-stop').addEventListener('click', endClips);
+})();
