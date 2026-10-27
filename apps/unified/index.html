@@ -906,6 +906,11 @@ function cardOf(c) {
   if (m) evs.push({ minute: m.minute, type: m.type, player: null, team: m.team, xg: null, why: m.why });
   // a live line from the api names its claims, not local events: each claim's metric, value and how it was counted, so the Why panel shows the basis instead of "No cited events"
   const basis = c.api ? (c.apiClaims || []).map((id) => r.claims.find((x) => x.id === id)).filter((x) => x && x.basis).map((x) => x.inputs.metric + ' = ' + x.inputs.value + ' (' + x.basis.units + ')' + (x.basis.through != null ? ', counted from stream events 1 to ' + x.basis.through : '') + (x.basis.derivation ? ', derivation ' + x.basis.derivation : '') + (x.basis.approval ? ', ' + x.basis.approval : '')) : [];
+  // the api events a line cites (onair source_event_ids) resolve to the events this page sent under the same api id; the rest are named, not dropped
+  const cited = c.api ? (c.eventIds || (r.lineEvents && r.lineEvents.get(c.id)) || []) : [];
+  const held = cited.map((id) => (typeof LV !== 'undefined' && LV.apiEvent ? LV.apiEvent(id) : null));
+  evs.push(...held.filter(Boolean).map((e) => ({ minute: e.minute, type: e.type, player: e.player, team: e.team, xg: e.data && e.data.xg != null ? e.data.xg : null })));
+  if (cited.length > held.filter(Boolean).length) basis.push((cited.length - held.filter(Boolean).length) + ' of ' + cited.length + ' cited events are not in this page (it keeps the last 2000 it sent)');
   const card = { id: c.id, minute: c.minute, kind: c.kind, text: c.text, verdict: c.verdict, source: c.source || 'rules', api: !!c.api, player: i.player || i.scorer || null, evidence: evs, basis, tr: c.tr || null };
   if (c.kind === 'score') Object.assign(card, { plain: 'Goal for ' + i.teamName + '!', chips: ['Score ' + i.score.join('–'), mins(c.minute)] });
   else if (c.kind === 'shot') Object.assign(card, { plain: 'A big chance for ' + i.teamName + '.', chips: ['xG ' + (+i.xg).toFixed(2), i.kind] });
