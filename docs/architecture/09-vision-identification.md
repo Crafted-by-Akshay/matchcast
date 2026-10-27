@@ -117,3 +117,7 @@ The passes on `<session>.vision` are not only stored. The agents of that match r
 
 Engine events remain the only source of the match record and of every engine line. Vision never writes to the engine stream, and the engine's agents do not read Vision's passes; a Vision pass can add a count to the Vision stream and nothing else. The line counter (`lines_verified`) lives in the api process and starts again at zero after a restart; the passes and the agreement come from the stored `.vision` and engine events, so they are recomputed on each read.
 
+
+## Debug view (FIX-11)
+
+The detection boxes and raw track ids (such as `?1124`) are a debug view. Watch and the desk start with the Boxes button off, labelled **Debug boxes**; `apps/unified/build.py` (`vision_labels`) sets `VIS.boxes` to false in both engine copies. The camera's names are not drawn on the pitch by default, so a viewer reads one identity per player: the engine's own name tag.

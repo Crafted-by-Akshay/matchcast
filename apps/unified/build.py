@@ -79,6 +79,28 @@ def walltime(text, label):
     return text
 
 
+# FIX-11: the detection boxes and raw track ids (?1124) are a debug view. The overlay is the prototype's (sources/ is read only), so its
+# default changes here: Boxes is off at every width and the button is labelled as debug (vision_debug_button).
+VISION_LABELS = [
+    ("const VIS = { on: false, boxes: true,", "const VIS = { on: false, boxes: false,", "vision boxes off by default"),
+]
+
+
+def vision_labels(text, label):
+    for old, new, what in VISION_LABELS:
+        text = sub(text, old, new, label + " " + what)
+    return text
+
+
+def vision_debug_button(head, label):
+    return sub(
+        head,
+        '<button id="visp-box" aria-pressed="true" title="Show detected boxes">Boxes</button>',
+        '<button id="visp-box" aria-pressed="false" title="Debug: detected boxes and raw track ids">Debug boxes</button>',
+        label + " debug boxes button",
+    )
+
+
 ORDER_OLD = "function setOrder(p, k, text, by) {\n  if (!k || k === 'none') return;"
 ORDER_NEW = (
     "function setOrder(p, k, text, by) {\n"
@@ -127,6 +149,7 @@ def build_watch():
     )
     main = sub(main, ORDER_OLD, ORDER_NEW, "watch role bound")
     main = walltime(main, "watch")
+    main = vision_labels(main, "watch")
     main = sub(main, "'./players.json'", "'../shared/players.json'", "watch players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
@@ -155,6 +178,7 @@ def build_watch():
         "<title>MatchCast Watch</title>",
         "watch title",
     )
+    head = vision_debug_button(head, "watch")
     assert main.count("sxg: 'xG',") == 6, "watch xg label: expected 6 language entries"
     main = main.replace("sxg: 'xG',", "sxg: 'xG (engine)',")   # Watch shows its engine's own per-shot xG; the Verifier uses the shared model, so the two can differ on low-value shots
     head = sub(   # Watch writes and checks these lines in the page, so the card says so (the API-Verified ones appear as Match Pulse cards)
@@ -230,6 +254,7 @@ def build_broadcast():
     )
     main = sub(main, ORDER_OLD, ORDER_NEW, "broadcast role bound")
     main = walltime(main, "broadcast")
+    main = vision_labels(main, "broadcast")
     # a refused order is said out loud, not acknowledged: the same line Watch uses
     main = sub(
         main,
@@ -274,6 +299,7 @@ def build_broadcast():
         "broadcast title",
     )
     head = head.replace("</style>", r(BS + "bc.css") + "\n</style>", 1)
+    head = vision_debug_button(head, "broadcast")
     return (
         head
         + sub(
