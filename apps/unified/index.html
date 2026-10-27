@@ -61,6 +61,54 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 @media (max-width:1400px){.switch button small{display:none}}   /* the four tabs fit beside the wordmark; their titles say what each one is */
 @media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#crew-btn,#fx,#lang-sel select,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
+/* ---- browse: Home and Matches. Catalog only, so no 3D engine starts here; the match bar and the five-stage strip stay on the player views ---- */
+body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="matches"] .matchbar,body[data-view="matches"] .story{display:none}
+.switch .nav-sep{width:1px;align-self:stretch;margin:4px 2px;background:var(--line);flex:none}
+.switch button.sec{color:#9FB3CF;font-weight:500}
+.switch button.sec[aria-selected="true"]{color:var(--accent-ink)}
+.browse{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;background:var(--bg);padding-bottom:32px;scrollbar-width:thin}
+.browse h2,.browse h3{margin:0;letter-spacing:.01em}
+.browse .sub{color:var(--muted);font-size:13px;margin:6px 0 0}
+.hero{position:relative;min-height:340px;display:flex;align-items:flex-end;padding:28px var(--gut);border-bottom:1px solid var(--line);background:linear-gradient(90deg,var(--bg) 0%,rgba(10,19,32,.84) 40%,rgba(10,19,32,.2) 100%),linear-gradient(120deg,var(--hc,#1d3b6b) 0%,var(--hc,#1d3b6b) 46%,var(--ac,#5a1f1f) 54%,var(--ac,#5a1f1f) 100%)}
+.hero-copy{max-width:560px;display:grid;gap:8px}
+.hero .kicker{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.hero h2{font-size:34px;line-height:1.1;font-weight:800}
+.hero .sub{margin:0}
+.hero-go{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;cursor:pointer;border:1px solid var(--line);background:var(--bg3);color:var(--text)}
+.btn.play{background:var(--text);color:#0A1320;border-color:var(--text)}
+.btn:hover{filter:brightness(1.12)}
+.btn:focus-visible,.mcard:focus-visible,.lib-bar select:focus-visible,.lib-bar input:focus-visible{outline:2px solid var(--warn);outline-offset:3px}
+.row{padding:20px var(--gut) 4px}
+.row-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.row-head h3{font-size:17px;font-weight:700}
+.row-head a{font-size:13px;color:var(--muted);text-decoration:none}
+.row-head a:hover{color:var(--text)}
+.row-track{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(236px,272px);gap:14px;overflow-x:auto;scroll-snap-type:x proximity;padding:4px 2px 12px;scrollbar-width:thin}
+.mcard{display:flex;flex-direction:column;gap:8px;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;border-radius:12px;scroll-snap-align:start;font:inherit}
+.thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:linear-gradient(120deg,var(--hc,#1d3b6b) 0 50%,var(--ac,#5a1f1f) 50% 100%);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.thumb::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,19,32,0) 45%,rgba(10,19,32,.7) 100%)}
+.mcard:hover .thumb,.mcard:focus-visible .thumb{transform:scale(1.03);box-shadow:0 12px 28px rgba(0,0,0,.5);border-color:var(--muted)}
+.thumb .sc{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);z-index:1;font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;text-shadow:0 2px 10px rgba(0,0,0,.55);white-space:nowrap}
+.thumb .tag{position:absolute;left:8px;bottom:8px;z-index:1;font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(10,19,32,.7);color:var(--text)}
+.mtitle{display:block;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mmeta{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-bar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px var(--gut);background:var(--bg);border-bottom:1px solid var(--line)}
+.lib-bar label{display:flex;min-width:0}
+.lib-bar input,.lib-bar select{background:var(--bg3);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;font:inherit}
+.lib-bar .lib-q{flex:1 1 240px}
+.lib-bar .lib-q input{width:100%}
+.lib-n{font-size:13px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px var(--gap,16px);padding:18px var(--gut)}
+.lib-empty{padding:8px var(--gut);color:var(--muted)}
+@media (max-width:560px){
+  .hero{min-height:300px;padding:20px var(--gut)}
+  .hero h2{font-size:26px}
+  .row-track{grid-auto-columns:minmax(200px,78%)}
+  .lib-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;--gap:12px}
+  .lib-n{margin-left:0}
+}
+
 /* ---- match bar: the one shared match every view opens on ---- */
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
 .fx{display:flex;flex-direction:column;gap:3px;min-width:0}
@@ -274,11 +322,14 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <span class="mark" aria-hidden="true">MC</span>
     <div><b>MatchCast</b><small title="One console: fan Watch, Analyst and Broadcast on one match">Fan, Analyst and Broadcast on one match</small></div>
   </div>
-  <nav class="switch" role="tablist" aria-label="Dashboards">
-    <button role="tab" id="tab-watch" data-view="watch" aria-controls="v-watch" aria-selected="true" title="Watch (1)">Watch <small>fan 3D</small></button>
-    <button role="tab" id="tab-analyst" data-view="analyst" aria-controls="v-analyst" aria-selected="false" title="Analyst (2)">Analyst <small>enterprise</small></button>
-    <button role="tab" id="tab-broadcast" data-view="broadcast" aria-controls="v-broadcast" aria-selected="false" title="Broadcast (3)">Broadcast <small>desk</small></button>
-    <button role="tab" id="tab-agents" data-view="agents" aria-controls="v-agents" aria-selected="false" title="Agents (4)">Agents <small>pipeline</small></button>
+  <nav class="switch" role="tablist" aria-label="Browse and tools">
+    <button role="tab" id="tab-home" data-view="home" aria-controls="v-home" aria-selected="true" title="Home: the featured match and rows from the season (1)">Home</button>
+    <button role="tab" id="tab-matches" data-view="matches" aria-controls="v-matches" aria-selected="false" title="Matches: all season fixtures, with search and filters (2)">Matches</button>
+    <button role="tab" id="tab-watch" data-view="watch" aria-controls="v-watch" aria-selected="false" title="Watch: the 3D match player (3)">Watch</button>
+    <span class="nav-sep" aria-hidden="true"></span>
+    <button role="tab" id="tab-analyst" data-view="analyst" aria-controls="v-analyst" aria-selected="false" class="sec" title="Analyze: the season analysis console (4)">Analyze</button>
+    <button role="tab" id="tab-broadcast" data-view="broadcast" aria-controls="v-broadcast" aria-selected="false" class="sec" title="Production Studio: the broadcast desk (5)">Production Studio</button>
+    <button role="tab" id="tab-agents" data-view="agents" aria-controls="v-agents" aria-selected="false" class="sec" title="Production Studio: the agent pipeline (6)">Agents</button>
   </nav>
   <div class="status" aria-label="Environment">
     <button type="button" class="pill" id="crew-btn" hidden aria-label="Crew: open the agent crew, its spawn tree and scoreboard" title="Crew: the agents that make each line, their spawn tree and the scoreboard (opens the Agents tab)">Crew</button>
@@ -336,6 +387,21 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 </section>
 
 <main class="stage" id="stage" tabindex="-1">
+  <section class="browse" id="v-home" data-view="home" aria-label="Home: featured match and season rows" hidden>
+    <div class="hero" id="hero"></div>
+    <div id="home-rows"></div>
+  </section>
+  <section class="browse" id="v-matches" data-view="matches" aria-label="Matches: the season library" hidden>
+    <div class="lib-bar" role="search">
+      <label class="lib-q"><span class="sr">Search matches</span><input id="lib-q" type="search" placeholder="Search a team, stadium or matchday" autocomplete="off"></label>
+      <label><span class="sr">Team</span><select id="lib-team"></select></label>
+      <label><span class="sr">Matchday</span><select id="lib-md"></select></label>
+      <label><span class="sr">Sort</span><select id="lib-sort"><option value="md">Matchday order</option><option value="goals">Most goals first</option><option value="date">Latest date first</option></select></label>
+      <span class="lib-n" id="lib-n" role="status" aria-live="polite"></span>
+    </div>
+    <div class="lib-grid" id="lib-grid"></div>
+    <p class="lib-empty" id="lib-empty" hidden>No match fits these filters. <button type="button" class="pill" id="lib-reset">Clear filters</button></p>
+  </section>
   <section class="view" id="v-watch" data-view="watch" aria-label="Watch: fan 3D match">
     <div class="wait" role="status"><div><b>Starting Watch</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div><div class="sk" aria-hidden="true"><i class="top">Score, clock and weather</i><i class="pitch">3D pitch</i><i class="side">Match Pulse and key moments</i><i class="bot">Live commentary · Copilot · camera modes</i></div></div>
   </section>
@@ -441,12 +507,12 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 // One shared match: the setup every view opens on. Watch and Broadcast play it live, and the Analyst opens the
 // season's recorded run for the same fixture. A live match sent from Watch or Broadcast at full time goes to the Analyst.
 const VIEWS = { watch: 'watch/index.html', analyst: 'analyst/index.html', broadcast: 'broadcast/index.html' };   // the three iframes
-const PANES = ['watch', 'analyst', 'broadcast', 'agents'];                                                    // every tab; agents is drawn here
+const PANES = ['home', 'matches', 'watch', 'analyst', 'broadcast', 'agents'];                                 // every tab; home and matches are catalog pages, agents is drawn here
 const KEYS = ['h', 'a', 'seed', 'st', 'month', 'kick', 'half', 'f0', 's0', 'f1', 's1'];
 const $ = (id) => document.getElementById(id);
 const M = { fixture: null, setup: null };                // the shared match
 const FR = {};                                           // view -> { el, key, ready, live, sent }
-let FX = [], STADIUM = {}, current = 'watch', pendingImports = [];
+let FX = [], STADIUM = {}, current = 'home', pendingImports = [];
 let LIVE_LAST = null;   // the last Watch start (setup and roster), for an Analyst console that opens mid-match
 
 const keyOf = (s) => KEYS.map((k) => s[k]).join('|');
@@ -641,8 +707,10 @@ try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applyS
 })();
 
 function show(view) {
-  if (!PANES.includes(view)) view = 'watch';
+  if (!PANES.includes(view)) view = 'home';
+  for (const b of Object.keys(BROWSE)) if (!$('v-' + b).hidden) BROWSE[b].y = $('v-' + b).scrollTop;   // a browse page keeps its scroll when the view changes
   current = view;
+  document.body.dataset.view = view;   // CSS hides the match bar and the five-stage strip on the catalog pages
   if (view !== 'watch') { hlStop(); $('hl').hidden = true; $('hl-open').hidden = true; } else paintHighlights();   // the panel and its button belong to Watch after full time; coming back to Watch shows them again
   if (!shownViews(view).includes('watch') && window.callLeave) window.callLeave();   // Watch beside Broadcast (SPLIT_VIEWS) keeps its call
   const on = shownViews(view);
@@ -659,7 +727,79 @@ function show(view) {
   for (const v of on) ensure(v);
   ALV.sync();
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
+  if (view === 'home') paintHome();
+  if (view === 'matches') paintLibrary();
+  if (BROWSE[view]) $('v-' + view).scrollTop = BROWSE[view].y;
   paint();
+}
+
+// ---------------------------------------------------------------- browse: Home and Matches
+// The catalog is the season (FX): each fixture's teams, colours, matchday, date, stadium and recorded score. Nothing here is ranked by
+// invented popularity, and nothing starts the 3D engine: a card opens its match on Watch, and Watch starts only then.
+const BROWSE = { home: { y: 0 }, matches: { y: 0 } };
+const LIB = { q: '', team: '', md: '', sort: 'md' };
+const fxTitle = (fx) => fx.home.club + ' v ' + fx.away.club;
+const fxSub = (fx) => (fx.national ? 'Synthetic squads, no recorded result' : 'Matchday ' + fx.matchday + ' · ' + fx.date);
+const fxGoals = (fx) => (fx.national ? -1 : fx.score[0] + fx.score[1]);
+const fxCard = (fx) => {
+  const sc = fx.national ? 'vs' : fx.score.join(' – ');
+  return '<button type="button" class="mcard" data-fx="' + esc(fx.id) + '" aria-label="' + esc(fxTitle(fx) + '. ' + fxSub(fx) + '. Open on Watch') + '">'
+    + '<span class="thumb" style="--hc:' + esc(fx.home.color) + ';--ac:' + esc(fx.away.color) + '"><span class="sc">' + esc(sc) + '</span><span class="tag">' + (fx.national ? 'Synthetic squads' : 'Recorded') + '</span></span>'
+    + '<span class="mtitle">' + esc(fxTitle(fx)) + '</span><span class="mmeta">' + esc(fxSub(fx)) + '</span></button>';
+};
+function paintHome() {
+  const nat = FX.find((f) => f.national), recorded = FX.filter((f) => !f.national);
+  const feat = nat || FX.slice().sort((a, b) => fxGoals(b) - fxGoals(a))[0];
+  if (!feat) { $('hero').innerHTML = ''; $('home-rows').innerHTML = ''; return; }
+  const hero = $('hero');
+  hero.style.setProperty('--hc', feat.home.color); hero.style.setProperty('--ac', feat.away.color);
+  hero.innerHTML = '<div class="hero-copy"><p class="kicker">Featured · ' + (feat.national ? 'synthetic squads' : 'recorded season match') + '</p>'
+    + '<h2>' + esc(fxTitle(feat)) + '</h2><p class="sub">' + esc(fxSub(feat)) + ' · ' + esc(stadiumName(feat.stIndex)) + '</p>'
+    + '<div class="hero-go"><button type="button" class="btn play" data-fx="' + esc(feat.id) + '">Watch the match</button><a class="btn" href="#matches">All matches</a></div></div>';
+  const byDate = (a, b) => b.date.localeCompare(a.date) || b.matchday - a.matchday;
+  const rows = [
+    ['Latest results', recorded.slice().sort(byDate).slice(0, 12), true],
+    ['Highest scoring', recorded.slice().sort((a, b) => fxGoals(b) - fxGoals(a) || a.matchday - b.matchday).slice(0, 12), true],
+    ['National teams', FX.filter((f) => f.national), false],
+  ].filter((r) => r[1].length);
+  $('home-rows').innerHTML = rows.map(([title, list, all]) => '<section class="row" aria-label="' + esc(title) + '"><div class="row-head"><h3>' + esc(title) + '</h3>'
+    + (all ? '<a href="#matches">See all matches</a>' : '') + '</div><div class="row-track">' + list.map(fxCard).join('') + '</div></section>').join('');
+}
+const libHay = (fx) => [fx.home.club, fx.away.club, 'matchday ' + fx.matchday, fx.date, stadiumName(fx.stIndex), fx.national ? 'national synthetic squads' : 'recorded'].join(' ').toLowerCase();
+const LIB_SORT = {
+  md: (a, b) => a.matchday - b.matchday || a.id.localeCompare(b.id),
+  goals: (a, b) => fxGoals(b) - fxGoals(a) || a.matchday - b.matchday,
+  date: (a, b) => b.date.localeCompare(a.date) || a.matchday - b.matchday,
+};
+function paintLibrary() {
+  const q = LIB.q.trim().toLowerCase();
+  const list = FX.filter((f) => (!LIB.team || f.home.key === LIB.team || f.away.key === LIB.team) && (!LIB.md || String(f.matchday) === LIB.md) && (!q || libHay(f).includes(q)));
+  list.sort(LIB_SORT[LIB.sort] || LIB_SORT.md);
+  $('lib-grid').innerHTML = list.map(fxCard).join('');
+  $('lib-n').textContent = list.length + ' of ' + FX.length + ' matches';
+  $('lib-empty').hidden = list.length > 0;
+}
+function buildLibControls() {
+  const clubs = new Map();
+  for (const f of FX) { clubs.set(f.home.key, f.home.club); clubs.set(f.away.key, f.away.club); }
+  $('lib-team').innerHTML = '<option value="">All teams</option>' + [...clubs].sort((a, b) => a[1].localeCompare(b[1])).map(([k, c]) => '<option value="' + esc(k) + '">' + esc(c) + '</option>').join('');
+  const mds = [...new Set(FX.map((f) => f.matchday))].sort((a, b) => a - b);
+  $('lib-md').innerHTML = '<option value="">All matchdays</option>' + mds.map((m) => '<option value="' + m + '">Matchday ' + m + '</option>').join('');
+  $('lib-q').oninput = (e) => { LIB.q = e.target.value; paintLibrary(); };
+  $('lib-team').onchange = (e) => { LIB.team = e.target.value; paintLibrary(); };
+  $('lib-md').onchange = (e) => { LIB.md = e.target.value; paintLibrary(); };
+  $('lib-sort').onchange = (e) => { LIB.sort = e.target.value; paintLibrary(); };
+  $('lib-reset').onclick = () => {
+    Object.assign(LIB, { q: '', team: '', md: '', sort: 'md' });
+    $('lib-q').value = ''; $('lib-team').value = ''; $('lib-md').value = ''; $('lib-sort').value = 'md';
+    paintLibrary(); $('lib-q').focus();
+  };
+  for (const id of ['v-home', 'v-matches']) $(id).addEventListener('click', (e) => { const b = e.target.closest('[data-fx]'); if (b) openMatch(b.dataset.fx); });
+}
+function openMatch(id) {
+  const fx = byId(id); if (!fx) return;
+  setMatch(setupOf(fx), fx.id);
+  location.hash = 'watch';
 }
 
 // ---------------------------------------------------------------- the match bar
@@ -1195,6 +1335,7 @@ function init(list) {
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };
+  buildLibControls();
   // default: the national-team fixture when the data has one, else the season's most open fixture, so the first view has goals to watch
   const best = FX.find((f) => f.national) || FX.slice().sort((a, b) => (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]))[0];
   M.setup = setupOf(best); M.fixture = best.id;
@@ -1226,12 +1367,12 @@ function init(list) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if ($('tour').open) return;
     if (e.target.closest && e.target.closest('input,select,textarea,dialog,[role=dialog],[contenteditable]')) return;
-    const map = { '1': 'watch', '2': 'analyst', '3': 'broadcast', '4': 'agents' };
+    const map = { '1': 'home', '2': 'matches', '3': 'watch', '4': 'analyst', '5': 'broadcast', '6': 'agents' };
     if (map[e.key]) location.hash = map[e.key];
   };
   document.addEventListener('keydown', shortcut);
   window.mcHookKeys = (el) => el.addEventListener('load', () => { try { el.contentWindow.document.addEventListener('keydown', shortcut); } catch (e) { /* cross-origin: no shortcuts from inside */ } });
-  window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'watch'));
+  window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'home'));
   $('ag-prov').onclick = (e) => { const b = e.target.closest('.ag-how'); if (b) TP.open(b.dataset.id); };
   for (const id of ['lg-verdict', 'lg-agent', 'lg-metric']) $(id).onchange = renderAgents;
   $('lg-export').onclick = exportLedger;
@@ -1352,7 +1493,7 @@ function init(list) {
   paintPill(LV.status);
   renderAgents();
   $('status-btn').onclick = () => { const dlg = $('status-dlg'); STX.draw($('status-box')); if (dlg.showModal) dlg.showModal(); };
-  show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'watch');
+  show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
 }
 
 // first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
