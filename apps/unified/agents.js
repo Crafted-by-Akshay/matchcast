@@ -283,7 +283,12 @@ const AG = (() => {
     if (!run || typeof id !== 'string' || !id) return;
     const k = id.slice(0, 200);
     run.aired.add(k);
-    if (d && Array.isArray(d.source_event_ids)) { run.lineEvents = run.lineEvents || new Map(); run.lineEvents.set(k, d.source_event_ids.map((x) => sstr(x, 60)).filter(Boolean).slice(0, 50)); }
+    if (d && Array.isArray(d.source_event_ids)) {
+      const ids = d.source_event_ids.map((x) => sstr(x, 60)).filter(Boolean);
+      run.lineEvents = run.lineEvents || new Map();
+      run.lineEvents.set(k, { ids: ids.slice(0, 200), total: ids.length });   // the total is kept true; the ids are capped
+    }
+    changed();   // the publication can reach the page before its onair record: its Pulse card is posted again with the cited events
   };
   const ingestDrop = (d, status) => {
     if (!run || !d || typeof d !== 'object') return false;

@@ -907,10 +907,11 @@ function cardOf(c) {
   // a live line from the api names its claims, not local events: each claim's metric, value and how it was counted, so the Why panel shows the basis instead of "No cited events"
   const basis = c.api ? (c.apiClaims || []).map((id) => r.claims.find((x) => x.id === id)).filter((x) => x && x.basis).map((x) => x.inputs.metric + ' = ' + x.inputs.value + ' (' + x.basis.units + ')' + (x.basis.through != null ? ', counted from stream events 1 to ' + x.basis.through : '') + (x.basis.derivation ? ', derivation ' + x.basis.derivation : '') + (x.basis.approval ? ', ' + x.basis.approval : '')) : [];
   // the api events a line cites (onair source_event_ids) resolve to the events this page sent under the same api id; the rest are named, not dropped
-  const cited = c.api ? (c.eventIds || (r.lineEvents && r.lineEvents.get(c.id)) || []) : [];
-  const held = cited.map((id) => (typeof LV !== 'undefined' && LV.apiEvent ? LV.apiEvent(id) : null));
-  evs.push(...held.filter(Boolean).map((e) => ({ minute: e.minute, type: e.type, player: e.player, team: e.team, xg: e.data && e.data.xg != null ? e.data.xg : null })));
-  if (cited.length > held.filter(Boolean).length) basis.push((cited.length - held.filter(Boolean).length) + ' of ' + cited.length + ' cited events are not in this page (it keeps the last 2000 it sent)');
+  const lined = c.api && r.lineEvents ? r.lineEvents.get(c.id) : null;
+  const cited = c.api ? (c.eventIds || (lined ? lined.ids : [])) : [], total = c.api ? (c.eventIds ? c.eventIds.length : lined ? lined.total : 0) : 0;
+  const held = cited.map((id) => (typeof LV !== 'undefined' && LV.apiEvent ? LV.apiEvent(id) : null)).filter(Boolean);
+  evs.push(...held.map((e) => ({ minute: e.minute, type: e.type, player: e.player, team: e.team, xg: e.data && e.data.xg != null ? e.data.xg : null })));
+  if (total > held.length) basis.push((total - held.length) + ' of ' + total + ' cited events are not in this page (it keeps the last 2000 it sent)');
   const card = { id: c.id, minute: c.minute, kind: c.kind, text: c.text, verdict: c.verdict, source: c.source || 'rules', api: !!c.api, player: i.player || i.scorer || null, evidence: evs, basis, tr: c.tr || null };
   if (c.kind === 'score') Object.assign(card, { plain: 'Goal for ' + i.teamName + '!', chips: ['Score ' + i.score.join('–'), mins(c.minute)] });
   else if (c.kind === 'shot') Object.assign(card, { plain: 'A big chance for ' + i.teamName + '.', chips: ['xG ' + (+i.xg).toFixed(2), i.kind] });
@@ -964,7 +965,8 @@ function pushCards() {
     if (c.approval === 'pending' || c.approval === 'killed') continue;   // a line waiting for a person, or killed, reaches no view
     const firstTotal = c.kind === 'xg_total' && r.claims.find((x) => x.kind === 'xg_total') === c;   // first-load: the opening running total (recounted like any claim) is Watch's first checked line; later totals stay in the Agents and Analyst views
     if (!c.text || ((c.route === 'analyst' || c.kind === 'xg_total') && !firstTotal)) continue;
-    const sig = c.verdict + '|' + c.source + '|' + c.text + '|' + JSON.stringify(c.tr || null);
+    const lined = r.lineEvents && r.lineEvents.get(c.id);   // the cited events join the signature, so a card posted before its onair record is posted again
+    const sig = c.verdict + '|' + c.source + '|' + c.text + '|' + JSON.stringify(c.tr || null) + '|' + (lined ? lined.ids.join(',') : '');
     if (sentCards.get(c.id) === sig) continue;
     sentCards.set(c.id, sig);
     post('watch', { src: 'matchcast-shell', type: 'pulse', card: cardOf(c) });

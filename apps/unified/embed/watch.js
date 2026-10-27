@@ -184,7 +184,7 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
     const rows = c.evidence.map((e) => '<div><b>' + Math.floor(e.minute) + "'</b> " + esc(e.type.replace('_', ' ') + (e.player ? ' · ' + e.player : '') + (e.xg != null ? ' · xG ' + (+e.xg).toFixed(2) : '') + (e.why ? ' · ' + e.why : '')) + '</div>');
     const basis = (c.basis || []).map((t) => '<div>Claim ' + esc(t) + '</div>');
     w.innerHTML = (rows.length || basis.length ? rows.concat(basis).join('') : 'No cited events, and the api sent no claim basis for this line.')
-      + '<div>' + (rows.length ? 'Cited events shown' : basis.length ? 'Claim basis shown; no cited event is in this page' : 'Nothing to show') + '; the 3D replay with highlights is Planned.</div>';
+      + '<div>' + (rows.length ? 'Cited events shown' : basis.length ? 'Claim basis shown' : 'Nothing to show') + '; the 3D replay with highlights is Planned.</div>';
     w.hidden = false;
   };
   const draw = (c, host, fade) => {
