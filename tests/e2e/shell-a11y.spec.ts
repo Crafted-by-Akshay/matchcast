@@ -11,15 +11,15 @@ test('shell: route and tool menus work by keyboard, a skip link exists, publishe
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('#tab-matches')).toBeFocused();
   await expect(page.locator('#tab-matches')).toHaveAttribute('aria-current', 'page');
-  await page.focus('#tools-toggle');
+  await page.focus('#more-toggle');
   await page.keyboard.press('ArrowDown');
-  await expect(page.locator('#tab-analyst')).toBeFocused();
+  await expect(page.locator('#tab-highlights')).toBeFocused();
   await page.keyboard.press('End');
   await expect(page.locator('#tab-agents')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#agents$/);
-  await expect(page.locator('#tools-toggle')).toHaveAttribute('aria-label', 'Tools, current page: Agents');
-  await expect(page.locator('#tools-toggle')).toBeFocused();
+  await expect(page.locator('#more-toggle')).toHaveAttribute('aria-label', 'More, current page: Agents');
+  await expect(page.locator('#more-toggle')).toBeFocused();
   await expect(page.locator('a.skip')).toHaveAttribute('href', '#stage');
   // a published line goes to the polite live region
   await page.evaluate(() => {

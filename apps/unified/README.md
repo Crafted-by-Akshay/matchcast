@@ -2,13 +2,15 @@
 
 This is the unified app for the hackathon. Generated folders (`watch/`, `broadcast/`, `analyst/`, `shared/`) are rebuilt with `python3 apps/unified/build.py` and are not committed.
 
-One app for the three MatchCast dashboards, switched from one top bar:
+One shell for Home, Matches, Highlights and My List, with Watch as the match player. Analyze, Production Studio and Agents remain available from More:
 
 - **Watch** (fan 3D match): the 3D app from `sources/3d-source/v2`, without its v10 Director and v11 Analyst boards.
 - **Analyst** (enterprise console): `sources/enterprise-console/src` with its data. The default nav is focused on the match: Live match, Match centre (five tabs), Ask the match, How was this made? and Match library; the rest sits under More (`analyst-pages/70_focus.js`).
 - **Broadcast** (broadcaster desk): `sources/broadcaster-console`, same build.
 
 Sources are in `sources/`, a copy of the three prototype folders. They are read only. `build.py` copies each view from its source folder and applies a few asserted patches. The shell, `index.html`, is written by hand.
+
+Home features a synthetic fixture and rows from the season. Matches provides search and team, matchday and sort filters. These shell pages do not load the 3D player. Match cards open Watch only when selected. My List saves fixture IDs in this browser and says "Saved on this device"; it does not sync across devices or accounts. Highlights uses the existing Watch-session clips in memory and lists a moment only when its 3D clip has enough frames. It is not an archive of old match videos.
 
 ## The shared match
 - The match bar holds one season fixture (28 in the league, from `shared/fixtures.json`). The fixture sets the teams, stadium, month, kick-off, seed, half length and formations.
@@ -21,7 +23,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 ## The live source and the agents
 - Watch is the live source. Each second it sends the match events and the explain moments it produced, with the setup they came from. The shell accepts them only from Watch, and only for the shared match.
 - The score and minute go back out to Broadcast (its scoreboard) and to the Analyst (a small "Live from Watch" pill). Broadcast's pitch still runs its own engine, so its goals can differ from Watch's until the single-engine refactor.
-- The Agents tab (key 4) is one pipeline for the three views. Producer picks moments and routes lines. Analyst turns events into claims with evidence. Narrator writes each English line from the claim's inputs. Verifier recounts every claim from the raw event log, repairs it once from that recount, or abstains. Predictor is a tool the agents call; the Data Scientist runs on demand in the Analyst only.
+- Agents (key 6, under More) is one pipeline for the three views. Producer picks moments and routes lines. Analyst turns events into claims with evidence. Narrator writes each English line from the claim's inputs. Verifier recounts every claim from the raw event log, repairs it once from that recount, or abstains. Predictor is a tool the agents call; the Data Scientist runs on demand in the Analyst only.
 - How the agents work, live (Agents tab, under the cards): each claim is a lane with its handoffs in order (Analyst claim, Narrator draft, Verifier verdict, Producer approval and publication), each tagged model or rules, with timing. A claim from the api shows the time after the claim arrived in the shell; a rules claim shows the page's own step times. The agent chip reads Foundry live, Warming up, Rules fallback or Rules simulated from the api's stream status, never a fixed label. The Vision line gives the browser tracker's passes sent to the api and the Azure Read checks on unclear shirt numbers. A line the stream repeats is listed once in the Live flow.
 - The agents are rules in the page. No Foundry call is made, and the tab says so.
 - `contracts.js` (`MCC`) holds the three shared contracts: `matchcast.event/1`, `matchcast.claim/1` and `matchcast.audit/1`. Canonical JSON (sorted keys) is hashed with SHA-256, and each audit record holds the hash of the one before it. "Verify chain" recounts the whole chain.
@@ -29,7 +31,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - Design and the Azure target: `/mnt/project-files/matchcast-v2/orchestration/DESIGN.md`.
 
 ## Files
-- `index.html`: the shell (switcher, match bar, Agents tab, message handling).
+- `index.html`: the shell (primary navigation, browse pages, match bar, message handling).
 - `contracts.js`, `agents.js`: the shared contracts and the agent pipeline, loaded by the shell.
 - `live.js` (`LV`, EXP-1): posts Watch's goal and shot events to the agent api (`POST /v1/matches`, `/events`) and subscribes to its SSE stream (claims, lines, publications), which `AG.ingest` shows beside the rules claims. The top-bar pill reads 'Live agents', 'Rules fallback' (api silent for 45 s or on rules), 'Warming up the match engine' or 'Offline (simulated)' (no api). Build with `python3 build.py --api https://<api>` to set `config.js`; without it nothing is called. Events sent to the api (EXP-4, checked against the contract schema in `events-contract.spec.ts`): goal, shot, pass (with start and end positions), foul, card (yellow, red, second yellow) and possession_change (from Watch's turnovers). Not sent: tackles and pressure, because Watch records no target player or distance for them, and anything else Watch logs (throw-ins, offsides and so on) that the contract has no event for.
 - Event to on air (`#lat-pill`, header): `live.js` records when each Watch event is queued (by stream sequence) and, when a publication arrives, reads its `state.max_evidence_sequence` to find the last event the line rests on; the pill shows the median of the last 30 matched times, one sample per event, so a publication replayed after a reconnect is not counted again. Watch batches events for up to a second before they reach the shell; that wait is before the stamp and not in the number. Hidden until the first sample; a new match clears it.
@@ -47,7 +49,7 @@ Sources are in `sources/`, a copy of the three prototype folders. They are read 
 - `tests/e2e/ledger.spec.ts` (EXP-10): newest first, filters, provenance, CSV export with a matching SHA-256.
 - `tests/e2e/pulse.spec.ts` (was `watch.cjs`): Match Pulse cards (tick, chips, Rules fallback chip, Why?, last 10), Casual v Analyst text and chips, Player focus lead, mode saved and restored after reload, Planned language labels.
 - `tests/e2e/connection.spec.ts` (was `connection.cjs`): live, rules fallback and offline against a mock api (drives the shell directly).
-- `tests/e2e/unified.spec.ts` (run with `make e2e`; was `unified.cjs`): headless Chromium. Checks the season loads, Watch and Broadcast start on the shared fixture with its clubs, the Analyst routes to it, switching keeps Watch running, Watch's events reach the agents, the audit chain verifies, the Broadcast scoreboard shows Watch's score, full time reaches the Analyst, a fixture change reloads Watch, the keyboard shortcuts work (1 to 4), and the phone layout has no horizontal scroll. Saves screenshots.
+- `tests/e2e/unified.spec.ts` (run with `make e2e`; was `unified.cjs`): headless Chromium. Checks the season loads, Watch and Broadcast start on the shared fixture with its clubs, the Analyst routes to it, switching keeps Watch running, Watch's events reach the agents, the audit chain verifies, the Broadcast scoreboard shows Watch's score, full time reaches the Analyst, a fixture change reloads Watch, the keyboard shortcuts work (1 to 6), and the phone layout has no horizontal scroll. Saves screenshots.
 - `tests/e2e/cross-view.spec.ts` (EXP-2): Watch paused then Broadcast opened (same minute, score, paused), Broadcast replays events, Analyst pill score and last five events, Broadcast follows once Watch resumes.
 
 ## Match Pulse and watch modes (EXP-3, EXP-4)
@@ -115,7 +117,7 @@ With an api configured, "Verify chain" in the Agents tab fetches `GET /v1/matche
 A red card or turning point is a deterministic trigger. The Producer marks that claim priority 1, it follows the normal Verifier path and the approval queue, and Broadcast shows it as a red "ALERT · … · verified" lower-third. Alerts sort first in the approval queue. Win-probability swings and goals against the run of play need the prediction stream and are Planned.
 
 ## Accessibility (EXP-14)
-The shell: arrow keys, Home and End move between the dashboard tabs (tab 1 to 4 still switch from anywhere outside a field); a skip link jumps to the match view; every button and tab shows a focus ring; each published line is announced through a polite live region (`#sr-lines`); tab labels, the selected tab and the filter buttons meet WCAG AA contrast (axe-core reports no serious or critical issue on the Agents tab). The trace panel is a native dialog, so Esc closes it. Not yet checked: the three views inside their frames (QUA-9 `a11y.spec.ts` covers them) and a VoiceOver listen-through.
+The shell routes Home, Matches and Watch directly; More opens Highlights, My List and the production tools. Arrow keys move between primary routes, Down opens More and Escape closes it; number keys 1 to 6 reach Home, Matches, Watch, Analyze, Production Studio and Agents. A skip link jumps to the match view; buttons and routes show a focus ring; published lines are announced through a polite live region (`#sr-lines`). The trace panel is a native dialog, so Esc closes it. Not yet checked: a VoiceOver listen-through.
 ## Analyst Data platform page (EXP-13)
 - `analyst-pages/*.js` holds Analyst pages we own; `build.py` appends them after the prototype pages. `10_data_platform.js` adds Platform > Data platform.
 - It shows the Fabric dashboard clip or screenshot (`shared/fabric-dashboard.mp4` / `.png`) and the danger model card (`shared/model-card.json`). Each block says **Planned** and names its ticket (DAT-8, DAT-6) until the file exists. Fabric is labelled paused after filming.

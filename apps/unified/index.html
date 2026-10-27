@@ -14,9 +14,13 @@
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 <style>
 :root{
-  --bg:#0A1320; --bg2:#101D30; --bg3:#17283F; --line:#22375A; --text:#E8EEF7; --muted:#8CA0BC;
-  --accent:#3D86F0; --accent-strong:#2862C9; --accent-ink:#FFFFFF; --hot:#FF7A2E; --ok:#35C48A; --warn:#F5B942; --bad:#F26B6B;
-  --r:12px; --gut:16px; --bar:52px; --mbar:64px;
+  --bg:#07110F; --bg2:#0C1B18; --bg3:#142722; --line:#254238; --text:#F1F5F2; --muted:#9AAFA7;
+  --pitch:#173C2C; --pitch-light:#245D3F; --surface:#0C1B18; --surface-raised:#142722;
+  --accent:#55B77B; --accent-strong:#276E4B; --accent-ink:#FFFFFF; --hot:#FF9A57; --ok:#57C98B; --warn:#F5B942; --bad:#F26B6B;
+  --type-xs:11px; --type-sm:12px; --type-base:14px; --type-lg:18px; --type-xl:28px; --type-display:clamp(32px,5vw,64px);
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px; --space-7:48px;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:20px; --radius-pill:999px; --focus-ring:2px solid #FFD166;
+  --r:var(--radius-md); --gut:var(--space-4); --bar:52px; --mbar:64px;
   --font:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:dark;
 }
@@ -35,16 +39,16 @@ button,select{font:inherit;color:inherit}
 .top{display:flex;align-items:center;gap:16px;height:var(--bar);padding:0 var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none}
 .brand{display:flex;align-items:center;gap:10px;min-width:0;flex:none}
 .brand>div{min-width:0}
-.mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,var(--accent),#7B5CF0);color:var(--accent-ink);flex:none}
+.mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,#2D9A68,#56C58B);color:#06140D;flex:none}
 .brand b{font-size:15px;letter-spacing:.01em}
 .brand small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .switch{position:relative;display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;max-width:100%}
 .switch::-webkit-scrollbar{display:none}
 .switch button{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:8px;font-weight:600}
 .switch button small{font-weight:500;font-size:12px}
-.switch button[aria-current="page"]{background:#2A62C9;color:var(--accent-ink)}
-#crew-btn{font-weight:700;border-color:var(--accent);color:var(--accent)}#crew-btn:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
-.switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.switch button[aria-current="page"]{background:#276E4B;color:var(--accent-ink)}
+#crew-btn{font-weight:700;border-color:var(--accent);color:var(--accent)}#crew-btn:focus-visible{outline:var(--focus-ring);outline-offset:2px}
+.switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:var(--focus-ring);outline-offset:2px}
 .status{display:flex;gap:6px;flex:none}
 .status .more{display:none}
 .pill{font-size:12px;min-height:32px;display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
@@ -62,59 +66,87 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 @media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#crew-btn,#fx,#lang-sel select,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- browse: Home and Matches. Catalog only, so no 3D engine starts here; the match bar and the five-stage strip stay on the player views ---- */
-body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="matches"] .matchbar,body[data-view="matches"] .story{display:none}
-.switch .nav-sep{width:1px;align-self:stretch;margin:4px 2px;background:var(--line);flex:none}
-.tools-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:20;min-width:220px;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);box-shadow:0 14px 34px rgba(0,0,0,.42)}
+body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="matches"] .matchbar,body[data-view="matches"] .story,body[data-view="highlights"] .matchbar,body[data-view="highlights"] .story,body[data-view="my-list"] .matchbar,body[data-view="my-list"] .story{display:none}
+.tools-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:20;min-width:244px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);box-shadow:0 14px 34px rgba(0,0,0,.42)}
 .tools-menu[hidden]{display:none}
 .tools-menu button{width:100%;justify-content:flex-start;border-radius:8px}
 .tools-menu button.sec{color:#9FB3CF;font-weight:500}
 .tools-menu button.sec[aria-current="page"]{color:var(--accent-ink)}
 .tools-menu button:hover{background:var(--bg3)}
+.tools-menu .menu-label{margin:6px 10px 3px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
+.tools-menu hr{border:0;border-top:1px solid var(--line);margin:7px 4px}
 .tools-toggle{gap:6px}
 .tools-toggle.active{color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
 .tools-toggle::after{content:"⌄";font-size:12px;color:var(--muted)}
 .tools-toggle[aria-expanded="true"]::after{content:"⌃"}
-.browse{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;background:var(--bg);padding-bottom:32px;scrollbar-width:thin}
+.browse{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;background:radial-gradient(ellipse at 50% 0%,rgba(36,93,63,.16),transparent 55%),var(--bg);padding-bottom:48px;scrollbar-width:thin;overscroll-behavior-y:contain}
+.browse-head{max-width:1380px;margin:0 auto;padding:28px var(--gut) 6px}
+.browse-head .eyebrow{margin:0 0 4px;color:#79C79A;font-size:var(--type-xs);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.browse-head h2{font-size:var(--type-xl);line-height:1.1;letter-spacing:-.025em}
+.browse-head p:last-child{margin:8px 0 0;color:var(--muted);font-size:var(--type-sm)}
 .browse h2,.browse h3{margin:0;letter-spacing:.01em}
 .browse .sub{color:var(--muted);font-size:13px;margin:6px 0 0}
-.hero{position:relative;min-height:340px;display:flex;align-items:flex-end;padding:28px var(--gut);border-bottom:1px solid var(--line);background:linear-gradient(90deg,var(--bg) 0%,rgba(10,19,32,.84) 40%,rgba(10,19,32,.2) 100%),linear-gradient(120deg,var(--hc,#1d3b6b) 0%,var(--hc,#1d3b6b) 46%,var(--ac,#5a1f1f) 54%,var(--ac,#5a1f1f) 100%)}
-.hero-copy{max-width:560px;display:grid;gap:8px}
-.hero .kicker{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.hero h2{font-size:34px;line-height:1.1;font-weight:800}
+.hero{position:relative;isolation:isolate;min-height:clamp(360px,42vw,540px);display:flex;align-items:flex-end;padding:clamp(24px,5vw,64px) max(var(--gut),calc((100vw - 1380px)/2));overflow:hidden;border-bottom:1px solid var(--line);background:linear-gradient(90deg,rgba(5,14,11,.96) 0%,rgba(5,14,11,.77) 44%,rgba(5,14,11,.1) 100%),radial-gradient(ellipse at 78% 80%,rgba(255,255,255,.14),transparent 48%),linear-gradient(125deg,var(--hc,#27573D) 0%,var(--hc,#27573D) 46%,var(--ac,#6B3C32) 54%,var(--ac,#6B3C32) 100%)}
+.hero::before{content:"";position:absolute;z-index:-1;inset:8% 4% -34% 54%;border:1px solid rgba(255,255,255,.22);border-radius:50%;box-shadow:0 0 0 38px rgba(255,255,255,.035),0 0 0 76px rgba(255,255,255,.025)}
+.hero::after{content:"";position:absolute;z-index:-1;inset:0;background:repeating-linear-gradient(90deg,transparent 0 9%,rgba(255,255,255,.025) 9% 18%);mask-image:linear-gradient(90deg,transparent 25%,#000 100%)}
+.hero-copy{position:relative;max-width:620px;display:grid;gap:10px}
+.hero .kicker{margin:0;font-size:var(--type-xs);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#B7D7C2}
+.hero h2{font-size:var(--type-display);line-height:.98;font-weight:800;letter-spacing:-.045em;text-wrap:balance}
 .hero .sub{margin:0}
-.hero-go{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.hero-go{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;cursor:pointer;border:1px solid var(--line);background:var(--bg3);color:var(--text)}
-.btn.play{background:var(--text);color:#0A1320;border-color:var(--text)}
+.btn.play{background:#A8E6BE;color:#082015;border-color:#A8E6BE}
 .btn:hover{filter:brightness(1.12)}
-.btn:focus-visible,.mcard:focus-visible,.lib-bar select:focus-visible,.lib-bar input:focus-visible{outline:2px solid var(--warn);outline-offset:3px}
-.row{padding:20px var(--gut) 4px}
+.btn:focus-visible,.match-open:focus-visible,.save-match:focus-visible,.lib-bar select:focus-visible,.lib-bar input:focus-visible{outline:var(--focus-ring);outline-offset:3px}
+.row{max-width:1412px;margin:0 auto;padding:26px var(--gut) 0}
 .row-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.row-head h3{font-size:17px;font-weight:700}
+.row-head h3{font-size:var(--type-lg);font-weight:700}
 .row-head a{font-size:13px;color:var(--muted);text-decoration:none}
 .row-head a:hover{color:var(--text)}
-.row-track{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(236px,272px);gap:14px;overflow-x:auto;scroll-snap-type:x proximity;padding:4px 2px 12px;scrollbar-width:thin}
-.mcard{display:flex;flex-direction:column;gap:8px;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;border-radius:12px;scroll-snap-align:start;font:inherit}
-.thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:linear-gradient(120deg,var(--hc,#1d3b6b) 0 50%,var(--ac,#5a1f1f) 50% 100%);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
-.thumb::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,19,32,0) 45%,rgba(10,19,32,.7) 100%)}
-.mcard:hover .thumb,.mcard:focus-visible .thumb{transform:scale(1.03);box-shadow:0 12px 28px rgba(0,0,0,.5);border-color:var(--muted)}
-.thumb .sc{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);z-index:1;font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;text-shadow:0 2px 10px rgba(0,0,0,.55);white-space:nowrap}
-.thumb .tag{position:absolute;left:8px;bottom:8px;z-index:1;font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(10,19,32,.7);color:var(--text)}
-.mtitle{display:block;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mmeta{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lib-bar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px var(--gut);background:var(--bg);border-bottom:1px solid var(--line)}
+.row-track{display:grid;grid-auto-flow:column;grid-auto-columns:clamp(238px,24vw,330px);gap:16px;overflow-x:auto;scroll-snap-type:x proximity;padding:5px 2px 16px;scrollbar-width:thin}
+.match-card{display:grid;gap:9px;min-width:0;scroll-snap-align:start}
+.match-open{display:grid;gap:9px;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;border-radius:var(--radius-md);font:inherit}
+.match-thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:var(--radius-md);overflow:hidden;border:1px solid rgba(210,235,220,.2);background:linear-gradient(135deg,rgba(6,20,13,.2),rgba(3,14,9,.66)),repeating-linear-gradient(90deg,transparent 0 12%,rgba(255,255,255,.05) 12% 24%),linear-gradient(120deg,var(--hc,#27573D) 0 50%,var(--ac,#6B3C32) 50% 100%);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.match-thumb::before{content:"";position:absolute;inset:12% 19%;border:1px solid rgba(255,255,255,.24);border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
+.match-thumb::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,13,9,.03) 25%,rgba(4,13,9,.72) 100%)}
+.match-card:hover .match-thumb,.match-open:focus-visible .match-thumb{transform:translateY(-3px) scale(1.015);box-shadow:0 12px 28px rgba(0,0,0,.4);border-color:rgba(210,235,220,.55)}
+.match-thumb .sc{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);z-index:1;font-size:clamp(22px,2.4vw,32px);font-weight:800;font-variant-numeric:tabular-nums;text-shadow:0 2px 10px rgba(0,0,0,.6);white-space:nowrap}
+.match-thumb .tag{position:absolute;left:10px;bottom:10px;z-index:1;font-size:var(--type-xs);padding:4px 9px;border-radius:var(--radius-pill);background:rgba(4,13,9,.76);color:var(--text)}
+.mtitle{display:block;font-weight:700;font-size:var(--type-base);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mmeta{display:block;font-size:var(--type-sm);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.save-match{justify-self:start;min-height:36px;padding:4px 10px;border:1px solid transparent;border-radius:var(--radius-pill);background:transparent;color:#B7D7C2;font-size:var(--type-sm);font-weight:600;cursor:pointer}
+.save-match:hover{background:var(--bg3);border-color:var(--line)}
+.save-match[aria-pressed="true"]{color:#A8E6BE}
+.lib-bar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px max(var(--gut),calc((100vw - 1380px)/2));background:rgba(7,17,15,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .lib-bar label{display:flex;min-width:0}
 .lib-bar input,.lib-bar select{background:var(--bg3);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;font:inherit}
 .lib-bar .lib-q{flex:1 1 240px}
 .lib-bar .lib-q input{width:100%}
 .lib-n{font-size:13px;color:var(--muted);margin-left:auto;white-space:nowrap}
-.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px var(--gap,16px);padding:18px var(--gut)}
-.lib-empty{padding:8px var(--gut);color:var(--muted)}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:22px 18px;max-width:1412px;margin:0 auto;padding:22px var(--gut)}
+.lib-empty,.browse-empty{max-width:680px;margin:40px auto;padding:24px var(--gut);text-align:center;color:var(--muted)}
+.browse-empty h3{color:var(--text);font-size:var(--type-lg)}
+.browse-empty p{margin:8px 0 18px}
+.browse-empty a{color:#A8E6BE}
+.saved-note{margin:10px 0 0;color:var(--muted);font-size:var(--type-sm)}
+.highlight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px;max-width:1412px;margin:0 auto;padding:22px var(--gut)}
+.highlight-card{display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:var(--radius-md);background:linear-gradient(145deg,rgba(36,93,63,.15),transparent 45%),var(--bg2);min-width:0}
+.highlight-card h3{font-size:var(--type-lg)}
+.highlight-card p{margin:0;color:var(--muted);line-height:1.5}
+.highlight-card .moment{color:#A8E6BE;font-size:var(--type-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.highlight-card .btn{justify-self:start}
 @media (max-width:560px){
   .hero{min-height:300px;padding:20px var(--gut)}
   .hero h2{font-size:26px}
-  .row-track{grid-auto-columns:minmax(200px,78%)}
-  .lib-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;--gap:12px}
+  .row{padding-top:22px}
+  .row-track{grid-auto-columns:minmax(220px,82%);gap:12px}
+  .lib-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px}
   .lib-n{margin-left:0}
+  .lib-bar .lib-q{flex-basis:100%}
+  .lib-bar label:not(.lib-q){flex:1 1 28%;}
+  .lib-bar select{width:100%;font-size:12px;padding-inline:7px}
+  .browse-head{padding-top:22px}
+  .highlight-grid{grid-template-columns:1fr;padding-top:16px}
 }
 
 /* ---- match bar: the one shared match every view opens on ---- */
@@ -240,7 +272,7 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .ag-filters button{background:var(--bg3);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:3px 8px;cursor:pointer}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .skip{position:absolute;left:8px;top:-48px;z-index:100;background:var(--accent-strong);color:#fff;padding:8px 12px;border-radius:6px}.skip:focus{top:8px}
-button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:var(--focus-ring);outline-offset:2px}
 .ag-filters select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
 .ag-panel table{width:100%;border-collapse:collapse;font-size:13px}
 .ag-panel th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
@@ -331,14 +363,19 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <header class="top">
   <div class="brand">
     <span class="mark" aria-hidden="true">MC</span>
-    <div><b>MatchCast</b><small title="One console: fan Watch, Analyst and Broadcast on one match">Fan, Analyst and Broadcast on one match</small></div>
+    <div><b>MatchCast</b><small title="Synthetic football, explained">Synthetic football, explained</small></div>
   </div>
   <nav class="switch" aria-label="MatchCast navigation">
     <button type="button" id="tab-home" data-view="home" aria-current="page" title="Home: featured match and season rows (1)">Home</button>
     <button type="button" id="tab-matches" data-view="matches" title="Matches: search and browse the season (2)">Matches</button>
     <button type="button" id="tab-watch" data-view="watch" title="Watch: open the 3D match player (3)">Watch</button>
-    <button type="button" id="tools-toggle" class="tools-toggle" aria-expanded="false" aria-controls="tools-menu">Tools</button>
-    <div class="tools-menu" id="tools-menu" aria-label="More tools" hidden>
+    <button type="button" id="more-toggle" class="tools-toggle" aria-expanded="false" aria-controls="more-menu">More</button>
+    <div class="tools-menu" id="more-menu" role="group" aria-label="More MatchCast pages" hidden>
+      <p class="menu-label">Your library</p>
+      <button type="button" id="tab-highlights" data-view="highlights" class="sec">Highlights</button>
+      <button type="button" id="tab-my-list" data-view="my-list" class="sec">My List</button>
+      <hr>
+      <p class="menu-label">Tools</p>
       <button type="button" id="tab-analyst" data-view="analyst" class="sec" title="Analyze: the season analysis console (4)">Analyze</button>
       <button type="button" id="tab-broadcast" data-view="broadcast" class="sec" title="Production Studio: the broadcast desk (5)">Production Studio</button>
       <button type="button" id="tab-agents" data-view="agents" class="sec" title="Agents: the agent pipeline (6)">Agents</button>
@@ -415,6 +452,16 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <div class="lib-grid" id="lib-grid"></div>
     <p class="lib-empty" id="lib-empty" hidden>No match fits these filters. <button type="button" class="pill" id="lib-reset">Clear filters</button></p>
   </section>
+  <section class="browse" id="v-highlights" data-view="highlights" aria-label="Highlights from recorded clips" hidden>
+    <header class="browse-head"><p class="eyebrow">Your library</p><h2>Highlights</h2><p>Clips held from the current Watch session on this device.</p></header>
+    <div class="highlight-grid" id="highlight-grid"></div>
+    <div class="browse-empty" id="highlights-empty" hidden><h3>No clips are available yet</h3><p>Only moments with replay frames from this Watch session appear here.</p><a href="#watch">Open Watch</a></div>
+  </section>
+  <section class="browse" id="v-my-list" data-view="my-list" aria-label="My saved matches" hidden>
+    <header class="browse-head"><p class="eyebrow">Your library</p><h2>My List</h2><p class="saved-note" id="saved-note">Saved on this device</p></header>
+    <div class="lib-grid" id="saved-grid"></div>
+    <div class="browse-empty" id="saved-empty" hidden><h3>Your list is ready for a match</h3><p>Save a match from Home or Matches and it will appear here.</p><a href="#matches">Browse matches</a></div>
+  </section>
   <section class="view" id="v-watch" data-view="watch" aria-label="Watch: fan 3D match">
     <div class="wait" role="status"><div><b>Starting Watch</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div><div class="sk" aria-hidden="true"><i class="top">Score, clock and weather</i><i class="pitch">3D pitch</i><i class="side">Match Pulse and key moments</i><i class="bot">Live commentary · Copilot · camera modes</i></div></div>
   </section>
@@ -475,7 +522,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 
 <footer class="foot">
   <span>Simulated match, fictional clubs. Each view keeps its own clock; switching does not restart a running match.</span>
-  <span><kbd>1</kbd> Watch · <kbd>2</kbd> Analyst · <kbd>3</kbd> Broadcast · <kbd>4</kbd> Agents</span>
+  <span><kbd>1</kbd> Home · <kbd>2</kbd> Matches · <kbd>3</kbd> Watch · <kbd>4</kbd> Analyze · <kbd>5</kbd> Studio · <kbd>6</kbd> Agents</span>
 </footer>
 <aside class="recap" id="recap" role="region" aria-label="Full-time recap" hidden>
   <h2 id="recap-h">Full-time recap</h2>
@@ -521,7 +568,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 // One shared match: the setup every view opens on. Watch and Broadcast play it live, and the Analyst opens the
 // season's recorded run for the same fixture. A live match sent from Watch or Broadcast at full time goes to the Analyst.
 const VIEWS = { watch: 'watch/index.html', analyst: 'analyst/index.html', broadcast: 'broadcast/index.html' };   // the three iframes
-const PANES = ['home', 'matches', 'watch', 'analyst', 'broadcast', 'agents'];                                 // every tab; home and matches are catalog pages, agents is drawn here
+const PANES = ['home', 'matches', 'highlights', 'my-list', 'watch', 'analyst', 'broadcast', 'agents'];       // browse pages stay in the shell; the match engine loads only on Watch or the studio
 const KEYS = ['h', 'a', 'seed', 'st', 'month', 'kick', 'half', 'f0', 's0', 'f1', 's1'];
 const $ = (id) => document.getElementById(id);
 const M = { fixture: null, setup: null };                // the shared match
@@ -739,10 +786,12 @@ function show(view) {
     $('v-' + v).hidden = !shown; $('v-' + v).classList.toggle('gone', !shown);
     const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-current', v === view ? 'page' : 'false');
   }
-  $('tools-toggle').classList.toggle('active', ['analyst', 'broadcast', 'agents'].includes(view));
-  $('tools-toggle').setAttribute('aria-label', ['analyst', 'broadcast', 'agents'].includes(view) ? 'Tools, current page: ' + ({ analyst: 'Analyze', broadcast: 'Production Studio', agents: 'Agents' })[view] : 'Tools');
-  if ($('tools-menu').contains(document.activeElement)) $('tools-toggle').focus();
-  $('tools-menu').hidden = true; $('tools-toggle').setAttribute('aria-expanded', 'false');
+  const moreLabels = { highlights: 'Highlights', 'my-list': 'My List', analyst: 'Analyze', broadcast: 'Production Studio', agents: 'Agents' };
+  const inMore = Object.hasOwn(moreLabels, view);
+  $('more-toggle').classList.toggle('active', inMore);
+  $('more-toggle').setAttribute('aria-label', inMore ? 'More, current page: ' + moreLabels[view] : 'More pages and tools');
+  if ($('more-menu').contains(document.activeElement)) $('more-toggle').focus();
+  $('more-menu').hidden = true; $('more-toggle').setAttribute('aria-expanded', 'false');
   $('stage').classList.toggle('split', on.length > 1);
   $('split-bar').hidden = on.length < 2;
   const tg = $('bc-toggle'); tg.hidden = true;   // the second 3D view is off the first screen for the sprint (AB#497); ?split=1 still opens it
@@ -752,6 +801,8 @@ function show(view) {
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   if (view === 'home') paintHome();
   if (view === 'matches') paintLibrary();
+  if (view === 'highlights') paintBrowseHighlights();
+  if (view === 'my-list') paintSaved();
   if (BROWSE[view]) $('v-' + view).scrollTop = BROWSE[view].y;
   paint();
 }
@@ -759,16 +810,21 @@ function show(view) {
 // ---------------------------------------------------------------- browse: Home and Matches
 // The catalog is the season (FX): each fixture's teams, colours, matchday, date, stadium and recorded score. Nothing here is ranked by
 // invented popularity, and nothing starts the 3D engine: a card opens its match on Watch, and Watch starts only then.
-const BROWSE = { home: { y: 0 }, matches: { y: 0 } };
+const BROWSE = { home: { y: 0 }, matches: { y: 0 }, highlights: { y: 0 }, 'my-list': { y: 0 } };
 const LIB = { q: '', team: '', md: '', sort: 'md' };
+const SAVED_KEY = 'matchcast.my-list.v1';
+const SAVED = new Set((() => { try { const value = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); return Array.isArray(value) ? value.filter((id) => typeof id === 'string') : []; } catch (e) { return []; } })());
 const fxTitle = (fx) => fx.home.club + ' v ' + fx.away.club;
 const fxSub = (fx) => (fx.national ? 'Synthetic squads, no recorded result' : 'Matchday ' + fx.matchday + ' · ' + fx.date);
 const fxGoals = (fx) => (fx.national ? -1 : fx.score[0] + fx.score[1]);
 const fxCard = (fx) => {
   const sc = fx.national ? 'vs' : fx.score.join(' – ');
-  return '<button type="button" class="mcard" data-fx="' + esc(fx.id) + '" aria-label="' + esc(fxTitle(fx) + '. ' + fxSub(fx) + '. Open on Watch') + '">'
-    + '<span class="thumb" style="--hc:' + esc(fx.home.color) + ';--ac:' + esc(fx.away.color) + '"><span class="sc">' + esc(sc) + '</span><span class="tag">' + (fx.national ? 'Synthetic squads' : 'Recorded') + '</span></span>'
-    + '<span class="mtitle">' + esc(fxTitle(fx)) + '</span><span class="mmeta">' + esc(fxSub(fx)) + '</span></button>';
+  const saved = SAVED.has(fx.id);
+  return '<article class="match-card">'
+    + '<button type="button" class="match-open" data-fx="' + esc(fx.id) + '" aria-label="' + esc(fxTitle(fx) + '. ' + fxSub(fx) + '. Open on Watch') + '">'
+    + '<span class="match-thumb" style="--hc:' + esc(fx.home.color) + ';--ac:' + esc(fx.away.color) + '"><span class="sc">' + esc(sc) + '</span><span class="tag">' + (fx.national ? 'Synthetic squads' : 'Recorded') + '</span></span>'
+    + '<span class="mtitle">' + esc(fxTitle(fx)) + '</span><span class="mmeta">' + esc(fxSub(fx)) + '</span></button>'
+    + '<button type="button" class="save-match" data-save-fx="' + esc(fx.id) + '" aria-pressed="' + String(saved) + '">' + (saved ? 'Remove from My List' : 'Add to My List') + '</button></article>';
 };
 function paintHome() {
   const nat = FX.find((f) => f.national), recorded = FX.filter((f) => !f.national);
@@ -778,7 +834,7 @@ function paintHome() {
   hero.style.setProperty('--hc', feat.home.color); hero.style.setProperty('--ac', feat.away.color);
   hero.innerHTML = '<div class="hero-copy"><p class="kicker">Featured · ' + (feat.national ? 'synthetic squads' : 'recorded season match') + '</p>'
     + '<h2>' + esc(fxTitle(feat)) + '</h2><p class="sub">' + esc(fxSub(feat)) + ' · ' + esc(stadiumName(feat.stIndex)) + '</p>'
-    + '<div class="hero-go"><button type="button" class="btn play" data-fx="' + esc(feat.id) + '">Watch the match</button><a class="btn" href="#matches">All matches</a></div></div>';
+    + '<div class="hero-go"><button type="button" class="btn play" data-fx="' + esc(feat.id) + '">Watch the match</button><button type="button" class="btn" data-save-fx="' + esc(feat.id) + '" aria-pressed="' + String(SAVED.has(feat.id)) + '">' + (SAVED.has(feat.id) ? 'Saved · remove' : '+ My List') + '</button><a class="btn" href="#matches">All matches</a></div></div>';
   const byDate = (a, b) => b.date.localeCompare(a.date) || b.matchday - a.matchday;
   const rows = [
     ['Latest results', recorded.slice().sort(byDate).slice(0, 12), true],
@@ -817,7 +873,39 @@ function buildLibControls() {
     $('lib-q').value = ''; $('lib-team').value = ''; $('lib-md').value = ''; $('lib-sort').value = 'md';
     paintLibrary(); $('lib-q').focus();
   };
-  for (const id of ['v-home', 'v-matches']) $(id).addEventListener('click', (e) => { const b = e.target.closest('[data-fx]'); if (b) openMatch(b.dataset.fx); });
+  for (const id of ['v-home', 'v-matches', 'v-my-list']) $(id).addEventListener('click', (e) => {
+    const save = e.target.closest('[data-save-fx]'); if (save) { e.preventDefault(); e.stopPropagation(); toggleSaved(save.dataset.saveFx); return; }
+    const open = e.target.closest('[data-fx]'); if (open) openMatch(open.dataset.fx);
+  });
+}
+function persistSaved() { try { localStorage.setItem(SAVED_KEY, JSON.stringify([...SAVED])); return true; } catch (e) { return false; } }
+function toggleSaved(id) {
+  if (SAVED.has(id)) SAVED.delete(id); else SAVED.add(id);
+  if (!persistSaved()) { if (SAVED.has(id)) SAVED.delete(id); else SAVED.add(id); toast('This browser could not save your list'); }
+  paintHome(); if (current === 'matches') paintLibrary(); if (current === 'my-list') paintSaved();
+}
+function paintSaved() {
+  const list = FX.filter((fx) => SAVED.has(fx.id));
+  $('saved-grid').innerHTML = list.map(fxCard).join('');
+  $('saved-empty').hidden = list.length > 0;
+  $('saved-grid').hidden = list.length === 0;
+}
+function paintBrowseHighlights() {
+  const clips = new Map(HL.plan().map((clip) => [clip.id, clip]));
+  const cards = HL.cards().filter((card) => clips.has(card.id));
+  const grid = $('highlight-grid'); grid.textContent = '';
+  for (const card of cards) {
+    const article = document.createElement('article'); article.className = 'highlight-card';
+    const tag = document.createElement('span'); tag.className = 'moment'; tag.textContent = card.minute + "' · " + card.club + ' · ' + card.label;
+    const title = document.createElement('h3'); title.textContent = card.title;
+    const commentary = document.createElement('p'); commentary.textContent = card.commentary;
+    const why = document.createElement('p'); why.textContent = card.why;
+    const action = document.createElement('button'); action.type = 'button'; action.className = 'btn'; action.textContent = 'Replay in 3D';
+    action.addEventListener('click', () => sendClips([card.id]));
+    article.append(tag, title, commentary, why, action); grid.append(article);
+  }
+  $('highlights-empty').hidden = cards.length > 0;
+  grid.hidden = cards.length === 0;
 }
 function openMatch(id) {
   const fx = byId(id); if (!fx) return;
@@ -1387,18 +1475,18 @@ function init(list) {
   }
   // Arrow keys move through the three primary routes. Down opens the secondary tools menu.
   document.querySelector('.switch').addEventListener('keydown', (e) => {
-    const primary = [...document.querySelectorAll('.switch > [data-view]')], tools = [...$('tools-menu').querySelectorAll('[data-view]')];
-    if (e.key === 'Escape' && !$('tools-menu').hidden) { e.preventDefault(); $('tools-menu').hidden = true; $('tools-toggle').setAttribute('aria-expanded', 'false'); $('tools-toggle').focus(); return; }
-    if (document.activeElement === $('tools-toggle') && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('tools-menu').hidden = false; $('tools-toggle').setAttribute('aria-expanded', 'true'); tools[0].focus(); return; }
+    const primary = [...document.querySelectorAll('.switch > [data-view]')], tools = [...$('more-menu').querySelectorAll('[data-view]')];
+    if (e.key === 'Escape' && !$('more-menu').hidden) { e.preventDefault(); $('more-menu').hidden = true; $('more-toggle').setAttribute('aria-expanded', 'false'); $('more-toggle').focus(); return; }
+    if (document.activeElement === $('more-toggle') && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('more-menu').hidden = false; $('more-toggle').setAttribute('aria-expanded', 'true'); tools[0].focus(); return; }
     const inTools = tools.includes(document.activeElement), tabs = inTools ? tools : primary, i = tabs.indexOf(document.activeElement);
     if (i < 0) return;
     const to = e.key === 'ArrowRight' || (inTools && e.key === 'ArrowDown') ? (i + 1) % tabs.length : e.key === 'ArrowLeft' || (inTools && e.key === 'ArrowUp') ? (i + tabs.length - 1) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
     if (to < 0) return;
     e.preventDefault(); if (inTools) tabs[to].focus(); else { location.hash = tabs[to].dataset.view; tabs[to].focus(); }
   });
-  $('tools-toggle').onclick = () => { $('tools-menu').hidden = !$('tools-menu').hidden; $('tools-toggle').setAttribute('aria-expanded', String(!$('tools-menu').hidden)); if (!$('tools-menu').hidden) $('tools-menu').querySelector('button').focus(); };
-  document.addEventListener('click', (e) => { if (!$('tools-menu').hidden && !e.target.closest('.switch')) { $('tools-menu').hidden = true; $('tools-toggle').setAttribute('aria-expanded', 'false'); } });
-  // keys 1 to 4: the shell hears them itself, and from the views too (once a view has focus the shell never sees the key)
+  $('more-toggle').onclick = () => { $('more-menu').hidden = !$('more-menu').hidden; $('more-toggle').setAttribute('aria-expanded', String(!$('more-menu').hidden)); if (!$('more-menu').hidden) $('more-menu').querySelector('button').focus(); };
+  document.addEventListener('click', (e) => { if (!$('more-menu').hidden && !e.target.closest('.switch')) { $('more-menu').hidden = true; $('more-toggle').setAttribute('aria-expanded', 'false'); } });
+  // Number shortcuts route to Home, Matches, Watch and the existing production tools.
   const shortcut = (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if ($('tour').open) return;
@@ -1534,10 +1622,10 @@ function init(list) {
 
 // first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
 const TOUR = [
-  ['Watch', 'watch', 'A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Press Talk to a player to ask a player a question or give an order (typed questions are checked against the match record when the agent api is connected; otherwise a labelled rules fallback answers), or try the Copilot Ask tab: it answers only what the match data can prove.'],
+  ['Watch', 'watch', 'Browse the synthetic season from Home or Matches. Save fixtures to My List on this device; Highlights shows only clips captured in the current Watch session. A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Press Talk to a player to ask a question or give an order (typed questions are checked against the match record when the agent api is connected; otherwise a labelled rules fallback answers), or try Copilot Ask: it answers only what the match data can prove.'],
   ['Agents', 'agents', 'Four agents write lines about the match and a Verifier recounts every number from the event log before anything is shown. Switch the approval mode to Producer to approve, edit or kill a line yourself. Provenance on any row shows its source events and audit records.'],
-  ['Broadcast', 'broadcast', 'The broadcaster desk: lower-thirds and a teleprompter fed only by approved lines, instant replay, odds with the reasons on screen, and Ask the producer.'],
-  ['Analyst', 'analyst', 'The enterprise workspace for the same match: pre-match, live and post-match pages, players, reports and a data-science section.'],
+  ['Production Studio', 'broadcast', 'The Broadcast desk: lower-thirds and a teleprompter fed only by approved lines, instant replay, odds with the reasons on screen, and Ask the producer.'],
+  ['Analyze', 'analyst', 'The Analyst workspace for the same match: pre-match, live and post-match pages, players, reports and data science.'],
   ['Prove it', 'agents', 'The audit chain is tamper-evident: use Verify chain on the Agents tab and it recomputes every hash. Anything not really connected yet is labelled Simulated or Planned.']];
 let tourAt = 0;
 function tourShow(i) {
