@@ -17,6 +17,12 @@ def load_build():
 
 
 build = load_build()
+CLAUDE = "Claude " * build.CLAUDE_WORDS
+
+
+@pytest.fixture
+def no_entries(monkeypatch):
+    monkeypatch.setattr(build, "ANALYST_COPY", [])
 
 
 def test_a_known_sentence_is_rewritten(monkeypatch):
@@ -33,7 +39,22 @@ def test_a_count_mismatch_stops_the_build(monkeypatch):
         build.analyst_copy("Shared with your team", strict=False)
 
 
-def test_host_identifiers_are_left_alone(monkeypatch):
-    monkeypatch.setattr(build, "ANALYST_COPY", [])
+def test_host_identifiers_are_left_alone(no_entries):
     out = build.analyst_copy("window.claude allowClaude ClaudeAgent", strict=False)
     assert out == "window.claude allowClaude ClaudeAgent"
+
+
+def test_strict_build_stops_when_the_claude_count_drifts(no_entries):
+    with pytest.raises(SystemExit, match="Claude words"):
+        build.analyst_copy("Claude " * (build.CLAUDE_WORDS - 1))
+
+
+def test_strict_build_stops_on_granted_copy(no_entries):
+    with pytest.raises(SystemExit, match="granted"):
+        build.analyst_copy(CLAUDE + "Granted by the viewer")
+
+
+def test_strict_build_allows_the_host_labels(no_entries):
+    out = build.analyst_copy(CLAUDE + "'downloads not granted'")
+    assert "'downloads not granted'" in out
+    assert "Claude" not in out

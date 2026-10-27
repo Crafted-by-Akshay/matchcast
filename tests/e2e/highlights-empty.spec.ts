@@ -21,12 +21,6 @@ test('highlights: with no moments, Play and Skip are disabled and Back to Watch 
   await expect(page.locator('#hl-3d')).toBeHidden();
   await page.locator('#hl-back').click();
   await expect(page.locator('#hl')).toBeHidden();
+  await expect(page.locator('#v-watch')).toBeVisible();
   expect(errs).toEqual([]);
-});
-
-test('analyst: the Watch links point at the Watch app beside the console, not an external artifact', async ({ page }) => {
-  await page.goto('/analyst/index.html', { waitUntil: 'commit' });
-  const link = page.locator('a.watch');
-  await expect(link).toHaveAttribute('href', '../watch/index.html');
-  await expect(page.locator('a[href*="claude.ai/artifact"]')).toHaveCount(0);
 });

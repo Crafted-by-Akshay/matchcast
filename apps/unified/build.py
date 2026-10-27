@@ -64,7 +64,8 @@ ASK_NEW = """  if (!typed) { chatAdd('ana', ruleAnswer(q)); return; }
 
 def sub(text, old, new, label):
     n = text.count(old)
-    assert n == 1, label + ": expected 1 match, found " + str(n)
+    if n != 1:
+        raise SystemExit(label + ": expected 1 match, found " + str(n))
     return text.replace(old, new)
 
 
@@ -351,7 +352,7 @@ ANALYST_COPY = [
     ("Demo: Claude via artifact sampling when granted, rules otherwise · Production: Azure AI Foundry Agent Service",
      "Answers come from rules in this console · Production target: the agent api runs Producer, Analyst, Narrator and Verifier on Azure AI Foundry", 1),
     ("Agents may call Claude when the viewer grants it (production: Azure AI Foundry).",
-     "Agents answer from rules in this console. Production target: the live agent api runs the Foundry models.", 1),
+     "Agents answer from rules in this console. Production target: the agent api runs the Foundry models.", 1),
     ("Rules answer when Claude is not granted.", "Rules answer when no model is available here.", 1),
     ("Claude writes the SQL when it is granted.", "A model writes the SQL when available.", 1),
     ("rules (Claude not granted here)", "rules only in this console", 1),
@@ -398,8 +399,9 @@ def analyst_copy(text, strict=True):
         rest = text
         for label in HOST_LABELS:
             rest = rest.replace(label, "")
-        if "granted" in rest:
-            raise SystemExit("analyst copy: 'granted' copy left in the build: " + rest[rest.index("granted") - 40 : rest.index("granted") + 20])
+        hit = re.search("granted", rest, re.I)
+        if hit:
+            raise SystemExit("analyst copy: 'granted' copy left in the build: " + rest[max(0, hit.start() - 40) : hit.end() + 20])
     return text
 
 
