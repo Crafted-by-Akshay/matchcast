@@ -7,7 +7,7 @@ Status: **Agreed design**. Last reviewed 27 Oct 2026. Backlog: EXP-1 to EXP-17. 
 ```mermaid
 flowchart TB
   subgraph Shell[index.html shell]
-    bar[top bar: Watch 1, Analyst 2, Broadcast 3, Agents 4<br/>match bar, language picker, status pill, sign-in]
+    bar[top bar: Home 1, Matches 2, Watch 3, Tools menu<br/>Analyze, Production Studio, Agents]
     bus[postMessage bus]
     live[live.js: REST + SSE client]
     ag[agents.js rules pipeline<br/>offline fallback]
@@ -203,7 +203,7 @@ The top bar has a Status button beside the api pill. It opens a dialog built by 
 
 ### Pass 9 (25 Oct): the split stage changes the arithmetic
 - The evaluator found the pass 8 layout wrong in the split stage (Watch pane 745 to 835 px): the layout had been keyed on window width. `dock()` and the Vision-box default now use the Watch pane's own width (see above); `watch-docked-cards.spec.ts` opens the Copilot drawer too.
-- Shell header: the wordmark keeps its width (`.brand{flex:none}`) and the tab descriptors ("fan 3D", "enterprise", "desk", "pipeline") are hidden at 1400 px and below, so four tabs fit beside it at 1280 px. Spec: `shell-header.spec.ts`.
+- Shell header: Home, Matches and Watch are the primary routes. Analyze, Production Studio and Agents are grouped in the keyboard-accessible Tools menu; opening a tool marks Tools with the active page. At 390 px and below the four primary controls fit without sideways scrolling. Specs: `shell-header.spec.ts`, `shell-a11y.spec.ts`, `shell-layout.spec.ts`.
 - Talk: a typed line that is a question or not an order, with no agent api, no longer gets "I hear you." The wording is "I can't act on or answer that here: this is the rules fallback (no checked answer from the agent api), which only follows plain orders such as press, mark or shoot." With the api connected nothing changes: a checked answer, or "No checked answer: the match record did not confirm that."
 - In a Watch pane of 561 to 1100 px the Copilot button leaves the top centre (where it landed on the camera chips) for the bottom right, 152 px up so it clears the caption card, and the Talk to a player control stacks above it (`embed/watch.js`). Below 561 px Watch's own phone rules apply. The followed-player card and the commentary card stop short of both buttons. When the commentary card has to step aside it is clipped out of sight and out of the tab order but stays in the page, so its live region keeps announcing lines; it returns when the drawer closes or the followed-player card goes.
 
@@ -293,7 +293,7 @@ Covered by `tests/e2e/watch-lang-picker.spec.ts`.
 ## Crew UI default-on, the Crew button and the off switch
 The crew UI is **on by default** because a judge will not add a query flag. The rule is one sentence, repeated in `crew.js`, `embed/feedpick.js`, `embed/langpick.js` and `embed/democtl.js`: on unless `?crew=0` is on the page (or on the parent page, for the Watch iframe) or `localStorage` `mc-crew` is `0`; an explicit `?crew=1` beats a stored `0`. The shell forwards the state to the Watch iframe as `crew=1` or `crew=0` (`url('watch')` in `index.html`), so the feed picker, the language row and the Demo-controls fold follow it. `?crew=0` is the off switch and restores the legacy Watch and Agents tab. `?demo=1` still brings back the Demo controls, the weather chip and the camera presets.
 
-- **Crew button.** A `Crew` pill sits in the header `.status` group (`#crew-btn`, `aria-label` "Crew: open the agent crew, its spawn tree and scoreboard"; hidden when the crew UI is off). It is a plain button, not a fifth tab, so the four-tab list and its arrow-key and 1 to 4 shortcuts are unchanged and the four tabs still fit at 320 px. It opens the Agents tab, scrolls the Crew section (`#crew-mount`, the spawn tree, with the scoreboard `#crew-score` below) into view and moves focus to its heading. Keyboard: Tab to it, Enter or Space. Tap target 44 px on a phone.
+- **Crew button.** A `Crew` pill sits in the header `.status` group (`#crew-btn`, `aria-label` "Crew: open the agent crew, its spawn tree and scoreboard"; hidden when the crew UI is off). It is a plain button, not a primary route. It opens Agents from the Tools menu route, scrolls the Crew section (`#crew-mount`, the spawn tree, with the scoreboard `#crew-score` below) into view and moves focus to its heading. Keyboard: Tab to it, Enter or Space. Tap target 44 px on a phone.
 - **Quiet Watch.** The Watch first screen adds only the feed picker in the commentary card header (language row stays in the viewer panel, closed). No crew panel, spawn tree or scoreboard is on Watch; they live in the Agents tab. The three unbuilt feeds (audio description, half-time explainer, news ticker) carry a "Planned" tag; Catch me up is live (below).
 - **Phone, default feed.** At 560 px and below the feed picker sits in the commentary card header. With the default feed (Casual) Watch keeps its own commentary line and the picker's one-line replacement stays hidden (`body.mc-feedon` is off). Only a viewer who picks another feed gets the one feed line in place of the commentary line, so live commentary is never lost by default.
 - **Score poll.** `CREW` polls the scoreboard GET only while the Agents tab is the current tab and the page is visible.

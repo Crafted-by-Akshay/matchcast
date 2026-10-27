@@ -38,11 +38,11 @@ button,select{font:inherit;color:inherit}
 .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,var(--accent),#7B5CF0);color:var(--accent-ink);flex:none}
 .brand b{font-size:15px;letter-spacing:.01em}
 .brand small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.switch{display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;overflow-x:auto;scrollbar-width:none;max-width:100%}
+.switch{position:relative;display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;max-width:100%}
 .switch::-webkit-scrollbar{display:none}
 .switch button{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:8px;font-weight:600}
 .switch button small{font-weight:500;font-size:12px}
-.switch button[aria-selected="true"]{background:#2A62C9;color:var(--accent-ink)}
+.switch button[aria-current="page"]{background:#2A62C9;color:var(--accent-ink)}
 #crew-btn{font-weight:700;border-color:var(--accent);color:var(--accent)}#crew-btn:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .status{display:flex;gap:6px;flex:none}
@@ -58,14 +58,22 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 #voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0;min-height:0}   /* a live region for voice announcements, not a visible control */
 #api-pill::before{content:"Agents ·";margin-right:.4em;color:var(--muted)}   /* says which part the pill is about, so it does not read as a contradiction of the engine chips */
 @media (max-width:1500px){.brand small{display:none}.proto{display:none}}
-@media (max-width:1400px){.switch button small{display:none}}   /* the four tabs fit beside the wordmark; their titles say what each one is */
+@media (max-width:1400px){.switch button small{display:none}}
 @media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#crew-btn,#fx,#lang-sel select,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- browse: Home and Matches. Catalog only, so no 3D engine starts here; the match bar and the five-stage strip stay on the player views ---- */
 body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="matches"] .matchbar,body[data-view="matches"] .story{display:none}
 .switch .nav-sep{width:1px;align-self:stretch;margin:4px 2px;background:var(--line);flex:none}
-.switch button.sec{color:#9FB3CF;font-weight:500}
-.switch button.sec[aria-selected="true"]{color:var(--accent-ink)}
+.tools-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:20;min-width:220px;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);box-shadow:0 14px 34px rgba(0,0,0,.42)}
+.tools-menu[hidden]{display:none}
+.tools-menu button{width:100%;justify-content:flex-start;border-radius:8px}
+.tools-menu button.sec{color:#9FB3CF;font-weight:500}
+.tools-menu button.sec[aria-current="page"]{color:var(--accent-ink)}
+.tools-menu button:hover{background:var(--bg3)}
+.tools-toggle{gap:6px}
+.tools-toggle.active{color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
+.tools-toggle::after{content:"⌄";font-size:12px;color:var(--muted)}
+.tools-toggle[aria-expanded="true"]::after{content:"⌃"}
 .browse{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;background:var(--bg);padding-bottom:32px;scrollbar-width:thin}
 .browse h2,.browse h3{margin:0;letter-spacing:.01em}
 .browse .sub{color:var(--muted);font-size:13px;margin:6px 0 0}
@@ -283,7 +291,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   :root{--bar:auto}
   .top{flex-wrap:wrap;padding:10px var(--gut);gap:10px}
   .switch{margin-left:0;width:100%}
-  .switch button{flex:1 0 auto;justify-content:center}
+  .switch button{flex:1 1 0;justify-content:center}
   .status{width:100%;flex-wrap:wrap}   /* language, Voice and Status stay reachable on a phone */
   .matchbar{gap:10px}
   .fx{width:100%}
@@ -308,7 +316,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   .fx label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .brand small{display:block}
 }
-@media (max-width:360px){.switch button{padding:7px 6px}#status-btn{order:3}#api-pill::before{content:none}}   /* a 320 px screen: the four view tabs fit without scrolling, Status joins Tour and Voice, and the agents pill drops its "Agents ·" prefix so it shares a row with the Azure label */
+@media (max-width:360px){.switch button{padding:7px 6px}#status-btn{order:3}#api-pill::before{content:none}}
 @media (max-width:420px){
   .brand small{display:none}
   .switch button small{display:none}
@@ -325,14 +333,16 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <span class="mark" aria-hidden="true">MC</span>
     <div><b>MatchCast</b><small title="One console: fan Watch, Analyst and Broadcast on one match">Fan, Analyst and Broadcast on one match</small></div>
   </div>
-  <nav class="switch" role="tablist" aria-label="Browse and tools">
-    <button role="tab" id="tab-home" data-view="home" aria-controls="v-home" aria-selected="true" title="Home: the featured match and rows from the season (1)">Home</button>
-    <button role="tab" id="tab-matches" data-view="matches" aria-controls="v-matches" aria-selected="false" title="Matches: all season fixtures, with search and filters (2)">Matches</button>
-    <button role="tab" id="tab-watch" data-view="watch" aria-controls="v-watch" aria-selected="false" title="Watch: the 3D match player (3)">Watch</button>
-    <span class="nav-sep" aria-hidden="true"></span>
-    <button role="tab" id="tab-analyst" data-view="analyst" aria-controls="v-analyst" aria-selected="false" class="sec" title="Analyze: the season analysis console (4)">Analyze</button>
-    <button role="tab" id="tab-broadcast" data-view="broadcast" aria-controls="v-broadcast" aria-selected="false" class="sec" title="Production Studio: the broadcast desk (5)">Production Studio</button>
-    <button role="tab" id="tab-agents" data-view="agents" aria-controls="v-agents" aria-selected="false" class="sec" title="Production Studio: the agent pipeline (6)">Agents</button>
+  <nav class="switch" aria-label="MatchCast navigation">
+    <button type="button" id="tab-home" data-view="home" aria-current="page" title="Home: featured match and season rows (1)">Home</button>
+    <button type="button" id="tab-matches" data-view="matches" title="Matches: search and browse the season (2)">Matches</button>
+    <button type="button" id="tab-watch" data-view="watch" title="Watch: open the 3D match player (3)">Watch</button>
+    <button type="button" id="tools-toggle" class="tools-toggle" aria-expanded="false" aria-controls="tools-menu">Tools</button>
+    <div class="tools-menu" id="tools-menu" aria-label="More tools" hidden>
+      <button type="button" id="tab-analyst" data-view="analyst" class="sec" title="Analyze: the season analysis console (4)">Analyze</button>
+      <button type="button" id="tab-broadcast" data-view="broadcast" class="sec" title="Production Studio: the broadcast desk (5)">Production Studio</button>
+      <button type="button" id="tab-agents" data-view="agents" class="sec" title="Agents: the agent pipeline (6)">Agents</button>
+    </div>
   </nav>
   <div class="status" aria-label="Environment">
     <button type="button" class="pill" id="crew-btn" hidden aria-label="Crew: open the agent crew, its spawn tree and scoreboard" title="Crew: the agents that make each line, their spawn tree and the scoreboard (opens the Agents tab)">Crew</button>
@@ -727,9 +737,12 @@ function show(view) {
   for (const v of PANES) {
     const shown = on.includes(v);
     $('v-' + v).hidden = !shown; $('v-' + v).classList.toggle('gone', !shown);
-    const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-selected', String(v === view));
-    tab.tabIndex = v === view ? 0 : -1;
+    const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-current', v === view ? 'page' : 'false');
   }
+  $('tools-toggle').classList.toggle('active', ['analyst', 'broadcast', 'agents'].includes(view));
+  $('tools-toggle').setAttribute('aria-label', ['analyst', 'broadcast', 'agents'].includes(view) ? 'Tools, current page: ' + ({ analyst: 'Analyze', broadcast: 'Production Studio', agents: 'Agents' })[view] : 'Tools');
+  if ($('tools-menu').contains(document.activeElement)) $('tools-toggle').focus();
+  $('tools-menu').hidden = true; $('tools-toggle').setAttribute('aria-expanded', 'false');
   $('stage').classList.toggle('split', on.length > 1);
   $('split-bar').hidden = on.length < 2;
   const tg = $('bc-toggle'); tg.hidden = true;   // the second 3D view is off the first screen for the sprint (AB#497); ?split=1 still opens it
@@ -1372,14 +1385,19 @@ function init(list) {
       h.tabIndex = -1; h.scrollIntoView({ block: 'start' }); h.focus({ preventScroll: true });
     };
   }
-  // arrow keys, Home and End move between the dashboard tabs (WAI-ARIA tabs pattern)
+  // Arrow keys move through the three primary routes. Down opens the secondary tools menu.
   document.querySelector('.switch').addEventListener('keydown', (e) => {
-    const tabs = [...document.querySelectorAll('.switch [data-view]')], i = tabs.indexOf(document.activeElement);
+    const primary = [...document.querySelectorAll('.switch > [data-view]')], tools = [...$('tools-menu').querySelectorAll('[data-view]')];
+    if (e.key === 'Escape' && !$('tools-menu').hidden) { e.preventDefault(); $('tools-menu').hidden = true; $('tools-toggle').setAttribute('aria-expanded', 'false'); $('tools-toggle').focus(); return; }
+    if (document.activeElement === $('tools-toggle') && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('tools-menu').hidden = false; $('tools-toggle').setAttribute('aria-expanded', 'true'); tools[0].focus(); return; }
+    const inTools = tools.includes(document.activeElement), tabs = inTools ? tools : primary, i = tabs.indexOf(document.activeElement);
     if (i < 0) return;
-    const to = e.key === 'ArrowRight' ? (i + 1) % tabs.length : e.key === 'ArrowLeft' ? (i + tabs.length - 1) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+    const to = e.key === 'ArrowRight' || (inTools && e.key === 'ArrowDown') ? (i + 1) % tabs.length : e.key === 'ArrowLeft' || (inTools && e.key === 'ArrowUp') ? (i + tabs.length - 1) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
     if (to < 0) return;
-    e.preventDefault(); location.hash = tabs[to].dataset.view; tabs[to].focus();
+    e.preventDefault(); if (inTools) tabs[to].focus(); else { location.hash = tabs[to].dataset.view; tabs[to].focus(); }
   });
+  $('tools-toggle').onclick = () => { $('tools-menu').hidden = !$('tools-menu').hidden; $('tools-toggle').setAttribute('aria-expanded', String(!$('tools-menu').hidden)); if (!$('tools-menu').hidden) $('tools-menu').querySelector('button').focus(); };
+  document.addEventListener('click', (e) => { if (!$('tools-menu').hidden && !e.target.closest('.switch')) { $('tools-menu').hidden = true; $('tools-toggle').setAttribute('aria-expanded', 'false'); } });
   // keys 1 to 4: the shell hears them itself, and from the views too (once a view has focus the shell never sees the key)
   const shortcut = (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
