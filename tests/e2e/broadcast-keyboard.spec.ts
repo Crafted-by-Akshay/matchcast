@@ -1,7 +1,6 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 declare const post: any;
-  collectErrors, openShell, ready, viewFrame } import { collectErrors, openShell, ready, viewFrame, openView}from './helpers';
 
 // Keyboard path through the Broadcast desk: every control is reachable with Tab, shows a visible focus ring, and Escape closes the dialogs it opens.
 test('Broadcast desk: Tab reaches every control with a visible focus indicator', async ({ page }) => {
