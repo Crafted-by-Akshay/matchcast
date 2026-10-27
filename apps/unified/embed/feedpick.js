@@ -25,7 +25,8 @@
   let feeds = {}, lang = 'en', pick = 'casual', simulated = true, first = true;
   let cu = { state: 'idle' }, cuLast = null;   // the catch-me-up answer, and the last good recap (kept while a refresh is loading, busy or failed)
   const seen = new Set();
-  try { const s = localStorage.getItem(KEY); if (s && DEFS.some((d) => d.key === s)) pick = s; } catch (e) { /* storage blocked: the default stands */ }
+  // a saved Planned feed is not restored: it cannot be chosen (AB#373)
+  try { const s = localStorage.getItem(KEY); if (s && DEFS.some((d) => d.key === s && d.live)) pick = s; } catch (e) { /* storage blocked: the default stands */ }
 
   const st = document.createElement('style'); st.id = 'mc-feedpick-css';
   st.textContent = '#mc-feeds{border-top:1px solid rgba(140,194,255,.2);padding:6px 10px 8px}'
@@ -143,7 +144,7 @@
   };
   const postPick = (key) => { try { window.parent.postMessage({ src: 'matchcast', type: 'crew-feed-pick', key, lang: 'en' }, '*'); } catch (e) { /* no shell */ } };
   const choose = (key, fromUser) => {
-    if (!DEFS.some((d) => d.key === key)) return;
+    if (!DEFS.some((d) => d.key === key && d.live)) return;   // a Planned feed cannot be chosen
     pick = key;
     if (fromUser) { try { localStorage.setItem(KEY, key); } catch (e) { /* storage blocked */ } }
     if (key === 'catch_me_up' && def().live) cu = { state: 'loading' };   // the shell reads the route for this pick (a re-pick is throttled there)
@@ -160,6 +161,7 @@
     e.preventDefault();
     // a Planned feed is disabled, so the keys step over it and End lands on the last live feed (AB#373)
     const live = DEFS.map((d, k) => (d.live ? k : -1)).filter((k) => k >= 0);
+    if (!live.length) return;
     const at = live.indexOf(DEFS.findIndex((d) => d.key === pick));
     const pos = e.key === 'Home' ? 0 : e.key === 'End' ? live.length - 1 : (at + step + live.length) % live.length;
     choose(DEFS[live[pos]].key, true); focusPick();
@@ -169,7 +171,7 @@
     const d = e.data || {};
     if (e.source !== window.parent || d.src !== 'matchcast-shell') return;
     if (d.type === 'crew-feeds') {
-      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: String(x.label), live: !!x.live })); if (!DEFS.some((x) => x.key === pick)) pick = DEFS[0].key; }
+      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: String(x.label), live: !!x.live })); const fl = DEFS.find((x) => x.live); if (!DEFS.some((x) => x.key === pick && x.live)) pick = (fl || DEFS[0]).key; }
       simulated = d.simulated !== false;   // anything but an explicit false counts as the fixture
       feeds = d.feeds && typeof d.feeds === 'object' ? d.feeds : {};
       announce(); drawPick(); drawLines();

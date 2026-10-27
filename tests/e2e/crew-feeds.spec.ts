@@ -30,7 +30,7 @@ test('with ?crew=0 nothing is added: no picker, style, body class or iframe para
   expect(await f.evaluate(() => { const b = document.getElementById('mc-two')!; b.hidden = false; return getComputedStyle(b).display; })).not.toBe('none');
 });
 
-test('feed picker: six labelled choices, Planned tags, planned copy, waiting copy, Simulated lines with a minute and no tick, saved choice', async ({ page }) => {
+test('feed picker: six labelled choices, Planned tags, waiting copy, Simulated lines with a minute and no tick, saved choice', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   const f = await open(page);
@@ -178,3 +178,16 @@ for (const [name, w, h] of [['phone', 390, 844], ['small phone', 320, 640]] as c
     expect(g.note!.r, 'the English note stays inside the card').toBeLessThanOrEqual(g.mcf!.r);
   });
 }
+
+test('feed picker: a saved Planned choice is not restored; the picker opens on Casual and stays keyboard reachable', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.addInitScript(() => { try { localStorage.setItem('mc-feedpick', 'audio_description'); } catch (e) { /* storage blocked */ } });
+  const f = await open(page);
+  const group = f.getByRole('radiogroup', { name: 'Feed' });
+  await expect(group).toBeVisible({ timeout: 60_000 });
+  const radios = group.getByRole('radio');
+  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(2)).toHaveAttribute('aria-checked', 'false');
+  await radios.nth(0).focus();
+  await expect(radios.nth(0)).toBeFocused();
+});
