@@ -11,14 +11,14 @@
     + '#mc-two h4{margin:0 0 2px;font:700 11px system-ui,sans-serif;color:#8CC2FF}#mc-two p{margin:0;font:12px/1.35 system-ui,sans-serif;color:#e8eefc;overflow-wrap:anywhere}#mc-two .ca h4{color:#F5B942}'
     + '#mc-trust{min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid rgba(91,209,154,.5);background:transparent;color:#5BD19A;font:600 11px system-ui,sans-serif;cursor:pointer;white-space:nowrap}#mc-trust:focus-visible,#cp-evalnote button:focus-visible{outline:2px solid #F5B942;outline-offset:2px}'
     + '#cp-evalnote{margin:0 0 8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:12px/1.4 system-ui,sans-serif;color:var(--muted)}#cp-evalnote b{color:var(--ink,#e8eefc)}#cp-evalnote button{margin-top:6px;min-height:32px;padding:2px 10px;border-radius:6px;border:1px solid var(--line);background:transparent;color:inherit;cursor:pointer}'
-    + '@media (max-width:560px){#mc-two{display:none}#mc-trust .mc-full{display:none}#mc-trust{padding:2px 6px}}'
+    + '@media (max-width:560px){#mc-two{display:none}#mc-trust .mc-full,#mc-trust .mc-mode{display:none}#mc-trust{padding:2px 6px}}'
     + '@media (max-width:560px) and (max-height:300px){#mcf-sound{display:none!important}#mcf-top{padding-bottom:2px}}';   // a very short frame (a small phone under the shell header): the card must leave room for the Talk control   /* a phone has no room for two cards above the pitch controls: the commentary card stays one line */';
   document.head.appendChild(st);
 
   // the trust chip: the measured record of the claim Verifier (docs/eval/agents-eval.md), in the commentary header
   const EVAL = '99.3% of 151 planted errors caught (right reason required), 0 false rejects on 34 honest lines';
   const chip = document.createElement('button');
-  chip.type = 'button'; chip.id = 'mc-trust'; chip.innerHTML = '✓ <span class="mc-full">Verifier </span>99.3%';   // static text; the word drops on phones so the commentary head stays on one row
+  chip.type = 'button'; chip.id = 'mc-trust'; chip.innerHTML = '✓ <span class="mc-full">Verifier </span>99.3% <span class="mc-mode">rules, offline</span>';   // static text; the word and the mode drop on phones so the commentary head stays on one row
   chip.title = 'Verifier record, offline evaluation of the rules agents on a frozen match: ' + EVAL + '. Not a live-model result (docs/eval/agents-eval.md). Click for the Verify tab.';
   chip.setAttribute('aria-label', 'Verifier record: ' + EVAL + '. Opens the Verify tab.');
   const head = feed.querySelector('#mcf-head'); if (head) head.insertBefore(chip, head.lastElementChild);
