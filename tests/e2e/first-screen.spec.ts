@@ -30,7 +30,8 @@ test('Watch shows one moment in two voices, and the Verifier chip opens the Veri
 
   await expect(page.locator('.top .pill', { hasText: 'Browser prototype' })).toHaveCount(0);
   await expect(page.locator('.top .pill', { hasText: 'Azure parts simulated' })).toHaveCount(0);
-  await expect(page.locator('#status-btn')).toBeVisible();   // the honest breakdown stays one click away
+  await page.locator('#more-toggle').click();
+  await expect(page.locator('#status-btn')).toBeVisible();   // service details are grouped under More
   expect(errs).toEqual([]);
 });
 

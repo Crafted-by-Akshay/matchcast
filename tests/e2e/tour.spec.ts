@@ -5,6 +5,7 @@ import { openShell, viewFrame } from './helpers';
 test('tour: the button opens a five-step guide that switches views, and Escape closes it', async ({ page }) => {
   await openShell(page, 'watch');
   await expect(page.locator('#tour')).not.toBeVisible();   // never opens by itself
+  await page.locator('#more-toggle').click();
   await page.click('#tour-btn');
   const d = page.locator('#tour');
   await expect(d).toBeVisible();
@@ -21,6 +22,7 @@ test('tour: the button opens a five-step guide that switches views, and Escape c
   await expect(page.locator('#tour-go')).toHaveText('Done');
   await page.click('#tour-go');
   await expect(d).not.toBeVisible();
+  await page.locator('#more-toggle').click();
   await page.click('#tour-btn');
   await page.keyboard.press('Escape');
   await expect(d).not.toBeVisible();

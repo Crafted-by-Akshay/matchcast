@@ -16,7 +16,7 @@ Three things to click once it is open:
 
 1. **Watch** view: the match starts on load. Pick Casual or Analyst in the Feed picker (or a watch mode: My club, Player focus, One metric) and see the same moment explained differently; pick one of ten languages in the header.
 2. Press **Why?** or **How was this made?** on any line: the claim, its cited events and each agent's step.
-3. **Crew** pill (Agents tab): the spawn tree of the specialists each goal called, and the scoreboard. Then **Seed a bad claim** (the Verifier rejects a wrong number and repairs it from the raw event log) and **Cut the model** (the rules twins take over mid-match and the lines keep coming).
+3. **More → Crew** (Agents tab): the spawn tree of the specialists each goal called, and the scoreboard. Then **Seed a bad claim** (the Verifier rejects a wrong number and repairs it from the raw event log) and **Cut the model** (the rules twins take over mid-match and the lines keep coming).
 
 ## The five stages
 

@@ -96,6 +96,7 @@ test('offline: Offline (simulated) and no api call', async ({ page }) => {
 test('status dialog: offline says everything is simulated', async ({ page }) => {
   const errs = collectErrors(page);
   await drive(page, '');
+  await page.locator('#more-toggle').click();
   await page.locator('#status-btn').click();
   await expect(page.locator('#status-dlg')).toBeVisible();
   await expect(page.locator('#status-box')).toContainText('No api is configured');
@@ -110,6 +111,7 @@ test('status dialog: lists each dependency from /v1/status', async ({ page }) =>
     { key: 'c', label: 'Sim thing', status: 'simulated', detail: 'in memory' }] };
   await page.route('**/v1/status', (rt) => rt.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(doc) }));
   await drive(page, 'http://127.0.0.1:9');
+  await page.locator('#more-toggle').click();
   await page.locator('#status-btn').click();
   const items = page.locator('#status-box li');
   await expect(items).toHaveCount(3);

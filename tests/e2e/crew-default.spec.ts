@@ -16,6 +16,7 @@ test('crew is on by default: the Crew button shows, Watch gets crew=1, the feed 
   const errs = collectErrors(page);
   await open(page);
   expect(await page.evaluate(() => (window as any).CREW.enabled)).toBe(true);
+  await page.locator('#more-toggle').click();
   await expect(page.getByRole('button', { name: /^Crew/ })).toBeVisible();
   await ready('watch')(page);
   expect(await watchSrc(page)).toMatch(/[?&]crew=1(&|$)/);
@@ -49,6 +50,7 @@ test('localStorage mc-crew=0 turns it off; an explicit ?crew=1 beats it', async 
   await page.goto('/index.html?split=1&crew=1#watch', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!(window as any).CREW);
   expect(await page.evaluate(() => (window as any).CREW.enabled)).toBe(true);
+  await page.locator('#more-toggle').click();
   await expect(page.locator('#crew-btn')).toBeVisible();
 });
 
@@ -91,6 +93,7 @@ test('the Crew button opens the Agents tab at the Crew section, by keyboard, and
   test.setTimeout(300_000);
   await open(page);
   const btn = page.getByRole('button', { name: /^Crew/ });
+  await page.locator('#more-toggle').click();
   await expect(btn).toBeVisible();
   await btn.focus();
   await expect(btn).toBeFocused();
@@ -106,6 +109,7 @@ test('Crew button at 320 px: visible, tappable, no sideways scroll, and it opens
   test.setTimeout(300_000);
   await open(page, '', 320, 640);
   const btn = page.getByRole('button', { name: /^Crew/ });
+  await page.locator('#more-toggle').click();
   await expect(btn).toBeVisible();
   const b = await btn.boundingBox();
   expect(b!.x).toBeGreaterThanOrEqual(0);

@@ -70,9 +70,9 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 
 /* ---- browse: Home and Matches. Catalog only, so no 3D engine starts here; the match bar and the five-stage strip stay on the player views ---- */
 body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="matches"] .matchbar,body[data-view="matches"] .story,body[data-view="highlights"] .matchbar,body[data-view="highlights"] .story,body[data-view="my-list"] .matchbar,body[data-view="my-list"] .story,body[data-view="my-club"] .matchbar,body[data-view="my-club"] .story,body[data-view="match"] .matchbar,body[data-view="match"] .story{display:none}
-.tools-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:20;min-width:244px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);box-shadow:0 14px 34px rgba(0,0,0,.42)}
+.tools-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:20;min-width:244px;max-height:calc(100vh - 80px);overflow-y:auto;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);box-shadow:0 14px 34px rgba(0,0,0,.42)}
 .tools-menu[hidden]{display:none}
-.tools-menu button{width:100%;justify-content:flex-start;border-radius:8px}
+.tools-menu button{width:100%;min-height:40px;justify-content:flex-start;border-radius:8px}
 .tools-menu button.sec{color:#9FB3CF;font-weight:500}
 .tools-menu button.sec[aria-current="page"]{color:var(--accent-ink)}
 .tools-menu button:hover{background:var(--bg3)}
@@ -405,15 +405,17 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
       <button type="button" id="tab-analyst" data-view="analyst" class="sec" title="Analyze: the season analysis console (4)">Analyze</button>
       <button type="button" id="tab-broadcast" data-view="broadcast" class="sec" title="Production Studio: the broadcast desk (5)">Production Studio</button>
       <button type="button" id="tab-agents" data-view="agents" class="sec" title="Agents: the agent pipeline (6)">Agents</button>
+      <hr>
+      <p class="menu-label">Help & status</p>
+      <button type="button" class="pill sec" id="crew-btn" hidden aria-label="Crew: open the agent crew, its spawn tree and scoreboard" title="Crew: agent specialists, spawn tree and scoreboard">Crew</button>
+      <button type="button" class="pill sec" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
+      <button type="button" class="pill sec" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status & service details</button>
     </div>
   </nav>
   <div class="status" aria-label="Environment">
-    <button type="button" class="pill" id="crew-btn" hidden aria-label="Crew: open the agent crew, its spawn tree and scoreboard" title="Crew: the agents that make each line, their spawn tree and the scoreboard (opens the Agents tab)">Crew</button>
-    <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Play spoken match commentary. Captions and on-screen text stay visible when sound is off.">Sound: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
     <label id="lang-sel" title="Changes match commentary and speech. Interface labels remain in English."><span>Commentary</span><span class="ui-scope" aria-hidden="true">UI: English</span><select id="lang-pick" aria-label="Commentary and speech language" aria-describedby="lang-scope-note"></select><span class="sr" id="lang-scope-note">Changes match commentary and speech where a checked translation is available. Navigation and interface labels remain in English.</span></label>
     <span class="pill" id="api-pill" role="status" title="">Starting…</span><span class="pill" id="lat-pill" hidden title="Event to on air: wall-clock time from a Watch event reaching this page to the agent api's published line arriving here, the median of the last 30 matched lines. Watch batches its events once a second before they reach this page; that wait is not in the number."></span>
-    <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
     <span class="more" aria-hidden="true">›</span>
   </div>
 </header>
@@ -849,6 +851,7 @@ function show(view) {
   if (BROWSE[view]) $('v-' + view).scrollTop = BROWSE[view].y;
   paint();
 }
+function closeMoreMenu() { $('more-menu').hidden = true; $('more-toggle').setAttribute('aria-expanded', 'false'); }
 
 // ---------------------------------------------------------------- browse: Home and Matches
 // The catalog is the season (FX): each fixture's teams, colours, matchday, date, stadium and recorded score. Nothing here is ranked by
@@ -1722,7 +1725,7 @@ function init(list) {
   if (new URLSearchParams(location.search).get('seedBadClaim') === '1') { $('ag-bad').checked = true; $('ag-bad').onchange({ target: $('ag-bad') }); }   // filming URL: the demo bad claim is on from the start
   paintPill(LV.status);
   renderAgents();
-  $('status-btn').onclick = () => { const dlg = $('status-dlg'); STX.draw($('status-box')); if (dlg.showModal) dlg.showModal(); };
+  $('status-btn').onclick = () => { closeMoreMenu(); const dlg = $('status-dlg'); STX.draw($('status-box')); if (dlg.showModal) dlg.showModal(); };
   show(location.hash.slice(1) || 'home');
 }
 
@@ -1745,7 +1748,7 @@ function tourShow(i) {
 }
 function tourOpen() { const d = $('tour'); if (!d.open) d.showModal(); tourShow(0); }
 function tourInit() {
-  $('tour-btn').onclick = tourOpen;
+  $('tour-btn').onclick = () => { closeMoreMenu(); tourOpen(); };
   $('tour-skip').onclick = () => $('tour').close();
   $('tour-back').onclick = () => tourShow(tourAt - 1);
   $('tour-go').onclick = () => {
