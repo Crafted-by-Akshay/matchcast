@@ -459,6 +459,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-dt', Math.round(r.top + r.height / 2) + 'px');   /* desktop: centred on the stage-steps row, off the views' cards and camera chips (UX pass 10) */ el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 // the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
 let RECAP = { gen: 0, closed: false };
+let RUN_GEN = 0;   // the match run on screen: a new Watch start takes the next number, and an answer from an older run is refused (FIX-01)
 const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };
 function paintRecap() {
   const p = RECAP_PERSONA[current], r = p && RECAP[p], el = $('recap');
@@ -909,7 +910,10 @@ const ANSWER_WAIT_MS = 20000;   // the api's model call is given 15 s (packages/
 const askTimes = { watch: [], broadcast: [] };   // one budget per view
 const ASK_LIMIT = 20;   // questions a minute per view; the api has its own limit of the same size per session
 async function answerAsk(id, q, to = 'watch', surface = 'ask') {
-  const reply = (answer) => { post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst', lang: answer.lang || 'en' }); };   // the answer's own language: a French answer is never read in the English voice   // spoken only when verified, and only if Voice is on
+  const gen = RUN_GEN;   // an answer that comes back after a new match started belongs to the match before: it is refused (FIX-01)
+  const reply = (answer) => {
+    if (gen !== RUN_GEN) answer = { text: 'The match changed before this answer came back. Ask again.', verdict: 'abstained', note: 'match changed' };
+    post(to, { src: 'matchcast-shell', type: 'answer', id, answer }); if (answer && answer.verdict === 'verified' && answer.text) VC.say(answer.text, { id: 'ask-' + id, role: 'analyst', lang: answer.lang || 'en' }); };   // the answer's own language: a French answer is never read in the English voice   // spoken only when verified, and only if Voice is on
   q = String(q || '').trim().slice(0, 300);
   const times = askTimes[to] || (askTimes[to] = []), now = Date.now(); while (times.length && now - times[0] > 60000) times.shift();
   if (times.length >= ASK_LIMIT) { reply({ text: 'You can ask ' + ASK_LIMIT + ' questions a minute. Try again in a moment.', verdict: 'abstained', note: 'rate limit' }); return; }
@@ -1120,11 +1124,12 @@ window.addEventListener('message', (e) => {
   if (d.type === 'trace') { TP.open(d.id); return; }   // 'How was this made?' from a card
   if (d.type === 'call' && view === 'watch') { if (d.on) callStart(); else callEnd(); return; }   // Watch's Call button (EXP-18)
   if (d.type === 'talk' && view === 'watch') {   // EXP-16: the api's player agent, when there is a match on the api
-    const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply });
+    const gen = RUN_GEN;   // a reply to a player's words said in the match before is not sent or spoken in this one (FIX-01)
+    const back = (reply) => post('watch', { src: 'matchcast-shell', type: 'talk-reply', id: d.id, reply: gen === RUN_GEN ? reply : null });   // null: Watch falls back to the rules
     if (!LV.enabled || !LV.key) { back(null); return; }
     const lang = window.MC_LANGS.includes(M.lang) ? M.lang : 'en';   // the viewer's language: the reply's caption is translated into it (EXP-19)
     if (d.call && CALL.sock) { const turn = ++CALL.n; if (CALL.sock.talk(turn, d.player, d.position, d.utterance, lang)) { CALL.turns.set(turn, d.id); return; } }   // a call's talk goes over its socket
-    LV.talk(d.player, d.utterance, d.position, lang).then((r) => { back(r); if (!d.call && r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
+    LV.talk(d.player, d.utterance, d.position, lang).then((r) => { back(r); if (gen === RUN_GEN && !d.call && r.verdict === 'verified' && r.audioUrl && r.facts && Object.keys(r.facts).length) VC.say(r.text, { id: 'talk-' + r.audioUrl, role: 'player', audio: r.audioUrl }); }, () => back(null));   // a verified reply with facts (the ones Watch shows) is spoken when Voice is on; the id is the clip's own key, since Watch's request numbers restart on a reload
     return;
   }
   if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; paintStory(); LV.persona(d.persona, d.lang); CM.setPersona(d.persona); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
@@ -1153,7 +1158,7 @@ window.addEventListener('message', (e) => {
     $('v-' + view).classList.add('ready');
     if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });
     if (M.agents) post(view, M.agents);   // a view that (re)loaded learns the viewer's language
-    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); HL.side = CM.side; HL.reset(teamsOf(s), (byId(M.fixture) || {}).formations || []); CM.reset(keyOf(s), Object.assign({}, teamsOf(s), { history: (byId(M.fixture) || {}).history })); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
+    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); HL.side = CM.side; HL.reset(teamsOf(s), (byId(M.fixture) || {}).formations || []); CM.reset(keyOf(s), Object.assign({}, teamsOf(s), { history: (byId(M.fixture) || {}).history })); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; RUN_GEN++; post('watch', { src: 'matchcast-shell', type: 'run', gen: RUN_GEN }); VC.clear(); if (CALL.on) callEnd('The match changed, so the call ended.'); }   // a new match from Watch starts a new agent run; everything match-scoped that is still on its way (Watch's pulse cards, Voice's queue and caption, a call, the answers in flight) is the run before's and is dropped (FIX-01)
     prefetchOthers();
     toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
     paint(); routeAnalyst();

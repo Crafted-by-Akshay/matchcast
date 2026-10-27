@@ -78,5 +78,7 @@ const VC = (() => {
     clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(BED, crowd.ctx.currentTime, 1.5); }, 3000);
   };
   const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
-  return { load, say, set, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get level() { return crowd ? crowd.g.gain.value : 0; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
+  // a new match from Watch: the lines queued or speaking, and the caption, belong to the match before. Their audio stops here; the next line is the new match's (FIX-01)
+  const clear = () => { gen++; queue = []; busy = false; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } if ('speechSynthesis' in window) window.speechSynthesis.cancel(); clearTimeout(hide); if (bar) bar.hidden = true; onChange(); };
+  return { load, say, set, clear, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get level() { return crowd ? crowd.g.gain.value : 0; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();

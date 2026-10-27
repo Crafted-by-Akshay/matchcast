@@ -273,8 +273,11 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
   gm.textContent = 'Game mode: orders change how the simulated match is played. They never change the event record behind the claims.';
   if ($('tk-form')) $('tk-form').after(gm);
   const kept = [];
+  // a new match from Watch (the shell's run message): the cards of the match before go, live and in the log. Claim ids start again at c1 in each run, so an old card must not be kept beside or replaced by a new one (FIX-01)
+  const resetPulse = () => { kept.length = 0; cards.clear(); live.replaceChildren(); log.replaceChildren(); log.hidden = true; tog.hidden = true; tog.textContent = 'Pulse log (0)'; };
   window.addEventListener('message', (e) => {
     const d = e.data || {};
+    if (d.src === 'matchcast-shell' && d.type === 'run') { resetPulse(); return; }
     if (d.src !== 'matchcast-shell' || d.type !== 'pulse') return;
     const c = d.card, i = kept.findIndex((x) => x.id === c.id);
     if (c && c.verdict === 'verified') MCRes.full();   // the first verified line is up: draw at full sharpness
