@@ -343,35 +343,63 @@ def build_broadcast():
 
 # ---------- Analyst: the enterprise console (same build as enterprise-console/build.py)
 # plus the shell hook
-# FIX-06 / FIX-07 / FIX-08: the console's copy. The console runs rules here (its model path needs a host capability this site does not have),
+# FIX-06 / FIX-07 / FIX-08: the console's copy. The console answers from rules here (its model path needs a host capability this site does not have),
 # its Watch links go to the Watch app beside it, and its saved items are kept in this browser, not shared.
-# Each pair asserts how many times it occurs, so a source change fails the build instead of shipping stale copy.
+# Each pair asserts how many times it occurs; a mismatch stops the build (SystemExit, so python -O cannot skip it) instead of shipping stale copy.
 ANALYST_COPY = [
     ("https://claude.ai/artifact/SSjrndFyoFUViaVZ6TzyFX", "../watch/index.html", 2),
     ("Demo: Claude via artifact sampling when granted, rules otherwise · Production: Azure AI Foundry Agent Service",
-     "Rules answers in this console · Production: the live agent api runs Producer, Analyst, Narrator and Verifier on Azure AI Foundry", 1),
+     "Answers come from rules in this console · Production target: the agent api runs Producer, Analyst, Narrator and Verifier on Azure AI Foundry", 1),
     ("Agents may call Claude when the viewer grants it (production: Azure AI Foundry).",
-     "Agents answer from rules in this console. The live agent api runs the Foundry models.", 1),
+     "Agents answer from rules in this console. Production target: the live agent api runs the Foundry models.", 1),
+    ("Rules answer when Claude is not granted.", "Rules answer when no model is available here.", 1),
+    ("Claude writes the SQL when it is granted.", "A model writes the SQL when available.", 1),
+    ("rules (Claude not granted here)", "rules only in this console", 1),
+    ("Claude not granted here: rules answer", "Rules answer in this console", 1),
+    ("chip('Claude not granted here', 'warn')", "chip('Rules only in this console', 'warn')", 1),
+    ("Claude is not granted here", "Rules only in this console", 1),
+    ("Rules mode: Claude not granted in this view", "Rules mode: no model in this view", 1),
+    ("rules (Claude not granted in this view)", "rules only in this view", 1),
+    ("(Claude when granted, rules otherwise)", "(model when available, rules otherwise)", 1),
+    ("AI.runs this session · Claude when granted, otherwise deterministic rules",
+     "AI.runs this session · model when available, otherwise deterministic rules", 1),
+    ("shared store not granted", "shared store not connected", 1),
+    ("It is shared when the team store is granted, else kept in this browser.",
+     "It is shared when the team store is connected, else kept in this browser.", 1),
+    ("(the shared team store is used when granted)", "(the shared team store is used when connected)", 1),
     ("Shared with your organisation", "Saved on this device", 3),
     ("Shared with your team", "Saved on this device", 1),
     ("Clips are shared with your organisation.", "Clips are saved on this device.", 1),
     ("Saved queries are shared with your organisation and logged in the audit trail.",
      "Saved queries are kept on this device.", 1),
     ("Foundry-ready agents", "console agents", 2),
+    ("shared store: claude db when granted, else this browser", "shared store: model db when connected, else this browser", 1),
 ]
+# the model word the console still shows (a label or comment), counted in the source so a new occurrence stops the build
+CLAUDE_WORDS = 27  # the Claude words the console source holds after the entries above; a change here means the source changed
+# host-capability labels that only show when the artifact host grants the capability; they are not copy this site makes
+HOST_LABELS = ("download capability granted", "downloads not granted")
 
 
-def analyst_copy(text):
+def analyst_copy(text, strict=True):
     for old, new, n in ANALYST_COPY:
         found = text.count(old)
-        assert found == n, "analyst copy: expected " + str(n) + " of " + repr(old[:60]) + ", found " + str(found)
+        if found != n:
+            raise SystemExit("analyst copy: expected " + str(n) + " of " + repr(old[:60]) + ", found " + str(found))
         text = text.replace(old, new)
-    # the console's own label for its model path: Claude only exists in the artifact host, so the copy says Model
+    # the remaining Claude labels and comments say Model: Claude exists only in the artifact host
+    # strict (the build) also checks the whole console source: the Claude count and no 'granted' copy left; snippets in tests skip that
+    if strict:
+        found = len(re.findall(r"\bClaude\b", text))
+        if found != CLAUDE_WORDS:
+            raise SystemExit("analyst copy: expected " + str(CLAUDE_WORDS) + " Claude words, found " + str(found))
     text = re.sub(r"\bClaude\b", "Model", text)
-    text = re.sub(r"\bnot granted\b(?! in this view| here)", "not available here", text)
-    text = re.sub(r"not granted (in this view|here)", "not available in this console", text)
-    text = re.sub(r"when (it is granted|the viewer grants it|granted)", "when available", text)
-    text = re.sub(r"\bis granted\b", "is available", text)
+    if strict:
+        rest = text
+        for label in HOST_LABELS:
+            rest = rest.replace(label, "")
+        if "granted" in rest:
+            raise SystemExit("analyst copy: 'granted' copy left in the build: " + rest[rest.index("granted") - 40 : rest.index("granted") + 20])
     return text
 
 
