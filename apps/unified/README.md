@@ -10,7 +10,7 @@ One shell for Home, Matches, Highlights and My List, with Watch as the match pla
 
 Sources are in `sources/`, a copy of the three prototype folders. They are read only. `build.py` copies each view from its source folder and applies a few asserted patches. The shell, `index.html`, is written by hand.
 
-Home features a synthetic fixture and rows from the season. Matches provides search and team, matchday and sort filters. These shell pages do not load the 3D player. Match cards open Watch only when selected. My List saves fixture IDs in this browser and says "Saved on this device"; it does not sync across devices or accounts. Highlights uses the existing Watch-session clips in memory and lists a moment only when its 3D clip has enough frames. It is not an archive of old match videos.
+Home features a synthetic fixture and rows from the season. Matches provides search and team, matchday and sort filters. Season scores are labelled "Simulated result" so they are not mistaken for real match records. These shell pages do not load the 3D player. Match cards open Watch only when selected. My List saves fixture IDs in this browser and says "Saved on this device"; it does not sync across devices or accounts. Highlights uses the existing Watch-session clips in memory and lists a moment only when its 3D clip has enough frames. It is not an archive of old match videos.
 
 ## The shared match
 - The match bar holds one season fixture (28 in the league, from `shared/fixtures.json`). The fixture sets the teams, stadium, month, kick-off, seed, half length and formations.

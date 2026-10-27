@@ -72,6 +72,52 @@ test('Opening a match from its card is the action that starts Watch', async ({ p
   await expect.poll(() => page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(true);
 });
 
+test('Matches search, team, matchday and sort filters change the results', async ({ page }) => {
+  await page.goto('/index.html#matches', { waitUntil: 'domcontentloaded' });
+  await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
+  const total = await page.locator('#lib-grid .match-card').count();
+  expect(total).toBeGreaterThan(20);
+
+  await page.locator('#lib-q').fill('Harbor City');
+  await expect.poll(() => page.locator('#lib-grid .match-card').count()).toBeGreaterThan(0);
+  const searchResults = await page.locator('#lib-grid .match-open').allTextContents();
+  expect(searchResults.length).toBeLessThan(total);
+  expect(searchResults.every((text) => text.includes('Harbor City'))).toBe(true);
+
+  await page.locator('#lib-q').fill('');
+  const harbor = await page.locator('#lib-team option').allTextContents();
+  const harborIndex = harbor.findIndex((text) => text === 'Harbor City');
+  expect(harborIndex).toBeGreaterThan(0);
+  await page.locator('#lib-team').selectOption({ label: 'Harbor City' });
+  const teamResults = await page.locator('#lib-grid .match-open').allTextContents();
+  expect(teamResults.length).toBeGreaterThan(0);
+  expect(teamResults.every((text) => text.includes('Harbor City'))).toBe(true);
+
+  await page.locator('#lib-team').selectOption('');
+  await page.locator('#lib-md').selectOption({ label: 'Matchday 1' });
+  const dayResults = await page.locator('#lib-grid .mmeta').allTextContents();
+  expect(dayResults.length).toBeGreaterThan(0);
+  expect(dayResults.every((text) => text.startsWith('Matchday 1'))).toBe(true);
+
+  await page.locator('#lib-md').selectOption('');
+  await page.locator('#lib-sort').selectOption('goals');
+  const goals = (await page.locator('#lib-grid .sc').allTextContents())
+    .map((score) => score.match(/(\d+)\s*[–-]\s*(\d+)/))
+    .filter((match): match is RegExpMatchArray => !!match)
+    .map((match) => Number(match[1]) + Number(match[2]));
+  expect(goals.length).toBeGreaterThan(20);
+  expect(goals).toEqual([...goals].sort((a, b) => b - a));
+});
+
+test('season scores are explicitly labeled as synthetic results', async ({ page }) => {
+  await page.goto('/index.html#matches', { waitUntil: 'domcontentloaded' });
+  await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
+  const labels = await page.locator('#lib-grid .match-thumb .tag').allTextContents();
+  expect(labels).toContain('Synthetic squads');
+  expect(labels).toContain('Simulated result');
+  expect(labels).not.toContain('Recorded');
+});
+
 for (const width of [390, 768, 1440]) {
   test(`Home and Matches fit the ${width} px viewport`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });

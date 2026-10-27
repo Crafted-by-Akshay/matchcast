@@ -410,7 +410,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   </div>
   <div class="scoreline" aria-live="polite">
     <span class="team h" id="home-name"><i id="home-dot"></i><span id="home-club">Choose a fixture</span></span>
-    <span class="score" id="score"><span id="score-v">–</span><small id="score-l">Recorded</small></span>
+    <span class="score" id="score"><span id="score-v">–</span><small id="score-l">Simulated result</small></span>
     <span class="team a" id="away-name"><span id="away-club"></span><i id="away-dot"></i></span>
   </div>
   <div class="meta" id="meta"></div>
@@ -452,7 +452,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <div class="lib-grid" id="lib-grid"></div>
     <p class="lib-empty" id="lib-empty" hidden>No match fits these filters. <button type="button" class="pill" id="lib-reset">Clear filters</button></p>
   </section>
-  <section class="browse" id="v-highlights" data-view="highlights" aria-label="Highlights from recorded clips" hidden>
+  <section class="browse" id="v-highlights" data-view="highlights" aria-label="Highlights from the current Watch session" hidden>
     <header class="browse-head"><p class="eyebrow">Your library</p><h2>Highlights</h2><p>Clips held from the current Watch session on this device.</p></header>
     <div class="highlight-grid" id="highlight-grid"></div>
     <div class="browse-empty" id="highlights-empty" hidden><h3>No clips are available yet</h3><p>Only moments with replay frames from this Watch session appear here.</p><a href="#watch">Open Watch</a></div>
@@ -822,7 +822,7 @@ const fxCard = (fx) => {
   const saved = SAVED.has(fx.id);
   return '<article class="match-card">'
     + '<button type="button" class="match-open" data-fx="' + esc(fx.id) + '" aria-label="' + esc(fxTitle(fx) + '. ' + fxSub(fx) + '. Open on Watch') + '">'
-    + '<span class="match-thumb" style="--hc:' + esc(fx.home.color) + ';--ac:' + esc(fx.away.color) + '"><span class="sc">' + esc(sc) + '</span><span class="tag">' + (fx.national ? 'Synthetic squads' : 'Recorded') + '</span></span>'
+    + '<span class="match-thumb" style="--hc:' + esc(fx.home.color) + ';--ac:' + esc(fx.away.color) + '"><span class="sc">' + esc(sc) + '</span><span class="tag">' + (fx.national ? 'Synthetic squads' : 'Simulated result') + '</span></span>'
     + '<span class="mtitle">' + esc(fxTitle(fx)) + '</span><span class="mmeta">' + esc(fxSub(fx)) + '</span></button>'
     + '<button type="button" class="save-match" data-save-fx="' + esc(fx.id) + '" aria-pressed="' + String(saved) + '">' + (saved ? 'Remove from My List' : 'Add to My List') + '</button></article>';
 };
@@ -832,7 +832,7 @@ function paintHome() {
   if (!feat) { $('hero').innerHTML = ''; $('home-rows').innerHTML = ''; return; }
   const hero = $('hero');
   hero.style.setProperty('--hc', feat.home.color); hero.style.setProperty('--ac', feat.away.color);
-  hero.innerHTML = '<div class="hero-copy"><p class="kicker">Featured · ' + (feat.national ? 'synthetic squads' : 'recorded season match') + '</p>'
+  hero.innerHTML = '<div class="hero-copy"><p class="kicker">Featured · ' + (feat.national ? 'synthetic squads' : 'synthetic season match') + '</p>'
     + '<h2>' + esc(fxTitle(feat)) + '</h2><p class="sub">' + esc(fxSub(feat)) + ' · ' + esc(stadiumName(feat.stIndex)) + '</p>'
     + '<div class="hero-go"><button type="button" class="btn play" data-fx="' + esc(feat.id) + '">Watch the match</button><button type="button" class="btn" data-save-fx="' + esc(feat.id) + '" aria-pressed="' + String(SAVED.has(feat.id)) + '">' + (SAVED.has(feat.id) ? 'Saved · remove' : '+ My List') + '</button><a class="btn" href="#matches">All matches</a></div></div>';
   const byDate = (a, b) => b.date.localeCompare(a.date) || b.matchday - a.matchday;
@@ -844,7 +844,7 @@ function paintHome() {
   $('home-rows').innerHTML = rows.map(([title, list, all]) => '<section class="row" aria-label="' + esc(title) + '"><div class="row-head"><h3>' + esc(title) + '</h3>'
     + (all ? '<a href="#matches">See all matches</a>' : '') + '</div><div class="row-track">' + list.map(fxCard).join('') + '</div></section>').join('');
 }
-const libHay = (fx) => [fx.home.club, fx.away.club, 'matchday ' + fx.matchday, fx.date, stadiumName(fx.stIndex), fx.national ? 'national synthetic squads' : 'recorded'].join(' ').toLowerCase();
+const libHay = (fx) => [fx.home.club, fx.away.club, 'matchday ' + fx.matchday, fx.date, stadiumName(fx.stIndex), fx.national ? 'national synthetic squads' : 'simulated'].join(' ').toLowerCase();
 const LIB_SORT = {
   md: (a, b) => a.matchday - b.matchday || a.id.localeCompare(b.id),
   goals: (a, b) => fxGoals(b) - fxGoals(a) || a.matchday - b.matchday,
@@ -945,7 +945,7 @@ function paint() {
   $('meta').title = $('meta').textContent;
   if (live) { $('score-v').textContent = live.live.score.join('–'); $('score-l').textContent = live.live.over ? 'Full time' : live.live.minute + "'"; }
   else if (fx && fx.national) { $('score-v').textContent = '–'; $('score-l').textContent = 'Synthetic squad'; }   // a national-team fixture has no recorded result
-  else if (fx) { $('score-v').textContent = fx.score.join('–'); $('score-l').textContent = 'Recorded'; }
+  else if (fx) { $('score-v').textContent = fx.score.join('–'); $('score-l').textContent = 'Simulated result'; }
   else { $('score-v').textContent = '–'; $('score-l').textContent = 'Not in season'; }
 
   const f = FR[current];
@@ -1450,7 +1450,7 @@ function init(list) {
   for (const m of Object.keys(md)) {
     const g = document.createElement('optgroup'); g.label = 'Matchday ' + m;
     for (const fx of md[m]) { const o = document.createElement('option'); o.value = fx.id;
-      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = fx.national ? 'Synthetic squads, no recorded result' : 'Recorded result ' + fx.score.join('–') + ' (the Analyst replays it)'; g.appendChild(o); }
+      o.textContent = fx.home.club + ' v ' + fx.away.club; o.title = fx.national ? 'Synthetic squads, no recorded result' : 'Simulated result ' + fx.score.join('–') + ' (the Analyst replays the season run)'; g.appendChild(o); }
     sel.appendChild(g);
   }
   sel.onchange = () => { const fx = byId(sel.value); if (!fx) return; setMatch(setupOf(fx), fx.id); toast(fx.home.club + ' v ' + fx.away.club + ' is the shared match'); };

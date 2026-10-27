@@ -3,7 +3,7 @@ import { openShell } from './helpers';
 declare const AG: any;
 
 // UX review 2026-10-24, shell items: one utility row on a phone, 32 px chips on a desktop, no stray
-// control beside Voice, no clipped subtitle, and a fixture list that says its score is a recorded one.
+// control beside Voice, no clipped subtitle, and a fixture list that labels synthetic results clearly.
 
 // Judge re-test: on a phone nothing in the header runs past the right edge (it used to be one sideways-scrolling row). The utilities wrap:
 // language and Status share the wordmark's row, Tour, Voice and the agents pill sit under the view switcher.
@@ -43,14 +43,14 @@ test('desktop chips are at least 32 px tall and the live-region pill is not draw
   expect(m.subRight, 'the subtitle is either hidden or ends before the view switcher').toBeLessThanOrEqual(m.swLeft);
 });
 
-test('the fixture list says its score is recorded, and the score label says so too', async ({ page }) => {
+test('the fixture list labels synthetic scores, and the score label says so too', async ({ page }) => {
   await page.route(/\/(watch|broadcast)\/index\.html/, (rt) => rt.abort());   // no 3D view, so no live score replaces the label
   await openShell(page, 'analyst');
   const labels = await page.$$eval('#fx option', (os) => os.map((o) => o.title || '').filter((t) => /\d–\d/.test(t)));   // the score moved from the label to the title (quiet first screen)
   expect(labels.length).toBeGreaterThan(20);
-  for (const t of labels) expect(t).toMatch(/^Recorded result \d+–\d+/);
+  for (const t of labels) expect(t).toMatch(/^Simulated result \d+–\d+/);
   await page.selectOption('#fx', { index: 1 });   // a season fixture (the default is the national-team one, which says Synthetic squad)
-  await expect(page.locator('#score-l')).toHaveText('Recorded');
+  await expect(page.locator('#score-l')).toHaveText('Simulated result');
 });
 
 test('a season load error is still visible on a phone', async ({ page }) => {
