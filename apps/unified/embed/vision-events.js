@@ -58,10 +58,7 @@
     if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
     if (!window.__mc.vis.VIS.on) {
       window.__mc.vis.toggle(true);
-      // the tracker runs, but the panel (debug-style accuracy numbers) stays closed until asked for (UX review pass 7). When the Watch pane is 700 px wide or more the detection boxes are drawn from the start, so
-      // the tracker is visible (pass 8; the pane is about 58 percent of the window while Broadcast shares the stage); below that they sit on top of the 3D name tags and stay off until asked for.
-      // Only when this start switched Vision on, so a viewer who already pressed the button is not overruled.
-      const bx = $('visp-box'); if (bx && window.__mc.vis.VIS.boxes && innerWidth < 700) bx.click();
+      // the tracker runs, but the panel (debug-style accuracy numbers) stays closed until asked for (UX review pass 7). FIX-11: the detection boxes and raw track ids are a debug view, off at every width (build.py sets VIS.boxes to false).
       $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false');
     }
   }, 300);
