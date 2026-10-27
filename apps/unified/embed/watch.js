@@ -186,7 +186,7 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
     const missing = c.missing ? ['<div>' + esc(c.missing) + '</div>'] : [];
     const any = rows.length || basis.length || missing.length;
     w.innerHTML = (any ? rows.concat(basis, missing).join('') : 'No cited events, and the api sent no claim basis for this line.')
-      + '<div>' + (rows.length ? 'Cited events shown' : basis.length ? 'Claim basis shown' : missing.length ? 'Cited events not held here' : 'Nothing to show') + '; the 3D replay with highlights is Planned.</div>';
+      + '<div>' + [rows.length ? 'Cited events shown' : '', basis.length ? 'Claim basis shown' : '', missing.length ? 'Cited events not held here' : ''].filter(Boolean).join('; ') + (rows.length || basis.length || missing.length ? '' : 'Nothing to show') + '; the 3D replay with highlights is Planned.</div>';
     w.hidden = false;
   };
   const draw = (c, host, fade) => {

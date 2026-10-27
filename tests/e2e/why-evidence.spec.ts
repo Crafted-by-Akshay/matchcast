@@ -57,3 +57,18 @@ test('Why evidence: a cited event this page holds is shown, and its Pulse card i
   expect(await page.evaluate(() => sentCards.get('onair-goal') || ''), 'the card posted at publication is replaced, not kept').toContain('e1,e-gone');
   expect(errs).toEqual([]);
 });
+
+test('Why evidence: a drop that later airs cites only the events of the onair record, not the dropped attempt', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openAgents(page);
+  await page.evaluate(() => {
+    LV.apiEvent = (id: string) => (['e7', 'e8'].includes(id) ? { minute: 30, type: 'shot', team: 'thr', player: 'B Two', xg: 0.1 } : null);
+    AG.ingestDrop({ publication_id: 'P1', reason_code: 'number_mismatch', feed: 'analyst', source_event_ids: ['e3'] }, 'live');   // the first attempt names e3 and is dropped
+    AG.ingest({ publication_id: 'P1', line_id: 'L-2', claim_ids: ['c-9'], text: 'Shot for Thames Rovers.' }, 'live');   // the line airs on a second attempt
+    AG.noteAired('P1', { publication_id: 'P1', source_event_ids: ['e7', 'e8'] });
+  });
+  const card = await page.evaluate(() => cardOf(AG.run.claims.find((c: any) => c.id === 'P1')));
+  expect(card.evidence.map((e: any) => e.player)).toEqual(['B Two', 'B Two']);   // e7 and e8, the events that aired
+  expect(card.missing, 'a fully held line has no not-held line').toBeFalsy();
+  expect(errs).toEqual([]);
+});
