@@ -307,7 +307,13 @@ def build_broadcast():
         "<title>MatchCast Broadcaster desk</title>",
         "broadcast title",
     )
-    head = head.replace("</style>", r(BS + "bc.css") + "\n</style>", 1)
+    head = head.replace(
+        "</style>",
+        r(BS + "bc.css")
+        + "\n/* The shell already supplies the match header and shared controls. Keep the desk's own task tabs. */\n"
+        + ".bc-top{display:none}\n</style>",
+        1,
+    )
     head = vision_debug_button(head, "broadcast")
     return (
         head
