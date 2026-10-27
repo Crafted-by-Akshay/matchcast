@@ -31,3 +31,12 @@ node services/simulation/run.cjs --seeds 1-1 --half 45 --events --out /tmp/mc-ru
 ```
 
 The same seed gives the same events, at any playback speed and frame rate (the engine steps a fixed 0.02 s and carries the remainder). The runner derives the clubs, stadium and month from the seed and passes them in the query; `node services/simulation/run.cjs --seeds 2026 --url` prints that query so the live app plays the same match. A seed number plus that query is a complete match id.
+
+## Cloud runs (24 Oct 2026)
+
+Run from the Mac mini with `az login`; no key or token was stored. Azure had no VM capacity or quota for the planned classic cluster in East US 2 (`Standard_D4ds_v5` quota 0; `DS3_v2` and `D4ds_v4` stockout) or in Central US (`D4ds_v4` stockout), so the job ran on Databricks serverless jobs compute.
+
+- Blob (DAT-5): `scenes/v1/` (`scenes.parquet` 42,794 B, `manifest.json` 336 B) and `models/danger/v1/` (`model.onnx` 98,807 B, `model-card.json`, `heldout-sample.json`) in `stmatchcastdev`; sizes match the repo files.
+- Databricks (DAT-6): workspace `dbw-matchcast-cus` (Premium, Central US), catalog `dbw_matchcast_cus`, schemas `raw` and `ml`, managed volumes `raw/scenes` and `ml/models`. `train_danger.py` ran once (with the MLflow experiment set and the model name `dbw_matchcast_cus.ml.danger`, changed only in the uploaded copy). Held-out AUC 0.8855, Brier 0.0432 (base rate 0.0447), the same as the local run. Registered in Unity Catalog as `dbw_matchcast_cus.ml.danger`. ONNX export did not run in the serverless environment (`onnx: false` in its card); the ONNX in Blob is the local export. The run page reports a failure only because the script ends with `SystemExit(0)`. No compute is left running.
+- Event Hubs (DAT-1): `replay_match.py --match M025 --speed 4 --sink eventhub` published 453 events to `match-events`. The live api stays in `direct` mode, so nothing consumed them; arrival at the hub was not counted.
+- Fabric (DAT-7/8): skipped. The account has no Fabric license ("User is not licensed"), so there is no trial or workspace; no paid capacity was bought.
