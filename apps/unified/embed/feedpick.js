@@ -25,13 +25,15 @@
   let feeds = {}, lang = 'en', pick = 'casual', simulated = true, first = true;
   let cu = { state: 'idle' }, cuLast = null;   // the catch-me-up answer, and the last good recap (kept while a refresh is loading, busy or failed)
   const seen = new Set();
-  try { const s = localStorage.getItem(KEY); if (s && DEFS.some((d) => d.key === s)) pick = s; } catch (e) { /* storage blocked: the default stands */ }
+  // a saved Planned feed is not restored: it cannot be chosen (AB#373)
+  try { const s = localStorage.getItem(KEY); if (s && DEFS.some((d) => d.key === s && d.live)) pick = s; } catch (e) { /* storage blocked: the default stands */ }
 
   const st = document.createElement('style'); st.id = 'mc-feedpick-css';
   st.textContent = '#mc-feeds{border-top:1px solid rgba(140,194,255,.2);padding:6px 10px 8px}'
     + '#mc-feedpick{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px}'
     + '#mc-feedpick button{min-height:32px;padding:2px 9px;border-radius:999px;border:1px solid rgba(140,194,255,.35);background:transparent;color:#c9d6f0;font:600 12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}'
     + '#mc-feedpick button[aria-checked=true]{background:#8CC2FF;border-color:#8CC2FF;color:#0B1630}#mc-feedpick button:focus-visible{outline:2px solid #F5B942;outline-offset:2px}'
+    + '#mc-feedpick button:disabled{opacity:.55;cursor:not-allowed}'
     + '#mc-feedpick .fp-tag,#mc-feedlines .fp-sim{font:700 12px system-ui,sans-serif;letter-spacing:.02em;text-transform:uppercase;padding:0 4px;border-radius:4px;border:1px solid currentColor;opacity:.9}'
     + '#mc-feedlines{font:12px/1.35 system-ui,sans-serif;color:#e8eefc;min-height:1.35em}#mc-feedlines .fp-sim{color:#F5B942;margin-right:6px}#mc-feedlines ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}'
     + '#mc-feedlines li{display:flex;gap:6px;align-items:baseline;overflow-wrap:anywhere}#mc-feedlines .fp-min{font-weight:700;color:#8CC2FF;flex:none}'
@@ -102,7 +104,8 @@
     const sig = DEFS.map((d) => d.key + d.label + d.live).join('|');
     if (sig !== built) {
       built = sig;
-      grp.innerHTML = DEFS.map((d) => '<button type="button" role="radio" data-key="' + esc(d.key) + '">' + esc(d.label) + (d.live ? '' : '<span class="fp-tag">Planned</span>') + '</button>').join('');
+      // a Planned feed is listed but cannot be chosen: it must not look like a running control (AB#373)
+      grp.innerHTML = DEFS.map((d) => '<button type="button" role="radio" data-key="' + esc(d.key) + '"' + (d.live ? '' : ' disabled aria-disabled="true"') + '>' + esc(d.label) + (d.live ? '' : '<span class="fp-tag">Planned</span>') + '</button>').join('');
     }
     grp.querySelectorAll('button').forEach((b) => { const sel = b.dataset.key === pick; b.setAttribute('aria-checked', String(sel)); b.tabIndex = sel ? 0 : -1; });
   };
@@ -142,7 +145,7 @@
   };
   const postPick = (key) => { try { window.parent.postMessage({ src: 'matchcast', type: 'crew-feed-pick', key, lang: 'en' }, '*'); } catch (e) { /* no shell */ } };
   const choose = (key, fromUser) => {
-    if (!DEFS.some((d) => d.key === key)) return;
+    if (!DEFS.some((d) => d.key === key && d.live)) return;   // a Planned feed cannot be chosen
     pick = key;
     if (fromUser) { try { localStorage.setItem(KEY, key); } catch (e) { /* storage blocked */ } }
     if (key === 'catch_me_up' && def().live) cu = { state: 'loading' };   // the shell reads the route for this pick (a re-pick is throttled there)
@@ -157,16 +160,19 @@
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     if (!step && e.key !== 'Home' && e.key !== 'End') return;
     e.preventDefault();
-    const i = DEFS.findIndex((d) => d.key === pick);
-    const n = e.key === 'Home' ? 0 : e.key === 'End' ? DEFS.length - 1 : (i + step + DEFS.length) % DEFS.length;
-    choose(DEFS[n].key, true); focusPick();
+    // a Planned feed is disabled, so the keys step over it and End lands on the last live feed (AB#373)
+    const live = DEFS.map((d, k) => (d.live ? k : -1)).filter((k) => k >= 0);
+    if (!live.length) return;
+    const at = live.indexOf(DEFS.findIndex((d) => d.key === pick));
+    const pos = e.key === 'Home' ? 0 : e.key === 'End' ? live.length - 1 : (at + step + live.length) % live.length;
+    choose(DEFS[live[pos]].key, true); focusPick();
   });
 
   window.addEventListener('message', (e) => {
     const d = e.data || {};
     if (e.source !== window.parent || d.src !== 'matchcast-shell') return;
     if (d.type === 'crew-feeds') {
-      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: String(x.label), live: !!x.live })); if (!DEFS.some((x) => x.key === pick)) pick = DEFS[0].key; }
+      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: String(x.label), live: !!x.live })); const fl = DEFS.find((x) => x.live); if (!DEFS.some((x) => x.key === pick && x.live)) { pick = (fl || DEFS[0]).key; postPick(pick); } }
       simulated = d.simulated !== false;   // anything but an explicit false counts as the fixture
       feeds = d.feeds && typeof d.feeds === 'object' ? d.feeds : {};
       announce(); drawPick(); drawLines();
