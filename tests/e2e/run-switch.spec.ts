@@ -18,8 +18,11 @@ test('a new run clears the Pulse cards of the match before', async ({ page }) =>
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   const f = await openWatch(page);
-  await page.evaluate((c) => post('watch', { src: 'matchcast-shell', type: 'pulse', card: c }), card('c1', 'OLD BRAZIL LINE'));
-  await expect(f.locator('#mcx-live')).toContainText('OLD BRAZIL LINE');
+  // Watch's listener can take a moment after the ready mark, so the card is posted again until it shows
+  await expect(async () => {
+    await page.evaluate((c) => post('watch', { src: 'matchcast-shell', type: 'pulse', card: c }), card('c1', 'OLD BRAZIL LINE'));
+    await expect(f.locator('#mcx-live')).toContainText('OLD BRAZIL LINE', { timeout: 1000 });
+  }).toPass({ timeout: 30_000 });
   await page.evaluate(() => post('watch', { src: 'matchcast-shell', type: 'run', gen: 2 }));
   await expect(f.locator('#mcx-live .mcx-c')).toHaveCount(0);
   await expect(f.locator('#mcx-log .mcx-c')).toHaveCount(0);
