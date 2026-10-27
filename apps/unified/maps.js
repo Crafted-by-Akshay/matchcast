@@ -17,11 +17,11 @@ const MAPS = (() => {
     // order by half, then the clock: the clock goes back to 45:00 at half-time, which is not a new kick-off
     const half = f.half || 1, sec = Math.floor(f.mclock || 0), order = half * 1e6 + sec;
     if (order === S.last) return;
-    if (order < S.last) reset(k);   // the clock went back within a half: a new kick-off in the same setup
+    if (order < S.last) { const roster = S.roster; reset(k); S.roster = roster; }   // the clock went back within a half: a new kick-off in the same setup (the roster stays)
     S.last = order;
     if (half === 1) S.halfEnd = sec;
     // t: one match timeline in seconds (the second half follows the first), so a view can count by minute
-    const t = half === 1 ? sec : S.halfEnd + Math.max(0, sec - HALF_CLOCK);
+    const t = half === 1 ? sec : (S.halfEnd || HALF_CLOCK) + Math.max(0, sec - HALF_CLOCK);
     S.frames.push({ t, f: half - 1, p: f.players.map((q) => [q[0], q[1]]) });
   }
   function events(setup, batch) {

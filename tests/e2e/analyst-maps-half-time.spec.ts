@@ -34,8 +34,24 @@ test('analyst maps: a kick-off that restarts the same half starts the maps again
     M.start(setup, roster);
     for (let s = 0; s < 50; s++) M.frame(setup, { mclock: s, half: 1, players: at(s) });
     for (let s = 0; s < 10; s++) M.frame(setup, { mclock: s, half: 1, players: at(s) });   // back to 0:00 in the first half
-    return M.samples;
+    return { samples: M.samples, hasMatch: M.match() !== null };
   }, { setup: SETUP, roster: ROSTER, names: NAMES });
-  expect(samples).toBe(10);
+  expect(samples.samples).toBe(10);
+  expect(samples.hasMatch, 'the roster stays, so the maps still draw after the restart').toBe(true);
+  expect(errs).toEqual([]);
+});
+
+test('analyst maps: a match that starts in the second half is on the same timeline, from 45:00', async ({ page }) => {
+  const errs = collectErrors(page);
+  await openShell(page, 'watch');
+  const t = await page.evaluate(({ setup, roster, names }) => {
+    const M = (window as any).MAPS;
+    const at = (s: number) => names.map((_: string, i: number) => [(i * 4 + s * 0.4) % 105, 10 + (i * 3) % 50, 0, 0, 0, 0]);
+    M.start(setup, roster);
+    for (let s = 2700; s < 2710; s++) M.frame(setup, { mclock: s, half: 2, players: at(s) });
+    return M.match().frames.map((f: { t: number }) => f.t);
+  }, { setup: SETUP, roster: ROSTER, names: NAMES });
+  expect(t[0]).toBe(45 * 60);
+  expect(t[9]).toBe(45 * 60 + 9);
   expect(errs).toEqual([]);
 });
