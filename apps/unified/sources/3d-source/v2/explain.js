@@ -84,7 +84,7 @@ function exStep(dt) {
     const x = r.p.xs; if (r.res) x.comp++; if (r.ov) r.ov.payload.completed = !!r.res; }
   EX.pend = EX.pend.filter((r) => r.res == null);
   // ball samples every 0.25 s: speed, heading, which half, whether play is stopped
-  EX.bsT += dt; if (EX.bsT >= 0.25) { EX.bsT = 0; const sp = Math.hypot(ball.v.x, ball.v.z); EX.bs.push({ t: S.t, sp, hd: Math.atan2(ball.v.z, ball.v.x), x: ball.p.x, stop: !!(S.dead || S.restart) }); }
+  EX.bsT += dt; if (EX.bsT >= 0.25) { EX.bsT = 0; const sp = DM.hypot(ball.v.x, ball.v.z); EX.bs.push({ t: S.t, sp, hd: DM.atan2(ball.v.z, ball.v.x), x: ball.p.x, stop: !!(S.dead || S.restart) }); }
   const cut = S.t - 130; while (EX.bs.length && EX.bs[0].t < cut) EX.bs.shift(); while (EX.ev.length && EX.ev[0].t < cut) EX.ev.shift(); while (EX.spells.length && EX.spells[0].t1 < cut) EX.spells.shift();
   EX.pulseT += dt; if (EX.pulseT >= 1) { EX.pulseT = 0; exPulse(); exDetect(); }
   exCards();
@@ -102,7 +102,7 @@ function exPulse() {
   const turns = E.filter((r) => r.type === 'turnover').length, tpm = turns / (W / 60);
   const pr = E.filter((r) => r.type === 'pass' && r.res != null), comp = pr.length ? pr.filter((r) => r.res).length / pr.length : 0.8;
   const B = EX.bs.filter((b) => b.t >= now - W && !b.stop && b.sp > 1); let sd = 0, turn = 0;
-  if (B.length > 4) { const m = B.reduce((a, b) => a + b.sp, 0) / B.length; sd = Math.sqrt(B.reduce((a, b) => a + (b.sp - m) ** 2, 0) / B.length); for (let i = 1; i < B.length; i++) { let d = Math.abs(B[i].hd - B[i - 1].hd); if (d > Math.PI) d = 2 * Math.PI - d; turn += d; } turn = turn / (B.length * 0.25); }
+  if (B.length > 4) { const m = B.reduce((a, b) => a + b.sp, 0) / B.length; sd = Math.sqrt(B.reduce((a, b) => a + DM.sq(b.sp - m), 0) / B.length); for (let i = 1; i < B.length; i++) { let d = Math.abs(B[i].hd - B[i - 1].hd); if (d > Math.PI) d = 2 * Math.PI - d; turn += d; } turn = turn / (B.length * 0.25); }
   const c = { spell: clamp((spell - 4) / 16, 0, 1), turnovers: 1 - clamp((tpm - 1) / 5, 0, 1), completion: clamp((comp - 0.6) / 0.32, 0, 1), ball: 1 - 0.5 * clamp(sd / 8, 0, 1) - 0.5 * clamp(turn / 1.2, 0, 1) };
   EX.ctlRaw = 100 * (0.3 * c.spell + 0.25 * c.turnovers + 0.25 * c.completion + 0.2 * c.ball);
   EX.ctl += (EX.ctlRaw - EX.ctl) * 0.2; EX.ctlC = { spell: +spell.toFixed(1), turnoversPerMin: +tpm.toFixed(1), completion: Math.round(comp * 100), ballSpeedSd: +sd.toFixed(1), turnRate: +turn.toFixed(2) };
@@ -129,7 +129,7 @@ function exPulseObj() {
   const ctl = Math.round(EX.ctl), m = Math.round(EX.mom); const sp = EX.spells.filter((s) => s.t1 > S.t - EX.W); const hold = [0, 0]; for (const s of sp) hold[s.ti] += s.t1 - Math.max(s.t0, S.t - EX.W); if (EX.cur) hold[EX.cur.ti] += S.t - Math.max(EX.cur.t0, S.t - EX.W);
   const ct = hold[0] + hold[1] > 0 ? (hold[0] >= hold[1] ? 0 : 1) : S.poss;
   const why = ctl >= 60 ? TEAMS[ct].club + ' are dictating: ' + (EX.ctlC ? EX.ctlC.completion + '% passing, spells of ' + Math.round(EX.ctlC.spell) + 's' : '') : ctl <= 40 ? 'Chaos: ' + (EX.ctlC ? EX.ctlC.turnoversPerMin + ' turnovers per minute of play, ' + EX.ctlC.completion + '% passing' : '') : 'An even contest for control';
-  return { control: ctl, chaos: 100 - ctl, controlTeam: TEAMS[ct].key, controlParts: EX.ctlC || null, momentum: m, momentumTeam: m >= 0 ? TEAMS[0].key : TEAMS[1].key, momentumParts: EX.momC || null, momentumSeries: EX.spark.slice(), tempo: +EX.tempo.toFixed(1), breaksPct: Math.round(EX.breaks * 100), rhythm: exRhythm(), ppda: EX.ppda.slice(), ballKmh: Math.round(Math.hypot(ball.v.x, ball.v.y, ball.v.z) * 3.6), why };
+  return { control: ctl, chaos: 100 - ctl, controlTeam: TEAMS[ct].key, controlParts: EX.ctlC || null, momentum: m, momentumTeam: m >= 0 ? TEAMS[0].key : TEAMS[1].key, momentumParts: EX.momC || null, momentumSeries: EX.spark.slice(), tempo: +EX.tempo.toFixed(1), breaksPct: Math.round(EX.breaks * 100), rhythm: exRhythm(), ppda: EX.ppda.slice(), ballKmh: Math.round(DM.hypot(ball.v.x, ball.v.y, ball.v.z) * 3.6), why };
 }
 const exCtlAgo = (sec) => { const h = EX.ctlHist; for (let i = h.length - 1; i >= 0; i--) if (h[i].t <= S.t - sec) return h[i].v; return h.length ? h[0].v : EX.ctl; };
 // ---- event intake: every dataEvent becomes a windowed record; some trigger moments directly ----
@@ -253,6 +253,6 @@ function exPlayerStats(p) {
   return { name: p.name, num: p.num, team: p.T.key, pos: p.pos, distanceKm: +exKm(x).toFixed(2), distanceRawKm: +(x.dm / 1000).toFixed(2), distanceSimM: Math.round(x.d), speedKmh: +(x.spd * 3.6).toFixed(1), topSpeedKmh: +x.top.toFixed(1), sprints: x.sprints, passes: x.passes, passesCompleted: x.comp, passAccuracyPct: x.passes ? Math.round(x.comp / x.passes * 100) : null, avgPassDifficulty: x.passes ? Math.round(x.diffSum / x.passes) : null, stamina: +p.stamina.toFixed(2) };
 }
 window.MCX = {
-  metrics: () => ({ ballKmh: Math.round(Math.hypot(ball.v.x, ball.v.y, ball.v.z) * 3.6), lastShot: S.shotInfo ? { player: S.shotInfo.p.name, kmh: S.shotInfo.kmh, xg: +S.shotInfo.xg.toFixed(3) } : null, lastPass: EX.lastPass ? Object.assign({}, EX.lastPass, { r: undefined, completed: EX.lastPass.r.res == null ? null : !!EX.lastPass.r.res }) : null, topSpeedKmh: +EX.topKmh.toFixed(1), players: players.map(exPlayerStats) }),
+  metrics: () => ({ ballKmh: Math.round(DM.hypot(ball.v.x, ball.v.y, ball.v.z) * 3.6), lastShot: S.shotInfo ? { player: S.shotInfo.p.name, kmh: S.shotInfo.kmh, xg: +S.shotInfo.xg.toFixed(3) } : null, lastPass: EX.lastPass ? Object.assign({}, EX.lastPass, { r: undefined, completed: EX.lastPass.r.res == null ? null : !!EX.lastPass.r.res }) : null, topSpeedKmh: +EX.topKmh.toFixed(1), players: players.map(exPlayerStats) }),
   get moments() { return EX.moments; }, onMoment: (fn) => { EX.subs.push(fn); }, pulse: exPulseObj, playerStats: exPlayerStats, overlays: () => EX.ov, overlayTrack, passDifficulty,
 };

@@ -249,3 +249,14 @@ def test_a_fault_after_the_first_spend_is_replayed_to_one_clean_run(match, monke
     run(flow.ingest([goal]))  # the retry
     assert flow.rundown == clean.rundown
     assert flow.spawn_budget.used == clean.spawn_budget.used
+
+
+# a full match calls about 100 moments (the N001 headless run on main, 26 Oct: 102 ledger entries
+# called); the quiet pool must cover them, or the crew tree goes empty after the pool is spent
+FULL_MATCH_MOMENTS = 102
+
+
+def test_the_default_quiet_pool_covers_a_full_match() -> None:
+    """Without the cap, the back half of a match still has specialists (AB#384, 26 Oct demo)."""
+    assert workflow_module.QUIET_SPAWNS_PER_MATCH >= FULL_MATCH_MOMENTS
+    assert MatchSpawnBudgets().quiet.limit >= FULL_MATCH_MOMENTS

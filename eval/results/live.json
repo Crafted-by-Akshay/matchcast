@@ -37,14 +37,14 @@
         "max": 0.0
       },
       "latency_p50_ms": {
-        "mean": 104.66,
-        "min": 104.66,
-        "max": 104.66
+        "mean": 28.56,
+        "min": 28.56,
+        "max": 28.56
       },
       "latency_p95_ms": {
-        "mean": 104.66,
-        "min": 104.66,
-        "max": 104.66
+        "mean": 28.56,
+        "min": 28.56,
+        "max": 28.56
       }
     },
     "four_agent_live": {
@@ -54,19 +54,19 @@
         "max": 22
       },
       "lines_shown": {
-        "mean": 4,
-        "min": 4,
-        "max": 4
+        "mean": 7,
+        "min": 7,
+        "max": 7
       },
       "coverage": {
-        "mean": 0.182,
-        "min": 0.182,
-        "max": 0.182
+        "mean": 0.318,
+        "min": 0.318,
+        "max": 0.318
       },
       "clean_rate": {
-        "mean": 0.182,
-        "min": 0.182,
-        "max": 0.182
+        "mean": 0.318,
+        "min": 0.318,
+        "max": 0.318
       },
       "wrong_line_rate": {
         "mean": 0.0,
@@ -84,14 +84,14 @@
         "max": 0.0
       },
       "latency_p50_ms": {
-        "mean": 5253.73,
-        "min": 5253.73,
-        "max": 5253.73
+        "mean": 6289.08,
+        "min": 6289.08,
+        "max": 6289.08
       },
       "latency_p95_ms": {
-        "mean": 5253.73,
-        "min": 5253.73,
-        "max": 5253.73
+        "mean": 6289.08,
+        "min": 6289.08,
+        "max": 6289.08
       }
     },
     "single_agent_live": {
@@ -131,14 +131,14 @@
         "max": 0.0
       },
       "latency_p50_ms": {
-        "mean": 1323.65,
-        "min": 1323.65,
-        "max": 1323.65
+        "mean": 1919.14,
+        "min": 1919.14,
+        "max": 1919.14
       },
       "latency_p95_ms": {
-        "mean": 1768.65,
-        "min": 1768.65,
-        "max": 1768.65
+        "mean": 3085.32,
+        "min": 3085.32,
+        "max": 3085.32
       }
     }
   },
@@ -146,18 +146,18 @@
   "single_model": "gpt-5-mini",
   "usage": {
     "four_agent_live": {
-      "calls": 58,
-      "prompt_tokens": 47577,
-      "completion_tokens": 5467
+      "calls": 64,
+      "prompt_tokens": 60839,
+      "completion_tokens": 4174
     },
     "single_agent_live": {
       "calls": 22,
       "prompt_tokens": 2732,
-      "completion_tokens": 1023
+      "completion_tokens": 1014
     }
   },
-  "four_agent_live_fallbacks": 1,
-  "four_agent_live_lines": 22,
+  "four_agent_live_fallbacks": 0,
+  "four_agent_live_lines": 21,
   "single_agent_errors": 0,
   "warning": null,
   "note": "Live four-agent lines that fail the Verifier fall back to the rules twin, so coverage and clean rate show the whole system; wrong_line_rate is the judge's count. Read four_agent_live_fallbacks first: a high count means the model calls failed."

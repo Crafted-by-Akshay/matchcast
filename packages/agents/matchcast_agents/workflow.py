@@ -7,6 +7,7 @@ a hash-chained audit record (ADR-0013: lines carry verdicts and approvals).
 
 import asyncio
 import copy
+import json
 import logging
 import os
 import re
@@ -22,8 +23,16 @@ from opentelemetry import trace
 from . import catch_me_up
 from . import half_time as half_time_mod
 from . import recap as recap_mod
+from .audio_description import MAX_LAG_MS, Window, gaps, spoken_span
 from .context import MatchContext
-from .feeds import drops_on_failed_repair, feed_for, waits_for_producer
+from .feed_lines import audio_line, audio_placements, ctx_at, ticker_drafts
+from .feeds import (
+    AUDIO_PERSONA,
+    TICKER_PERSONA,
+    drops_on_failed_repair,
+    feed_for,
+    waits_for_producer,
+)
 from .history import history_for_roster
 from .hub import StreamHub
 from .memory import storylines
@@ -41,7 +50,7 @@ from .statsdesk import TEAM_METRICS, StatsDesk, StatsDeskError
 from .store import MemoryStore, Store, stream_key
 from .storyline import FALLBACK_PLAN, StorylineBook, pick_plan
 from .tools import InProcessTools, ToolCall, ToolError
-from .verify.checks import recompute
+from .verify.checks import FRESH_MS, recompute
 from .verify.text import extract_numbers
 from .vision import agreement, is_vision_stream, pass_facts, vision_value
 
@@ -50,6 +59,38 @@ if TYPE_CHECKING:
     from .live.knowledge import TalkKnowledge
 
 STATS_DESK_BUDGET_S = 2.0
+# the template feeds a live match airs
+HALF_TIME_PERSONA = "half_time"  # the half-time explainer's persona (CREW-7.4)
+LIVE_FEED_LINES = ("ticker", "audio_description", "half_time")
+# a description's commentary window is read up to this long after its event
+FEED_HORIZON_MS = MAX_LAG_MS + 5_000
+# booth lines that may still be spoken: anything but a rejected, killed or abstained line
+SILENT_STATUSES = ("rejected", "killed", "abstained")
+
+
+def commentary_spans(lines: list[LineRecord], at_by_id: dict[str, int]) -> list[tuple[int, int]]:
+    """Where the booth's lines are or may be spoken, as (start, end) in match milliseconds.
+
+    The play-by-play speaks at its moment's event time. The colour line speaks after it, so it
+    starts when the play-by-play ends (workflow._verify_line's order: colour reacts to the call).
+    """
+    booth = [
+        line
+        for line in lines
+        if line.persona in BOOTH
+        and line.status not in SILENT_STATUSES
+        and line.moment_id.removeprefix("m-") in at_by_id
+    ]
+    spans: list[tuple[int, int]] = []
+    free_at: dict[str, int] = {}
+    for line in sorted(booth, key=lambda ln: (ln.moment_id, BOOTH.index(ln.persona))):
+        start = max(at_by_id[line.moment_id.removeprefix("m-")], free_at.get(line.moment_id, 0))
+        span = spoken_span(start, line.text)
+        free_at[line.moment_id] = span[1]
+        spans.append(span)
+    return spans
+
+
 MINUTE_MENTION = re.compile(r"\bminute\s+(\d{1,3})\b", re.IGNORECASE)  # "minute 12": a log minute
 
 TALK_PHRASES = {
@@ -137,7 +178,9 @@ REPLAN_SPECIALIST = "replay"
 ROUTED_AGENTS = ("analyst", "narrator", "verifier")
 # the specialists the Showrunner may spawn, in the order the planner prefers them (CREW-2.1)
 SPAWN_POOL = ("replay", "tactics", "stats", "rhythm", "history")
-QUIET_SPAWNS_PER_MATCH = 40  # the quiet moments' own allowance, apart from the priority-1 pool
+# the quiet moments' own allowance, apart from the priority-1 pool; a full match calls about 100
+# moments, so the pool covers the back half too (AB#384: at 40 the crew tree was empty after 37')
+QUIET_SPAWNS_PER_MATCH = 120
 
 
 @dataclass
@@ -249,6 +292,12 @@ class WorkflowConfig:
     personas: tuple[Persona, ...] = ("casual", "analyst")
     # the engine clock at which the one Vision moment is due (ADR-0022); 0 turns it off
     vision_moment_ms: int = 900_000
+    # the template feeds aired on this match: () by default; the match service turns on
+    # LIVE_FEED_LINES (AB#471), so the library and its evals keep their lines as they were
+    feed_lines: tuple[str, ...] = ()
+    # the workflow writes the full-time recaps itself (AB#499). The match service turns this on
+    # where no recap function sees the match end (direct and memory); eventhubs keeps the function
+    recap_at_full_time: bool = False
     # af (Microsoft Agent Framework workflow graph, the default) | native (plain calls)
     orchestrator: str = field(
         default_factory=lambda: os.environ.get("MATCHCAST_ORCHESTRATOR", "af")
@@ -367,6 +416,7 @@ class MatchWorkflow:
         self._processed_key: tuple[str, int] | None = None  # (event id, revision) last finished
         self._plan: str | None = None  # the last storyline the stall replan chose
         self._book = StorylineBook()  # the storylines a replan opened, each waiting for its payoff
+        self._half_times: dict[tuple[int, str], dict[str, Any] | None] = {}  # None when held
         self._vision_lines = 0
         self._latest_vision_line: str | None = None
         self._answers = LiveAnswers(answer_model) if answer_model is not None else None
@@ -426,6 +476,14 @@ class MatchWorkflow:
         self._specialists = default_registry()
         self._restore()
         self.killed_feeds: set[str] = set()  # the desk's per-feed kills, from the audit chain
+        # audio descriptions held until no booth line can still overlap them: (draft, claims,
+        # speak_at_ms, ends_at_ms). Held in memory: a restart drops them, so they do not air.
+        self._pending_audio: list[tuple[DraftLine, list[dict[str, Any]], int, int]] = []
+        # every description's (speak, end) span, held or aired: a new one is placed around them
+        self._audio_spans: list[tuple[int, int]] = []
+        # the events whose description holds a span (held or aired): placing a new description
+        # leaves them where they are, so a re-placed one cannot push the new one out of its gap
+        self._described: set[str] = set()
         self._restore_feed_state()
         self.stats = {
             "events": 0,
@@ -711,7 +769,143 @@ class MatchWorkflow:
             task = await self._decide_moment(ctx, event)
             if task is not None:
                 await self._run_moment(ctx, task)
+        await self._write_feed_lines(event)
+        await self._air_half_time(event)
+        await self._recap_at_full_time(event)
         self._note_aired(event)
+
+    async def _write_feed_lines(self, event: dict[str, Any]) -> None:
+        """The feed lines of this event: the ticker (AB#471) and the audio description (AB#454).
+
+        Template lines, each backed by claims the Verifier recounts, through the same Verifier and
+        air gate as every line. A refusal is dropped at once: a template line has no repair.
+
+        A description is held until an event at or after its end has arrived. By then every booth
+        line that could overlap it is written, so it airs only where no booth line is speaking.
+        """
+        at_ms = int(event["event_time_ms"])
+        await self._air_held_audio(at_ms)
+        eid = event["event_id"]
+        ctx = self._ctx()
+        if TICKER_PERSONA in self.config.feed_lines:
+            written = {ln.line_id for ln in self.store.lines(self.sk)}
+            for draft, claims in ticker_drafts(ctx, eid):
+                if draft.line_id not in written:
+                    await self._air_feed_line(ctx, eid, draft, claims)
+        if AUDIO_PERSONA in self.config.feed_lines:
+            self._hold_audio(ctx, event)
+
+    def _hold_audio(self, ctx: MatchContext, event: dict[str, Any]) -> None:
+        """Place this event's description in a commentary gap and hold it until it is checked."""
+        eid = event["event_id"]
+        line_id = f"line-audio-{eid}"
+        written = {ln.line_id for ln in self.store.lines(self.sk)}
+        held = {draft.line_id for draft, *_ in self._pending_audio}
+        if line_id in written or line_id in held:
+            return
+        windows = self._commentary_windows(ctx, event)
+        placing = replace(
+            ctx, events=tuple(e for e in ctx.events if e["event_id"] not in self._described)
+        )
+        placed = {d.source_event_id: d for d in audio_placements(placing, windows)}
+        if eid not in placed:
+            return
+        draft, claims = audio_line(ctx, placed[eid])
+        _, length = spoken_span(0, draft.text)
+        speak = placed[eid].speak_at_ms
+        self._described.add(eid)
+        self._audio_spans.append((speak, speak + length))
+        self._pending_audio.append((draft, claims, speak, speak + length))
+
+    async def _air_held_audio(self, at_ms: int) -> None:
+        """Air each held description whose window has ended, unless it no longer may.
+
+        A description is skipped when a booth line speaks in its window, or when the engine took
+        its event back (a retraction or a correction stored by now). Each item leaves the hold when
+        it is due, so it is tried once: a failure is logged and the description is dropped, rather
+        than raised again on every later event.
+        """
+        due = [p for p in self._pending_audio if p[3] <= at_ms]
+        if not due:
+            return
+        ctx = self._ctx()
+        busy = self._booth_spans(ctx)
+        taken_back = {
+            e["payload"]["target_event_id"]
+            for e in ctx.events
+            if e["payload"]["type"] in ("retraction", "correction")
+        }
+        for item in due:
+            self._pending_audio.remove(item)
+            draft, claims, speak, ends = item
+            eid = draft.line_id.removeprefix("line-audio-")
+            speaking = [span for span in busy if span[0] < ends and speak < span[1]]
+            if eid in taken_back or speaking:
+                continue
+            # The claims were valued at the description's own cut, so the revisions stored since are
+            # not staleness: judged at that cut. The 30 s bound still applies to the airing time.
+            cut = claims[0]["snapshot"]["event_time_ms"]
+            judged = (
+                ctx
+                if ctx.state.event_time_ms - cut > FRESH_MS
+                else ctx_at(ctx, claims[0]["max_evidence_sequence"])
+            )
+            try:
+                await self._air_feed_line(
+                    judged, eid, draft, claims, timing={"speak_at_ms": speak, "ends_at_ms": ends}
+                )
+            except Exception:
+                logger.exception("held description %s failed to air; it is dropped", draft.line_id)
+
+    async def _air_feed_line(
+        self,
+        ctx: MatchContext,
+        eid: str,
+        draft: DraftLine,
+        claims: list[dict[str, Any]],
+        timing: dict[str, int] | None = None,
+    ) -> None:
+        """Store a template line's claims, then send it through the Verifier like any line."""
+        if not claims:
+            return
+        event = next(e for e in ctx.events if e["event_id"] == eid)
+        task = ProducerTask(
+            moment_id=f"f-{eid}",
+            match_id=self.stream["match_id"],
+            event_ids=(eid,),
+            up_to_sequence=event["stream_sequence"],
+            priority=3,
+            personas=(draft.persona,),
+            reason="feed",
+        )
+        for claim in claims:
+            validate(claim)
+            self.store.put_claim(
+                self.sk,
+                claim,
+                {
+                    "moment_id": task.moment_id,
+                    "agent": self.agents.narrator.agent_id,
+                    "created_at": _stamp(self._clock()),
+                    "tool_call_ids": [],
+                    "formula_inputs": {},
+                },
+            )
+        await self._verify_line(ctx, task, claims, draft, attempt=1, timing=timing)
+
+    def _booth_spans(self, ctx: MatchContext) -> list[tuple[int, int]]:
+        """Where the booth's lines are or may be spoken (see commentary_spans)."""
+        at_by_id = {e["event_id"]: int(e["event_time_ms"]) for e in ctx.events}
+        return commentary_spans(list(self.store.lines(self.sk)), at_by_id)
+
+    def _commentary_windows(self, ctx: MatchContext, event: dict[str, Any]) -> list[Window]:
+        """The commentary gaps up to the feed horizon after an event, from the booth's lines so far.
+
+        A later booth line can still land in a gap read here; the check when a description is due
+        (_air_held_audio) is what keeps it from talking over the commentary.
+        """
+        spans = [*self._booth_spans(ctx), *self._audio_spans]
+        return gaps(spans, end_ms=int(event["event_time_ms"]) + FEED_HORIZON_MS)
 
     def _note_aired(self, event: dict[str, Any]) -> None:
         """A verified line of this event's moment aired: the match is quiet no longer."""
@@ -1117,6 +1311,12 @@ class MatchWorkflow:
             order = {"key": heard, "accepted": decision.accepted}
             stats = player_stats(ctx, target)  # the counts the order was checked against
             facts = stats.as_dict() if stats is not None else facts
+        team = (
+            None  # the player's team, for the transcript language (EXP-19); the producer has none
+        )
+        if target != "producer":
+            known = player_stats(ctx, target)
+            team = ctx.club_name(known.team_id) if known is not None and known.team_id else None
         numbers_ok = self._talk_numbers_ok(ctx, target, reply)
         names_ok = all(n.casefold() in ctx.allowed_names for n in extract_names(reply))
         words = len(reply.split())
@@ -1140,6 +1340,7 @@ class MatchWorkflow:
             "verdict": verdict,
             "facts": facts,
             "order": order,
+            "team": team,
         }
 
     @staticmethod
@@ -1260,80 +1461,62 @@ class MatchWorkflow:
     ) -> dict[str, dict[str, Any]]:
         """Write, verify and store one recap per persona; a failing sentence is dropped."""
         async with self._lock:
-            a = self.agents
-            ctx = self._ctx()
-            todo = [p for p in personas if force or self.store.get_recap(self.sk, p) is None]
-            if todo:
-                moments = recap_mod.pick_moments(ctx)
-                tools = InProcessTools(ctx, ctx.state.max_sequence)
-                try:
-                    claims = recap_mod.final_claims(ctx, tools)
-                except ToolError as error:
-                    self._agent(
-                        "fallback_used",
-                        a.analyst,
-                        "recap",
-                        fallback_reason="tool_error",
-                        tool=error.tool,
-                    )
-                    raise WorkflowError("recap_unavailable", str(error)) from error
-                packets = [c for c, _ in claims]
-                for packet, call_id in claims:
-                    validate(packet)
-                    self.store.put_claim(
-                        self.sk,
-                        packet,
-                        {
-                            "moment_id": "recap",
-                            "agent": a.analyst.agent_id,
-                            "created_at": _stamp(self._clock()),
-                            "tool_call_ids": [call_id],
-                            "formula_inputs": {"metric": packet["metric"], "tool": "get_metrics"},
-                        },
-                    )
-                    self._agent(
-                        "claim_created",
-                        a.analyst,
-                        packet["claim_id"],
-                        metric=packet["metric"],
-                        value=packet["value"],
-                        tool_call_ids=[call_id],
-                        recap=True,
-                    )
-                for persona in todo:
-                    await self._recap_persona(ctx, persona, packets, moments)  # type: ignore[arg-type]
-                self.hub.publish(
-                    "recap_ready", f"recap:{self.stream['match_id']}", {"personas": todo}
+            return await self._write_recap(personas, force=force)
+
+    async def _recap_at_full_time(self, event: dict[str, Any]) -> None:
+        """With ``recap_at_full_time``, the end of period 2 writes the recaps (AB#499): no recap
+        function sees the match end there. Extra time is not covered (the function writes it on
+        eventhubs). A replayed boundary writes nothing, since recap() skips the personas it has.
+        A failed recap of any kind is logged and the match goes on. The boundary is not
+        checkpointed, so a narrow catch would replay it on every batch and hold the match at full
+        time. The recap route can write the recap later."""
+        if not self.config.recap_at_full_time:
+            return
+        payload = event["payload"]
+        if not (
+            payload["type"] == "period_boundary"
+            and payload.get("boundary") == "ended"
+            and event["clock"]["period"] == FULL_TIME_PERIOD
+        ):
+            return
+        try:
+            await self._write_recap()
+        except Exception:  # best effort: see the docstring
+            logger.exception("full-time recap for %s not written", self.sk)
+
+    async def _write_recap(
+        self, personas: tuple[str, ...] = ("casual", "analyst", "broadcast"), *, force: bool = False
+    ) -> dict[str, dict[str, Any]]:
+        """The recap body; the caller holds the match lock."""
+        a = self.agents
+        ctx = self._ctx()
+        todo = [p for p in personas if force or self.store.get_recap(self.sk, p) is None]
+        if todo:
+            moments = recap_mod.pick_moments(ctx)
+            tools = InProcessTools(ctx, ctx.state.max_sequence)
+            try:
+                claims = recap_mod.final_claims(ctx, tools)
+            except ToolError as error:
+                self._agent(
+                    "fallback_used",
+                    a.analyst,
+                    "recap",
+                    fallback_reason="tool_error",
+                    tool=error.tool,
                 )
-            return {p: r for p in personas if (r := self.store.get_recap(self.sk, p))}
-
-    async def half_time(self) -> dict[str, Any] | None:
-        """Write and verify the half-time piece once the first half has ended (CREW-7.4).
-
-        Each line cites its claims; the Verifier recounts them from the first-half events only.
-        A line that fails is dropped, not escalated. Nothing airs here: the air path belongs to
-        the feed lane (AB#499). None until the half is over, or when no piece can be written.
-        """
-        async with self._lock:
-            a = self.agents
-            ctx = self._ctx()
-            piece = half_time_mod.build(ctx)
-            if piece is None:
-                return None
-            stamp = _stamp(self._clock())
-            packets = half_time_mod.claims(piece, ctx.stream)
-            by_id = {c["claim_id"]: c for c in packets}
-            for packet in packets:
+                raise WorkflowError("recap_unavailable", str(error)) from error
+            packets = [c for c, _ in claims]
+            for packet, call_id in claims:
                 validate(packet)
                 self.store.put_claim(
                     self.sk,
                     packet,
                     {
-                        "moment_id": "half_time",
+                        "moment_id": "recap",
                         "agent": a.analyst.agent_id,
-                        "created_at": stamp,
-                        "tool_call_ids": [],
-                        "formula_inputs": {"metric": packet["metric"], "tool": "state"},
+                        "created_at": _stamp(self._clock()),
+                        "tool_call_ids": [call_id],
+                        "formula_inputs": {"metric": packet["metric"], "tool": "get_metrics"},
                     },
                 )
                 self._agent(
@@ -1342,67 +1525,282 @@ class MatchWorkflow:
                     packet["claim_id"],
                     metric=packet["metric"],
                     value=packet["value"],
-                    half_time=True,
+                    tool_call_ids=[call_id],
+                    recap=True,
                 )
-            # the Verifier sees the first half only: no later event, engine truth, Vision pass or
-            # storyline (storylines are built from every stored line, so later ones are in it)
-            later = {"vision_passes", "storylines"}
-            half = replace(
-                ctx,
-                events=piece.events,
-                state=piece.state,
-                truth=(),
-                extra={k: v for k, v in ctx.extra.items() if k not in later},
-            )
-            kept: list[str] = []
-            dropped = 0
-            for draft in half_time_mod.drafts(piece, packets):
-                self._agent(
-                    "line_drafted",
-                    a.narrator,
-                    draft.line_id,
-                    persona=draft.persona,
-                    claim_ids=list(draft.claim_ids),
-                    half_time=True,
-                )
-                claims = [by_id[c] for c in draft.claim_ids]
-                verdict = await self._call(a.verifier, "check", draft.line_id, half, draft, claims)
-                verdict = await self._screen(draft, verdict)
-                if (
-                    verdict.verdict != "verified"
-                ):  # a half-time line is verified or dropped, never held
-                    dropped += 1
-                    self._agent(
-                        "line_rejected",
-                        a.verifier,
-                        draft.line_id,
-                        reason_code=verdict.reason_code,
-                        half_time=True,
-                        checks=[c.model_dump() for c in verdict.checks if not c.passed],
-                    )
-                    continue
-                self._audit(
-                    "agent",
-                    a.verifier.agent_id,
-                    "line_verified",
-                    draft.line_id,
-                    {
-                        "mode": getattr(a.verifier, "mode", "live"),
-                        "half_time": True,
-                        "checks": [{"name": c.name, "passed": c.passed} for c in verdict.checks],
-                    },
-                )
-                kept.append(draft.text)
+            for persona in todo:
+                await self._recap_persona(ctx, persona, packets, moments)  # type: ignore[arg-type]
+            self.hub.publish("recap_ready", f"recap:{self.stream['match_id']}", {"personas": todo})
+        return {p: r for p in personas if (r := self.store.get_recap(self.sk, p))}
+
+    async def half_time(self) -> dict[str, Any] | None:
+        """Write and verify the half-time piece once the first half has ended (CREW-7.4).
+
+        Each line cites its claims; the Verifier recounts them from the first-half events only.
+        A line that fails is dropped, not escalated. Nothing airs here: the air path belongs to
+        the feed lane (AB#499). None until the half is over, when no piece can be written, or
+        when no line survives the Verifier (the piece is held). Within one process, a repeat call
+        with the same claims returns the same answer without writing again.
+        """
+        async with self._lock:
+            return await self._write_half_time()
+
+    async def _write_half_time(self) -> dict[str, Any] | None:
+        """The half-time piece, written and verified; the caller holds the match lock (AB#499)."""
+        a = self.agents
+        ctx = self._ctx()
+        piece = half_time_mod.build(ctx)
+        if piece is None:
+            return None
+        stamp = _stamp(self._clock())
+        aired_id = f"pub-half-time-{piece.cut_sequence}"
+        aired = [p for p in self.store.publications(self.sk) if p["publication_id"] == aired_id]
+        if aired:  # aired already, and a fresh process asks again: read it back and write nothing
+            # but the publish of kept lines a crash left verified; the aired claims keep their
+            # approval, and the kill guard below holds only before air
+            self._publish_half_time_lines(aired[0])
             return {
                 "match_id": self.stream["match_id"],
                 "persona": "half_time",
                 "cut_sequence": piece.cut_sequence,
-                "text": " ".join(kept),
-                "lines_dropped": dropped,
-                "claim_ids": [c["claim_id"] for c in packets],
+                "text": aired[0]["text"],
+                "claim_ids": list(aired[0]["claim_ids"]),
                 "source_event_ids": list(piece.source_event_ids),
                 "created_at": stamp,
             }
+        if self._half_time_line_killed():
+            return None
+        packets = half_time_mod.claims(piece, ctx.stream)
+        # the claims carry the state they were counted from, so a late first-half control
+        # that changes the state (though not the wording) is written again, not replayed
+        key = (
+            piece.cut_sequence,
+            json.dumps(
+                [packets, list(piece.sentences), list(piece.source_event_ids)], sort_keys=True
+            ),
+        )
+        if key in self._half_times:  # a repeat call writes nothing new, so no new audit rows
+            cached = self._half_times[key]
+            return copy.deepcopy(cached) if cached is not None else None
+        by_id = {c["claim_id"]: c for c in packets}
+        for packet in packets:
+            validate(packet)
+            self.store.put_claim(
+                self.sk,
+                packet,
+                {
+                    "moment_id": "half_time",
+                    "agent": a.analyst.agent_id,
+                    "created_at": stamp,
+                    "tool_call_ids": [],
+                    "formula_inputs": {"metric": packet["metric"], "tool": "state"},
+                },
+            )
+            self._agent(
+                "claim_created",
+                a.analyst,
+                packet["claim_id"],
+                metric=packet["metric"],
+                value=packet["value"],
+                half_time=True,
+            )
+        # the Verifier sees the first half only: no later event, engine truth, Vision pass or
+        # storyline (storylines are built from every stored line, so later ones are in it)
+        later = {"vision_passes", "storylines"}
+        half = replace(
+            ctx,
+            events=piece.events,
+            state=piece.state,
+            truth=(),
+            extra={k: v for k, v in ctx.extra.items() if k not in later},
+        )
+        kept: list[str] = []
+        kept_claims: list[
+            str
+        ] = []  # only the claims a kept line cites: a dropped line's do not air
+        dropped = 0
+        for draft in half_time_mod.drafts(piece, packets):
+            self._agent(
+                "line_drafted",
+                a.narrator,
+                draft.line_id,
+                persona=draft.persona,
+                claim_ids=list(draft.claim_ids),
+                half_time=True,
+            )
+            claims = [by_id[c] for c in draft.claim_ids]
+            verdict = await self._call(a.verifier, "check", draft.line_id, half, draft, claims)
+            verdict = await self._screen(draft, verdict)
+            # stored, so the claims it cites show the Verifier's verdict
+            self.store.put_line(
+                self.sk,
+                LineRecord(
+                    line_id=draft.line_id,
+                    moment_id="half_time",
+                    claim_ids=list(draft.claim_ids),
+                    persona=draft.persona,
+                    text=draft.text,
+                    status=verdict.verdict,
+                    reason_code=verdict.reason_code,
+                    checks=list(verdict.checks),
+                    created_at=stamp,
+                    origin=draft.origin,
+                    snapshot_revision=claims[0]["snapshot"]["state_revision"],
+                ),
+            )
+            if verdict.verdict != "verified":  # a half-time line is verified or dropped
+                dropped += 1
+                self._agent(
+                    "line_rejected",
+                    a.verifier,
+                    draft.line_id,
+                    reason_code=verdict.reason_code,
+                    half_time=True,
+                    checks=[c.model_dump() for c in verdict.checks if not c.passed],
+                )
+                continue
+            self._audit(
+                "agent",
+                a.verifier.agent_id,
+                "line_verified",
+                draft.line_id,
+                {
+                    "mode": getattr(a.verifier, "mode", "live"),
+                    "half_time": True,
+                    "checks": [{"name": c.name, "passed": c.passed} for c in verdict.checks],
+                },
+            )
+            kept.append(draft.text)
+            kept_claims.extend(draft.claim_ids)
+        if not kept:  # nothing survived the Verifier: hold the piece, never show it blank
+            self._half_times[key] = None
+            return None
+        result = {
+            "match_id": self.stream["match_id"],
+            "persona": "half_time",
+            "cut_sequence": piece.cut_sequence,
+            "text": " ".join(kept),
+            "lines_dropped": dropped,
+            "claim_ids": list(dict.fromkeys(kept_claims)),
+            "source_event_ids": list(piece.source_event_ids),
+            "created_at": stamp,
+        }
+        self._half_times[key] = result
+        return copy.deepcopy(result)
+
+    def _publish_half_time_lines(self, publication: dict[str, Any]) -> None:
+        """On air, the kept half-time lines of this piece are published, as a ticker line is, so
+        kill() refuses them. A line is this piece's when its text is in the piece's text, so a
+        verified line left by an earlier write is not put on air. Called again on every replay of
+        an aired boundary, so a crash between the publication and these writes is repaired."""
+        for line in self.store.lines(self.sk):
+            if (
+                line.moment_id == "half_time"
+                and line.status == "verified"
+                and line.text in publication["text"]
+            ):
+                line.status = "published"
+                self._save_line(line)
+
+    def _on_air(self, line: LineRecord) -> bool:
+        """Whether a half-time line's text is on air. kill() refuses it then, even before its status
+        says published, so a crash after the publication cannot leave a killable line on air."""
+        return line.moment_id == "half_time" and any(
+            line.text in p["text"]
+            for p in self.store.publications(self.sk)
+            if p["publication_id"].startswith("pub-half-time-")
+        )
+
+    def _half_time_line_killed(self) -> bool:
+        """A desk kill on a stored half-time line (kill() accepts a verified line). A restart writes
+        the lines again, so the kill is read back before a write could mark the line verified."""
+        return any(
+            line.moment_id == "half_time" and line.status == "killed"
+            for line in self.store.lines(self.sk)
+        )
+
+    async def _air_half_time(self, event: dict[str, Any]) -> None:
+        """The half-time piece airs once, when the first half ends (AB#499). It is written whole or
+        held (_write_half_time), and it airs with the same publication and onair records as a feed
+        line. A desk kill of the feed holds it for good; a replayed boundary does not air it twice.
+        The kill and dedupe checks run before the write, so an aired or killed piece is not
+        verified again."""
+        if HALF_TIME_PERSONA not in self.config.feed_lines:
+            return
+        payload = event["payload"]
+        if not (
+            payload["type"] == "period_boundary"
+            and payload.get("boundary") == "ended"
+            and event["clock"]["period"] == 1
+        ):
+            return
+        if "half_time" in self.killed_feeds:
+            return
+        built = half_time_mod.build(self._ctx())
+        if built is None:
+            return
+        publication_id = f"pub-half-time-{built.cut_sequence}"
+        aired = [
+            p for p in self.store.publications(self.sk) if p["publication_id"] == publication_id
+        ]
+        if aired:  # a crash after the publication may have left its lines verified: publish them
+            self._publish_half_time_lines(aired[0])
+            return
+        piece = await self._write_half_time()
+        if piece is None:
+            return
+        claims = []
+        for claim_id in piece["claim_ids"]:
+            row = self.store.get_claim(self.sk, claim_id)
+            assert row is not None
+            packet = {**row["packet"], "approval_status": "approved"}
+            validate(packet)
+            self.store.put_claim(self.sk, packet, {k: v for k, v in row.items() if k != "packet"})
+            claims.append(packet)
+        now = self._clock()
+        publication = {
+            "kind": "publication",
+            "schema_version": "1.1.0",
+            "stream": self.stream,
+            "publication_id": publication_id,
+            "claim_ids": list(piece["claim_ids"]),
+            "state": claims[0]["snapshot"],
+            "persona": HALF_TIME_PERSONA,
+            "language": "en",
+            "event_time_ms": claims[0]["snapshot"]["event_time_ms"],
+            "published_at": _stamp(now),
+            "expires_at": _stamp(now + timedelta(seconds=self.config.publication_ttl_s)),
+            "audio_generation_id": None,
+            "text": piece["text"],
+        }
+        validate(publication)
+        self.store.put_publication(self.sk, publication)
+        self._publish_half_time_lines(publication)
+        self.stats["published"] += 1
+        self.hub.publish("publication", f"pub:{publication_id}", publication)
+        onair = {
+            "kind": "onair",
+            "schema_version": "1.2.0",
+            "stream": self.stream,
+            "publication_id": publication_id,
+            "feed": "half_time",
+            "lang": "en",
+            "text": piece["text"],
+            "source_event_ids": list(piece["source_event_ids"]),
+            "claim_ids": list(piece["claim_ids"]),
+            "match_time_ms": publication["event_time_ms"],
+            "aired_at": publication["published_at"],
+            "repair_count": 0,
+        }
+        validate(onair)
+        self.hub.publish("onair", f"onair:{publication_id}", onair)
+        self._audit(
+            "system",
+            "publisher",
+            "publication_created",
+            publication_id,
+            {"persona": HALF_TIME_PERSONA, "lines_dropped": piece["lines_dropped"]},
+        )
 
     async def _recap_persona(
         self,
@@ -1660,6 +2058,7 @@ class MatchWorkflow:
         *,
         attempt: int,
         repair_of: str | None = None,
+        timing: dict[str, int] | None = None,
     ) -> None:
         a = self.agents
         record = LineRecord(
@@ -1686,6 +2085,7 @@ class MatchWorkflow:
             mode="rules" if draft.origin == "template" else "live",  # what wrote this very line
             routed_by=task.routed_by,
             why=task.why,
+            **(timing or {}),
         )
         verdict = await self._call(a.verifier, "check", draft.line_id, ctx, draft, claims)
         verdict = await self._screen(draft, verdict)
@@ -1979,6 +2379,10 @@ class MatchWorkflow:
     ) -> LineRecord:
         async with self._lock:
             line = self._line(line_id)
+            if (
+                line.persona == "half_time"
+            ):  # the piece is written whole or held, never line by line
+                raise WorkflowError("not_approvable", "a half-time line is not approved on its own")
             if line.status not in ("verified", "review"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
             if line.escalated:
@@ -1995,6 +2399,8 @@ class MatchWorkflow:
     ) -> LineRecord:
         async with self._lock:
             line = self._line(line_id)
+            if self._on_air(line):
+                raise WorkflowError("not_approvable", "a half-time line on air cannot be killed")
             if line.status in ("published", "killed"):
                 raise WorkflowError("not_approvable", f"line is {line.status}")
             line.status = "killed"

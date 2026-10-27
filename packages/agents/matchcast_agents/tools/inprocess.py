@@ -3,7 +3,9 @@
 from typing import Any
 
 from .. import history_metrics as history
+from .. import match_shares
 from ..context import MatchContext
+from ..match_shares import SHARE_METRICS
 from ..metrics_spec import METRIC_UNITS, derivation_version
 from ..vision import VISION_METRICS, vision_value
 from ..xg import team_xg
@@ -108,6 +110,8 @@ class InProcessTools:
                     raise ToolError("get_metrics", f"no pre-match history for {name}") from error
             elif metric == "xg":
                 value = team_xg(self._ctx.events, team, self._up_to)
+            elif metric in SHARE_METRICS:
+                value = match_shares.recount(name, self._ctx.events, self._up_to)
             elif metric in VISION_METRICS:
                 value = self._vision(name, metric, team)
             else:

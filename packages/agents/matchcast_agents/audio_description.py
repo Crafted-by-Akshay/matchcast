@@ -3,8 +3,10 @@
 The describer reads the engine's positions and events, never pixels. It names only the player
 and club the engine reports, and it places the action by thirds of the pitch length (counted from
 x = 0, as the engine reports it) and by the side of the pitch. A description is written only when
-a gap of at least the feed's minimum (2 s) is long enough to speak it, so it never talks over
-the commentary. A goal's description has a 3 s deadline: the caller is told when it is late.
+a gap of at least the feed's minimum (2 s) is long enough to speak it, so it is placed in the
+gaps the commentary leaves. A booth line for a later event can still land inside it, so the
+workflow holds it until no booth line speaks in its window (MatchWorkflow._air_held_audio). A
+goal's description has a 3 s deadline: the caller is told when it is late.
 No description starts more than MAX_LAG_MS after its event.
 
 Commentary busy-time comes from the booth lines' word counts at the booth pace, so a gap is an

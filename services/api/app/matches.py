@@ -45,8 +45,9 @@ from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
+from matchcast_agents.verify import extract_names
 from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
-from matchcast_agents.workflow import WorkflowError, feed_kills_in, public_line
+from matchcast_agents.workflow import LIVE_FEED_LINES, WorkflowError, feed_kills_in, public_line
 from matchcast_contracts import ContractError
 from matchcast_mcp.app import build_app
 from matchcast_mcp.season import Season, SeasonError
@@ -57,7 +58,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app import budget
 from app.auth import PRODUCER_ROLES, caller_actor, caller_role
 from app.call import CallSocket
-from app.pipeline import Pipeline
+from app.pipeline import Pipeline, pipeline_mode
 from app.speech import SPEECH_PER_MINUTE, SpeechError, SpeechTokenService
 from app.vision import VISION_MAX_BODY, VisionError, VisionService
 from app.voice import (
@@ -210,6 +211,25 @@ class TalkBody(BaseModel):
     target: str = Field(pattern=ID)
     utterance: str = Field(min_length=1, max_length=300)
     position: str | None = Field(default=None, pattern=r"^[A-Z]{1,3}$")  # the sim's position code
+    # ADR-0023: the viewer's language, the one the reply's caption is translated into (EXP-19)
+    lang: Literal["en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans"] = "en"
+
+
+async def captioned(
+    translation: TranslationService, match_id: str, result: dict[str, Any], lang: str
+) -> dict[str, Any]:
+    """Adds the captions (EXP-19) to a verified talk reply: the player's own-language transcript
+    and the viewer's caption, both checked translations of the English line. The team is read here
+    and not sent to the viewer."""
+    team = result.pop("team", None)
+    if result["verdict"] != "verified":
+        return result  # an unchecked reply is shown as it is, never translated
+    captions = await translation.talk_captions(
+        f"talk:{match_id}", result["reply"], team, lang, extract_names(result["reply"])
+    )
+    if captions is not None:
+        result["captions"] = captions
+    return result
 
 
 class RecapTrigger(BaseModel):
@@ -472,6 +492,8 @@ class Registry:
             config = WorkflowConfig(
                 approval_mode=info.get("approval_mode", "auto"),
                 hold_booth=bool(info.get("hold_booth", True)),
+                feed_lines=LIVE_FEED_LINES,
+                recap_at_full_time=pipeline_mode() != "eventhubs",
             )
             live = info.get("live", True)  # a match past the live allowance stays on the rules
             seeds: dict[str, Any] = {}
@@ -727,7 +749,12 @@ def build_router(registry: Registry) -> APIRouter:
                 raise Problem(
                     422, "contract_invalid", "roster stream must match this match", "/roster/stream"
                 )
-            config = WorkflowConfig(approval_mode=body.approval_mode, hold_booth=body.hold_booth)
+            config = WorkflowConfig(
+                approval_mode=body.approval_mode,
+                hold_booth=body.hold_booth,
+                feed_lines=LIVE_FEED_LINES,
+                recap_at_full_time=pipeline_mode() != "eventhubs",
+            )
             cut = ModelCut()
             players = body.roster.get("players")
             teams = body.roster.get("team_ids")
@@ -1269,6 +1296,7 @@ def build_router(registry: Registry) -> APIRouter:
             result = await flow.talk(body.target, body.utterance, position=body.position)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
+        result = await captioned(registry.translation, match_id, result, body.lang)
         result["lang"] = "en"
         result["audio_url"] = None
         voice = registry.voice
@@ -1301,10 +1329,16 @@ def build_router(registry: Registry) -> APIRouter:
         voice = registry.voice
         ip = client_ip(websocket)
 
-        async def talk(target: str, utterance: str, position: str | None) -> dict[str, Any]:
+        async def talk(
+            target: str, utterance: str, position: str | None, lang: str
+        ) -> dict[str, Any]:
             try:  # the talk route's own limits, so a turn never reaches the model unchecked
                 TalkBody(
-                    session_id=session_id, target=target, utterance=utterance, position=position
+                    session_id=session_id,
+                    target=target,
+                    utterance=utterance,
+                    position=position,
+                    lang=lang,
                 )
             except ValidationError as error:
                 raise Problem(
@@ -1317,6 +1351,7 @@ def build_router(registry: Registry) -> APIRouter:
                 result = await flow.talk(target, utterance, position=position)
             except WorkflowError as error:
                 raise Problem(STATUS[error.code], error.code, str(error)) from error
+            result = await captioned(registry.translation, match_id, result, lang)
             result["lang"] = "en"
             return result
 
@@ -1393,12 +1428,17 @@ def build_router(registry: Registry) -> APIRouter:
 
     @router.get("/matches/{match_id}/catch-me-up")
     async def get_catch_me_up(
-        match_id: str, session_id: str, minute: int = Query(ge=0, le=200)
+        match_id: str,
+        session_id: str,
+        minute: int = Query(ge=0, le=200),
+        # ADR-0023: the feed languages, the same as on the stream and in /ask
+        lang: Literal["en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans"] = "en",
     ) -> dict[str, Any]:
         """The catch-me-up recap as of a minute (CREW-7.3): the score and the most important
         events up to that minute, every figure recounted from the stored events. A read: it is
         not sent to the streams. Held (404) when a correction before the cut holds it, the desk
-        has killed the feed, or the recap does not recount."""
+        has killed the feed, or the recap does not recount. With lang, a checked translation
+        rides along as variants[lang]; the same re-check as a stream line keeps it or drops it."""
         if not registry.allow_catch_me_up(session_id):
             raise Problem(
                 429, "rate_limited", "too many catch-me-up reads a minute", retry_after=60
@@ -1407,6 +1447,18 @@ def build_router(registry: Registry) -> APIRouter:
         recap = await asyncio.to_thread(flow.catch_me_up, minute, publish=False)
         if recap is None:
             raise Problem(404, "not_found", f"the catch-me-up is held at minute {minute}")
+        if lang != "en":
+            key = f"catch-me-up:{minute}"
+            variant = await registry.translation.variant(
+                f"{session_id}/{match_id}",
+                key,
+                recap["text"],
+                lang,
+                _names(flow),
+                lambda reason: flow.record_translation_rejected(key, lang, reason),
+            )
+            if variant.text is not None:
+                recap = {**recap, "variants": {lang: variant.text}}
         return recap
 
     @router.post("/matches/{match_id}/ask")

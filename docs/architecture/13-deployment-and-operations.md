@@ -21,7 +21,7 @@ flowchart TB
         st[stmatchcastdev<br/>Tables + Blobs]
         kv[kv-matchcast-dev]
         appi[appi + log-matchcast-dev]
-        foundry[matchcast-foundry / proj-default<br/>gpt-6-luna, text-embedding-3-small]
+        foundry[matchcast-foundry / proj-default<br/>gpt-5-mini, text-embedding-3-small]
         cs[cs-matchcast-dev]
         sp[spch-matchcast-dev]
         tr[tr-matchcast-dev]
@@ -88,13 +88,15 @@ Key Vault secrets (the only ones): `srch-query-key`, `srch-admin-key`. Each is d
 | --- | --- | --- | --- |
 | Image | `acrmatchcast<suffix>.azurecr.io/matchcast-api:sha-<sha>` (cloud build, ADR-0019) or `ghcr.io/crafted-by-akshay/matchcast-api:sha-<sha>` | `…-mcp:sha-<sha>` | `…-web:sha-<sha>` |
 | CPU / memory | 0.5 vCPU / 1 GiB | 0.5 / 1 GiB | 0.25 / 0.5 GiB |
-| Replicas | min 0, max 1 | min 0, max 2 | min 0, max 1 |
+| Replicas | min 0, max 1 | min 0, max 2 | min 0, max 3 |
 | Scale rules | HTTP 20 concurrent; KEDA `azure-eventhub` on `match-events`, `$Default`, threshold 50 | HTTP 20 concurrent | HTTP 50 concurrent |
 | Ingress | external, port 8000 | internal port 8001 + external path `/mcp` behind Easy Auth | external, port 8080 |
 | Probes | liveness `/health`, readiness `/ready` | `/health` | `/` |
 
+**Autoscaling.** Only `web` (static, stateless) scales out, to 3 replicas at 50 concurrent requests; min is 1 while `keepWarm` is on, else 0. `api` stays at exactly 1 replica because match state and SSE live in its memory (ADR-0005 addendum), and `mcp` waits for a shared store. An extra `web` replica (0.25 vCPU) costs about $0.02/hr and exists only while load lasts (the roughly $0.04/hr figure is per 0.5 vCPU replica).
+
 Environment variables for `api` (no secrets except the Key Vault reference):
-`MATCHCAST_MODE=cloud`, `MATCHCAST_AGENT_MODE=live|rules`, `MATCHCAST_TOOLS=inproc|mcp`, `MATCHCAST_ORCHESTRATOR=af|native`, `MATCHCAST_STATE_WRITER=workflow|reducer` (ADR-0017, default `workflow`), `AZURE_CLIENT_ID`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT=gpt-6-luna`, `FOUNDRY_EMBEDDING_DEPLOYMENT=text-embedding-3-small`, `STORAGE_TABLE_URL`, `STORAGE_BLOB_URL`, `EVENTHUB_FQDN`, `EVENTHUB_NAME=match-events`, `MCP_URL`, `SEARCH_ENDPOINT`, `SEARCH_INDEX=kb-matchcast-v1`, `MATCHCAST_SCOREBOARD_LIVE_RUN=/app/data/models/scoreboard-live.json` (the recorded live scoreboard run, committed into the image; no file means the rules arms show), `SEARCH_QUERY_KEY` (secretRef to `srch-query-key`), `CONTENT_SAFETY_ENDPOINT`, `SPEECH_ENDPOINT` (custom-domain `https://<name>.cognitiveservices.azure.com`), `SPEECH_REGION=eastus2`, `TRANSLATOR_ENDPOINT` (custom domain), `TRANSLATOR_REGION`, `TRANSLATOR_MAX_CHARS=500000`, `VISION_ENDPOINT`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `CORS_ORIGINS=https://<web-fqdn>`. The old `MATCHCAST_MODEL_ENDPOINT` and `MATCHCAST_MODEL_API_KEY` are removed (PLT-2).
+`MATCHCAST_MODE=cloud`, `MATCHCAST_AGENT_MODE=live|rules`, `MATCHCAST_TOOLS=inproc|mcp`, `MATCHCAST_ORCHESTRATOR=af|native`, `MATCHCAST_STATE_WRITER=workflow|reducer` (ADR-0017, default `workflow`), `AZURE_CLIENT_ID`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT=gpt-5-mini`, `FOUNDRY_EMBEDDING_DEPLOYMENT=text-embedding-3-small`, `STORAGE_TABLE_URL`, `STORAGE_BLOB_URL`, `EVENTHUB_FQDN`, `EVENTHUB_NAME=match-events`, `MCP_URL`, `SEARCH_ENDPOINT`, `SEARCH_INDEX=kb-matchcast-v1`, `MATCHCAST_SCOREBOARD_LIVE_RUN=/app/data/models/scoreboard-live.json` (the recorded live scoreboard run, committed into the image; no file means the rules arms show), `SEARCH_QUERY_KEY` (secretRef to `srch-query-key`), `CONTENT_SAFETY_ENDPOINT`, `SPEECH_ENDPOINT` (custom-domain `https://<name>.cognitiveservices.azure.com`), `SPEECH_REGION=eastus2`, `TRANSLATOR_ENDPOINT` (custom domain), `TRANSLATOR_REGION`, `TRANSLATOR_MAX_CHARS=500000`, `VISION_ENDPOINT`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `CORS_ORIGINS=https://<web-fqdn>`. The old `MATCHCAST_MODEL_ENDPOINT` and `MATCHCAST_MODEL_API_KEY` are removed (PLT-2).
 
 ## 5. CI/CD
 

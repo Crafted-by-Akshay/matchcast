@@ -7,7 +7,7 @@
 //<core>
 // ---- vision core: pure functions over an RGBA buffer and a pinhole camera; no engine state ----
 const VC = {};
-VC.lut = Uint8Array.from({ length: 256 }, (_, i) => Math.round(255 * Math.pow(i / 255, 1 / 2.2)));   // linear render target -> display gamma
+VC.lut = Uint8Array.from({ length: 256 }, (_, i) => Math.round(255 * DM.pow(i / 255, 1 / 2.2)));   // linear render target -> display gamma
 // camera model from the calibration: a ray for each pixel and a projection back into the image
 VC.camera = (mw, pmi, pm, mwi, W, H) => {
   const ap = (m, x, y, z, w) => [m[0] * x + m[4] * y + m[8] * z + m[12] * w, m[1] * x + m[5] * y + m[9] * z + m[13] * w, m[2] * x + m[6] * y + m[10] * z + m[14] * w, m[3] * x + m[7] * y + m[11] * z + m[15] * w];
@@ -23,7 +23,7 @@ VC.camera = (mw, pmi, pm, mwi, W, H) => {
   // pitch point (x,y) at height h -> pixel
   cam.proj = (x, y, h) => { const v = ap(mwi, x - 52.5, h, y - 34, 1); const c = ap(pm, v[0], v[1], v[2], 1); if (c[3] <= 0) return null; return [(c[0] / c[3] + 1) / 2 * W, (1 - c[1] / c[3]) / 2 * H]; };
   // how many pixels tall a 1.8 m person standing at (x,y) appears
-  cam.pxH = (x, y) => { const a = cam.proj(x, y, 0), b = cam.proj(x, y, 1.8); return a && b ? Math.hypot(a[0] - b[0], a[1] - b[1]) : 0; };
+  cam.pxH = (x, y) => { const a = cam.proj(x, y, 0), b = cam.proj(x, y, 1.8); return a && b ? DM.hypot(a[0] - b[0], a[1] - b[1]) : 0; };
   return cam;
 };
 // colour classes: 0 grass/background, 1 home shirt, 2 away shirt, 3 home GK, 4 away GK, 5 black (referee kit, dark shorts),
@@ -89,11 +89,11 @@ VC.components = (cls, W, H, want) => {
 };
 // distance (m) from a pitch point to the nearest painted line: the line model a real system calibrates against
 VC.lineDist = (x, y) => {
-  const seg = (x0, y0, x1, y1) => { const dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy))); return Math.hypot(x - x0 - t * dx, y - y0 - t * dy); };
-  const arc = (cx, cy, r, inside) => { const d = Math.hypot(x - cx, y - cy); return inside && !inside() ? 1e9 : Math.abs(d - r); };
-  let d = Math.min(seg(0, 0, 105, 0), seg(0, 68, 105, 68), seg(0, 0, 0, 68), seg(105, 0, 105, 68), seg(52.5, 0, 52.5, 68), arc(52.5, 34, 9.15), Math.hypot(x - 52.5, y - 34) - 0.2);
+  const seg = (x0, y0, x1, y1) => { const dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy))); return DM.hypot(x - x0 - t * dx, y - y0 - t * dy); };
+  const arc = (cx, cy, r, inside) => { const d = DM.hypot(x - cx, y - cy); return inside && !inside() ? 1e9 : Math.abs(d - r); };
+  let d = Math.min(seg(0, 0, 105, 0), seg(0, 68, 105, 68), seg(0, 0, 0, 68), seg(105, 0, 105, 68), seg(52.5, 0, 52.5, 68), arc(52.5, 34, 9.15), DM.hypot(x - 52.5, y - 34) - 0.2);
   for (const [g, s] of [[0, 1], [105, -1]]) d = Math.min(d, seg(g, 13.84, g + s * 16.5, 13.84), seg(g, 54.16, g + s * 16.5, 54.16), seg(g + s * 16.5, 13.84, g + s * 16.5, 54.16), seg(g, 24.84, g + s * 5.5, 24.84), seg(g, 43.16, g + s * 5.5, 43.16), seg(g + s * 5.5, 24.84, g + s * 5.5, 43.16),
-    arc(g + s * 11, 34, 9.15, () => s * (x - g) > 16.5), Math.hypot(x - g - s * 11, y - 34) - 0.2, arc(g, 0, 1), arc(g, 68, 1));
+    arc(g + s * 11, 34, 9.15, () => s * (x - g) > 16.5), DM.hypot(x - g - s * 11, y - 34) - 0.2, arc(g, 0, 1), arc(g, 68, 1));
   return d;
 };
 // ---- detection: kit-colour blobs -> people standing on the pitch, white specks -> ball candidates ----
@@ -123,7 +123,7 @@ VC.detect = (cls, cam, buf) => {
     const cen = []; for (let a = 0; a < nw; a++) for (let b = 0; b < nh && cen.length < k; b++) cen.push([c.u0 + (a + 0.5) * w / nw, c.v0 + (b + 0.5) * h / nh]);
     let asg = new Int32Array(c.n);
     for (let it = 0; it < 6; it++) { const sm = cen.map(() => [0, 0, 0]);
-      for (let i = 0; i < c.n; i++) { const q = c.px[i], u = q % W, v = (q / W) | 0; let bi = 0, bd = 1e9; for (let j = 0; j < cen.length; j++) { const d = (u - cen[j][0]) ** 2 + (v - cen[j][1]) ** 2; if (d < bd) { bd = d; bi = j; } } asg[i] = bi; sm[bi][0] += u; sm[bi][1] += v; sm[bi][2]++; }
+      for (let i = 0; i < c.n; i++) { const q = c.px[i], u = q % W, v = (q / W) | 0; let bi = 0, bd = 1e9; for (let j = 0; j < cen.length; j++) { const d = DM.sq(u - cen[j][0]) + DM.sq(v - cen[j][1]); if (d < bd) { bd = d; bi = j; } } asg[i] = bi; sm[bi][0] += u; sm[bi][1] += v; sm[bi][2]++; }
       for (let j = 0; j < cen.length; j++) if (sm[j][2]) cen[j] = [sm[j][0] / sm[j][2], sm[j][1] / sm[j][2]]; }
     for (let j = 0; j < cen.length; j++) { const px = []; let u0 = 1e9, u1 = -1, v0 = 1e9, v1 = -1; for (let i = 0; i < c.n; i++) if (asg[i] === j) { const q = c.px[i], u = q % W, v = (q / W) | 0; px.push(q); u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
       if (px.length) parts.push({ c: c.c, px, n: px.length, u0, u1, v0, v1, hp: c.hp, split: k }); }
@@ -152,9 +152,9 @@ VC.detect = (cls, cam, buf) => {
     people.push({ cls: 5, u: cu, v: fv, x: g[0], y: g[1], top: c.v0 - hp * 0.12, sv0: c.v0, sv1: c.v1, u0: c.u0, u1: c.u1, hp, n: c.n, split: 1 }); }
   // one person per spot: kit-coloured boots and socks near a player are part of him (players never stand closer than 0.7 m)
   people.sort((a, b) => b.n - a.n);
-  for (let i = people.length - 1; i >= 0; i--) { const c = people[i]; for (let j = 0; j < i; j++) { const p = people[j]; const d = Math.hypot(p.x - c.x, p.y - c.y); if ((p.cls === c.cls && d < 0.75) || (d < 0.6 && c.n < p.n * 0.45)) { people.splice(i, 1); break; } } }
+  for (let i = people.length - 1; i >= 0; i--) { const c = people[i]; for (let j = 0; j < i; j++) { const p = people[j]; const d = DM.hypot(p.x - c.x, p.y - c.y); if ((p.cls === c.cls && d < 0.75) || (d < 0.6 && c.n < p.n * 0.45)) { people.splice(i, 1); break; } } }
   // a black blob right next to a player is his shorts or hair seen from above, not the referee
-  for (let i = people.length - 1; i >= 0; i--) { const c = people[i]; if (c.cls === 5 && people.some((p) => p.cls !== 5 && Math.hypot(p.x - c.x, p.y - c.y) < 0.9)) people.splice(i, 1); }
+  for (let i = people.length - 1; i >= 0; i--) { const c = people[i]; if (c.cls === 5 && people.some((p) => p.cls !== 5 && DM.hypot(p.x - c.x, p.y - c.y) < 0.9)) people.splice(i, 1); }
   // only people standing on the field of play (and its run-off) count; the boards and benches are outside
   const ppl = people.filter((p) => p.x > -3 && p.x < 108 && p.y > -3 && p.y < 71);
   // ball candidates: small, round-ish white specks that are not shorts or boots of someone, and not a stretch of line or rain
@@ -163,14 +163,14 @@ VC.detect = (cls, cam, buf) => {
     const g = cam.ground(u, v + 0.5, 0.11); if (!g || g[0] < -3 || g[0] > 108 || g[1] < -3 || g[1] > 71) continue; const hp = cam.pxH(g[0], g[1]);
     const d = Math.max(1, hp * 0.22 / 1.8);
     // a speck of painted line (or a spot): within about two pixels of the line model, measured along the ground in depth
-    const g2 = cam.ground(u, v + 1.5, 0.11); const mpp = g2 ? Math.hypot(g2[0] - g[0], g2[1] - g[1]) : 0.3; if (VC.lineDist(g[0], g[1]) < 0.2 + 1.6 * mpp) continue;
+    const g2 = cam.ground(u, v + 1.5, 0.11); const mpp = g2 ? DM.hypot(g2[0] - g[0], g2[1] - g[1]) : 0.3; if (VC.lineDist(g[0], g[1]) < 0.2 + 1.6 * mpp) continue;
     if (g[0] < -0.3 || g[0] > 105.3 || ((g[0] < 1.2 || g[0] > 103.8) && g[1] > 29 && g[1] < 39) || ((g[0] < 1.5 || g[0] > 103.5) && (g[1] < 1.5 || g[1] > 66.5))) continue;   // goal frames, nets and corner flags
     if (w > d * 2 + 2 || h > d * 2 + 2 || c.n > (d + 2) * (d + 2) * 1.3 || Math.max(w, h) > 2.6 * Math.min(w, h) + 1) continue;
     // inside a player's silhouette and above his ankles: white shorts or socks, not the ball
     let body = false; for (const p of ppl) if (u >= p.u0 - 2 && u <= p.u1 + 2 && v >= p.top && v < p.v - p.hp * 0.12) body = true; if (body) continue;
     // brightness: a lit ball is the brightest thing on the grass; rain streaks and line specks are greyer
     let vm = 0; if (buf) for (const q of c.px) { const k = ((H - 1 - ((q / W) | 0)) * W + q % W) * 4; vm = Math.max(vm, VC.lut[buf[k]], VC.lut[buf[k + 1]], VC.lut[buf[k + 2]]); }
-    let dn = 1e9; for (const p of ppl) dn = Math.min(dn, Math.hypot(p.x - g[0], p.y - g[1]));
+    let dn = 1e9; for (const p of ppl) dn = Math.min(dn, DM.hypot(p.x - g[0], p.y - g[1]));
     // isolation: share of the ring of pixels around the speck that is grass. A ball rolls free; a white boot or sock is joined to a leg
     let ring = 0, rg = 0; for (let v = c.v0 - 1; v <= c.v1 + 1; v++) for (let u = c.u0 - 1; u <= c.u1 + 1; u++) { if (v < 0 || u < 0 || v >= H || u >= W || (v >= c.v0 && v <= c.v1 && u >= c.u0 && u <= c.u1)) continue; ring++; const k = cls[v * W + u]; if (k === 0) rg++; }
     const iso = ring ? rg / ring : 0;
@@ -225,7 +225,7 @@ function visCapture(sc) {
 function visCam(J) { camera.updateMatrixWorld(); const M = { mw: camera.matrixWorld.elements.slice(), pmi: camera.projectionMatrixInverse.elements.slice(), pm: camera.projectionMatrix.elements.slice(), mwi: camera.matrixWorldInverse.elements.slice() }; if (J) J.camM = M; return VC.camera(M.mw, M.pmi, M.pm, M.mwi, VIS.W, VIS.H); }
 // ground truth at the instant of capture, for the scorer only
 function visTruth() { return { ppl: players.map((p) => ({ i: p.i, ti: p.ti, x: p.pos2.x, y: p.pos2.y, sp: p.vel.length(), cls: clsOf(p), off: p.off })).concat(officials.filter((o) => o.role === 'ref').map((o) => ({ i: -1, x: o.pos2.x, y: o.pos2.y, sp: 0, cls: 5 }))),
-  ball: { x: ball.p.x, y: ball.p.z, h: ball.p.y, sp: Math.hypot(ball.v.x, ball.v.z) } }; }
+  ball: { x: ball.p.x, y: ball.p.z, h: ball.p.y, sp: DM.hypot(ball.v.x, ball.v.z) } }; }
 // one job per capture, spread over three frames so no single frame pays for all of it
 function visStep() {
   const J = VIS.job; const t0 = performance.now();
@@ -246,23 +246,23 @@ function visStep() {
 function visTrack(J) {
   const t = J.t, dt = Math.max(0.05, t - VIS.t); VIS.t = t; const D = J.det.people;
   for (const k of VIS.tracks) { k.x += k.vx * dt; k.y += k.vy * dt; if (k.missT > 0.6) { k.vx *= 0.7; k.vy *= 0.7; } const s = J.cam.proj(k.x, k.y, 0); k.inView = !!s && s[0] > 2 && s[0] < VIS.W - 2 && s[1] > 2 && s[1] < VIS.H + 4; }
-  const pairs = []; for (const k of VIS.tracks) for (let j = 0; j < D.length; j++) { if (D[j].cls !== k.cls) continue; const d = Math.hypot(D[j].x - k.x, D[j].y - k.y); if (d < VID.gate + VID.gv * dt + Math.min(8, 7 * k.missT)) pairs.push([d - Math.min(k.hits, 10) * 0.02 - (k.missT > 0 ? VID.rb : 0), k, j]); }
+  const pairs = []; for (const k of VIS.tracks) for (let j = 0; j < D.length; j++) { if (D[j].cls !== k.cls) continue; const d = DM.hypot(D[j].x - k.x, D[j].y - k.y); if (d < VID.gate + VID.gv * dt + Math.min(8, 7 * k.missT)) pairs.push([d - Math.min(k.hits, 10) * 0.02 - (k.missT > 0 ? VID.rb : 0), k, j]); }
   pairs.sort((a, b) => a[0] - b[0]); const usedK = new Set(), usedD = new Set();
   for (const [, k, j] of pairs) { if (usedK.has(k) || usedD.has(j)) continue; usedK.add(k); usedD.add(j); const z = D[j];
     const rx = z.x - k.x, ry = z.y - k.y, re = k.missT > 0.3; const al = re ? 1 : 0.55, be = re ? 0 : 0.16;
-    k.x += al * rx; k.y += al * ry; if (re) { k.vx = 0; k.vy = 0; } else { k.vx += be * rx / dt; k.vy += be * ry / dt; } const sp = Math.hypot(k.vx, k.vy); if (sp > 10.5) { k.vx *= 10.5 / sp; k.vy *= 10.5 / sp; }
+    k.x += al * rx; k.y += al * ry; if (re) { k.vx = 0; k.vy = 0; } else { k.vx += be * rx / dt; k.vy += be * ry / dt; } const sp = DM.hypot(k.vx, k.vy); if (sp > 10.5) { k.vx *= 10.5 / sp; k.vy *= 10.5 / sp; }
     k.hits++; k.miss = 0; k.missT = 0; k.seen = t; k.det = z; visSig(k.sig, z.f, 1); visSpeed(k, t, z); }
   for (const k of VIS.tracks) if (!usedK.has(k)) { k.miss++; k.missT += dt; k.det = null; }
   VIS.tracks = VIS.tracks.filter((k) => k.missT < (k.inView ? (k.hits > 4 ? VID.life : VID.life0) : 8));
   for (let j = 0; j < D.length; j++) if (!usedD.has(j)) { const z = D[j]; const k = { id: VIS.nextId++, cls: z.cls, x: z.x, y: z.y, vx: 0, vy: 0, hits: 1, miss: 0, missT: 0, seen: t, born: t, pid: -1, stable: 0, inView: true, det: z, sig: visSigNew() }; visSig(k.sig, z.f, 1); VIS.tracks.push(k); }
   // two tracks on one person: keep the older
-  VIS.tracks.sort((a, b) => b.hits - a.hits); for (let i = VIS.tracks.length - 1; i >= 0; i--) { const a = VIS.tracks[i]; if (VIS.tracks.some((b, j) => j < i && b.cls === a.cls && Math.hypot(b.x - a.x, b.y - a.y) < 0.55)) VIS.tracks.splice(i, 1); }
+  VIS.tracks.sort((a, b) => b.hits - a.hits); for (let i = VIS.tracks.length - 1; i >= 0; i--) { const a = VIS.tracks[i]; if (VIS.tracks.some((b, j) => j < i && b.cls === a.cls && DM.hypot(b.x - a.x, b.y - a.y) < 0.55)) VIS.tracks.splice(i, 1); }
 }
 // speed from a least-squares line through the last second of measured positions: steadier than differencing two looks
 function visSpeed(k, t, z) {
-  const H = k.hist || (k.hist = []); H.push([t, z.x, z.y]); while (H.length && t - H[0][0] > 1.0) H.shift(); if (H.length < 3) { k.sp = Math.hypot(k.vx, k.vy); return; }
+  const H = k.hist || (k.hist = []); H.push([t, z.x, z.y]); while (H.length && t - H[0][0] > 1.0) H.shift(); if (H.length < 3) { k.sp = DM.hypot(k.vx, k.vy); return; }
   let st = 0, sx = 0, sy = 0; for (const h of H) { st += h[0]; sx += h[1]; sy += h[2]; } const n = H.length; st /= n; sx /= n; sy /= n; let tt = 0, tx = 0, ty = 0;
-  for (const h of H) { const d = h[0] - st; tt += d * d; tx += d * (h[1] - sx); ty += d * (h[2] - sy); } k.sp = tt > 1e-6 ? Math.min(10.5, Math.hypot(tx / tt, ty / tt)) : 0;
+  for (const h of H) { const d = h[0] - st; tt += d * d; tx += d * (h[1] - sx); ty += d * (h[2] - sy); } k.sp = tt > 1e-6 ? Math.min(10.5, DM.hypot(tx / tt, ty / tt)) : 0;
 }
 const visSigNew = () => ({ h: 0, hw: 0, hair: null, hairW: 0, skin: null, skinW: 0, boot: null, bootW: 0 });
 // running weighted means of a signature (height and three colours)
@@ -272,7 +272,7 @@ function visSig(g, f, w) {
 }
 // how unlike a track's signature is to a player's gallery signature (sum of capped squared z-scores)
 function visAppCost(a, b) {
-  let c = 0; const term = (x, xw, y, yw, s0, fl) => { if (xw < 0.4 || yw < 0.4 || !x || !y) return 0; const d2 = Array.isArray(x) ? x.reduce((s, v, i) => s + (v - y[i]) ** 2, 0) : (x - y) ** 2; return Math.min(6, d2 / (s0 * s0 * (1 / xw + 1 / yw) + fl * fl)); };
+  let c = 0; const term = (x, xw, y, yw, s0, fl) => { if (xw < 0.4 || yw < 0.4 || !x || !y) return 0; const d2 = Array.isArray(x) ? x.reduce((s, v, i) => s + DM.sq(v - y[i]), 0) : DM.sq(x - y); return Math.min(6, d2 / (s0 * s0 * (1 / xw + 1 / yw) + fl * fl)); };
   c += term(a.h, a.hw, b.h, b.hw, 0.12, VID.fh); c += term(a.hair, a.hairW, b.hair, b.hairW, 0.3, VID.fc); c += term(a.skin, a.skinW, b.skin, b.skinW, 0.25, VID.fc); c += term(a.boot, a.bootW, b.boot, b.bootW, 0.2, VID.fc);
   return c;
 }
@@ -296,11 +296,11 @@ function visIdentify(J) {
     // appearance counts relative to the best-matching team-mate: only differences between candidates matter
     const AP = R.map((k) => { const a = P.map((pi) => visAppCost(k.sig, VIS.gal[pi])); const mn = Math.min(...a); return a.map((x) => (x - mn) * VID.app); });
     const C = R.map((k, r) => P.map((pi, j) => { const p = players[pi]; let c = AP[r][j];
-      if (fit && !ko) { const f = fit(pi); c += VID.shape * Math.min(6, ((k.x - f[0]) ** 2 + (k.y - f[1]) ** 2) / (VID.sig * VID.sig)); }
+      if (fit && !ko) { const f = fit(pi); c += VID.shape * Math.min(6, (DM.sq(k.x - f[0]) + DM.sq(k.y - f[1])) / (VID.sig * VID.sig)); }
       if (k.pid === pi) c -= VID.keep + Math.min(VID.keepMax, k.stable * 0.25);                                   // keep identities unless the evidence says otherwise
-      const L = VIS.last[pi]; if (L && L.k !== k.id) { const dt = t - L.t, d = Math.hypot(L.x - k.x, L.y - k.y); if (d > 9.5 * dt + 3) c += VID.far;   // seen elsewhere too recently
+      const L = VIS.last[pi]; if (L && L.k !== k.id) { const dt = t - L.t, d = DM.hypot(L.x - k.x, L.y - k.y); if (d > 9.5 * dt + 3) c += VID.far;   // seen elsewhere too recently
         else if (!VIS.tracks.some((o) => o.id === L.k && o.missT < 0.5)) c -= VID.near * Math.max(0, 1 - d / (2 + 6 * dt)); }   // his last track ended right here: probably him again
-      if (ko) { const kp = own2w(ti, Math.min(p.slot.x * 0.85, 49.5), p.slot.y); c += VID.ko * Math.min(10, (Math.hypot(kp.x - k.x, kp.y - k.y) / 3.5) ** 2); }   // team-sheet formation at kick-off
+      if (ko) { const kp = own2w(ti, Math.min(p.slot.x * 0.85, 49.5), p.slot.y); c += VID.ko * Math.min(10, DM.sq(DM.hypot(kp.x - k.x, kp.y - k.y) / 3.5)); }   // team-sheet formation at kick-off
       return c; }).concat(R.map(() => VID.unk)));                                                        // or leave unidentified
     const as = VC.hungarian(C);
     R.forEach((k, r) => { const pi = as[r] >= 0 && as[r] < P.length ? P[as[r]] : -1; if (pi === k.pid) k.stable++; else { if (k.pid >= 0 && pi >= 0) VIS.idSwitch = (VIS.idSwitch || 0) + 1; k.pid = pi; k.stable = 0; } });
@@ -308,7 +308,7 @@ function visIdentify(J) {
   // the gallery learns from tracks whose identity has held for a while (fast during the kick-off calibration window)
   for (const k of VIS.tracks) { if (k.pid < 0 || !k.det) continue; const p = players[k.pid]; VIS.last[k.pid] = { x: k.x, y: k.y, t, k: k.id };
     if (k.stable >= 3 || (ko && k.stable >= 1)) visSig(VIS.gal[k.pid], k.det.f, ko ? 1 : VID.learn);
-    const st = VIS.pstat[k.pid]; const sp = k.sp || 0; if (k.hits > 5) { st.top = Math.max(st.top, sp); st.n++; } if (k.lx !== undefined) { const d = Math.hypot(k.x - k.lx, k.y - k.ly); if (d < 3) st.dist += d; } k.lx = k.x; k.ly = k.y; if (!p) continue; }
+    const st = VIS.pstat[k.pid]; const sp = k.sp || 0; if (k.hits > 5) { st.top = Math.max(st.top, sp); st.n++; } if (k.lx !== undefined) { const d = DM.hypot(k.x - k.lx, k.y - k.ly); if (d < 3) st.dist += d; } k.lx = k.x; k.ly = k.y; if (!p) continue; }
 }
 // ---- the ball: a small white blob, followed with its own filter; a lost ball is re-found near the players ----
 const VB = { decay: 0.7, hyst: 1.05, spawn: 1.2, min: 1.5, boot: 1.2, miss: 0.8 };   // ball-tracker constants (tuned on recorded runs)
@@ -316,17 +316,17 @@ function visBall(J) {
   const t = J.t, C = J.det.balls, prev = VIS.prevBalls || []; VIS.prevBalls = C;
   // how ball-like each speck is: the right size for that distance, round, free of a body, and seen near the same spot a moment
   // ago (rain and glints flicker; a ball persists)
-  for (const c of C) { let sup = 0; for (const q of prev) { const d = Math.hypot(q.x - c.x, q.y - c.y); if (d < 3) sup = Math.max(sup, d < 0.05 ? 0.3 : 1); } c.sup = sup;
+  for (const c of C) { let sup = 0; for (const q of prev) { const d = DM.hypot(q.x - c.x, q.y - c.y); if (d < 3) sup = Math.max(sup, d < 0.05 ? 0.3 : 1); } c.sup = sup;
     c.score = Math.min(1, c.n / (0.78 * c.d * c.d + 1)) + (c.w >= 2 && c.h >= 2 ? 0.3 : 0) + 0.4 * (c.iso === undefined ? 0.75 : c.iso) + sup - (c.n === 1 && c.dn < 1 ? VB.boot : 0); }
   // several ball hypotheses run at once, each scored by the evidence along its path; the best-supported one is the ball.
   // A white boot or a glint can win a frame, but it rarely keeps a smooth path as long as the real ball does.
   const HY = VIS.hyps || (VIS.hyps = []); const used = new Set();
   for (const h of HY) { const dt = t - h.t; h.px = h.x + h.vx * dt; h.py = h.y + h.vy * dt; }
-  const pr = []; for (const h of HY) { const gate = 1.6 + 20 * Math.min(1, t - h.seen); for (const c of C) { const d = Math.hypot(c.x - h.px, c.y - h.py); if (d < gate) pr.push([d / gate - c.score * 0.2, h, c]); } }
+  const pr = []; for (const h of HY) { const gate = 1.6 + 20 * Math.min(1, t - h.seen); for (const c of C) { const d = DM.hypot(c.x - h.px, c.y - h.py); if (d < gate) pr.push([d / gate - c.score * 0.2, h, c]); } }
   pr.sort((a, b) => a[0] - b[0]); const hu = new Set();
   for (const [, h, c] of pr) { if (hu.has(h) || used.has(c)) continue; hu.add(h); used.add(c); const dt = Math.max(0.05, t - h.t), rx = c.x - h.px, ry = c.y - h.py;
     if (t - h.seen < 0.7) { h.x = h.px + 0.75 * rx; h.y = h.py + 0.75 * ry; h.vx += 0.45 * rx / dt; h.vy += 0.45 * ry / dt; } else { h.vx = rx / dt * 0.3; h.vy = ry / dt * 0.3; h.x = c.x; h.y = c.y; }
-    const sp = Math.hypot(h.vx, h.vy); if (sp > 42) { h.vx *= 42 / sp; h.vy *= 42 / sp; } h.t = t; h.seen = t; h.ev = h.ev * VB.decay + c.score; h.n++; h.u = c.u; h.v = c.v; }
+    const sp = DM.hypot(h.vx, h.vy); if (sp > 42) { h.vx *= 42 / sp; h.vy *= 42 / sp; } h.t = t; h.seen = t; h.ev = h.ev * VB.decay + c.score; h.n++; h.u = c.u; h.v = c.v; }
   for (const h of HY) if (!hu.has(h)) { h.x = h.px; h.y = h.py; h.t = t; h.vx *= 0.85; h.vy *= 0.85; h.ev *= VB.miss; }
   for (const c of C) if (!used.has(c) && c.score > VB.spawn) HY.push({ x: c.x, y: c.y, vx: 0, vy: 0, t, seen: t, ev: c.score * 0.5, n: 1, id: (VIS.hypId = (VIS.hypId || 0) + 1) });
   for (let i = HY.length - 1; i >= 0; i--) if (t - HY[i].seen > 1.2 || HY[i].ev < 0.4) HY.splice(i, 1);
@@ -336,20 +336,20 @@ function visBall(J) {
   if (!top || top.ev < VB.min) { if (VIS.ball) VIS.ball.t = t; return; }
   const B = VIS.ball && VIS.ball.id === top.id ? VIS.ball : (VIS.ball = { id: top.id, hist: [] });
   Object.assign(B, { x: top.x, y: top.y, vx: top.vx, vy: top.vy, t, seen: top.seen, u: top.u, v: top.v });
-  if (top.seen === t) { B.hist.push([t, B.x, B.y, Math.hypot(B.vx, B.vy)]); if (B.hist.length > 60) B.hist.shift(); }
+  if (top.seen === t) { B.hist.push([t, B.x, B.y, DM.hypot(B.vx, B.vy)]); if (B.hist.length > 60) B.hist.shift(); }
 }
 // ---- 6. auto-eventing: possession from the nearest identified player, passes from possession changing hands ----
 function visEvents(J) {
   const t = J.t, B = VIS.ball; if (!B || B.seen !== t) return;
-  let own = null, od = 1.5; for (const k of VIS.tracks) { if (k.pid < 0 || k.missT > 0 || players[k.pid].gk && k.cls < 3) continue; const d = Math.hypot(k.x - B.x, k.y - B.y); if (d < od) { od = d; own = k; } }
-  const bsp = Math.hypot(B.vx, B.vy); if (!own || bsp > 14) { return; }
+  let own = null, od = 1.5; for (const k of VIS.tracks) { if (k.pid < 0 || k.missT > 0 || players[k.pid].gk && k.cls < 3) continue; const d = DM.hypot(k.x - B.x, k.y - B.y); if (d < od) { od = d; own = k; } }
+  const bsp = DM.hypot(B.vx, B.vy); if (!own || bsp > 14) { return; }
   const pid = own.pid, P = VIS.poss;
   if (P && P.pid === pid) { P.lastT = t; P.lx = B.x; P.ly = B.y; VIS.pend = null; return; }
   // a new player on the ball must hold it for two looks (0.4 s) before possession changes hands
   if (!VIS.pend || VIS.pend.pid !== pid) { VIS.pend = { pid, t, x: B.x, y: B.y, n: 1 }; return; } if (++VIS.pend.n < 2) return;
   const N = VIS.pend; VIS.pend = null;
   if (P && t - P.lastT < 8) {
-    const a = players[P.pid], b = players[pid], dist = Math.hypot(N.x - P.lx, N.y - P.ly), dur = Math.max(0.2, N.t - P.lastT);
+    const a = players[P.pid], b = players[pid], dist = DM.hypot(N.x - P.lx, N.y - P.ly), dur = Math.max(0.2, N.t - P.lastT);
     let peak = 0; for (const h of B.hist) if (h[0] >= P.lastT && h[0] <= N.t) peak = Math.max(peak, h[3]);
     if (dist >= 4 && dist / dur < 40) { const ev = { t: N.t, t0: P.lastT, from: P.pid, to: pid, team: a.ti, ok: a.ti === b.ti, dist, kmh: dist / dur * 3.6, peak: peak * 3.6 }; VIS.passes.push(ev); if (VIS.passes.length > 400) VIS.passes.shift();
       dataEvent('vision_pass', { team: a.T.key, player: a.name, to: b.name, completed: ev.ok, distM: +dist.toFixed(1), kmh: Math.round(ev.kmh), peakKmh: Math.round(ev.peak), source: 'pixels' }); }
@@ -362,17 +362,17 @@ function visEval(J) {
   const G = T.ppl.filter((g) => !g.off && inV(g.x, g.y)); const D = J.det.people;
   for (const E of [VIS.ev, VIS.win]) {
     // detection: one-to-one matches within 2 m and the right kit
-    const pr = []; for (const g of G) for (let j = 0; j < D.length; j++) if (D[j].cls === g.cls) { const d = Math.hypot(D[j].x - g.x, D[j].y - g.y); if (d < 2) pr.push([d, g, j]); }
+    const pr = []; for (const g of G) for (let j = 0; j < D.length; j++) if (D[j].cls === g.cls) { const d = DM.hypot(D[j].x - g.x, D[j].y - g.y); if (d < 2) pr.push([d, g, j]); }
     pr.sort((a, b) => a[0] - b[0]); const ug = new Set(), ud = new Set(); for (const [d, g, j] of pr) { if (ug.has(g) || ud.has(j)) continue; ug.add(g); ud.add(j); E.se += d; }
     E.gt += G.length; E.det += D.length; E.tp += ug.size;
     // identity and speed: each visible player against the confirmed track that covers him
-    const tk = VIS.tracks.filter((k) => k.hits >= 2 && k.missT === 0 && k.cls !== 5); const pt = []; for (const g of G) if (g.i >= 0) for (const k of tk) if (k.cls === g.cls) { const d = Math.hypot(k.x - g.x, k.y - g.y); if (d < 2) pt.push([d, g, k]); }
+    const tk = VIS.tracks.filter((k) => k.hits >= 2 && k.missT === 0 && k.cls !== 5); const pt = []; for (const g of G) if (g.i >= 0) for (const k of tk) if (k.cls === g.cls) { const d = DM.hypot(k.x - g.x, k.y - g.y); if (d < 2) pt.push([d, g, k]); }
     pt.sort((a, b) => a[0] - b[0]); const ug2 = new Set(), uk = new Set();
     for (const [, g, k] of pt) { if (ug2.has(g) || uk.has(k)) continue; ug2.add(g); uk.add(k); const gi = players.findIndex((p) => p.ti === g.ti && p.i === g.i);
       E.idN++; if (k.pid === gi) E.idOK++; else if (k.pid < 0) E.idUnk++; const pv = E.prev.get(gi); if (k.pid >= 0) { if (pv !== undefined && pv !== k.pid) E.sw++; E.prev.set(gi, k.pid); }
       if (k.hits >= 5 && k.sp !== undefined) { E.spN++; E.spE += Math.abs(k.sp - g.sp); } }
     // ball: found when the vision ball is within 1.5 m of the real one (ground position)
-    if (inV(T.ball.x, T.ball.y)) { E.bIn++; const B = VIS.ball; if (B && B.seen === J.t) { const e = Math.hypot(B.x - T.ball.x, B.y - T.ball.y); if (e < 1.5) { E.bHit++; E.bSe += e; if (T.ball.h < 0.5 && B.hist.length > 3) { E.bSpN++; E.bSpE += Math.abs(Math.hypot(B.vx, B.vy) - T.ball.sp); } } } }
+    if (inV(T.ball.x, T.ball.y)) { E.bIn++; const B = VIS.ball; if (B && B.seen === J.t) { const e = DM.hypot(B.x - T.ball.x, B.y - T.ball.y); if (e < 1.5) { E.bHit++; E.bSe += e; if (T.ball.h < 0.5 && B.hist.length > 3) { E.bSpN++; E.bSpE += Math.abs(DM.hypot(B.vx, B.vy) - T.ball.sp); } } } }
   }
   if (S.t >= VIS.nextChk) { VIS.nextChk = S.t + 10; const w = VIS.win; if (w.gt >= 30) { const r = visRates(w); const ok = r.recall >= 85 && r.id >= 70 && r.posErr < 1; vRes('vision', ok, 'Detection ' + r.recall + '%, ID ' + r.id + '%, position error ' + r.posErr + ' m on the ' + S.cam + ' camera'); } VIS.win = visZero(); }
   if (S.t >= VIS.nextAcc) { VIS.nextAcc = S.t + 60; const r = visReport(); dataEvent('vision_accuracy', { camera: S.cam, recallPct: r.detection.recall, precisionPct: r.detection.precision, posErrM: r.detection.posErr, idPct: r.identity.accuracy, idSwitches: r.identity.switches, speedErrMs: r.speed.playerErr, ballFoundPct: r.ball.found, passRecallPct: r.passes.recall, passPrecisionPct: r.passes.precision, msPerCapture: r.cost.msPerCapture }); }
@@ -411,7 +411,7 @@ function visOverlay() {
     if (bh > 14 || p) { const tw = g.measureText(txt).width + 6; g.globalAlpha = 0.82; g.fillStyle = sp >= 27 ? '#FFD166' : 'rgba(9,13,19,0.85)'; g.fillRect(a[0] - tw / 2, b[1] - 15, tw, 14); g.globalAlpha = 1; g.fillStyle = sp >= 27 ? '#1A1206' : c; g.fillText(txt, a[0] - tw / 2 + 3, b[1] - 2); }
   }
   g.globalAlpha = 1; const B = VIS.ball;
-  if (B && S.t - B.seen < 0.6) { const a = P(B.x + B.vx * lag, B.y + B.vy * lag, 0.11); if (a) { g.strokeStyle = '#FFFFFF'; g.lineWidth = 2; g.beginPath(); g.arc(a[0], a[1], 7, 0, 7); g.stroke(); const sp = Math.hypot(B.vx, B.vy) * 3.6; if (sp > 20) { g.fillStyle = '#FFFFFF'; g.fillText(Math.round(sp) + ' km/h', a[0] + 9, a[1] - 4); } } }
+  if (B && S.t - B.seen < 0.6) { const a = P(B.x + B.vx * lag, B.y + B.vy * lag, 0.11); if (a) { g.strokeStyle = '#FFFFFF'; g.lineWidth = 2; g.beginPath(); g.arc(a[0], a[1], 7, 0, 7); g.stroke(); const sp = DM.hypot(B.vx, B.vy) * 3.6; if (sp > 20) { g.fillStyle = '#FFFFFF'; g.fillText(Math.round(sp) + ' km/h', a[0] + 9, a[1] - 4); } } }
   // the pass the vision just saw
   const lp = VIS.passes[VIS.passes.length - 1]; if (lp && S.t - lp.t < 2.5) { const a = players[lp.from], b = players[lp.to]; const txt = 'PASS ' + a.num + ' → ' + b.num + ' · ' + lp.dist.toFixed(0) + ' m · ' + Math.round(lp.kmh) + ' km/h'; g.font = '700 13px "JetBrains Mono",ui-monospace,monospace'; const tw = g.measureText(txt).width + 14; g.fillStyle = 'rgba(9,13,19,0.85)'; g.fillRect(w / 2 - tw / 2, h * 0.16, tw, 24); g.fillStyle = lp.ok ? '#7CE0A3' : '#FF8A8A'; g.fillText(txt, w / 2 - tw / 2 + 7, h * 0.16 + 19); }
 }

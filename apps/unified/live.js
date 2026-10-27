@@ -33,14 +33,26 @@ const LV = (() => {
       default: return null;
     }
   };
-  const toPacket = (ev, key, seq, iso) => {
+  const toPacket = (ev, key, seq, iso, period) => {
     const t = ev.team ? slug(ev.team) : null, p = ev.player ? slug(ev.player) : null;
     if (!t || !p) return null;
     const m = payloadOf(ev, t, p);
     if (!m) return null;
-    const ms = Math.max(0, Math.round(ev.minute * 60000));
-    return { kind: 'event', schema_version: m.v, stream: key, event_id: 'e' + seq, stream_sequence: seq, revision: 0, event_time_ms: ms, emitted_at: iso,
-      clock: { period: ev.minute < 45 ? 1 : 2, period_elapsed_ms: ev.minute < 45 ? ms : ms - 45 * 60000 }, payload: m.o };
+    return packet(ev, key, seq, iso, period, m.v, m.o);
+  };
+  // `period` is the match's own (the engine's half): first-half stoppage time past minute 45 is still period 1. Without it the minute decides.
+  const packet = (ev, key, seq, iso, period, v, o) => {
+    const ms = Math.max(0, Math.round(ev.minute * 60000)), per = period || (ev.minute < 45 ? 1 : 2);
+    return { kind: 'event', schema_version: v, stream: key, event_id: 'e' + seq, stream_sequence: seq, revision: 0, event_time_ms: ms, emitted_at: iso,
+      clock: { period: per, period_elapsed_ms: per === 1 ? ms : Math.max(0, ms - 45 * 60000) }, payload: o };
+  };
+  // The engine's half_time and full_time data events become period_boundary {boundary: 'ended'} in period 1 and 2: the api's half-time explainer
+  // and full-time recap fire on them. Each is sent once per match (run.bounded), and a full time before any half time (an abandoned match) is not a period 2 end.
+  const boundaryOf = (ev) => {
+    const r = run;
+    if (ev.type === 'half_time' && !r.bounded[1]) return 1;
+    if (ev.type === 'full_time' && !r.bounded[2] && r.period === 2) return 2;
+    return 0;
   };
 
   const url = (path, q) => api() + path + '?' + new URLSearchParams(Object.assign({ session_id: run.key.session_id }, q || {}));
@@ -53,7 +65,7 @@ const LV = (() => {
     vstats.passes = 0; vstats.reads = 0; vstats.readsFailed = 0;   // Vision counts belong to one match
     if (!api()) { set('offline'); return; }
     const id = 'm-' + slug(matchKey).slice(0, 60), ses = TENANT_SESSION + '-' + Date.now().toString(36);
-    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, armed: false, sending: false, sent: new Map(), evs: new Map(), lats: [] };
+    run = { id, key: { tenant_id: 'demo', session_id: ses, match_id: id }, seq: 0, queue: [], created: false, es: null, tries: 0, last: null, claimed: false, accepted: false, armed: false, sending: false, sent: new Map(), evs: new Map(), lats: [], period: 1, bounded: {} };
     set('warming', true); onLatency(latency());   // a new match starts with no latency sample   // repaint even if already warming: the shell restarts its seconds counter with the warm-up timer
     // no warm-up clock yet: it starts at kick-off (the first events) or when the api cannot be reached, so a slow client still loading the pitch never reads 'Rules fallback'
     run.roster = roster ? { kind: 'roster', schema_version: '1.0.0', stream: run.key, pitch: { length_m: 105, width_m: 68 }, ball_id: 'ball', team_ids: roster.teams.map(slug),
@@ -125,7 +137,7 @@ const LV = (() => {
 
   const flush = async () => {
     const r = run; if (!r || r.sending || !r.queue.length) return;
-    r.sending = true;
+    r.sending = true; let more = false;
     try {
       if (!r.created) await create(r);
       const batch = r.queue.slice(0, BATCH);
@@ -133,9 +145,11 @@ const LV = (() => {
       if (res.status === 404) { r.created = false; if (r.es) r.es.close(); }   // the api lost the match (a restart on a store that did not keep it): create it again with the next batch
       if (!res.ok) throw new Error('events ' + res.status);
       r.queue.splice(0, batch.length);
+      more = true;
       if (run === r && !r.accepted) { r.accepted = true; clearTimeout(timer); timer = setTimeout(() => { if (run === r && !r.claimed && st === 'warming') set('fallback'); }, CLAIM_MS); }   // the clock for a claim starts at the first accepted batch, not at page load
     } catch (e) { if (run === r && st === 'warming' && !r.created && e.status >= 400 && e.status < 500 && e.status !== 404 && e.status !== 409) set('fallback'); /* the api refused the match: a real failure. A network error or a 5xx on a cold container keeps waiting; the timers decide */ }
     r.sending = false;
+    if (more && run === r && r.queue.length) flush();   // a backlog of more than one batch drains now: nothing calls flush again after full time, so the last events and the final boundary would wait
   };
 
   // the chip next to a verified answer, from the api's `intent` and `retrieval`: `local` is the match record for a live question and the built-in knowledge base for a knowledge one
@@ -156,13 +170,13 @@ const LV = (() => {
   };
 
   // a viewer's words to a player or the producer (EXP-16): the api's role agent answers from the stored events and its Verifier checks the reply; position is the sim's code (GK, ST...) so the role guard can bound an order
-  const talk = async (target, utterance, position) => {
+  const talk = async (target, utterance, position, lang) => {
     if (!run) throw new Error('no match yet');
     if (!String(utterance).trim()) throw new Error('empty utterance');
-    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}) });
+    const res = await post('/v1/matches/' + run.id + '/talk', { session_id: run.key.session_id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}), ...(lang && lang !== 'en' ? { lang } : {}) });
     if (!res.ok) throw Object.assign(new Error('talk ' + res.status), { status: res.status });
     const j = await res.json();
-    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, order: j.order || null, api: true, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // the api's Azure Speech clip of a verified reply (Voice lane)
+    return { text: j.reply, verdict: j.verdict, facts: j.facts || {}, order: j.order || null, api: true, captions: j.captions || null, audioUrl: j.audio_url ? new URL(j.audio_url, api() + '/').href : null };   // captions (EXP-19): the transcript and the viewer's caption; audioUrl: the api's Azure Speech clip of a verified reply (Voice lane)
   };
 
   // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one
@@ -185,20 +199,22 @@ const LV = (() => {
   // CREW-7.3: the catch-me-up recap as of a minute, GET /v1/matches/{id}/catch-me-up?session_id&minute (docs/architecture/12-api.md). A read: the api sends nothing to the streams.
   // Answers {state} and never throws: ok (the whole recap), held (404: a correction before the cut, a desk kill or a recap that did not recount; not an error), limited (429, wait_s from Retry-After),
   // error (422 or anything else) or none (no api or no match yet). The minute is clamped to the route's 0-200 here, so a bad minute never reaches the api.
-  const catchMeUp = async (minute) => {
-    const r = run, m = Math.max(0, Math.min(200, Math.floor(+minute) || 0));
-    if (!r || !r.created || !api()) return { state: 'none', minute: m };
+  // With lang (the viewer's language, not English) the route may add variants[lang], the Verifier-checked translation: it comes back as `translated` (null when the route sent none, so the page says Showing English); `text` stays the English recap.
+  const catchMeUp = async (minute, lng) => {
+    const r = run, m = Math.max(0, Math.min(200, Math.floor(+minute) || 0)), l = window.MC_LANGS.includes(lng) ? lng : 'en';   // only the ten feed languages (ADR-0023) go on the wire; the route answers 422 to any other
+    if (!r || !r.created || !api()) return { state: 'none', minute: m, lang: l };
     const opts = { headers: { Accept: 'application/json' }, cache: 'no-store' };
     try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) opts.signal = AbortSignal.timeout(8000); } catch (e) { /* no timeout support */ }
     let res;
-    try { res = await fetch(url('/v1/matches/' + encodeURIComponent(r.id) + '/catch-me-up', { minute: m }), opts); } catch (e) { return { state: 'error', minute: m }; }
-    if (res.status === 404) return { state: 'held', minute: m };
-    if (res.status === 429) return { state: 'limited', minute: m, wait_s: Math.max(5, Math.min(600, +res.headers.get('Retry-After') || 60)) };
-    if (!res.ok) return { state: 'error', minute: m };
-    let j; try { j = await res.json(); } catch (e) { return { state: 'error', minute: m }; }
-    if (!j || j.feed !== 'catch_me_up' || typeof j.text !== 'string' || !j.text) return { state: 'error', minute: m };
+    try { res = await fetch(url('/v1/matches/' + encodeURIComponent(r.id) + '/catch-me-up', l === 'en' ? { minute: m } : { minute: m, lang: l }), opts); } catch (e) { return { state: 'error', minute: m, lang: l }; }
+    if (res.status === 404) return { state: 'held', minute: m, lang: l };
+    if (res.status === 429) return { state: 'limited', minute: m, lang: l, wait_s: Math.max(5, Math.min(600, +res.headers.get('Retry-After') || 60)) };
+    if (!res.ok) return { state: 'error', minute: m, lang: l };
+    let j; try { j = await res.json(); } catch (e) { return { state: 'error', minute: m, lang: l }; }
+    if (!j || j.feed !== 'catch_me_up' || typeof j.text !== 'string' || !j.text) return { state: 'error', minute: m, lang: l };
+    const tr = l !== 'en' && j.variants && typeof j.variants[l] === 'string' && j.variants[l] ? j.variants[l] : null;   // a translation only when the route returned a checked variants[lang]
     const ids = Array.isArray(j.source_event_ids) ? new Set(j.source_event_ids.map(String)) : null;   // the recount's evidence: the Verified line only shows when the route returned it
-    return { state: 'ok', minute: Number.isFinite(+j.minute) ? Math.max(0, Math.min(200, Math.floor(+j.minute))) : m, text: j.text, word_count: Number.isFinite(+j.word_count) ? Math.max(0, Math.floor(+j.word_count)) : null, events: ids ? ids.size : null };
+    return { state: 'ok', lang: l, translated: tr, minute: Number.isFinite(+j.minute) ? Math.max(0, Math.min(200, Math.floor(+j.minute))) : m, text: j.text, word_count: Number.isFinite(+j.word_count) ? Math.max(0, Math.floor(+j.word_count)) : null, events: ids ? ids.size : null };
   };
   // the server's audit records for this match (EXP-12), and the same check the server's verifyChain does (packages/contracts/src/audit.ts)
   const GENESIS = '0'.repeat(64);
@@ -238,7 +254,8 @@ const LV = (() => {
   const events = (batch) => {
     if (!run) return;
     if (batch && batch.length) arm(run);
-    for (const ev of batch || []) { const p = toPacket(ev, run.key, run.seq + 1, new Date().toISOString()); if (p) { run.seq++; run.evs.set('e' + run.seq, ev); if (run.evs.size > 2000) run.evs.delete(run.evs.keys().next().value); run.queue.push(p); run.sent.set(run.seq, performance.now()); if (run.sent.size > 600) run.sent.delete(run.sent.keys().next().value); } }   // when each event reached this page, by stream sequence, for the on-air latency
+    for (const ev of batch || []) { const b = boundaryOf(ev), iso = new Date().toISOString(), p = b ? packet(ev, run.key, run.seq + 1, iso, b, '1.0.0', { type: 'period_boundary', boundary: 'ended' }) : toPacket(ev, run.key, run.seq + 1, iso, run.period);
+      if (b) { run.bounded[b] = true; if (b === 1) run.period = 2; } if (p) { run.seq++; run.evs.set('e' + run.seq, ev); if (run.evs.size > 2000) run.evs.delete(run.evs.keys().next().value); run.queue.push(p); run.sent.set(run.seq, performance.now()); if (run.sent.size > 600) run.sent.delete(run.sent.keys().next().value); } }   // when each event reached this page, by stream sequence, for the on-air latency
     flush();
   };
   // Vision derived events (DAT-11 task 277): the tracker's passes, on their own stream `<session>.vision` so they never mix with engine truth.
@@ -333,7 +350,7 @@ const LV = (() => {
     ws.onmessage = (e) => {
       if (typeof e.data !== 'string') { if (header) { h.audio(header.id, new Blob([e.data], { type: 'audio/mpeg' })); header = null; } return; }
       let d; try { d = JSON.parse(e.data); } catch (err) { return; }
-      if (d.type === 'reply') h.reply(d.id, { text: d.reply, verdict: d.verdict, facts: d.facts || {}, order: d.order || null, api: true, audioUrl: null });
+      if (d.type === 'reply') h.reply(d.id, { text: d.reply, verdict: d.verdict, facts: d.facts || {}, order: d.order || null, api: true, captions: d.captions || null, audioUrl: null });
       else if (d.type === 'audio') header = d;
       else if (d.type === 'audio_end') h.end(d.id);
       else if (d.type === 'error') h.error(d.id, d.code);
@@ -342,9 +359,9 @@ const LV = (() => {
     ws.onopen = () => { opened = true; };
     ws.onclose = () => h.close(opened);   // a socket that never opened was refused at the handshake (no match, or a bad session)
     return {
-      talk: (id, target, position, utterance) => {
+      talk: (id, target, position, utterance, lang) => {
         if (ws.readyState !== 1) return false;
-        ws.send(JSON.stringify({ type: 'talk', id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}) }));
+        ws.send(JSON.stringify({ type: 'talk', id, target: slug(target), utterance: String(utterance).slice(0, 300), ...(position ? { position } : {}), ...(lang && lang !== 'en' ? { lang } : {}) }));
         return true;
       },
       cancel: (id) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'cancel', id })); },
@@ -354,6 +371,6 @@ const LV = (() => {
   return { configure: (b, cbs) => { base = b || ''; onStatus = cbs.status; onClaim = cbs.claim; onLine = cbs.line; onBooth = cbs.booth || (() => {}); onLatency = cbs.latency || (() => {}); onDrop = cbs.drop || (() => {}); onAired = cbs.aired || (() => {}); onFeed = cbs.feed || (() => {}); set(base ? 'warming' : 'offline'); if (!base) onStatus('offline'); },
     begin, feedSwitch, lineTexts, catchMeUp, get role() { return String(window.MATCHCAST_ROLE || 'Producer'); }, events, apiEvent: (id) => (run && run.evs.get(String(id))) || null, visionEvents, visionSummary, stop, talk, openCall, recap, drill, get latency() { return latency(); }, get modelCut() { return !!(run && run.cut); }, get vision() { return Object.assign({}, vstats); }, persona: setPersona, seedBad: (on) => { badClaim = !!on; },
     get badState() { return run && run.created && run.bad ? 'sent' : !badClaim ? 'off' : !run || !run.created ? 'pending' : 'late'; },   // pending: goes with the match; late: this match was created without it
-     toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get joinedMidMatch() { return !!(run && (run.attached || run.reconnected)); },   // the page attached to a match that already existed, or its stream dropped and came back: the crew frames sent meanwhile are gone
+     toPacket, ask, identify, audit, verifyChain, get base() { return api(); }, get queued() { return run ? run.queue.slice() : []; }, get joinedMidMatch() { return !!(run && (run.attached || run.reconnected)); },   // the page attached to a match that already existed, or its stream dropped and came back: the crew frames sent meanwhile are gone
      get language() { return lang; }, get auditionUrl() { return api() ? api() + '/v1/voice/audition.mp3' : null; }, get key() { return run ? run.key : null; }, get status() { return st; }, get enabled() { return !!api(); } };
 })();

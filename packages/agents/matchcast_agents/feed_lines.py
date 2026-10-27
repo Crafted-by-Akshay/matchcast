@@ -103,16 +103,20 @@ def _goal_retracted(ctx: MatchContext) -> bool:
     return any(e["event_id"] in targets and e["payload"]["type"] == "goal" for e in ctx.events)
 
 
-def ticker_drafts(ctx: MatchContext) -> list[tuple[DraftLine, list[Claim]]]:
+def ticker_drafts(
+    ctx: MatchContext, event_id: str | None = None
+) -> list[tuple[DraftLine, list[Claim]]]:
     """One DraftLine per ticker item, backed by its event's counters and, on a goal, the score.
 
     Goal lines are not written while a goal is retracted (see _goal_retracted). Card lines are.
+    With event_id, only that event's item is built, so its claims are not built for the rest.
     """
     retracted = _goal_retracted(ctx)
     return [
         _ticker_line(ctx, item)
         for item in ticker_items(ctx)
         if not (retracted and item.kind in ("goal", "own_goal"))
+        and (event_id is None or item.source_event_id == event_id)
     ]
 
 
@@ -169,21 +173,20 @@ def audio_drafts(ctx: MatchContext, windows: list[Window]) -> list[tuple[DraftLi
     A goal described late (its gap starts more than 3 s after it) is not written: the goal's
     description must be spoken within the deadline, so a late one would only mislead.
     """
-    events = {e["event_id"]: e for e in ctx.events}
-    drafts = []
-    for described in audio_placements(ctx, windows):
-        if described.late:
-            continue
-        event = events[described.source_event_id]
-        line_id = f"line-audio-{event['event_id']}"
-        claims = _claims(ctx, line_id, event_metrics(event["payload"]), event["stream_sequence"])
-        line = DraftLine(
-            line_id=line_id,
-            claim_ids=tuple(c["claim_id"] for c in claims),
-            persona=AUDIO,
-            text=described.text,
-            max_chars=AUDIO_MAX_CHARS,
-            origin="template",
-        )
-        drafts.append((line, claims))
-    return drafts
+    return [audio_line(ctx, d) for d in audio_placements(ctx, windows) if not d.late]
+
+
+def audio_line(ctx: MatchContext, described: Description) -> tuple[DraftLine, list[Claim]]:
+    """The DraftLine for one placed description, backed by the counters of its event."""
+    event = next(e for e in ctx.events if e["event_id"] == described.source_event_id)
+    line_id = f"line-audio-{event['event_id']}"
+    claims = _claims(ctx, line_id, event_metrics(event["payload"]), event["stream_sequence"])
+    line = DraftLine(
+        line_id=line_id,
+        claim_ids=tuple(c["claim_id"] for c in claims),
+        persona=AUDIO,
+        text=described.text,
+        max_chars=AUDIO_MAX_CHARS,
+        origin="template",
+    )
+    return line, claims

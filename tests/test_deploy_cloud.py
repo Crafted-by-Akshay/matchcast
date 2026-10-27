@@ -106,11 +106,14 @@ def test_a_failed_cloud_provision_is_retried_and_fails_the_deploy(tmp_path):
     script = LOCAL.read_text()
     funcs = "\n".join(
         script[script.index(f"{name}() {{") :].split("\n}\n", 1)[0] + "\n}"
-        for name in ("retry", "provision_acr")
+        for name in ("retry", "wait_idle", "provision_acr")
     )
     for tool, body in (
         ("azd", "echo 'AZURE_ENV_NAME=\"dev\"'; echo 'FOUNDRY_PROJECT_ENDPOINT=\"https://f\"'"),
-        ("az", f"echo az >> {tmp_path}/calls; exit 3"),
+        (
+            "az",
+            f'echo "$@" >> {tmp_path}/calls; case "$*" in *"group list"*) exit 0;; esac; exit 3',
+        ),
     ):
         (tmp_path / tool).write_text(f"#!/bin/sh\n{body}\n")
         (tmp_path / tool).chmod(0o755)
@@ -124,7 +127,8 @@ def test_a_failed_cloud_provision_is_retried_and_fails_the_deploy(tmp_path):
         text=True,
     )
     assert run.returncode != 0
-    assert (tmp_path / "calls").read_text().count("az") == 3
+    calls = (tmp_path / "calls").read_text().splitlines()
+    assert sum("group create" in call for call in calls) == 3
 
 
 def test_an_unset_required_parameter_stops_the_render():
@@ -132,3 +136,91 @@ def test_an_unset_required_parameter_stops_the_render():
 
     with pytest.raises(SystemExit):
         _params().render((ROOT / "infra/main.parameters.json").read_text(), {})
+
+
+def test_provision_waits_for_a_running_deployment_before_it_starts_one():
+    # a cut-off deploy can leave a nested module deployment Running (DeploymentActive)
+    script = LOCAL.read_text()
+    assert "wait_idle() {" in script
+    body = script.split("wait_idle() {", 1)[1].split("\n}\n", 1)[0]
+    assert "provisioningState=='Running'" in body
+    assert (
+        "az deployment group cancel" in body
+    )  # a stuck one is cancelled after the wait, never deleted
+    assert "delete" not in body
+    provision = script.split("provision_acr() {", 1)[1].split("\n}\n", 1)[0]
+    assert provision.index("wait_idle") < provision.index("az deployment group create")
+
+
+def _run_wait_idle(tmp_path, az_body):
+    script = LOCAL.read_text()
+    func = script[script.index("wait_idle() {") :].split("\n}\n", 1)[0] + "\n}"
+    for tool, body in (("az", az_body), ("sleep", f"echo s >> {tmp_path}/sleeps")):
+        (tmp_path / tool).write_text(f"#!/bin/sh\n{body}\n")
+        (tmp_path / tool).chmod(0o755)
+    return subprocess.run(
+        ["bash", "-c", f"{func}\nwait_idle"],
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_wait_idle_returns_at_once_when_nothing_runs(tmp_path):
+    run = _run_wait_idle(tmp_path, "exit 0")
+    assert run.returncode == 0 and not (tmp_path / "sleeps").exists()
+
+
+def test_wait_idle_fails_when_the_query_fails(tmp_path):
+    run = _run_wait_idle(tmp_path, "exit 1")
+    assert run.returncode == 1  # an auth blip is not "idle"
+
+
+def test_wait_idle_cancels_a_stuck_deployment_after_20_minutes_then_gives_up(tmp_path):
+    calls = tmp_path / "calls"
+    run = _run_wait_idle(
+        tmp_path, f'echo "$@" >> {calls}; case "$*" in *"group list"*) echo ai;; esac; exit 0'
+    )
+    assert run.returncode == 1 and "still running after 25 minutes" in run.stderr
+    assert (tmp_path / "sleeps").read_text().count("s") == 50  # 25 minutes in 30 s steps
+    cancels = [c for c in calls.read_text().splitlines() if "group cancel" in c]
+    assert len(cancels) == 1 and "-n ai" in cancels[0]  # once, and never a delete
+    assert "delete" not in calls.read_text()
+
+
+def test_wait_idle_returns_once_the_deployment_finishes(tmp_path):
+    state = tmp_path / "state"
+    first = f"[ -f {state} ] || {{ touch {state}; echo ai; }}"
+    body = f'case "$*" in *"group list"*) {first};; esac; exit 0'
+    run = _run_wait_idle(tmp_path, body)
+    assert run.returncode == 0 and (tmp_path / "sleeps").read_text().count("s") == 1
+
+
+def _run_api_uri(tmp_path, azd_body, az_body):
+    script = LOCAL.read_text()
+    func = script[script.index("api_uri() {") :].split("\n}\n", 1)[0] + "\n}"
+    for tool, body in (("azd", azd_body), ("az", az_body)):
+        (tmp_path / tool).write_text(f"#!/bin/sh\n{body}\n")
+        (tmp_path / tool).chmod(0o755)
+    return subprocess.run(
+        ["bash", "-c", f"set -euo pipefail\nENV_NAME=dev\n{func}\napi_uri"],
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_api_uri_is_azds_value_when_it_has_one(tmp_path):
+    run = _run_api_uri(tmp_path, "echo https://from-azd", "exit 9")
+    assert run.returncode == 0 and run.stdout.strip() == "https://from-azd"
+
+
+def test_api_uri_comes_from_the_app_when_azd_has_none(tmp_path):
+    run = _run_api_uri(tmp_path, "exit 1", "echo ca-api.example.io")
+    assert run.returncode == 0 and run.stdout.strip() == "https://ca-api.example.io"
+
+
+def test_api_uri_fails_clearly_when_nothing_knows_the_address(tmp_path):
+    assert _run_api_uri(tmp_path, "exit 1", "exit 3").returncode != 0
+    run = _run_api_uri(tmp_path, "exit 1", "true")  # az answers with nothing
+    assert run.returncode != 0 and "cannot find the api address" in run.stderr

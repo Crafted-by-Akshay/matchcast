@@ -14,6 +14,7 @@ FEED_REPLAYED = ("onair", "feed_drop")
 # viewer who opens the stream late rebuilds the crew tree and ledger from them
 CREW_REPLAYED = ("crew_ledger", "crew_spawn")
 REPLAYED = (*PUBLICATION_REPLAYED, *FEED_REPLAYED, *CREW_REPLAYED)
+KEPT_REPLAYED = (*FEED_REPLAYED, *CREW_REPLAYED)  # kept past the buffer, each kind newest-capped
 REPLAY_LIMIT = 500
 FEED_REPLAY_LIMIT = 2000
 CREW_REPLAY_LIMIT = 2000
@@ -39,8 +40,9 @@ class StreamHub:
     def __init__(self, buffer: int = 5000) -> None:
         self._buffer = buffer
         self._log: list[StreamEvent] = []
-        # the newest feed records the buffer has evicted, oldest first: they are older than _log
-        self._kept_feeds: list[StreamEvent] = []
+        # the newest feed and crew records the buffer has evicted, in publish order: they are older
+        # than _log, so a resume from any of them replays what came after it, in order
+        self._kept: list[StreamEvent] = []
         self._subscribers: set[asyncio.Queue[StreamEvent]] = set()
 
     def publish(self, event: str, id_: str | None, data: dict[str, Any]) -> None:
@@ -50,13 +52,22 @@ class StreamHub:
         if overflow > 0:
             evicted = self._log[:overflow]
             del self._log[:overflow]
-            self._kept_feeds.extend(e for e in evicted if e.event in FEED_REPLAYED)
-            del self._kept_feeds[:-FEED_REPLAY_LIMIT]
+            self._kept.extend(e for e in evicted if e.event in KEPT_REPLAYED)
+            if len(self._kept) > 2 * (FEED_REPLAY_LIMIT + CREW_REPLAY_LIMIT):
+                self._trim_kept()
         for queue in list(self._subscribers):
             try:
                 queue.put_nowait(item)
             except asyncio.QueueFull:
                 self._subscribers.discard(queue)
+
+    def _trim_kept(self) -> None:
+        """Keep the newest FEED_REPLAY_LIMIT feed records and the newest CREW_REPLAY_LIMIT crew
+        frames of the kept list, in publish order."""
+        feeds = [i for i, e in enumerate(self._kept) if e.event in FEED_REPLAYED]
+        crew = [i for i, e in enumerate(self._kept) if e.event in CREW_REPLAYED]
+        dropped = set(feeds[:-FEED_REPLAY_LIMIT]) | set(crew[:-CREW_REPLAY_LIMIT])
+        self._kept = [e for i, e in enumerate(self._kept) if i not in dropped]
 
     def history(self) -> list[StreamEvent]:
         return list(self._log)
@@ -67,9 +78,10 @@ class StreamHub:
         """Records after ``last_id`` (all of them when it is unknown), oldest first.
 
         Publications and audit records are capped at the first 500 of what ``wanted`` lets
-        through. Feed records are capped at the newest 2000 of those, and they are kept past the
-        buffer, so a late desk still counts the feeds of a long match."""
-        records = [*self._kept_feeds, *self._log]
+        through. Feed records and crew frames are each capped at the newest 2000 of those, and
+        both are kept past the buffer, in publish order, so a late desk still counts the feeds of
+        a long match and a late viewer still has the crew tree."""
+        records = [*self._kept, *self._log]
         start = 0
         if last_id:
             for index, item in enumerate(records):
