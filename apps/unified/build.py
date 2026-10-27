@@ -376,7 +376,7 @@ NATIONAL = [
 ]
 NATIONAL_SEED = 2026
 # The default match must show something. The venue fixture's tactics were a 5-4-1 low block for Argentina, which gave 0 to 2 shots
-# a half-time in most seeds; an open 4-3-3 balanced v 4-3-3 balanced on the same seed gives 14 shots and goals at 21' and 27' (one seed, not a calibration claim)
+# a half-time in most seeds; an open 4-3-3 balanced v 4-3-3 balanced on the same seed gives 13 shots and one goal at 34' (one seed, not a calibration claim)
 # (measured on the runner's 0.02 s step). Tactics are a fixture setting, not engine calibration. tests/e2e/lively-default.spec.ts guards it.
 NATIONAL_FORMATIONS = ("4-3-3", "4-3-3")
 NATIONAL_STYLES = ("balanced", "balanced")
@@ -539,7 +539,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst-shots.js", "crew-analyst-momentum.js", "crew-analyst-ppda.js", "crew-analyst-radar.js", "maps.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
+        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst-shots.js", "crew-analyst-momentum.js", "crew-analyst-ppda.js", "crew-analyst-progressive.js", "crew-analyst-radar.js", "maps.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)

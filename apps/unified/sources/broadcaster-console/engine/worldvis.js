@@ -44,7 +44,7 @@ let precipT = 0;
 function stepPrecip(dt) {
   const wx = WX[ENV.wx] || WX.clear; const isSnow = ENV.wx === 'snow' && ENV.temp < 1.5; const rate = isSnow ? 0 : wx.rain;
   const nR = Math.floor(RAIN_N * clamp(rate / 16, 0, 1)); const nS = isSnow ? SNOW_N : 0; precipT += dt;
-  const c = camera.position; const wx_ = Math.cos(ENV.windDir) * ENV.wind * 0.6, wz_ = Math.sin(ENV.windDir) * ENV.wind * 0.6;
+  const c = camera.position; const wx_ = DM.cos(ENV.windDir) * ENV.wind * 0.6, wz_ = DM.sin(ENV.windDir) * ENV.wind * 0.6;
   rainGeo.setDrawRange(0, nR * 2); rainMat.opacity = nR ? 0.28 + 0.25 * clamp(rate / 16, 0, 1) : 0;
   const fall = 9.5, len = 0.55;
   for (let i = 0; i < nR; i++) {
@@ -54,7 +54,7 @@ function stepPrecip(dt) {
   }
   rainGeo.attributes.position.needsUpdate = nR > 0;
   snowPts.material.opacity = nS ? 0.9 : 0; snowGeo.setDrawRange(0, nS);
-  for (let i = 0; i < nS; i++) { const s = rainSeed.subarray(i * 3, i * 3 + 3); const y = 30 - ((s[1] + precipT * 1.1) % 30); snowPos.set([c.x + ((s[0] + Math.sin(precipT * 0.7 + i) * 0.6 + wx_ * precipT * 0.5) % 70 + 105) % 70 - 35, y + Math.max(0, c.y - 12), c.z + ((s[2] + wz_ * precipT * 0.5) % 70 + 105) % 70 - 35], i * 3); }
+  for (let i = 0; i < nS; i++) { const s = rainSeed.subarray(i * 3, i * 3 + 3); const y = 30 - ((s[1] + precipT * 1.1) % 30); snowPos.set([c.x + ((s[0] + DM.sin(precipT * 0.7 + i) * 0.6 + wx_ * precipT * 0.5) % 70 + 105) % 70 - 35, y + Math.max(0, c.y - 12), c.z + ((s[2] + wz_ * precipT * 0.5) % 70 + 105) % 70 - 35], i * 3); }
   snowGeo.attributes.position.needsUpdate = nS > 0;
 }
 const C = (h) => new THREE.Color(h); const tmpC = new THREE.Color(), tmpC2 = new THREE.Color();
@@ -68,11 +68,11 @@ function applyWorldVisuals(dt) {
   const dayAmt = clamp((el + 6) / 18, 0, 1); const ovc = tmpC2.copy(OVC.night).lerp(OVC.day, dayAmt);
   skyMat.uniforms.uZen.value.copy(pickSky(0)).lerp(ovc, cloud * 0.85); skyMat.uniforms.uHor.value.copy(pickSky(1)).lerp(ovc, cloud * 0.75); skyMat.uniforms.uGlow.value.copy(pickSky(2));
   // sun direction in scene space: pitch long axis runs east-west (x = east), z = south
-  const sd = new THREE.Vector3(Math.sin(az) * Math.cos(el * Math.PI / 180), Math.sin(el * Math.PI / 180), -Math.cos(az) * Math.cos(el * Math.PI / 180));
+  const sd = new THREE.Vector3(DM.sin(az) * DM.cos(el * Math.PI / 180), DM.sin(el * Math.PI / 180), -DM.cos(az) * DM.cos(el * Math.PI / 180));
   skyMat.uniforms.uSun.value.copy(sd); skyMat.uniforms.uCloud.value = cloud; skyMat.uniforms.uTime.value += dt; skyMat.uniforms.uSunVis.value = el > -1 ? 1 : 0;
-  ENV.flash = Math.max(0, (ENV.flash || 0) - dt * 4.5); const fl = ENV.flash > 0 ? (Math.sin(ENV.flash * 40) > 0 ? ENV.flash : ENV.flash * 0.3) : 0; skyMat.uniforms.uFlash.value = fl * 0.9;
+  ENV.flash = Math.max(0, (ENV.flash || 0) - dt * 4.5); const fl = ENV.flash > 0 ? (DM.sin(ENV.flash * 40) > 0 ? ENV.flash : ENV.flash * 0.3) : 0; skyMat.uniforms.uFlash.value = fl * 0.9;
   // sunlight: strength by elevation, softened by cloud; warm near the horizon
-  const sunUp = clamp(Math.sin(el * Math.PI / 180) * 1.6, 0, 1); const sunI = 2.7 * Math.pow(sunUp, 0.7) * (1 - 0.8 * cloud);
+  const sunUp = clamp(DM.sin(el * Math.PI / 180) * 1.6, 0, 1); const sunI = 2.7 * DM.pow(sunUp, 0.7) * (1 - 0.8 * cloud);
   const floodOn = el < 12 || (cloud > 0.85 && el < 22) || ENV.wx === 'storm' || ENV.wx === 'fog';
   const floodLvl = floodOn ? clamp((12 - el) / 10, 0.35, 1) : 0;
   if (sunI > 0.25) { sun.position.copy(sd).multiplyScalar(140); sun.intensity = sunI; sun.color.setRGB(1, lerp(0.72, 0.96, clamp(el / 25, 0, 1)), lerp(0.5, 0.88, clamp(el / 25, 0, 1))); sun.castShadow = true; }

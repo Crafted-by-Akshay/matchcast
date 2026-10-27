@@ -45,20 +45,20 @@ const hash32 = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) {
 // one match seed, named sub-streams (play, words, tactics, setup); weather has its own mulberry(seed) in initEnv. No stream's draws change another's
 const subStream = (seed, name) => mulberry(hash32(seed + ':' + name));
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-const wgauss = () => { let u = 0, v = 0; while (!u) u = wrnd(); while (!v) v = wrnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+const wgauss = () => { let u = 0, v = 0; while (!u) u = wrnd(); while (!v) v = wrnd(); return Math.sqrt(-2 * DM.log(u)) * DM.cos(2 * Math.PI * v); };
 const climateOf = (st, m) => { const c = CLIMATE[st.id]; const g = (k) => c[k] ? c[k][m] : 0; return { hi: g('hi'), lo: g('lo'), rh: g('rh'), rainDays: g('rainDays'), rainMm: g('rainMm'), thunder: g('thunderDays'), fog: g('fogDays'), snowD: g('snowDays'), sun: g('sunHours'), wind: g('windKmh'), cloud: g('cloudPct') / 100, conv: c.convective || 0 }; };
-const satVP = (t) => 6.1094 * Math.exp(17.625 * t / (t + 243.04)); // hPa, Magnus
-const dewFrom = (t, rh) => { const a = Math.log(Math.max(1, rh) / 100) + 17.625 * t / (243.04 + t); return 243.04 * a / (17.625 - a); };
+const satVP = (t) => 6.1094 * DM.exp(17.625 * t / (t + 243.04)); // hPa, Magnus
+const dewFrom = (t, rh) => { const a = DM.log(Math.max(1, rh) / 100) + 17.625 * t / (243.04 + t); return 243.04 * a / (17.625 - a); };
 // diurnal temperature curve: coolest near sunrise, warmest mid-afternoon
-const diurnal = (h) => { h = ((h % 24) + 24) % 24; return h >= 6 && h <= 15 ? 0.5 - 0.5 * Math.cos(Math.PI * (h - 6) / 9) : 0.5 + 0.5 * Math.cos(Math.PI * (((h - 15 + 24) % 24)) / 15); };
+const diurnal = (h) => { h = ((h % 24) + 24) % 24; return h >= 6 && h <= 15 ? 0.5 - 0.5 * DM.cos(Math.PI * (h - 6) / 9) : 0.5 + 0.5 * DM.cos(Math.PI * (((h - 15 + 24) % 24)) / 15); };
 // solar position (NOAA-style, mid-month day of year)
 function solar(st, m, local) {
-  const N = [15, 46, 74, 105, 135, 166, 196, 227, 258, 288, 319, 349][m]; const decl = 23.44 * Math.sin(2 * Math.PI * (284 + N) / 365) * Math.PI / 180;
-  const B = 2 * Math.PI * (N - 81) / 364; const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+  const N = [15, 46, 74, 105, 135, 166, 196, 227, 258, 288, 319, 349][m]; const decl = 23.44 * DM.sin(2 * Math.PI * (284 + N) / 365) * Math.PI / 180;
+  const B = 2 * Math.PI * (N - 81) / 364; const eot = 9.87 * DM.sin(2 * B) - 7.53 * DM.cos(B) - 1.5 * DM.sin(B);
   const solarT = local - st.tz(m) + st.lon / 15 + eot / 60; const H = (solarT - 12) * 15 * Math.PI / 180; const lat = st.lat * Math.PI / 180;
-  const el = Math.asin(Math.sin(lat) * Math.sin(decl) + Math.cos(lat) * Math.cos(decl) * Math.cos(H));
-  const az = Math.atan2(-Math.sin(H), Math.tan(decl) * Math.cos(lat) - Math.sin(lat) * Math.cos(H));
-  const ws = Math.acos(clamp(-Math.tan(lat) * Math.tan(decl), -1, 1)) * 180 / Math.PI / 15; const noon = 12 + st.tz(m) - st.lon / 15 - eot / 60;
+  const el = DM.asin(DM.sin(lat) * DM.sin(decl) + DM.cos(lat) * DM.cos(decl) * DM.cos(H));
+  const az = DM.atan2(-DM.sin(H), DM.tan(decl) * DM.cos(lat) - DM.sin(lat) * DM.cos(H));
+  const ws = DM.acos(clamp(-DM.tan(lat) * DM.tan(decl), -1, 1)) * 180 / Math.PI / 15; const noon = 12 + st.tz(m) - st.lon / 15 - eot / 60;
   return { el: el * 180 / Math.PI, az: (az * 180 / Math.PI + 360) % 360, sunrise: noon - ws, sunset: noon + ws };
 }
 const hhmm = (h) => { h = ((h % 24) + 24) % 24; const H = Math.floor(h), M = Math.round((h - H) * 60); return (M === 60 ? H + 1 : H) + ':' + String(M % 60).padStart(2, '0'); };
@@ -86,13 +86,13 @@ function matchOdds(st, m, kick) {
   const acc = { sun: 0, cloud: 0, rain: 0, storm: 0, fog: 0, snow: 0 }; for (let i = 0; i < 4; i++) { const o = wxOdds(st, m, kick + i * 0.6); acc.sun += o.clear + o.partly * 0.6; acc.cloud += o.overcast + o.partly * 0.4; acc.rain += o.drizzle + o.rain + o.heavy; acc.storm += o.storm; acc.fog += o.fog; acc.snow += o.snow; }
   for (const k in acc) acc[k] /= 4;
   // chance of seeing it at least once in a ~2 h window is higher than the instantaneous odds
-  return { sun: acc.sun, cloud: acc.cloud, rain: 1 - Math.pow(1 - acc.rain, 2.2), storm: 1 - Math.pow(1 - acc.storm, 2.2), fog: 1 - Math.pow(1 - acc.fog, 1.6), snow: 1 - Math.pow(1 - acc.snow, 2) };
+  return { sun: acc.sun, cloud: acc.cloud, rain: 1 - DM.pow(1 - acc.rain, 2.2), storm: 1 - DM.pow(1 - acc.storm, 2.2), fog: 1 - DM.pow(1 - acc.fog, 1.6), snow: 1 - DM.pow(1 - acc.snow, 2) };
 }
 const FORCE = { auto: null, sunny: 'clear', cloudy: 'overcast', rain: 'rain', storm: 'storm', fog: 'fog', snow: 'snow' };
 // one-off draw of the match day: the day's own temperature anomaly, humidity, wind, and whether it rained before kick-off
 function initEnv(set) {
   ENV.set = set; ENV.seed = set.seed; wrnd = mulberry(set.seed); const st = set.st, m = set.month, c = climateOf(st, m);
-  ENV.anom = clamp(wgauss() * 2.4, -5, 5); ENV.rhAnom = wgauss() * 7; ENV.windBase = Math.max(0.5, c.wind / 3.6 * Math.exp(wgauss() * 0.35)); ENV.windDir = wrnd() * Math.PI * 2;
+  ENV.anom = clamp(wgauss() * 2.4, -5, 5); ENV.rhAnom = wgauss() * 7; ENV.windBase = Math.max(0.5, c.wind / 3.6 * DM.exp(wgauss() * 0.35)); ENV.windDir = wrnd() * Math.PI * 2;
   ENV.local = set.kick; ENV.minute = 0; ENV.log = []; ENV.events = []; ENV.strikes = 0; ENV.susp = null; ENV.lastStrike = -99; ENV.snow = 0;
   const forced = FORCE[set.weather]; ENV.wx = forced || pick(wxOdds(st, m, set.kick));
   if (ENV.wx === 'snow' && lerp(c.lo, c.hi, diurnal(set.kick)) + ENV.anom > 3) ENV.anom -= (lerp(c.lo, c.hi, diurnal(set.kick)) + ENV.anom) - 1; // forced snow needs a cold day
@@ -111,7 +111,7 @@ function updateEnv(dtMin, first) {
   if (!first) { ENV.minute += dtMin; ENV.local += dtMin / 60; }
   // weather transitions: leave the current state at 1/persistence, choose the next by today's odds at this hour
   if (!first && set.dynamic) {
-    const cur = WX[ENV.wx]; const pLeave = 1 - Math.exp(-dtMin / cur.dur);
+    const cur = WX[ENV.wx]; const pLeave = 1 - DM.exp(-dtMin / cur.dur);
     if (wrnd() < pLeave) {
       const o = wxOdds(st, m, ENV.local); const nx = {}; let s = 0;
       for (const k of WX_NEXT[ENV.wx]) { let w = o[k] + 0.02; if (k === 'snow' && ENV.temp > 2) w = 0; if (k === 'fog' && (ENV.wind > 4 || ENV.sunEl > 25)) w *= 0.1; nx[k] = w; s += w; }
@@ -132,7 +132,7 @@ function updateEnv(dtMin, first) {
   // heat stress: simplified WBGT (Australian BoM) plus a direct-sun term
   const e = ENV.rh / 100 * satVP(ENV.temp); ENV.wbgt = 0.567 * ENV.temp + 0.393 * e + 3.94 + 2.6 * sunny * (1 - wx.cloud) - Math.min(1.5, ENV.wind * 0.15);
   // air density from altitude (barometric formula) and temperature: drag and swerve scale with it
-  const P = 101325 * Math.pow(1 - 2.25577e-5 * st.alt, 5.25588); ENV.rho = P / (287.05 * (ENV.temp + 273.15)) * (1 - 0.378 * e * 100 / P); ENV.rhoRatio = ENV.rho / 1.225;
+  const P = 101325 * DM.pow(1 - 2.25577e-5 * st.alt, 5.25588); ENV.rho = P / (287.05 * (ENV.temp + 273.15)) * (1 - 0.378 * e * 100 / P); ENV.rhoRatio = ENV.rho / 1.225;
   // pitch water budget (mm on the surface): rain in, drainage and evaporation out; dew forms on clear calm nights near the dew point
   const rainIn = (ENV.wx === 'snow' && ENV.temp < 1) ? 0 : wx.rain; const roofCut = st.roof === 'Retractable roof' && (ENV.wx === 'storm' || ENV.wx === 'heavy') && set.roofAuto ? 0.1 : 1;
   const evap = Math.max(0.02, (0.04 + 0.012 * Math.max(0, ENV.temp) + 0.03 * ENV.wind) * (1 - ENV.rh / 110) * (0.4 + sunny));
