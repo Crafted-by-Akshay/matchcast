@@ -45,6 +45,7 @@ from matchcast_agents.store import stream_key
 from matchcast_agents.tables import build_store
 from matchcast_agents.tools import ToolCall
 from matchcast_agents.translate import LANGUAGES, TranslationService
+from matchcast_agents.verify import extract_names
 from matchcast_agents.vision import agreement, engine_stream_of, is_vision_stream, pass_facts
 from matchcast_agents.workflow import LIVE_FEED_LINES, WorkflowError, feed_kills_in, public_line
 from matchcast_contracts import ContractError
@@ -210,6 +211,25 @@ class TalkBody(BaseModel):
     target: str = Field(pattern=ID)
     utterance: str = Field(min_length=1, max_length=300)
     position: str | None = Field(default=None, pattern=r"^[A-Z]{1,3}$")  # the sim's position code
+    # ADR-0023: the viewer's language, the one the reply's caption is translated into (EXP-19)
+    lang: Literal["en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans"] = "en"
+
+
+async def captioned(
+    translation: TranslationService, match_id: str, result: dict[str, Any], lang: str
+) -> dict[str, Any]:
+    """Adds the captions (EXP-19) to a verified talk reply: the player's own-language transcript
+    and the viewer's caption, both checked translations of the English line. The team is read here
+    and not sent to the viewer."""
+    team = result.pop("team", None)
+    if result["verdict"] != "verified":
+        return result  # an unchecked reply is shown as it is, never translated
+    captions = await translation.talk_captions(
+        f"talk:{match_id}", result["reply"], team, lang, extract_names(result["reply"])
+    )
+    if captions is not None:
+        result["captions"] = captions
+    return result
 
 
 class RecapTrigger(BaseModel):
@@ -1276,6 +1296,7 @@ def build_router(registry: Registry) -> APIRouter:
             result = await flow.talk(body.target, body.utterance, position=body.position)
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
+        result = await captioned(registry.translation, match_id, result, body.lang)
         result["lang"] = "en"
         result["audio_url"] = None
         voice = registry.voice
@@ -1308,10 +1329,16 @@ def build_router(registry: Registry) -> APIRouter:
         voice = registry.voice
         ip = client_ip(websocket)
 
-        async def talk(target: str, utterance: str, position: str | None) -> dict[str, Any]:
+        async def talk(
+            target: str, utterance: str, position: str | None, lang: str
+        ) -> dict[str, Any]:
             try:  # the talk route's own limits, so a turn never reaches the model unchecked
                 TalkBody(
-                    session_id=session_id, target=target, utterance=utterance, position=position
+                    session_id=session_id,
+                    target=target,
+                    utterance=utterance,
+                    position=position,
+                    lang=lang,
                 )
             except ValidationError as error:
                 raise Problem(
@@ -1324,6 +1351,7 @@ def build_router(registry: Registry) -> APIRouter:
                 result = await flow.talk(target, utterance, position=position)
             except WorkflowError as error:
                 raise Problem(STATUS[error.code], error.code, str(error)) from error
+            result = await captioned(registry.translation, match_id, result, lang)
             result["lang"] = "en"
             return result
 

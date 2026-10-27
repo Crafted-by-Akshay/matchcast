@@ -71,7 +71,10 @@ def test_argentina_v_brazil_is_one_flagged_fixture_on_a_known_stadium() -> None:
     assert fx["stIndex"] == build.MSI_STADIUM["mexico"] == 4
     assert fx["setup"]["stadium"] == "Venue Four" and fx["setup"]["city"] == "City Four"
     assert fx["setup"]["seed"] == build.NATIONAL_SEED
-    assert fx["formations"] == SEASON[0]["formations"] and fx["styles"] == SEASON[0]["styles"]
+    # the default match must be lively: open balanced tactics, not a low block
+    # (tests/e2e/lively-default.spec.ts)
+    assert fx["formations"] == list(build.NATIONAL_FORMATIONS) == ["4-3-3", "4-3-3"]
+    assert fx["styles"] == list(build.NATIONAL_STYLES) == ["balanced", "balanced"]
 
 
 def test_no_recorded_match_is_claimed_for_argentina_v_brazil() -> None:

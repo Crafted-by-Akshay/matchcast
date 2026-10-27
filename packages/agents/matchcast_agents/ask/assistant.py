@@ -20,6 +20,7 @@ from ..messages import DraftLine
 from ..tools import InProcessTools, ToolError
 from ..verify.checks import extract_numbers, run_checks
 from ..workflow import _stamp
+from . import history_qa
 from .azure_search import AzureSearchClient, SearchError
 from .retrieval import ENTITY_CORPORA, Bm25Index, Hit, analyse, defines
 
@@ -127,7 +128,7 @@ class AskResult:
 
 @dataclass(frozen=True)
 class Route:
-    intent: str  # live | knowledge | both | leader | goals | goal_impact | out_of_scope | abstain
+    intent: str  # live|knowledge|both|leader|goals|goal_impact|history|out_of_scope|abstain
     metric: tuple[str, str] | None
     teams: tuple[str, ...]
     kb_query: str
@@ -184,7 +185,14 @@ def names_outside_the_match(ctx: MatchContext, question: str, index: Bm25Index) 
 def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     """Rules router (the model-free fallback of the one-call router)."""
     lowered = question.casefold()
-    if DECLINE.search(question) or names_outside_the_match(ctx, question, index):
+    if DECLINE.search(question):
+        return Route("out_of_scope", None, (), "")
+    if history_qa.parse(question) is not None:
+        # a real person in a history question is still out of scope; the nations are not names
+        if names_outside_the_match(ctx, history_qa.without_teams(question), index):
+            return Route("out_of_scope", None, (), "")
+        return Route("history", None, (), "")
+    if names_outside_the_match(ctx, question, index):
         return Route("out_of_scope", None, (), "")
     teams = tuple(t for t in (ctx.home, ctx.away) if ctx.club_name(t).casefold() in lowered)
     if FUTURE_CUE.search(question):
@@ -401,6 +409,9 @@ class Assistant:
         ):  # the cues are narrow, so a broadcast question never reaches the router's declines
             return _broadcast_answer(ctx, intent)
         plan = route(ctx, question, self.index)
+        if plan.intent == "history":  # answered from the results file; no match fact is used
+            answer, abstained, citations, dropped = history_qa.answer(question)
+            return AskResult(answer, "history", abstained, citations, dropped)
         if plan.intent == "out_of_scope":
             return AskResult(OUT_OF_SCOPE, plan.intent, abstained=True)
         goals = _goal_lines(ctx) if plan.intent in ("goals", "goal_impact") else []

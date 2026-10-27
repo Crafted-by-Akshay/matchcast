@@ -57,20 +57,20 @@ Starting from the prototype values (0.04, 0.09, 0, 1) the engine produced about 
 
 `make realism` (equivalent to `uv run python scripts/check_realism.py --matches 200`, about 1.5 to 2 h on 4 cores, not in CI yet; targets in `data/calibration/targets.json`, sources and licences next to each). Engine "duel" = aerial duel + slide tackle + take-on + possession turnover. Each match is a different pair of season clubs.
 
-Result of the validation run on main after PR #47 and #169 (seeds 1 to 200, half = 45, 200 full 90-minute matches, median 112 s wall time per match). The run's `summary.json` is committed at `data/calibration/results/seeds-1-200/summary.json`; reproduce it with `make realism REALISM_ARGS="--out data/calibration/results/seeds-1-200"` and `check_realism.py --results` reads it back. An earlier run of the same seeds during the tuning (goals 2.865, draws 0.26, 0-0 0.07, shots 27.9, passes 920, duels 562, late goals 0.215, penalty share 0.112) was made before the last engine fixes and is superseded by this one:
+Result of the run on main 3be6bc3, after PR #463 made the engine's maths deterministic (seeds 1 to 200, half = 45, 200 full 90-minute matches, median 113 s wall time per match, re-run 27 Oct 2026). The run's `summary.json` is committed at `data/calibration/results/seeds-1-200-post463/summary.json`; reproduce it with `make realism REALISM_ARGS="--out data/calibration/results/seeds-1-200-post463"` and `check_realism.py --results` reads it back. The run before #463 (main after PR #47 and #169, the same seeds) is kept at `data/calibration/results/seeds-1-200/summary.json` and is superseded: it read goals 2.900, draws 0.225, 0-0 0.095, shots 27.4, passes 925, duels 564, late goals 0.200, penalty share 0.100. The #463 change moved every seed's match once, so the two runs differ by chance, not by tuning. The current run:
 
 | Measure | Simulated | Target | Band | Result |
 | --- | --- | --- | --- | --- |
-| Goals per match | 2.900 | 2.66 | 2.3 to 3.0 | ok |
-| Share of draws | 0.225 | 0.24 | 0.18 to 0.30 | ok |
-| Share of 0-0 | 0.095 | 0.07 | 0.03 to 0.12 | ok |
-| Shots per match | 27.4 | 25 | 20 to 30 | ok |
+| Goals per match | 2.840 | 2.66 | 2.3 to 3.0 | ok |
+| Share of draws | 0.265 | 0.24 | 0.18 to 0.30 | ok |
+| Share of 0-0 | 0.075 | 0.07 | 0.03 to 0.12 | ok |
+| Shots per match | 26.7 | 25 | 20 to 30 | ok |
 | Goals per shot | 0.106 | 0.11 | 0.08 to 0.13 | ok |
 | Passes per match | 925 | 840 | 700 to 1000 | ok |
-| Duels per match | 564 | 470 | 380 to 580 | ok (band widened) |
-| Share of goals in 76'-90' | 0.200 | 0.215 | 0.17 to 0.26 | ok |
+| Duels per match | 559 | 470 | 380 to 580 | ok (band widened) |
+| Share of goals in 76'-90' | 0.232 | 0.215 | 0.17 to 0.26 | ok |
 | Penalty goals as share of goals | 0.100 | 0.068 | 0.03 to 0.13 | ok (band widened) |
-| Watch length at 1x, condensed (minutes) | 9.7 | 10 | 8 to 12 | ok |
+| Watch length at 1x, condensed (minutes) | 9.6 | 10 | 8 to 12 | ok |
 
 The watch length is the director's own accounting (live seconds plus fast-forwarded seconds divided by the 40x factor); `tests/e2e/condensed.spec.ts` checks that `frame()` spends its time budget exactly that way. It has not been timed against a person watching on a real screen. A box entry is cut (fast-forwarded), so the viewer jumps from the build-up to the shot, which plays live with its five-second window.
 
@@ -91,4 +91,4 @@ Engine faults found by the full-length tuning runs and fixed in PR #47: a kick-o
 
 ## Known debt
 
-Penalty goals are 10.0% of goals against a real share of 6.8% (the first tuning run read 11.2%), and duels run 564 against 470. Both bands were widened (see `data/calibration/targets.json`) because the simulator's box-foul rate is the cause and lowering `boxFoul` further moves goals and cards out of band. Revisit after the Mac mini runs a wider seed sweep.
+Penalty goals are 10.0% of goals against a real share of 6.8% (the first tuning run read 11.2%), and duels run 559 against 470. Both bands were widened (see `data/calibration/targets.json`) because the simulator's box-foul rate is the cause and lowering `boxFoul` further moves goals and cards out of band. Revisit after the Mac mini runs a wider seed sweep.

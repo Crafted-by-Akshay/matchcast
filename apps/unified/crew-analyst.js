@@ -48,6 +48,18 @@ const ALV = (() => {
   }
   const fav = (side, f) => (side === f ? ' data-fav="1"' : '');
 
+  // the live match's maps, drawn by MAPS (maps.js) through window.MC.analysis; the team and map choice are buttons
+  let mapTeam = 'home', mapKind = 'heatmap', mapAt = 0;
+  const mapPanel = (cl) => '<section class="wide" id="al-maps"><h3>Maps <small>live match, simulated: ' + esc(cl[0]) + ' v ' + esc(cl[1]) + '</small></h3>' +
+    '<div class="key" role="group" aria-label="Team">' + [['home', cl[0]], ['away', cl[1]]].map(([t, n]) => '<button type="button" data-team="' + t + '" aria-pressed="' + (mapTeam === t) + '">' + esc(n) + '</button>').join('') + '</div>' +
+    '<div class="key" role="group" aria-label="Map">' + [['heatmap', 'Heatmap'], ['pass_network', 'Pass network'], ['avg_positions', 'Average positions']].map(([k, l]) => '<button type="button" data-map="' + k + '" aria-pressed="' + (mapKind === k) + '">' + l + '</button>').join('') + '</div>' +
+    '<div id="al-map"></div></section>';
+  function drawMap(force) {
+    const el = hostEl && hostEl.querySelector('#al-map');
+    if (!el || !window.MC || !window.MC.analysis || (!force && Date.now() - mapAt < 2000)) return;
+    mapAt = Date.now(); window.MC.analysis.render(mapKind, { team: mapTeam }, el);
+  }
+
   // ---- panels, each a string of html built from the data the shell already holds
   function feedPanel(r) {
     const ver = [], sim = [];
@@ -83,28 +95,6 @@ const ALV = (() => {
           + '<div class="m"><span data-side="0"' + fav(0, f) + '>' + esc(cl[0]) + ' ' + a + '%</span> · <span data-side="1"' + fav(1, f) + '>' + esc(cl[1]) + ' ' + (100 - a) + '%</span></div>';
       }
     }
-    return h + '</section>';
-  }
-
-  const PITCH = '<rect x="0.5" y="0.5" width="104" height="67" fill="none" stroke="var(--line)" stroke-width="0.5"/><line x1="52.5" y1="0.5" x2="52.5" y2="67.5" stroke="var(--line)" stroke-width="0.5"/>'
-    + '<circle cx="52.5" cy="34" r="9.15" fill="none" stroke="var(--line)" stroke-width="0.5"/>'
-    + '<rect x="0.5" y="13.85" width="16.5" height="40.3" fill="none" stroke="var(--line)" stroke-width="0.5"/><rect x="88" y="13.85" width="16.5" height="40.3" fill="none" stroke="var(--line)" stroke-width="0.5"/>'
-    + '<rect x="0.5" y="24.85" width="5.5" height="18.3" fill="none" stroke="var(--line)" stroke-width="0.5"/><rect x="99" y="24.85" width="5.5" height="18.3" fill="none" stroke="var(--line)" stroke-width="0.5"/>';
-  function shotPanel(r, cl, f) {
-    const shots = r ? r.events.filter((e) => e.type === 'shot' && sideOf(r, e.team) >= 0 && e.data && num(e.data.x) && num(e.data.y)) : [];
-    let h = '<section data-panel="shots"><h3>Shot map <small>Simulated · dot size is xG</small></h3>';
-    if (!shots.length) return h + '<p class="empty">No shots yet.</p></section>';
-    const n = [0, 0], xg = [0, 0]; let goals = 0, saves = 0;
-    for (const e of shots) { const s = sideOf(r, e.team); n[s]++; xg[s] += +e.data.xg || 0; if (e.data.fate === 'goal') goals++; else if (e.data.fate === 'save') saves++; }
-    const sum = 'Shot map, simulated match. ' + shots.length + ' shots: ' + cl[0] + ' ' + n[0] + ', ' + cl[1] + ' ' + n[1] + '. Total xG ' + cl[0] + ' ' + f2(xg[0]) + ', ' + cl[1] + ' ' + f2(xg[1]) + '. ' + goals + (goals === 1 ? ' goal' : ' goals') + '. Dot size is the shot\'s xG; filled is a goal, half filled a save, hollow off target.';
-    const dots = shots.map((e) => {
-      const s = sideOf(r, e.team), d = e.data, op = d.fate === 'goal' ? 1 : d.fate === 'save' ? 0.5 : 0.12;
-      return '<circle data-fate="' + esc(d.fate || 'miss') + '"' + (d.fate === 'save' ? ' stroke-dasharray="1 0.7"' : '') + ' data-xg="' + f2(d.xg) + '" data-side="' + s + '"' + fav(s, f) + ' cx="' + Math.max(0, Math.min(105, +d.x)).toFixed(1) + '" cy="' + Math.max(0, Math.min(68, +d.y)).toFixed(1) + '" r="' + (1 + 4.2 * Math.sqrt(Math.max(0, +d.xg || 0))).toFixed(2)
-        + '" fill="var(--side)" fill-opacity="' + op + '" stroke="var(--side)" stroke-width="' + (s === f ? 0.9 : 0.4) + '"><title>' + esc(mn(e.minute) + ' ' + (e.player || '') + ' xG ' + f2(d.xg) + ' ' + (d.fate || '')) + '</title></circle>';
-    }).join('');
-    h += '<div class="key"><span data-side="0"' + fav(0, f) + '>' + esc(cl[0]) + ' · ' + n[0] + ' shots · xG ' + f2(xg[0]) + '</span><span data-side="1"' + fav(1, f) + '>' + esc(cl[1]) + ' · ' + n[1] + ' shots · xG ' + f2(xg[1]) + '</span></div>'
-      + '<svg data-map="shots" viewBox="0 0 105 68" role="img" aria-label="' + esc(sum) + '">' + PITCH + dots + '</svg>'
-      + '<p class="m">Key: ' + goals + ' filled (goal), ' + saves + ' half filled with a dashed edge (save), ' + (shots.length - goals - saves) + ' hollow (off target). Positions are as the match recorded them.</p>';
     return h + '</section>';
   }
 
@@ -155,6 +145,12 @@ const ALV = (() => {
     hostEl = document.createElement('div'); hostEl.id = 'al'; hostEl.setAttribute('role', 'region'); hostEl.setAttribute('aria-label', 'Analyst live view');
     hostEl.innerHTML = '<div class="alh"><h2>Analyst live view</h2><span class="sim" title="The match is the browser simulator, not a real fixture">Simulated</span><label>Favourite club <select id="al-fav"></select></label><span class="sp"></span><button type="button" id="al-full" title="Open the 27-page enterprise console">Full console</button></div><div id="al-body" class="grid"></div>';
     sec.insertBefore(hostEl, sec.firstChild);
+    hostEl.addEventListener('click', (e) => {   // the Maps section's team and map buttons
+      const t = e.target.closest && e.target.closest('#al-maps [data-team],#al-maps [data-map]'); if (!t) return;   // only the Maps buttons: other panels mark their svgs with data-map too
+      if (t.dataset.team) mapTeam = t.dataset.team;
+      if (t.dataset.map) mapKind = t.dataset.map;
+      bodySig = ''; render(); drawMap(true);
+    });
     const bar = document.createElement('div'); bar.id = 'al-bar'; bar.hidden = true;
     const back = document.createElement('button'); back.type = 'button'; back.id = 'al-back'; back.textContent = 'Live view'; back.title = 'Back to the compact live view';
     bar.appendChild(back); sec.appendChild(bar);
@@ -173,8 +169,10 @@ const ALV = (() => {
     if (hs !== headSig) { headSig = hs; sel.innerHTML = cl ? cl.map((c, i) => '<option value="' + i + '"' + (i === f ? ' selected' : '') + '>' + esc(c) + '</option>').join('') : ''; sel.disabled = !cl; }
     let body;
     if (!cl) body = '<section class="wide"><p class="empty">Pick a fixture to see its live view.</p></section>';
-    else body = feedPanel(r) + controlPanel(r, cl, f) + shotPanel(r, cl, f) + passPanel(r, cl, f) + storyPanel(r, cl, f);
-    if (body !== bodySig) { bodySig = body; hostEl.querySelector('#al-body').innerHTML = body; }
+    else body = feedPanel(r) + mapPanel(cl) + controlPanel(r, cl, f) + ALX.panel(r, cl, f, null, hostEl) + ALM.panel(r, cl, hostEl) + ALP.panel(r, cl, hostEl) + ALG.panel(r, cl, hostEl) + ALS.panel(r, cl, hostEl) + passPanel(r, cl, f) + storyPanel(r, cl, f);
+    if (body !== bodySig) { bodySig = body; ALX.setHtml(hostEl.querySelector('#al-body'), body); mapAt = 0; }
+    ALX.mounted(hostEl);   // the shot replay (crew-analyst-shots.js) draws into the fresh svg, or starts after a tap
+    drawMap();
   }
   // which of the live view and the console shows; the console iframe is created only when asked for
   function sync() {

@@ -489,6 +489,23 @@
       "TalkBody": {
         "additionalProperties": false,
         "properties": {
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "es",
+              "pt",
+              "hi",
+              "ar",
+              "fr",
+              "de",
+              "id",
+              "ja",
+              "zh-Hans"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
           "position": {
             "anyOf": [
               {
@@ -1657,6 +1674,93 @@
         ]
       }
     },
+    "/v1/matches/{match_id}/catch-me-up": {
+      "get": {
+        "description": "The catch-me-up recap as of a minute (CREW-7.3): the score and the most important\nevents up to that minute, every figure recounted from the stored events. A read: it is\nnot sent to the streams. Held (404) when a correction before the cut holds it, the desk\nhas killed the feed, or the recap does not recount. With lang, a checked translation\nrides along as variants[lang]; the same re-check as a stream line keeps it or drops it.",
+        "operationId": "get_catch_me_up_v1_matches__match_id__catch_me_up_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "minute",
+            "required": true,
+            "schema": {
+              "maximum": 200,
+              "minimum": 0,
+              "title": "Minute",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "en",
+              "enum": [
+                "en",
+                "es",
+                "pt",
+                "hi",
+                "ar",
+                "fr",
+                "de",
+                "id",
+                "ja",
+                "zh-Hans"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Catch Me Up V1 Matches  Match Id  Catch Me Up Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catch Me Up",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/matches/{match_id}/claims": {
       "get": {
         "operationId": "claims_v1_matches__match_id__claims_get",
@@ -2465,7 +2569,7 @@
     },
     "/v1/matches/{match_id}/scoreboard": {
       "get": {
-        "description": "The three-arm crew scoreboard for this match (CREW-5.2). The arms run on the stored\nevents with rules, so the result is cached per match, event count and run date. A new\nevent or a new day runs them again. When a recorded live run is set\n(MATCHCAST_SCOREBOARD_LIVE_RUN), its arms replace the rules arms as precomputed, labelled\nwith the run id. The route never calls a model (docs/architecture/16, 4.1).",
+        "description": "The three-arm crew scoreboard for this match (CREW-5.2). The rules arms run on the\nstored events, cached per match, event count and run date. When a recorded live run of\nthe fixture is set (MATCHCAST_SCOREBOARD_LIVE_RUN), it is shown beside them under\n``recorded``: as the same events when its digest matches this match, else as a benchmark\non the fixture, labelled not this match. The route never calls a model.",
         "operationId": "crew_scoreboard_v1_matches__match_id__scoreboard_get",
         "parameters": [
           {

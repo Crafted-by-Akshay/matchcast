@@ -11,8 +11,8 @@
     "chaotic_scramble": 40,
     "quiet_spell": 40
   },
-  "rows": 2142,
-  "danger_rate": 0.0397,
+  "rows": 2162,
+  "danger_rate": 0.0453,
   "window_s": 30.0,
   "danger_horizon_s": 10.0
 }

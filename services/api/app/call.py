@@ -1,7 +1,7 @@
 """The voice call socket (EXP-18): one WebSocket per call, both ways.
 
 Client to server, JSON text frames:
-  {"type": "talk", "id": n, "target": "home9", "position": "ST", "utterance": "..."}
+  {"type": "talk", "id": n, "target": "home9", "position": "ST", "utterance": "...", "lang": "es"}
   {"type": "cancel", "id": n}        the fan spoke over the reply: stop sending it
 
 Server to client:
@@ -15,7 +15,8 @@ Only a verified reply with facts is spoken, the same rule Watch shows the reply 
 one turn are sent in order, and a cancel stops the turn before its next sentence is sent. A frame
 that is not a JSON object, a talk whose id is already in flight, or a talk outside the talk
 route's limits (utterance 1 to 300 characters, a player id, a position code) is answered with
-`bad_frame`; the call stays open.
+`bad_frame`; the call stays open. A talk's `lang` (the viewer's language, default en) gets the
+reply its captions: the player's own-language transcript and the caption in `lang` (EXP-19).
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from fastapi import WebSocketDisconnect
 
 SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 
-TalkFn = Callable[[str, str, str | None], Awaitable[dict[str, Any]]]
+TalkFn = Callable[[str, str, str | None, str], Awaitable[dict[str, Any]]]
 SpeakFn = Callable[[str, str], Awaitable[bytes | None]]
 
 
@@ -124,8 +125,9 @@ class CallSocket:
         if not isinstance(target, str) or not isinstance(utterance, str):
             await self._json({"type": "error", "id": turn_id, "code": "bad_frame"})
             return
+        lang = message.get("lang", "en")  # the viewer's language; the talk route checks it
         try:
-            result = await self._talk(target, utterance, position)
+            result = await self._talk(target, utterance, position, lang)
         except Exception as error:  # a workflow refusal is answered in the call, not dropped
             await self._json(
                 {"type": "error", "id": turn_id, "code": getattr(error, "code", "talk_failed")}

@@ -375,6 +375,11 @@ NATIONAL = [
     ("BRA", "Brazil", "#F2C400", "mexico"),
 ]
 NATIONAL_SEED = 2026
+# The default match must show something. The venue fixture's tactics were a 5-4-1 low block for Argentina, which gave 0 to 2 shots
+# a half-time in most seeds; an open 4-3-3 balanced v 4-3-3 balanced on the same seed gives 13 shots and one goal at 34' (one seed, not a calibration claim)
+# (measured on the runner's 0.02 s step). Tactics are a fixture setting, not engine calibration. tests/e2e/lively-default.spec.ts guards it.
+NATIONAL_FORMATIONS = ("4-3-3", "4-3-3")
+NATIONAL_STYLES = ("balanced", "balanced")
 
 
 def national_clubs():
@@ -406,8 +411,9 @@ def national_clubs():
 
 def national_fixtures(season):
     """One Argentina v Brazil fixture. No recorded match exists: the score is [0, 0] only because the
-    shell needs an array, so it is not a result, and the fixture is flagged. The venue name, city and
-    tactics come from a season fixture at the same stadium index, so the labels match the 3D stadium."""
+    shell needs an array, so it is not a result, and the fixture is flagged. The venue name and city
+    come from a season fixture at the same stadium index, so the labels match the 3D stadium. The tactics do not:
+    they are NATIONAL_FORMATIONS / NATIONAL_STYLES."""
     home, away = national_clubs()
     venue = next(fx for fx in season if fx["stIndex"] == MSI_STADIUM[home["stadium"]])
     setup = dict(venue["setup"], seed=NATIONAL_SEED)
@@ -425,8 +431,8 @@ def national_fixtures(season):
             "stIndex": MSI_STADIUM[home["stadium"]],
             "setup": setup,
             "history": history,
-            "formations": venue["formations"],
-            "styles": venue["styles"],
+            "formations": list(NATIONAL_FORMATIONS),
+            "styles": list(NATIONAL_STYLES),
             "result": None,
         }
     ]
@@ -484,6 +490,10 @@ def build(out_root):
     write(out_root + "broadcast/index.html", build_broadcast())
     write(out_root + "analyst/index.html", build_analyst())
     copy_data(out_root + "analyst/data/")
+    # what-if clips (whatif/clips, written by services/simulation/run.cjs and whatif/build_index.py)
+    os.makedirs(out_root + "analyst/data/whatif", exist_ok=True)
+    for f in glob.glob(U + "whatif/clips/*.json"):
+        shutil.copy(f, out_root + "analyst/data/whatif/" + os.path.basename(f))
     os.makedirs(out_root + "shared", exist_ok=True)
     shutil.copy(W + "players.json", out_root + "shared/players.json")
     shutil.copy(W + "intl.json", out_root + "shared/intl.json")
@@ -529,7 +539,7 @@ if __name__ == "__main__":
             t = "\n".join(ln for ln in t.split("\n") if "fonts.googleapis" not in ln)
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
-        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
+        shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst-shots.js", "crew-analyst-momentum.js", "crew-analyst-ppda.js", "crew-analyst-progressive.js", "crew-analyst-shape.js", "maps.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
         shell += ["speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)

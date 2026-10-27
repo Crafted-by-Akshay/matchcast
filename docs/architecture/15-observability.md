@@ -20,7 +20,7 @@ Spans follow the OpenTelemetry GenAI conventions:
 | `POST /v1/matches/{match_id}/events` | `matchcast.sk`, batch size, last_sequence |
 | `consume match-events` | sequence, lag_ms |
 | `invoke_agent producer|analyst|narrator|verifier` | `gen_ai.agent.name`, `matchcast.moment_id`, mode `live|rules` |
-| `chat gpt-6-luna` | `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, finish reason |
+| `chat gpt-5-mini` | `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` |
 | `execute_tool <tool>` | tool name, elapsed, result bytes |
 | `verify` | `matchcast.line_id`, `matchcast.verdict`, `matchcast.reason_code` |
 | `search kb` | top, hit count, fallback bool |

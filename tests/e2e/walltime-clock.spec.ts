@@ -93,11 +93,12 @@ test.describe('Wall-time match clock', () => {
 });
 
 // The headless runner (services/simulation/run.cjs, sim-engine.spec.ts) must see the same steps as before the change.
-// The digests below were taken from the build before the wall-time patch: frame() driven with a large fixed budget
-// (__mcDt = 0.37, above the 0.3 catch-up cap) must not be clamped, with and without the condensed director.
+// frame() is driven with a large fixed budget (__mcDt = 0.37, above the 0.3 catch-up cap) and must not be clamped, with and
+// without the condensed director. The digests pin the engine's steps: re-recorded when the engine moved to DM maths
+// (06-simulation.md, section 3), since every seed's match changed once.
 const GOLDEN: Record<string, string> = {
-  live: 'db0ce795',
-  condensed: '966667b7',
+  live: '247936e2',
+  condensed: 'bee6ae9d',
 };
 for (const [name, q] of [['live', 'half=15&condense=0'], ['condensed', 'half=45']] as const) {
   test(`headless path is unchanged (${name}): same seed, same steps, same digest as before the patch`, async ({ page }) => {
