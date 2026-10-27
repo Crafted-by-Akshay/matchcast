@@ -278,7 +278,18 @@ const AG = (() => {
   // A line the server Verifier dropped (contract 1.2.0 `feed_drop`, docs/contracts.md): a card in the Agents tab with the Verifier's closed reason_code and the api's audit_id.
   // Its text is not on the stream (it stays in the audit chain), so the card has none. A line that aired is never turned into a drop: a dropped translation is a note on it (trace-panel.js).
   const sstr = (x, n) => (typeof x === 'string' ? x : Number.isFinite(x) ? String(x) : '').slice(0, n || 120);
-  const noteAired = (id) => { if (run && typeof id === 'string' && id) run.aired.add(id.slice(0, 200)); };
+  // the onair record names the api events its line cites (source_event_ids): kept by publication id, so the line's Why panel can resolve them
+  const noteAired = (id, d) => {
+    if (!run || typeof id !== 'string' || !id) return;
+    const k = id.slice(0, 200);
+    run.aired.add(k);
+    if (d && Array.isArray(d.source_event_ids)) {
+      const ids = d.source_event_ids.map((x) => sstr(x, 60)).filter(Boolean);
+      run.lineEvents = run.lineEvents || new Map();
+      run.lineEvents.set(k, { ids: ids.slice(0, 200), total: ids.length });   // the total is kept true; the ids are capped
+    }
+    changed();   // the publication can reach the page before its onair record: its Pulse card is posted again with the cited events
+  };
   const ingestDrop = (d, status) => {
     if (!run || !d || typeof d !== 'object') return false;
     const id = sstr(d.publication_id, 200); if (!id) return false;

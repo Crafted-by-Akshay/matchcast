@@ -183,8 +183,10 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
     const w = el.querySelector('.mcx-w'); if (!w.hidden) { w.hidden = true; return; }
     const rows = c.evidence.map((e) => '<div><b>' + Math.floor(e.minute) + "'</b> " + esc(e.type.replace('_', ' ') + (e.player ? ' · ' + e.player : '') + (e.xg != null ? ' · xG ' + (+e.xg).toFixed(2) : '') + (e.why ? ' · ' + e.why : '')) + '</div>');
     const basis = (c.basis || []).map((t) => '<div>Claim ' + esc(t) + '</div>');
-    w.innerHTML = (rows.length || basis.length ? rows.concat(basis).join('') : 'No cited events, and the api sent no claim basis for this line.')
-      + '<div>' + (rows.length ? 'Cited events shown' : basis.length ? 'Claims shown, not the events: the api names no event ids on a claim' : 'Nothing to show') + '; the 3D replay with highlights is Planned.</div>';
+    const missing = c.missing ? ['<div>' + esc(c.missing) + '</div>'] : [];
+    const any = rows.length || basis.length || missing.length;
+    w.innerHTML = (any ? rows.concat(basis, missing).join('') : 'No cited events, and the api sent no claim basis for this line.')
+      + '<div>' + [rows.length ? 'Cited events shown' : '', basis.length ? 'Claim basis shown' : '', missing.length ? 'Cited events not held here' : ''].filter(Boolean).join('; ') + (rows.length || basis.length || missing.length ? '' : 'Nothing to show') + '; the 3D replay with highlights is Planned.</div>';
     w.hidden = false;
   };
   const draw = (c, host, fade) => {

@@ -113,7 +113,7 @@ const LV = (() => {
       on('line', (d) => onLine(d, st));
       // contract 1.2.0 records for derived feeds (docs/contracts.md): the stream sends each record under its kind, onair or feed_drop (AB#499)
       const crew = (kind, d) => { if (window.CREW && CREW.enabled) CREW.ingest(Object.assign({}, d, { kind })); };   // the crew data layer validates; a bad frame is skipped there
-      on('onair', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'onair' }, d)); onAired(d && d.publication_id); crew('onair', d); });
+      on('onair', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'onair' }, d)); onAired(d && d.publication_id, d); crew('onair', d); });
       on('feed_drop', (d) => { if (window.mcCrewTrace) window.mcCrewTrace(Object.assign({ kind: 'feed_drop' }, d)); onDrop(d, st); crew('feed_drop', d); });
       // contract 1.3.0 crew frames (PR #379, docs/contracts.md "Crew frames"); not replayed on reconnect
       on('crew_ledger', (d) => crew('crew_ledger', d));
