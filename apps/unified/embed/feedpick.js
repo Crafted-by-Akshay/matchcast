@@ -33,6 +33,7 @@
     + '#mc-feedpick{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px}'
     + '#mc-feedpick button{min-height:32px;padding:2px 9px;border-radius:999px;border:1px solid rgba(140,194,255,.35);background:transparent;color:#c9d6f0;font:600 12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}'
     + '#mc-feedpick button[aria-checked=true]{background:#8CC2FF;border-color:#8CC2FF;color:#0B1630}#mc-feedpick button:focus-visible{outline:2px solid #F5B942;outline-offset:2px}'
+    + '#mc-feedpick button:disabled{opacity:.55;cursor:not-allowed}'
     + '#mc-feedpick .fp-tag,#mc-feedlines .fp-sim{font:700 12px system-ui,sans-serif;letter-spacing:.02em;text-transform:uppercase;padding:0 4px;border-radius:4px;border:1px solid currentColor;opacity:.9}'
     + '#mc-feedlines{font:12px/1.35 system-ui,sans-serif;color:#e8eefc;min-height:1.35em}#mc-feedlines .fp-sim{color:#F5B942;margin-right:6px}#mc-feedlines ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}'
     + '#mc-feedlines li{display:flex;gap:6px;align-items:baseline;overflow-wrap:anywhere}#mc-feedlines .fp-min{font-weight:700;color:#8CC2FF;flex:none}'
@@ -171,7 +172,7 @@
     const d = e.data || {};
     if (e.source !== window.parent || d.src !== 'matchcast-shell') return;
     if (d.type === 'crew-feeds') {
-      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: String(x.label), live: !!x.live })); const fl = DEFS.find((x) => x.live); if (!DEFS.some((x) => x.key === pick && x.live)) pick = (fl || DEFS[0]).key; }
+      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: String(x.label), live: !!x.live })); const fl = DEFS.find((x) => x.live); if (!DEFS.some((x) => x.key === pick && x.live)) { pick = (fl || DEFS[0]).key; postPick(pick); } }
       simulated = d.simulated !== false;   // anything but an explicit false counts as the fixture
       feeds = d.feeds && typeof d.feeds === 'object' ? d.feeds : {};
       announce(); drawPick(); drawLines();

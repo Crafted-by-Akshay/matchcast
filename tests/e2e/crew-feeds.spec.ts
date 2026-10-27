@@ -190,4 +190,7 @@ test('feed picker: a saved Planned choice is not restored; the picker opens on C
   await expect(radios.nth(2)).toHaveAttribute('aria-checked', 'false');
   await radios.nth(0).focus();
   await expect(radios.nth(0)).toBeFocused();
+  await f.page().keyboard.press('ArrowRight');   // the next live feed, not the Planned one
+  await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(1)).toBeFocused();
 });
