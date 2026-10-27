@@ -22,6 +22,7 @@ METRIC_UNITS = {
     "elo": "count",
     "vision_passes": "count",  # Vision's own pass count, on the engine feed (ADR-0022)
     "vision_precision": "ratio",  # the share of Vision's passes an engine pass backs
+    "possession_share": "count",  # a team's percent of on-ball actions to date (match_shares.py)
     "rhythm_share": "count",  # a team's percent of the on-ball actions, rhythm_share:team-end_ms
 }
 TOLERANCE = {"count": 0.0, "ratio": 0.01, "m": 0.5, "m/s": 0.5, "s": 0.5, "ms": 500.0}

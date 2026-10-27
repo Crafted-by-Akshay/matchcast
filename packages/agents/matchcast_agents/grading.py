@@ -34,7 +34,9 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from . import history_metrics as history
+from . import match_shares
 from .context import MatchContext
+from .match_shares import SHARE_METRICS
 from .messages import DraftLine, LineRecord, ProducerTask, Verdict
 from .metrics_spec import METRIC_UNITS, TOLERANCE
 from .rules import AnalystRules, NarratorRules, ProducerRules, VerifierRules
@@ -82,6 +84,8 @@ def _engine_value(events: Sequence[Mapping[str, Any]], claim: Mapping[str, Any])
     upto = claim["max_evidence_sequence"]
     if not any(e["stream_sequence"] == upto for e in events):
         return None  # the log does not hold the claim's evidence: a count up to it is a guess
+    if name in SHARE_METRICS:  # a share is worked out from the log's own passes and turnovers
+        return float(match_shares.recount(metric, events, upto))
     return float(recompute(events, metric, upto))
 
 

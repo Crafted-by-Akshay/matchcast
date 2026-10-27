@@ -53,6 +53,8 @@ Pass quality (CREW-2.4, AB#491, `matchcast_agents/passes.py`) is a deterministic
 
 Rhythm weights on-ball actions (passes and carries) and pass tempo at 0.6 of the index, and territory, pressure, shots and turnovers won at 0.4. The engine emits no possession time, so possession is the share of on-ball actions. The sides swap at half time, the usual convention; the fixture has only one period, so the swap is not checked against engine data.
 
+Possession (AB#373, `match_shares.py`) is a match-to-date share the Analyst cites on priority-1 moments, one per side: the team's percent of the on-ball actions (passes and carries) to date. It is not a time in possession, which the engine does not record. The Verifier recounts it from the stored events up to the claim, so a share that disagrees with the log is refused like any count. A share with nothing to divide (no on-ball action yet) is not cited. Pass accuracy was built and then dropped: the engine logs every loss of the ball as a loose-ball turnover, so it cannot tell a failed pass from any other loss.
+
 ## 3. Workflow graph (Microsoft Agent Framework)
 
 Exported image: [img/2-agent-workflow.png](img/2-agent-workflow.png) (regenerate with `scripts/export_diagrams.sh`).

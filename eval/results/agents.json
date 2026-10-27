@@ -11,8 +11,8 @@
     "quiet_events_skipped_share": 0.982
   },
   "analyst": {
-    "claims": 45,
-    "recounted": 34,
+    "claims": 53,
+    "recounted": 42,
     "claim_accuracy": 1.0,
     "not_recounted_here": 11,
     "xg_in_range": 1.0,
