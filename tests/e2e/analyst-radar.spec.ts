@@ -96,3 +96,21 @@ test('before the live match, the radar says so', async ({ page }) => {
   expect(out.citations).toEqual([]);
   await expect(page.locator('#radar-none')).toContainText('Needs the live match first.');
 });
+
+test('a 10 m gain is progressive here as in view 6, even when float noise lands just under 10', async ({ page }) => {
+  await block3d(page);
+  await openShell(page, 'analyst', '?crew=1');
+  await page.evaluate(() => {
+    AG.reset('k', { hk: 'h', ak: 'a', home: 'Harbor City', away: 'Thames Rovers' });
+    // 16.4 - 6.4 is 9.999999999999998 in floating point; the view counts it as 10 m
+    AG.onWatch('k', [{ minute: 2, type: 'pass', team: 'h', player: 'J. Winger', to: 'Mate', x0: 6.4, y0: 34, x1: 16.4, y1: 34, attack_x: 105 }], []);
+    const setup = { h: 'h', a: 'a', seed: 1, st: 0, month: 0, kick: '15:00', half: 45 };
+    const roster = { teams: ['h', 'a'], players: Array.from({ length: 22 }, (_, i) => ({ name: i === 1 ? 'J. Winger' : 'P' + i, team: i < 11 ? 'h' : 'a' })) };
+    const still = Array.from({ length: 22 }, (_, i) => [30 + (i % 5) * 10, 20 + (i % 3) * 15]);
+    MAPS.start(setup, roster);
+    for (let t = 0; t <= 2; t++) MAPS.frame(setup, { mclock: t, half: 1, players: still });
+  });
+  await expect.poll(() => page.evaluate(() => AG.run.events.length), { timeout: 15_000 }).toBe(1);
+  await expect(row(page, 'Progressive')).toContainText('1');
+  await expect(row(page, 'Progressive')).toContainText('100%');
+});

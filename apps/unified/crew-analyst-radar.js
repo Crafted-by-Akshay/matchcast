@@ -16,7 +16,7 @@ const ALR = (() => {
     + '[data-radar] svg{display:block;width:100%;height:auto;max-width:300px;margin:0 auto}'
     + '[data-radar] .rd-grid{fill:none;stroke:var(--line);stroke-width:0.4}'
     + '[data-radar] .rd-axis{stroke:var(--line);stroke-width:0.4}'
-    + '[data-radar] .rd-shape{fill:var(--side);fill-opacity:0.25;stroke:var(--side);stroke-width:0.8;stroke-linejoin:round}'
+    + '[data-radar] .rd-shape{fill:var(--accent);fill-opacity:0.25;stroke:var(--accent);stroke-width:0.8;stroke-linejoin:round}'
     + '[data-radar] .rd-label{font-size:4px;fill:var(--muted);text-anchor:middle}'
     + '[data-radar] table{width:100%;font-size:12px;border-collapse:collapse}[data-radar] td,[data-radar] th{padding:3px 6px;border-bottom:1px solid var(--line);text-align:left}';
 
@@ -40,8 +40,9 @@ const ALR = (() => {
   // a pass's gain toward the opponent's goal, in metres, in the direction its side attacks (attack_x); null without the positions or direction
   function gainOf(e) {
     const d = e.data || {};
-    if (!num(d.attack_x) || !num(d.x0) || !num(d.x1)) return null;
-    return (+d.x1 - +d.x0) * (+d.attack_x === 105 ? 1 : -1);
+    if (!num(d.attack_x) || !num(d.x0) || !num(d.x1) || !num(d.y0) || !num(d.y1)) return null;
+    // rounded to a micro-metre, as the progressive view does: float noise can turn a true 10 m gain into 9.999999999999998 and miss it
+    return Math.round((+d.x1 - +d.x0) * (+d.attack_x === 105 ? 1 : -1) * 1e6) / 1e6;
   }
 
   // each roster slot's six measures: the first five from the events by player name, distance from the position samples
