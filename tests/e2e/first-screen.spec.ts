@@ -22,7 +22,7 @@ test('Watch shows one moment in two voices, and the Verifier chip opens the Veri
   const chip = f.locator('#mc-trust');
   await expect(chip).toBeVisible();
   await expect(chip).toContainText('99.3%');
-  await expect(chip).toContainText('rules, offline');        // the population and mode are on the chip, not only in its tooltip
+  await expect(chip).toContainText('rules, offline');        // the mode is on the chip; the population (151 planted errors) is in its tooltip and aria label
   expect(await chip.getAttribute('title')).toMatch(/151 planted errors.*34 honest lines/s);
   await chip.click();
   await expect(f.locator('#cp-verify')).toBeVisible();

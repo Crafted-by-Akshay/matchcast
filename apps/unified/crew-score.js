@@ -97,7 +97,7 @@
       bar.appendChild(fill);
       arm.appendChild(bar);
       var dl = el('dl');
-      [['Catch rate (seeded wrong claims caught)', pct(catchV)], ['Latency', secs(d.latency_ms)], ['Cost per match', usd(d.cost)], ['Graded', lines(d.n)]].forEach(function (r) {
+      [['Catch rate (seeded wrong claims kept off air, of those made)', pct(catchV)], ['Latency', secs(d.latency_ms)], ['Cost per match', usd(d.cost)], ['Graded', lines(d.n)]].forEach(function (r) {
         dl.appendChild(el('dt', null, r[0]));
         dl.appendChild(el('dd', null, r[1]));
       });
