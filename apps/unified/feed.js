@@ -201,5 +201,5 @@ const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); ev
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers, speaker: x.speaker || (x.source === 'live' || x.kind === 'summary' ? 'colour' : 'pbp') }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under
   const setPersona = (p) => { persona = p && p !== 'fan' ? p : 'casual'; };
-  return { fromWatch, api, reset, view, setPersona, fill, onChange: (fn) => { changed = fn; }, get count() { return items.length; } };
+  return { fromWatch, api, reset, view, setPersona, fill, onChange: (fn) => { changed = fn; }, get count() { return items.length; }, side: (team) => idx(team) };
 })();

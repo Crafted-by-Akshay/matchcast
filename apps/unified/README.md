@@ -213,3 +213,11 @@ The shell preconnects to the CDN and `modulepreload`s `three.module.js`, which W
 - Ask (rules) also counts from the event log: "how many passes has Ana made", "shots for Ridgeview", "who has the most fouls". Each answer cites the events it counted.
 - A talk order always gets a reply in the chat: the checked reply, or "Not checked against the match record", or "No checked answer yet" when the api has no live match.
 - Tests: `tests/e2e/feed.spec.ts`.
+
+## Highlights (Watch, after full time)
+- `highlights.js` (`HL`) picks the key moments from Watch's events: goals, red cards and big chances (xG 0.25 or more, the line `feed.js` draws). One shot that is the goal's own shot is not a card of its own.
+- Each card has its commentary, why the moment mattered (score before and after), the phase of play (passes in the last minute, or a counter after a possession change), the shape (the last tactical change, or the fixture's formation), the technique (shot type, distance, final pass) and one insight. The rules write the cards in the page: **Simulated**.
+- A second pass recounts every number on a card from the stored events. A card that does not recount is held and counted in the panel, never shown.
+- Clips: the shell keeps Watch's last 40 s of frames and, for each moment, the frames from 6 s before to 4 s after. They are in memory for this page only, and nothing is stored or served. "Replay in 3D" (or "Play all in 3D") sends them to the Broadcast desk, which plays them in order with the card's caption, Skip and Stop. The desk's pitch draws them, as its instant replay does; Watch is the source, not a consumer.
+- Client hook for Ask (same page only): `window.MC.highlights.list()` and `.play({moment_id} | {minute})`. A late joiner has no frames for a moment, and `play` says so.
+- Tests: `node --test tests/unit/highlights.test.mjs` (cards, recount, frame window) and `tests/e2e/highlights.spec.ts` (panel, skip, close, 3D clip on the desk).

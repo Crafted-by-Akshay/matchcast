@@ -117,6 +117,21 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .recap h2{margin:0 0 4px;font-size:13px}
 .recap p{margin:0 0 8px;line-height:1.45}
 .recap .rm{color:var(--muted);font-size:12px}
+.hl{position:fixed;left:var(--gut);right:var(--gut);bottom:44px;z-index:5;max-height:60vh;overflow:auto;max-width:min(520px,calc(100vw - 2*var(--gut)));background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:13px}
+.hl[hidden]{display:none}
+#hl-open{position:fixed;right:var(--gut);bottom:44px;z-index:5;min-height:44px;min-width:44px;padding:8px 14px;border-radius:999px;border:1px solid #3aa0ff;background:#12294a;color:#fff;font:600 13px system-ui,sans-serif;cursor:pointer}
+#hl-open[hidden]{display:none}
+.hl-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hl-bar h2{margin:0;font-size:14px;flex:1 1 auto}
+.hl button{min-height:44px;min-width:44px;margin-right:4px}
+.hl-card{border-top:1px solid var(--line);padding:10px 0 10px 8px}
+.hl-card[aria-current="true"]{border-left:3px solid #3aa0ff}
+.hl-tag{color:var(--muted);font-size:12px}
+.hl-card h3{margin:2px 0 4px;font-size:14px}
+.hl-card p{margin:0 0 6px;line-height:1.45}
+.hl dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px}
+.hl dt{color:var(--muted)}
+.hl dd{margin:0}
 .recap button{min-height:44px;min-width:44px;margin-right:8px}
 
 /* ---- agents: one pipeline for the three views, drawn by the shell (no iframe) ---- */
@@ -389,6 +404,12 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <div class="rm" id="recap-m"></div>
   <button id="recap-listen" type="button">Listen</button><button id="recap-close" type="button">Close</button>
 </aside>
+<button id="hl-open" type="button" hidden>Highlights</button>
+<section class="hl" id="hl" role="region" aria-label="Match highlights" hidden>
+  <div class="hl-bar"><h2>Highlights</h2><span class="rm" id="hl-n"></span><button id="hl-3d" type="button" hidden>Play all in 3D</button><button id="hl-play" type="button">Play</button><button id="hl-skip" type="button">Skip</button><button id="hl-close" type="button">Close</button></div>
+  <div id="hl-list"></div>
+  <p class="rm">Simulated: the rules write these cards. The score, passes, shots and xG on each card are counted twice from the match events. The 3D clips play on the Broadcast desk from Watch's frames held in this page.</p>
+</section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="langs.js"></script>
@@ -396,6 +417,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="config.js"></script>
 <script src="agents.js"></script>
 <script src="feed.js"></script>
+<script src="highlights.js"></script>
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
 <script src="crew.js"></script>
@@ -457,6 +479,70 @@ $('recap-listen').onclick = () => {
   if (!VC.on) { toast('Turn Voice on to hear the recap'); return; }
   VC.say(r.text, { role: 'playByPlay', audio: r.audioUrl });
 };
+// ---- highlights (Watch, after full time): one card per key moment, from highlights.js. Simulated: the rules write the cards, and each number is rechecked.
+const HLS = { i: -1, timer: 0 };
+function hlShow(i) {
+  const els = document.querySelectorAll('#hl-list .hl-card'); if (!els.length) return;
+  HLS.i = (i + els.length) % els.length;
+  els.forEach((el, k) => el.setAttribute('aria-current', k === HLS.i ? 'true' : 'false'));
+  els[HLS.i].scrollIntoView({ block: 'nearest' });
+}
+// the 3D replay runs in the Broadcast desk: its pitch is the engine that draws the frames (Watch is the source, not a consumer)
+let pendingClips = null;
+function sendClips(ids) {
+  const clips = HL.plan().filter((c) => !ids || ids.includes(c.id));
+  if (!clips.length) { toast('No 3D clip is recorded for this moment yet'); return; }
+  pendingClips = clips; show('broadcast'); flushClips();
+  toast('Playing ' + clips.length + (clips.length === 1 ? ' highlight' : ' highlights') + ' in 3D on the desk');
+}
+// the desk takes the clips once it is up (its ready mark comes with its first tick), so an early click waits for it
+function flushClips() {
+  if (!pendingClips || !$('v-broadcast').classList.contains('ready')) return;
+  post('broadcast', { src: 'matchcast-shell', type: 'clips', clips: pendingClips }); pendingClips = null;
+}
+$('hl-3d').onclick = () => sendClips(null);
+// for the Ask lane (same page): list the moments and play one from the frames held in this page. A late joiner has no frames for a moment, and the call says so.
+window.MC = window.MC || {};
+window.MC.highlights = {
+  list: () => HL.cards().map((c) => ({ moment_id: c.id, minute: c.minute, kind: c.kind, title: c.title, has_clip: c.frames.length >= 4 })),
+  play: ({ moment_id, minute } = {}) => {
+    const c = HL.cards().find((k) => (moment_id ? k.id === moment_id : k.minute === +minute));
+    if (!c) return { ok: false, reason: 'no moment' };
+    if (c.frames.length < 4) return { ok: false, reason: 'no frames for this moment in this page: open the Highlights panel on Watch' };
+    sendClips([c.id]); return { ok: true, moment_id: c.id };
+  },
+};
+function hlStop() { clearInterval(HLS.timer); HLS.timer = 0; $('hl-play').textContent = 'Play'; }
+$('hl-play').onclick = () => {
+  if (HLS.timer) { hlStop(); return; }
+  HLS.timer = setInterval(() => hlShow(HLS.i + 1), 7000); $('hl-play').textContent = 'Pause'; hlShow(HLS.i < 0 ? 0 : HLS.i + 1);
+};
+$('hl-skip').onclick = () => hlShow(HLS.i + 1);
+$('hl-close').onclick = () => { hlStop(); $('hl').hidden = true; };
+$('hl-open').onclick = () => { RECAP.closed = true; paintRecap(); $('hl').hidden = false; paintHighlights(); hlShow(HLS.i < 0 ? 0 : HLS.i); };
+function paintHighlights() {
+  const cards = HL.cards(), list = $('hl-list');
+  $('hl-open').hidden = !cards.length || current !== 'watch';
+  $('hl-3d').hidden = !HL.plan().length;
+  const shown = cards.length;
+  $('hl-n').textContent = shown + (shown === 1 ? ' moment' : ' moments') + (HL.more ? ' · ' + HL.more + ' more not shown (the panel keeps the first ' + (shown + HL.held) + ' by priority)' : '') + (HL.held ? ' · ' + HL.held + ' held: did not recount' : '');
+  list.textContent = '';
+  for (const c of cards) {
+    const art = document.createElement('article'); art.className = 'hl-card'; art.setAttribute('aria-current', 'false');
+    const put = (tag, text, cls) => { const el = document.createElement(tag); if (cls) el.className = cls; el.textContent = text; art.append(el); };
+    put('span', c.minute + "' · " + c.club, 'hl-tag'); put('h3', c.title);
+    put('p', c.commentary); put('p', c.why);
+    const dl = document.createElement('dl');
+    for (const [k, v] of [['Strategy', c.strategy.phase + (c.strategy.shape ? ' · shape ' + c.strategy.shape : '')], ['Technique', c.technique], ['Insight', c.insight]]) {
+      const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd);
+    }
+    art.append(dl);
+    if (c.frames.length >= 4) { const b = document.createElement('button'); b.type = 'button'; b.className = 'hl-3d'; b.textContent = 'Replay in 3D'; b.onclick = () => sendClips([c.id]); art.append(b); }
+    list.append(art);
+  }
+  if (HLS.i >= cards.length) HLS.i = -1;
+  if (HLS.i >= 0) list.children[HLS.i].setAttribute('aria-current', 'true');   // a repaint keeps the card that is playing marked
+}
 const frameOf = (view) => FR[view] && FR[view].el;
 
 function url(view) {
@@ -557,6 +643,7 @@ try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applyS
 function show(view) {
   if (!PANES.includes(view)) view = 'watch';
   current = view;
+  if (view !== 'watch') { hlStop(); $('hl').hidden = true; $('hl-open').hidden = true; } else paintHighlights();   // the panel and its button belong to Watch after full time; coming back to Watch shows them again
   if (!shownViews(view).includes('watch') && window.callLeave) window.callLeave();   // Watch beside Broadcast (SPLIT_VIEWS) keeps its call
   const on = shownViews(view);
   for (const v of PANES) {
@@ -1038,11 +1125,11 @@ window.addEventListener('message', (e) => {
   }
   if (d.type === 'persona' && view === 'watch') { M.persona = d.persona; paintStory(); LV.persona(d.persona, d.lang); CM.setPersona(d.persona); window.setLang(LANGS_OK.includes(d.lang) ? d.lang : 'en', 'watch'); return; }   // a Watch-only language (Tamil, French, Arabic) leaves the console in English
    // the viewer's watch mode changed (EXP-4)
-  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) { post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); post('analyst', { src: 'matchcast-shell', type: 'live-frame', setup: d.setup, frame: d.frame }); /* the Analyst's live maps sample these positions (77_live.js) */ MAPS.frame(d.setup, d.frame); /* and the shell's own live maps (maps.js) */ if (FR.watch) { FR.watch.stats = d.frame.stats; if (Date.now() - (FR.watch.feedAt || 0) > 1000) { FR.watch.feedAt = Date.now(); pushFeed(); } } } return; }   // Watch's pitch state goes to Broadcast (EXP-2)
+  if (d.type === 'frame') { if (keyOf(d.setup) === keyOf(M.setup)) { HL.frame(d.frame); post('broadcast', { src: 'matchcast-shell', type: 'frame', frame: d.frame }); post('analyst', { src: 'matchcast-shell', type: 'live-frame', setup: d.setup, frame: d.frame }); /* the Analyst's live maps sample these positions (77_live.js) */ MAPS.frame(d.setup, d.frame); /* and the shell's own live maps (maps.js) */ if (FR.watch) { FR.watch.stats = d.frame.stats; if (Date.now() - (FR.watch.feedAt || 0) > 1000) { FR.watch.feedAt = Date.now(); pushFeed(); } } } return; }   // Watch's pitch state goes to Broadcast (EXP-2)
   if (d.type === 'events') {
     AG.onWatch(keyOf(d.setup), d.batch, d.moments);
     if (keyOf(d.setup) === keyOf(M.setup)) { post('analyst', { src: 'matchcast-shell', type: 'live-batch', setup: d.setup, batch: d.batch }); MAPS.events(d.setup, d.batch); }
-    if (view === 'watch' && AG.run && AG.run.key === keyOf(d.setup)) CM.fromWatch(d.batch, d.moments);   // the continuous feed (feed.js): every moment, key event and quiet-stretch summary
+    if (view === 'watch' && AG.run && AG.run.key === keyOf(d.setup)) { CM.fromWatch(d.batch, d.moments); HL.add(d.batch); }   // the continuous feed (feed.js): every moment, key event and quiet-stretch summary
     if (AG.run && AG.run.key === keyOf(d.setup)) { LV.events(d.batch); post('broadcast', { src: 'matchcast-shell', type: 'events', batch: d.batch }); pushFeed(); }
     return;
   }   // Watch's live events and moments
@@ -1062,20 +1149,20 @@ window.addEventListener('message', (e) => {
     $('v-' + view).classList.add('ready');
     if (M.lang && M.lang !== 'en') post(view, { src: 'matchcast-shell', type: 'lang', lang: M.lang });
     if (M.agents) post(view, M.agents);   // a view that (re)loaded learns the viewer's language
-    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); CM.reset(keyOf(s), Object.assign({}, teamsOf(s), { history: (byId(M.fixture) || {}).history })); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
+    if (view === 'watch') { AG.reset(keyOf(s), teamsOf(s)); HL.side = CM.side; HL.reset(teamsOf(s), (byId(M.fixture) || {}).formations || []); CM.reset(keyOf(s), Object.assign({}, teamsOf(s), { history: (byId(M.fixture) || {}).history })); sentCards.clear(); LV.begin(keyOf(s), d.roster); RECAP = { gen: RECAP.gen + 1, closed: false }; }   // a new match from Watch starts a new agent run
     prefetchOthers();
     toast(fxId ? 'Shared match: ' + byId(fxId).home.club + ' v ' + byId(fxId).away.club : 'Shared match set from ' + view);
     paint(); routeAnalyst();
   } else if (d.type === 'tick') {
     if (view === current) $('v-' + view).classList.add('ready');
-    paint();
+    paint(); flushClips();
   } else if (d.type === 'fulltime') {
     if (f.sent === 'done') return;
     f.sent = 'done';
     const msg = { src: 'matchcast-shell', type: 'import', dataset: d.dataset, recap: LV.enabled && LV.key && view === 'watch' && LV.status !== 'fallback' && LV.status !== 'offline' ? { api: LV.base, session_id: LV.key.session_id, match_id: LV.key.match_id } : null };
     if (FR.analyst && FR.analyst.ready) post('analyst', msg); else pendingImports.push(msg);
     toast('Full time: the live match went to the Analyst as a new library entry');
-    if (view === 'watch') loadRecap();
+    if (view === 'watch') { HL.finish(); loadRecap(); paintHighlights(); }
     paint();
   }
 });
