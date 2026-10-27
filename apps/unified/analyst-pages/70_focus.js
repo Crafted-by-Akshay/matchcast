@@ -16,6 +16,9 @@ MC_TABS.splice(0, MC_TABS.length, ['ov', 'Overview'], ['shots', 'Shots'], ['pat'
 
 const focusLive = () => (window.MC_FEED && window.MC_FEED.on ? window.MC_FEED : null);
 const focusMatch = (arg) => D.match(arg || (focusLive() || {}).fixture) || D.matches[D.matches.length - 1];
+// a historical route's match (the trace page): its own argument, else the recorded match this console showed last, else the latest. The live fixture is never the default, so a recorded run is not swapped for the match on Watch (FIX-02)
+let archiveLast = null;
+const archiveMatch = (arg) => { const id = arg || archiveLast, m = (id && D.match(id)) || D.matches[D.matches.length - 1]; if (m) archiveLast = m.id; return m; };
 // the season match a feed belongs to, or null for a custom setup (no season fixture to compare with)
 const focusFeedMatch = (f) => (f && f.fixture ? D.match(f.fixture) : null);
 

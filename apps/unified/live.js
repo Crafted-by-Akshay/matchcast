@@ -131,7 +131,7 @@ const LV = (() => {
     try {
       const bad = badClaim;   // the api takes the demo switch at match creation only
       const res = await post('/v1/matches', { session_id: r.key.session_id, match_id: r.id, seed: 0, engine_version: 'unified-1', home_team_id: r.roster ? r.roster.team_ids[0] : 'home', away_team_id: r.roster ? r.roster.team_ids[1] : 'away', venue_id: 'v1', kickoff_local: new Date().toISOString().slice(0, 19), approval_mode: 'auto', clubs: r.clubs || {}, names: r.names || {}, roster: r.roster, ...(badClaim ? { seed_bad_claim: true } : {}) });
-      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; if (res.status === 409) r.attached = true; if (run === r) feedsSent(r); open(); } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
+      if (res.ok || res.status === 409) { r.created = true; r.bad = res.ok && bad; if (res.status === 409) r.attached = true; if (run === r) { feedsSent(r); open(); } } else { const er = new Error('create ' + res.status); er.status = res.status; throw er; }   // a 409 means the match existed and the body was ignored; the stream opens once the match exists
     } finally { r.creating = null; }
   })());
 
@@ -180,12 +180,15 @@ const LV = (() => {
   };
 
   // a shirt-number second opinion for a torso crop (DAT-11): throws {status, retry_after} when the api cannot give one
+  // an answer that comes back after the match changed belongs to the match before: it is refused, so no caller shows it (FIX-01)
+  const changed = () => Object.assign(new Error('match changed'), { status: 0 });
   const identify = async (trackId, team, crop) => {
     if (!run) throw Object.assign(new Error('no match yet'), { status: 0 });
-    const res = await fetch(api() + '/v1/matches/' + run.id + '/vision/identify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: run.key.session_id, crop, track_id: trackId, team_hint: team }) });
-    if (!res.ok) { vstats.readsFailed++; throw Object.assign(new Error('identify ' + res.status), { status: res.status, retry_after: +res.headers.get('Retry-After') || 0 }); }
-    const j = await res.json(); vstats.reads++; return j;
+    const r = run;
+    const res = await fetch(api() + '/v1/matches/' + r.id + '/vision/identify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: r.key.session_id, crop, track_id: trackId, team_hint: team }) });
+    if (!res.ok) { if (run === r) vstats.readsFailed++; throw Object.assign(new Error('identify ' + res.status), { status: res.status, retry_after: +res.headers.get('Retry-After') || 0 }); }
+    const j = await res.json(); if (run !== r) throw changed(); vstats.reads++; return j;
   };
 
   // the viewer's role for the producer-only routes: the page's configured account (config.js MATCHCAST_ROLE; the shell's simulated producer by default). The api checks the real role (Easy Auth) and answers 403 to anyone else.
@@ -194,7 +197,7 @@ const LV = (() => {
     const r = run; if (!r || !r.created || !api()) throw Object.assign(new Error('no match yet'), { status: 0 });
     const res = await fetch(url('/v1/matches/' + r.id + '/lines', { status: 'review' }), { headers: { Accept: 'application/json' } });
     if (!res.ok) throw Object.assign(new Error('lines ' + res.status), { status: res.status });
-    const j = await res.json(); return Array.isArray(j.items) ? j.items : [];
+    const j = await res.json(); if (run !== r) throw changed(); return Array.isArray(j.items) ? j.items : [];
   };
   // CREW-7.3: the catch-me-up recap as of a minute, GET /v1/matches/{id}/catch-me-up?session_id&minute (docs/architecture/12-api.md). A read: the api sends nothing to the streams.
   // Answers {state} and never throws: ok (the whole recap), held (404: a correction before the cut, a desk kill or a recap that did not recount; not an error), limited (429, wait_s from Retry-After),
@@ -238,11 +241,12 @@ const LV = (() => {
   };
   const audit = async () => {
     if (!run) throw new Error('no match yet');
-    const all = [], LIMIT = 1000;
+    const r = run, all = [], LIMIT = 1000;   // one match's records: a page fetched after the match changed would mix two chains
     for (let page = 0; page < 20; page++) {   // the api returns at most 1000 records a call; from_seq is the first sequence wanted
-      const res = await fetch(url('/v1/matches/' + run.id + '/audit', { limit: LIMIT, from_seq: all.length + 1 }));
+      const res = await fetch(url('/v1/matches/' + r.id + '/audit', { limit: LIMIT, from_seq: all.length + 1 }));
       if (!res.ok) throw new Error('audit ' + res.status);
       const j = await res.json(), got = Array.isArray(j) ? j : (j.records || j.items || []);
+      if (run !== r) throw changed();
       all.push(...got);
       if (got.length < LIMIT) return all;
     }
@@ -305,7 +309,7 @@ const LV = (() => {
     for (let i = 0; i < (tries || 40) && run === r; i++) {   // the recap waits on the final event, the function and the Verifier: about two minutes in all
       let res = null;
       try { res = await fetch(api() + path + q); } catch (e) { return null; }
-      if (res.ok) { const j = await res.json(); const ok = (j.sentences || []).filter((x) => x.verdict === 'verified'); return ok.length ? { text: ok.map((x) => x.text).join(' '), sentences: ok.length, partial: ok.length < (j.sentences || []).length, mode: j.mode || 'rules', audioUrl: api() + path + '/audio.mp3' + q } : null; }
+      if (res.ok) { const j = await res.json(); if (run !== r) return null; const ok = (j.sentences || []).filter((x) => x.verdict === 'verified'); return ok.length ? { text: ok.map((x) => x.text).join(' '), sentences: ok.length, partial: ok.length < (j.sentences || []).length, mode: j.mode || 'rules', audioUrl: api() + path + '/audio.mp3' + q } : null; }
       if (res.status !== 404) return null;
       await new Promise((ok) => setTimeout(ok, i < 10 ? 1500 : 4000));
     }
@@ -314,7 +318,7 @@ const LV = (() => {
   // Vision -> Agents (ADR-0022): the Vision stream's summary for this match (passes in, lines the Verifier passed, the latest such line, agreement with the engine); null with no match or no api
   const visionSummary = async () => {
     const r = run; if (!r || !api()) return null;
-    try { const res = await fetch(url('/v1/matches/' + r.id + '/vision/summary'), { cache: 'no-store' }); return res.ok ? await res.json() : null; } catch (e) { return null; }
+    try { const res = await fetch(url('/v1/matches/' + r.id + '/vision/summary'), { cache: 'no-store' }); const j = res.ok ? await res.json() : null; return run === r ? j : null; } catch (e) { return null; }
   };
   // the failure drill (ADR-0014 on camera): cut this match's model calls on the api so the rules twins take over mid-match, or restore them; throws when the api cannot
   const drill = async (on) => {
