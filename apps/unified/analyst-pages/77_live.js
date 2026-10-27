@@ -1,9 +1,10 @@
 // Live maps (Analyst page "Live maps"): the Watch match as it plays. The shell forwards Watch's pitch frames (four a second) and
 // its events to this page; one position sample is kept per match second, and the heatmaps, average positions and pass network
 // are built from those samples the same way as for a finished match. Simulated, one match at a time.
-const LIVE = { key: null, roster: null, frames: [], events: [], seen: new Set(), last: -1 };
+const LIVE = { key: null, roster: null, frames: [], events: [], seen: new Set(), last: -1, halfEnd: 0 };
+const LIVE_HALF_CLOCK = 45 * 60;   // Watch's clock starts the second half at 45:00 (setup.js), so it goes back at half-time
 const liveKey = (s) => [s.h, s.a, s.seed, s.st, s.month, s.kick, s.half].join('|');
-function liveReset(key) { LIVE.key = key; LIVE.roster = null; LIVE.frames = []; LIVE.events = []; LIVE.seen = new Set(); LIVE.last = -1; }
+function liveReset(key) { LIVE.key = key; LIVE.roster = null; LIVE.frames = []; LIVE.events = []; LIVE.seen = new Set(); LIVE.last = -1; LIVE.halfEnd = 0; }
 
 window.addEventListener('message', (e) => {
   const d = e.data;
@@ -12,11 +13,14 @@ window.addEventListener('message', (e) => {
   if (d.type === 'live-start') { liveReset(key); LIVE.roster = d.roster; return; }
   if (LIVE.key !== key) liveReset(key);
   if (d.type === 'live-frame' && d.frame && d.frame.players && d.frame.players.length) {
-    const sec = Math.floor(d.frame.mclock || 0);
-    if (sec === LIVE.last) return;
-    if (sec < LIVE.last) liveReset(key);   // the clock went back: a new kick-off in the same setup
-    LIVE.last = sec;
-    LIVE.frames.push({ t: d.frame.mclock, f: (d.frame.half || 1) - 1, p: d.frame.players.map((q) => [q[0], q[1]]) });
+    // order by half, then the clock: the clock goes back to 45:00 at half-time, which is not a new kick-off (as maps.js)
+    const half = d.frame.half || 1, sec = Math.floor(d.frame.mclock || 0), order = half * 1e6 + sec;
+    if (order === LIVE.last) return;
+    if (order < LIVE.last) { const roster = LIVE.roster; liveReset(key); LIVE.roster = roster; }   // a new kick-off in the same half; the roster stays
+    LIVE.last = order;
+    if (half === 1) LIVE.halfEnd = sec;
+    const t = half === 1 ? sec : (LIVE.halfEnd || LIVE_HALF_CLOCK) + Math.max(0, sec - LIVE_HALF_CLOCK);   // one match timeline
+    LIVE.frames.push({ t, f: half - 1, p: d.frame.players.map((q) => [q[0], q[1]]) });
   }
   if (d.type === 'live-batch' && Array.isArray(d.batch)) {
     for (const ev of d.batch) {
