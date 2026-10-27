@@ -6,7 +6,7 @@ WORKDIR /app
 COPY . .
 RUN if [ -n "$API_URL" ]; then python build.py --api "$API_URL"; else python build.py; fi
 # Everything the shell loads (tests/test_web_image.py checks this list against index.html).
-RUN mkdir /site && cp -r index.html config.js langs.js contracts.js agents.js feed.js live.js trace-panel.js crew.js crew-analyst-shots.js crew-analyst-momentum.js crew-analyst-ppda.js maps.js crew-analyst.js crew-score.js crew-tree.js \
+RUN mkdir /site && cp -r index.html config.js langs.js contracts.js agents.js feed.js live.js trace-panel.js crew.js crew-analyst-shots.js crew-analyst-momentum.js crew-analyst-ppda.js crew-analyst-shape.js maps.js crew-analyst.js crew-score.js crew-tree.js \
       speech.js status.js voice.js voices.json watch broadcast analyst shared /site/
 # Pre-compress for nginx gzip_static; config.js stays plain so a deploy can overwrite it.
 RUN find /site -type f -size +1k ! -name config.js \
