@@ -17,7 +17,7 @@ const MAPS = (() => {
     if (sec === S.last) return;
     if (sec < S.last) reset(k);   // the clock went back: a new kick-off in the same setup
     S.last = sec;
-    S.frames.push({ f: (f.half || 1) - 1, p: f.players.map((q) => [q[0], q[1]]) });
+    S.frames.push({ t: sec, f: (f.half || 1) - 1, p: f.players.map((q) => [q[0], q[1]]) });   // t: the match second, so a view can count by minute
   }
   function events(setup, batch) {
     if (!Array.isArray(batch)) return;

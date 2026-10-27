@@ -246,8 +246,10 @@ const ALX = (() => {
       const r = typeof AG !== 'undefined' ? AG.run : null;
       container.setAttribute('data-mc-analysis', kind);
       cards.set(container, params || {});
-      const ids = fn(container, params || {}, r);
-      return { kind, status: !r ? 'empty' : ids.length ? 'ok' : 'empty', citations: ids };
+      const out = fn(container, params || {}, r);
+      // a kind returns its citations, or {status, ids} when it has its own answer (a view with no event citations, such as the shape)
+      if (out && !Array.isArray(out)) return { kind, status: out.status, citations: out.ids || [] };
+      return { kind, status: !r ? 'empty' : out.length ? 'ok' : 'empty', citations: out };
     }
   };
 
