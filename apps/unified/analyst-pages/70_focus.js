@@ -16,9 +16,8 @@ MC_TABS.splice(0, MC_TABS.length, ['ov', 'Overview'], ['shots', 'Shots'], ['pat'
 
 const focusLive = () => (window.MC_FEED && window.MC_FEED.on ? window.MC_FEED : null);
 const focusMatch = (arg) => D.match(arg || (focusLive() || {}).fixture) || D.matches[D.matches.length - 1];
-// a historical route's match (the trace page): its own argument, else the recorded match this console showed last, else the latest. The live fixture is never the default, so a recorded run is not swapped for the match on Watch (FIX-02)
-let archiveLast = null;
-const archiveMatch = (arg) => { const id = arg || archiveLast, m = (id && D.match(id)) || D.matches[D.matches.length - 1]; if (m) archiveLast = m.id; return m; };
+// a historical route's match (the trace page): its own argument, else the match the Match centre showed last (R.lastMatch, the same one the nav opens), else the latest. The live fixture is never the default, so a recorded run is not swapped for the match on Watch (FIX-02)
+const archiveMatch = (arg) => D.match(arg || R.lastMatch) || D.matches[D.matches.length - 1];
 // the season match a feed belongs to, or null for a custom setup (no season fixture to compare with)
 const focusFeedMatch = (f) => (f && f.fixture ? D.match(f.fixture) : null);
 
@@ -95,7 +94,7 @@ page({
 
 page({
   id: 'trace', title: 'How was this made?', render(el, arg) {
-    const m = focusMatch(arg), ins = m.events.filter((e) => e.type === 'insight');
+    const m = archiveMatch(arg), ins = m.events.filter((e) => e.type === 'insight');
     el.innerHTML = pgHead('How was this made?', 'Each agent line in ' + esc(m.title) + ' (recorded run, Simulated), with the steps that made it. The in-page rules agents wrote them, and the Verifier recounts each one from the event log.') +
       '<div class="card" id="trace-list">' + (ins.length
         ? '<div class="list">' + ins.map((e) => '<div class="li"><span class="chip ' + (e.status === 'verified' ? 'good' : e.status === 'rejected' ? 'bad' : 'warn') + '">' + esc(e.status) + '</span><div><div class="t">' + esc(e.text) + '</div><div class="s">' + minLbl(e.minute) + ' · Analyst (' + esc(e.agent || 'rules') + ') made the claim · Narrator wrote the line · Verifier ' + esc(e.status) + ' it against the event log (Simulated)</div></div></div>').join('') + '</div>'
