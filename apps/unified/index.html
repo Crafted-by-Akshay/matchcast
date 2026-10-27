@@ -516,7 +516,7 @@ function paintHighlights() {
   const cards = HL.cards(), list = $('hl-list');
   $('hl-open').hidden = !cards.length || current !== 'watch';
   $('hl-3d').hidden = !HL.plan().length;
-  $('hl-n').textContent = cards.length + (cards.length === 1 ? ' moment' : ' moments') + (HL.held ? ' · ' + HL.held + ' held: did not recount' : '');
+  $('hl-n').textContent = cards.length + (cards.length === 1 ? ' moment' : ' moments') + (HL.more ? ' · ' + HL.more + ' more not shown (the panel keeps the first ' + cards.length + ' by priority)' : '') + (HL.held ? ' · ' + HL.held + ' held: did not recount' : '');
   list.textContent = '';
   for (const c of cards) {
     const art = document.createElement('article'); art.className = 'hl-card'; art.setAttribute('aria-current', 'false');
@@ -633,7 +633,7 @@ try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applyS
 function show(view) {
   if (!PANES.includes(view)) view = 'watch';
   current = view;
-  if (view !== 'watch') { hlStop(); $('hl').hidden = true; $('hl-open').hidden = true; }   // the panel and its button belong to Watch after full time
+  if (view !== 'watch') { hlStop(); $('hl').hidden = true; $('hl-open').hidden = true; } else paintHighlights();   // the panel and its button belong to Watch after full time; coming back to Watch shows them again
   if (!shownViews(view).includes('watch') && window.callLeave) window.callLeave();   // Watch beside Broadcast (SPLIT_VIEWS) keeps its call
   const on = shownViews(view);
   for (const v of PANES) {

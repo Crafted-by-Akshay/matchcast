@@ -17,17 +17,18 @@ function load() {
   HL.side = (team) => (team === 'ARG' ? 0 : team === 'BRA' ? 1 : -1);
   HL.reset({ home: 'Argentina', away: 'Brazil' }, ['4-3-3', '4-2-3-1']);
   // JSON copies: the cards come from the vm realm, and deepStrictEqual compares prototypes
-  return { add: (b) => HL.add(b), frame: (f) => HL.frame(f), finish: () => HL.finish(), plan: () => JSON.parse(JSON.stringify(HL.plan())), cards: () => JSON.parse(JSON.stringify(HL.cards())), get count() { return HL.count; }, get held() { return HL.held; } };
+  return { get more() { return HL.more; }, add: (b) => HL.add(b), frame: (f) => HL.frame(f), finish: () => HL.finish(), plan: () => JSON.parse(JSON.stringify(HL.plan())), cards: () => JSON.parse(JSON.stringify(HL.cards())), get count() { return HL.count; }, get held() { return HL.held; } };
 }
 
 const shot = (minute, team, player, xg, extra = {}) => ({ type: 'shot', minute, team, player, xg, x: 92, y: 34, fate: 'miss', ...extra });
 const goal = (minute, team, player, extra = {}) => ({ type: 'goal', minute, team, player, ...extra });
 const pass = (minute, team, player, extra = {}) => ({ type: 'pass', minute, team, player, ...extra });
+const turnover = (minute, team) => ({ type: 'turnover', minute, team });
 
 test('a goal becomes a card with commentary, why, strategy, technique and an insight', () => {
   const HL = load();
   HL.add([
-    pass(25, 'ARG', 'Messi'), pass(25.5, 'ARG', 'Di Maria'), pass(26, 'ARG', 'Messi', { kind: 'through', distM: 18 }),
+    pass(25, 'ARG', 'Messi'), pass(25.5, 'ARG', 'Di Maria'), pass(26, 'ARG', 'Messi', { x0: 10, y0: 34, x1: 28, y1: 34 }),
     shot(26.5, 'ARG', 'Lautaro', 0.31, { fate: 'goal' }),
     goal(27, 'ARG', 'Lautaro'),
   ]);
@@ -37,7 +38,7 @@ test('a goal becomes a card with commentary, why, strategy, technique and an ins
   assert.match(c.commentary, /scores for Argentina\. Argentina 1-0 Brazil/);
   assert.equal(c.why, 'Opens the scoring.');
   assert.match(c.strategy.phase, /in the last minute/);
-  assert.match(c.technique, /Last pass by the side before it: through ball over 18\.0 m/);
+  assert.match(c.technique, /Last pass by the side before it: 18\.0 m/);
   assert.equal(c.insight, 'Argentina had 1 shot and 0.31 xG before this goal.');
   assert.equal(c.checked, true);
   assert.equal(HL.held, 0);
@@ -81,6 +82,7 @@ test('at most eight cards, in match order, goals first when the list is full', (
   const cards = HL.cards();
   assert.equal(cards.length, 8);
   assert.ok(cards.some((c) => c.kind === 'goal'));
+  assert.equal(HL.more, 5);   // 13 candidates, 8 shown
   const mins = cards.map((c) => c.minute);
   assert.deepEqual(mins, [...mins].sort((a, b) => a - b));
 });
@@ -130,4 +132,20 @@ test('an own goal counts for the side it is credited to in the score', () => {
   const HL = load();
   HL.add([{ type: 'goal', minute: 10, team: 'ARG', player: 'Own', ownGoal: true }, goal(30, 'BRA', 'Vini')]);
   assert.match(HL.cards()[0].commentary, /Argentina 1-1 Brazil/);
+});
+
+test('a turnover to the side just before a goal reads as a counter-attack', () => {
+  const HL = load();
+  HL.add([turnover(29, 'ARG'), pass(29.5, 'ARG', 'Messi'), pass(29.7, 'ARG', 'Di Maria'), goal(30, 'ARG', 'Lautaro')]);
+  assert.match(HL.cards()[0].strategy.phase, /Counter-attack after winning the ball/);
+});
+
+test('a paused Watch repeats its clock; the clip keeps only the frames that move it on', () => {
+  const HL = load();
+  HL.frame({ mclock: 100, score: [0, 0] });
+  HL.frame({ mclock: 100, score: [0, 0] });
+  HL.frame({ mclock: 100.25, score: [0, 0] });
+  HL.add([{ type: 'red_card', minute: 2, team: 'BRA', player: 'Casemiro' }]);
+  HL.finish();
+  assert.equal(HL.cards()[0].frames.length, 2);
 });

@@ -6,8 +6,7 @@
 const HL = (() => {
   const MAX = 8, BIG = 0.25, RING_S = 40, PRE_S = 6, POST_S = 4, MIN_FRAMES = 4;   // a clip: 6 s of match clock before the event and 4 s after
   const RANK = { goal: 0, red_card: 1, big_chance: 2 }, LABEL = { goal: 'Goal', red_card: 'Red card', big_chance: 'Big chance' };
-  const PASS = { through: 'through ball', cross: 'cross', lofted: 'lofted pass' };
-  let evs = [], sideOf = () => -1, nm = null, forms = [], cards = [], held = 0, ring = [], clips = new Map();
+  let evs = [], sideOf = () => -1, nm = null, forms = [], cards = [], held = 0, more = 0, ring = [], clips = new Map();
   const f1 = (x) => (+x || 0).toFixed(1), f2 = (x) => (+x || 0).toFixed(2);
   const club = (s) => (s === 0 ? nm.home : nm.away);
   const dist = (e) => { const x = +e.x, y = +e.y; return Number.isFinite(x) && Number.isFinite(y) ? Math.hypot(Math.min(x, 105 - x), y - 34) : null; };   // metres to the nearer goal centre
@@ -24,7 +23,7 @@ const HL = (() => {
   // PRE_S seconds before it to POST_S seconds after, counted from the latest frame when its event arrives (events come a second late at most)
   const frame = (f) => {
     const c = +(f && f.mclock);
-    if (!Number.isFinite(c)) return;
+    if (!Number.isFinite(c) || (ring.length && c <= ring[ring.length - 1].c)) return;   // a paused Watch repeats its clock: keep the frames that move it on
     ring.push({ c, f }); while (ring.length && ring[0].c < c - RING_S) ring.shift();
     for (const k of clips.values()) if (!k.done) { if (c >= k.from) k.frames.push(f); if (c >= k.until) k.done = true; }
   };
@@ -54,7 +53,9 @@ const HL = (() => {
       else if (e.type === 'red_card') out.push({ kind: 'red_card', e, idx });
       else if (e.type === 'shot' && (+e.xg || 0) >= BIG && sameNext(idx, e.player) !== 'goal') out.push({ kind: 'big_chance', e, idx });
     });
-    return out.sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.idx - b.idx).slice(0, MAX).sort((a, b) => a.idx - b.idx);
+    const ranked = out.sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.idx - b.idx);
+    more = Math.max(0, ranked.length - MAX);
+    return ranked.slice(0, MAX).sort((a, b) => a.idx - b.idx);
   };
 
   // the numbers of a card, counted from the events before its own index
@@ -64,18 +65,18 @@ const HL = (() => {
     const goals = (k) => evs.slice(0, k + 1).filter((x) => x.type === 'goal');
     const scoreAt = (k) => [0, 1].map((t) => goals(k).filter((x) => x.side === t).length);
     const shotsOf = (k) => before(k, (x) => x.type === 'shot' && x.side === s);
-    const lastPass = before(idx, (x) => x.type === 'pass' && x.side === s && x.minute >= m - 1).pop() || null;
+    const lastPass = before(idx, (x) => x.type === 'pass' && x.side === s && x.minute >= m - 1 && Number.isFinite(+x.x0) && Number.isFinite(+x.x1)).pop() || null;
     // a goal's shot: the scorer's own last shot in the minute before the goal, else the side's; no such record means no shot type
     const recent = (x) => x.type === 'shot' && x.side === s && x.minute >= m - 1 && x.minute <= m;
     const shot = c.kind === 'goal' ? evs.slice(0, idx + 1).reverse().find((x) => recent(x) && x.player === e.player) || evs.slice(0, idx + 1).reverse().find(recent) || null : e;
     return {
       minute: m, score: scoreAt(idx), prev: idx ? scoreAt(idx - 1) : [0, 0],
       passes: before(idx, (x) => x.type === 'pass' && x.side === s && x.minute >= m - 1).length,
-      turn: before(idx, (x) => x.type === 'possession_change' && x.side === s && x.minute >= m - 1).length > 0,
+      turn: before(idx, (x) => (x.type === 'possession_change' || x.type === 'turnover') && x.side === s && x.minute >= m - 1).length > 0,
       reds: before(idx + 1, (x) => x.type === 'red_card' && x.side === s).length,
       shots: shotsOf(idx).length, xg: +shotsOf(idx).reduce((a, x) => a + (+x.xg || 0), 0).toFixed(2),
       shot, dist: shot ? dist(shot) : null,
-      lastPass: lastPass && PASS[lastPass.kind] ? lastPass : null,
+      lastPass: lastPass ? Math.hypot(+lastPass.x1 - +lastPass.x0, +lastPass.y1 - +lastPass.y0) : null,
     };
   };
   // the recount: the same numbers again, from the raw list by minute (not by index), so a wrong index or count does not pass unnoticed
@@ -104,7 +105,7 @@ const HL = (() => {
       else if (f.prev[0] === f.prev[1]) why = 'Puts ' + tc + ' ahead, ' + score + '.';
       else if (f.score[0] === f.score[1]) why = 'Levels it at ' + score + '.';
       else why = 'Makes it ' + score + '.';
-      technique = shotTech(f.shot) + (f.lastPass ? '. Last pass by the side before it: ' + PASS[f.lastPass.kind] + (typeof f.lastPass.distM === 'number' ? ' over ' + f1(f.lastPass.distM) + ' m' : '') : '');
+      technique = shotTech(f.shot) + (f.lastPass != null ? '. Last pass by the side before it: ' + f1(f.lastPass) + ' m' : '');
       insight = tc + ' had ' + count(f.shots, 'shot') + ' and ' + f2(f.xg) + ' xG before this goal.';
     } else if (kind === 'red_card') {
       commentary = f.minute + "' " + who + ' is sent off for ' + tc + '.';
@@ -132,7 +133,7 @@ const HL = (() => {
   };
 
   return {
-    reset, add, frame, finish, cards: () => cards.map(withFrames), get held() { return held; }, get count() { return cards.length; },
+    reset, add, frame, finish, cards: () => cards.map(withFrames), get held() { return held; }, get more() { return more; }, get count() { return cards.length; },
     // the clips to play in 3D, in match order: a card with at least MIN_FRAMES frames
     plan: () => cards.map(withFrames).filter((c) => c.frames.length >= MIN_FRAMES).map((c) => ({ id: c.id, title: c.title, commentary: c.commentary, why: c.why, insight: c.insight, frames: c.frames })),
     set side(fn) { sideOf = fn || (() => -1); },

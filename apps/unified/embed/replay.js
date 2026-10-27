@@ -50,7 +50,7 @@ if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and c
   };
   // start(seconds, rate): play back from `seconds` ago at `rate` (1 or 0.5). Returns false when the buffer is shorter than a second.
   const start = (sec, rate) => {
-    if (BUF.length < 2) return false;
+    if (BUF.length < 2 || window.MCClipOn) return false;   // a highlight clip is playing: the instant replay waits for it
     clearInterval(timer);
     const nowT = BUF[BUF.length - 1].at, from = Math.max(BUF[0].at, nowT - sec * 1000);
     const clip = BUF.filter((b) => b.at >= from);
@@ -92,10 +92,11 @@ if (window.innerWidth < 480) {   // a phone-width pane keeps the bar small and c
     + '<button type="button" id="mc-clip-stop" style="min-height:44px;padding:4px 10px;border-radius:4px;border:1px solid #ff4d4d;background:#4a1212;color:#fff;font:inherit;cursor:pointer">Stop</button></div>';
   (document.getElementById('bc-view') || document.body).append(cap);
   let list = [], k = -1, timer = 0;
-  const endClips = () => { clearTimeout(timer); timer = 0; list = []; k = -1; cap.hidden = true; window.MCReplay.stop(); };
+  const endClips = () => { clearTimeout(timer); timer = 0; list = []; k = -1; cap.hidden = true; window.MCClipOn = false; window.MCReplay.stop(); };
   const showClip = (i) => {
     clearTimeout(timer); timer = 0;
     if (i >= list.length) { endClips(); return; }
+    window.MCClipOn = true;
     k = i;
     const c = list[i], frames = c.frames, slow = document.getElementById('mc-replay-slow');
     const pace = (slow && slow.checked ? 2 : 1) * 250;   // the frames are about a quarter second apart as Watch sends them; this plays them at that pace, whatever the match speed
