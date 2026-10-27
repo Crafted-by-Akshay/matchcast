@@ -411,7 +411,7 @@ test('the commentary card says Sound is off until Voice is on', async ({ page })
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
   // Voice is off by default, so the card must learn that from the shell (the hint is hidden until then)
   await expect(f.locator('#mcf-sound')).toBeVisible({ timeout: 10_000 });
-  await expect(f.locator('#mcf-sound')).toContainText('Voice: off');
+  await expect(f.locator('#mcf-sound')).toContainText('Turn Sound on');
   await page.click('#voice-btn');
   await expect(f.locator('#mcf-sound')).toBeHidden();
   await page.click('#voice-btn');

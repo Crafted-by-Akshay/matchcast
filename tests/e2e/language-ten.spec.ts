@@ -11,10 +11,14 @@ test.beforeEach(({ page }) => page.addInitScript(() => { (window as any).MC_TEST
 test('language picker: ten feed languages, the choice is kept on reload', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'agents');
+  await expect(page.locator('#lang-pick')).toHaveAccessibleName('Commentary and speech language');
+  await expect(page.locator('#lang-sel')).toHaveAttribute('title', /Interface labels remain in English/);
+  await expect(page.locator('#lang-sel .ui-scope')).toHaveText('UI: English');
   await expect(page.locator('#lang-pick option')).toHaveCount(LANGS.length);
   expect(await page.locator('#lang-pick option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).toEqual(LANGS);
   await page.locator('#lang-pick').selectOption('ja');
   await expect(page.locator('#lang-pick')).toHaveValue('ja');
+  await expect(page.locator('#lang-sel')).toHaveAttribute('title', /Match commentary and speech: 日本語/);
   expect(await page.evaluate(() => [VC.speaks('pt'), VC.speaks('ja')])).toEqual([true, false]);   // CREW-7.10: Portuguese is spoken, Japanese is captions only
   await page.reload();
   await openShell(page, 'agents');

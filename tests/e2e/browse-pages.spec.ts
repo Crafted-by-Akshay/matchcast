@@ -44,6 +44,18 @@ test('My List saves and removes matches on this device', async ({ page }) => {
   await expect(page.locator('#saved-grid .match-card')).toHaveCount(0);
 });
 
+test('Home has a stadium cover, an explicitly simulated demo, and no invented upcoming scores', async ({ page }) => {
+  await page.goto('/index.html#home', { waitUntil: 'domcontentloaded' });
+  await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
+  const image = await page.locator('#hero').evaluate((el) => getComputedStyle(el).backgroundImage);
+  expect(image).toContain('matchcast-stadium-cover.png');
+  await expect(page.locator('#hero .kicker')).toContainText('SIMULATED DEMO · NO RESULT YET');
+  await expect(page.locator('#hero .btn.play')).toHaveText('Start simulated match');
+  await expect(page.locator('.row[aria-label="Upcoming"]')).toContainText('No upcoming fixtures in this synthetic season.');
+  await expect(page.locator('.row[aria-label="Simulated demo"] .match-thumb .sc')).toHaveText('VS');
+  expect(page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(false);
+});
+
 test('Highlights never offers playback for moments without a saved clip', async ({ page }) => {
   await page.goto('/index.html#highlights', { waitUntil: 'domcontentloaded' });
   await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
@@ -60,16 +72,39 @@ test('Highlights never offers playback for moments without a saved clip', async 
   await page.locator('#more-toggle').click();
   await page.locator('#tab-highlights').click();
   await expect(page.locator('#v-highlights .highlight-card')).toHaveCount(1);
+  await expect(page.locator('.highlight-thumb')).toHaveAttribute('aria-label', /not a saved video frame/);
+  expect(await page.locator('.highlight-thumb').evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('matchcast-stadium-cover.png');
   await expect(page.locator('#v-highlights button')).toContainText('Replay in 3D');
   expect(page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(false);
 });
 
-test('Opening a match from its card is the action that starts Watch', async ({ page }) => {
+test('Opening a past match shows the saved events and stats without starting either engine', async ({ page }) => {
   await page.goto('/index.html#matches', { waitUntil: 'domcontentloaded' });
   await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
   await page.locator('#v-matches .match-open').first().click();
-  await expect(page).toHaveURL(/#watch$/);
-  await expect.poll(() => page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(true);
+  await expect(page).toHaveURL(/#match\/M001$/);
+  await expect(page.locator('#match-detail h2')).toHaveText('Harbor City v Coloso Ciudad');
+  await expect(page.locator('#match-detail .archive-note')).toContainText('not recorded video');
+  await expect(page.locator('#match-detail .moment-list li').first()).toBeVisible();
+  expect(page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(false);
+  expect(page.frames().some((frame) => /analyst\/index\.html/.test(frame.url()))).toBe(false);
+  await page.locator('#match-detail [data-match-action="back"]').click();
+  await expect(page).toHaveURL(/#matches$/);
+});
+
+test('My Club remembers a favorite and lists only that club’s past synthetic season matches', async ({ page }) => {
+  await page.goto('/index.html#home', { waitUntil: 'domcontentloaded' });
+  await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
+  await page.locator('#more-toggle').click();
+  await page.locator('#tab-my-club').click();
+  await expect(page).toHaveURL(/#my-club$/);
+  await page.locator('#my-club-pick').selectOption({ label: 'Harbor City' });
+  await expect(page.locator('#my-club-grid .match-card')).toHaveCount(7);
+  await expect(page.locator('#my-club-grid')).toContainText('SIMULATED RESULT');
+  expect(page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(false);
+  await page.reload();
+  await expect(page.locator('#my-club-pick')).toHaveValue('HAR');
+  await expect(page.locator('#my-club-grid .match-card')).toHaveCount(7);
 });
 
 test('Matches search, team, matchday and sort filters change the results', async ({ page }) => {
@@ -127,8 +162,8 @@ test('season scores are explicitly labeled as synthetic results', async ({ page 
   await page.goto('/index.html#matches', { waitUntil: 'domcontentloaded' });
   await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
   const labels = await page.locator('#lib-grid .match-thumb .tag').allTextContents();
-  expect(labels).toContain('Synthetic squads');
-  expect(labels).toContain('Simulated result');
+  expect(labels).toContain('SIMULATED DEMO');
+  expect(labels).toContain('SIMULATED RESULT');
   expect(labels).not.toContain('Recorded');
 });
 

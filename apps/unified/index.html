@@ -14,9 +14,9 @@
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 <style>
 :root{
-  --bg:#07110F; --bg2:#0C1B18; --bg3:#142722; --line:#254238; --text:#F1F5F2; --muted:#9AAFA7;
-  --pitch:#173C2C; --pitch-light:#245D3F; --surface:#0C1B18; --surface-raised:#142722;
-  --accent:#55B77B; --accent-strong:#276E4B; --accent-ink:#FFFFFF; --hot:#FF9A57; --ok:#57C98B; --warn:#F5B942; --bad:#F26B6B;
+  --bg:#080809; --bg2:#111214; --bg3:#1A1B1E; --line:#303238; --text:#F5F5F5; --muted:#A4A5AA;
+  --pitch:#173C2C; --pitch-light:#245D3F; --surface:#111214; --surface-raised:#1A1B1E;
+  --accent:#E50914; --accent-strong:#B20710; --accent-ink:#FFFFFF; --hot:#FF9A57; --ok:#57C98B; --warn:#F5B942; --bad:#F26B6B;
   --type-xs:11px; --type-sm:12px; --type-base:14px; --type-lg:18px; --type-xl:28px; --type-display:clamp(32px,5vw,64px);
   --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px; --space-7:48px;
   --radius-sm:8px; --radius-md:12px; --radius-lg:20px; --radius-pill:999px; --focus-ring:2px solid #FFD166;
@@ -25,9 +25,9 @@
   color-scheme:dark;
 }
 @media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]){ --bg:#0A1320; } /* the shell stays dark in both modes so the views sit on one frame */
+  :root:not([data-theme="dark"]){ --bg:#080809; } /* the shell stays dark in both modes so the views sit on one frame */
 }
-:root[data-theme="dark"]{ --bg:#0A1320; }
+:root[data-theme="dark"]{ --bg:#080809; }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--text);font:14px/1.4 var(--font);display:flex;flex-direction:column;overflow:hidden}
@@ -39,14 +39,14 @@ button,select{font:inherit;color:inherit}
 .top{display:flex;align-items:center;gap:16px;height:var(--bar);padding:0 var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none}
 .brand{display:flex;align-items:center;gap:10px;min-width:0;flex:none}
 .brand>div{min-width:0}
-.mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,#2D9A68,#56C58B);color:#06140D;flex:none}
+.mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,#B20710,#E50914);color:#fff;flex:none}
 .brand b{font-size:15px;letter-spacing:.01em}
 .brand small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .switch{position:relative;display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;max-width:100%}
 .switch::-webkit-scrollbar{display:none}
 .switch button{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:8px;font-weight:600}
 .switch button small{font-weight:500;font-size:12px}
-.switch button[aria-current="page"]{background:#276E4B;color:var(--accent-ink)}
+.switch button[aria-current="page"]{background:var(--accent-strong);color:var(--accent-ink)}
 #crew-btn{font-weight:700;border-color:var(--accent);color:var(--accent)}#crew-btn:focus-visible{outline:var(--focus-ring);outline-offset:2px}
 .switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:var(--focus-ring);outline-offset:2px}
 .status{display:flex;gap:6px;flex:none}
@@ -58,7 +58,10 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 #status-dlg::backdrop{background:rgba(0,0,0,.55)}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
-#lang-sel select{font:inherit;padding:2px 6px;border:1px solid var(--line,#999);border-radius:999px;background:transparent;color:inherit;max-width:9.5em}
+#lang-sel{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;font-weight:700;white-space:nowrap}
+#lang-sel .ui-scope{font-size:10px;font-weight:500;color:var(--muted);opacity:.85}
+#lang-sel select{font:inherit;font-size:12px;padding:2px 6px;border:1px solid var(--line,#999);border-radius:999px;background:var(--bg2);color:var(--text);max-width:9.5em}
+#lang-sel:focus-within{outline:var(--focus-ring);outline-offset:2px;border-radius:8px}
 #voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0;min-height:0}   /* a live region for voice announcements, not a visible control */
 #api-pill::before{content:"Agents ·";margin-right:.4em;color:var(--muted)}   /* says which part the pill is about, so it does not read as a contradiction of the engine chips */
 @media (max-width:1500px){.brand small{display:none}.proto{display:none}}
@@ -66,7 +69,7 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 @media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#crew-btn,#fx,#lang-sel select,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- browse: Home and Matches. Catalog only, so no 3D engine starts here; the match bar and the five-stage strip stay on the player views ---- */
-body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="matches"] .matchbar,body[data-view="matches"] .story,body[data-view="highlights"] .matchbar,body[data-view="highlights"] .story,body[data-view="my-list"] .matchbar,body[data-view="my-list"] .story{display:none}
+body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="matches"] .matchbar,body[data-view="matches"] .story,body[data-view="highlights"] .matchbar,body[data-view="highlights"] .story,body[data-view="my-list"] .matchbar,body[data-view="my-list"] .story,body[data-view="my-club"] .matchbar,body[data-view="my-club"] .story,body[data-view="match"] .matchbar,body[data-view="match"] .story{display:none}
 .tools-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:20;min-width:244px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);box-shadow:0 14px 34px rgba(0,0,0,.42)}
 .tools-menu[hidden]{display:none}
 .tools-menu button{width:100%;justify-content:flex-start;border-radius:8px}
@@ -79,23 +82,23 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .tools-toggle.active{color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
 .tools-toggle::after{content:"⌄";font-size:12px;color:var(--muted)}
 .tools-toggle[aria-expanded="true"]::after{content:"⌃"}
-.browse{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;background:radial-gradient(ellipse at 50% 0%,rgba(36,93,63,.16),transparent 55%),var(--bg);padding-bottom:48px;scrollbar-width:thin;overscroll-behavior-y:contain}
+.browse{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;background:var(--bg);padding-bottom:48px;scrollbar-width:thin;overscroll-behavior-y:contain}
 .browse-head{max-width:1380px;margin:0 auto;padding:28px var(--gut) 6px}
-.browse-head .eyebrow{margin:0 0 4px;color:#79C79A;font-size:var(--type-xs);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.browse-head .eyebrow{margin:0 0 4px;color:var(--accent);font-size:var(--type-xs);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .browse-head h2{font-size:var(--type-xl);line-height:1.1;letter-spacing:-.025em}
 .browse-head p:last-child{margin:8px 0 0;color:var(--muted);font-size:var(--type-sm)}
 .browse h2,.browse h3{margin:0;letter-spacing:.01em}
 .browse .sub{color:var(--muted);font-size:13px;margin:6px 0 0}
-.hero{position:relative;isolation:isolate;min-height:clamp(360px,42vw,540px);display:flex;align-items:flex-end;padding:clamp(24px,5vw,64px) max(var(--gut),calc((100vw - 1380px)/2));overflow:hidden;border-bottom:1px solid var(--line);background:linear-gradient(90deg,rgba(5,14,11,.96) 0%,rgba(5,14,11,.77) 44%,rgba(5,14,11,.1) 100%),radial-gradient(ellipse at 78% 80%,rgba(255,255,255,.14),transparent 48%),linear-gradient(125deg,var(--hc,#27573D) 0%,var(--hc,#27573D) 46%,var(--ac,#6B3C32) 54%,var(--ac,#6B3C32) 100%)}
+.hero{position:relative;isolation:isolate;min-height:clamp(360px,42vw,540px);display:flex;align-items:flex-end;padding:clamp(24px,5vw,64px) max(var(--gut),calc((100vw - 1380px)/2));overflow:hidden;border-bottom:1px solid var(--line);background-image:linear-gradient(90deg,rgba(3,8,8,.97) 0%,rgba(3,8,8,.78) 42%,rgba(3,8,8,.16) 100%),linear-gradient(0deg,rgba(3,8,8,.42),transparent 52%),url('assets/matchcast-stadium-cover.png'),linear-gradient(125deg,var(--hc,#27573D) 0%,var(--hc,#27573D) 46%,var(--ac,#6B3C32) 54%,var(--ac,#6B3C32) 100%);background-size:cover;background-position:center 42%}
 .hero::before{content:"";position:absolute;z-index:-1;inset:8% 4% -34% 54%;border:1px solid rgba(255,255,255,.22);border-radius:50%;box-shadow:0 0 0 38px rgba(255,255,255,.035),0 0 0 76px rgba(255,255,255,.025)}
 .hero::after{content:"";position:absolute;z-index:-1;inset:0;background:repeating-linear-gradient(90deg,transparent 0 9%,rgba(255,255,255,.025) 9% 18%);mask-image:linear-gradient(90deg,transparent 25%,#000 100%)}
 .hero-copy{position:relative;max-width:620px;display:grid;gap:10px}
-.hero .kicker{margin:0;font-size:var(--type-xs);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#B7D7C2}
+.hero .kicker{margin:0;font-size:var(--type-xs);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#E5E5E5}
 .hero h2{font-size:var(--type-display);line-height:.98;font-weight:800;letter-spacing:-.045em;text-wrap:balance}
 .hero .sub{margin:0}
 .hero-go{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;cursor:pointer;border:1px solid var(--line);background:var(--bg3);color:var(--text)}
-.btn.play{background:#A8E6BE;color:#082015;border-color:#A8E6BE}
+.btn.play{background:var(--accent);color:#fff;border-color:var(--accent)}
 .btn:hover{filter:brightness(1.12)}
 .btn:focus-visible,.match-open:focus-visible,.save-match:focus-visible,.lib-bar select:focus-visible,.lib-bar input:focus-visible{outline:var(--focus-ring);outline-offset:3px}
 .row{max-width:1412px;margin:0 auto;padding:26px var(--gut) 0}
@@ -106,7 +109,7 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .row-track{display:grid;grid-auto-flow:column;grid-auto-columns:clamp(238px,24vw,330px);gap:16px;overflow-x:auto;scroll-snap-type:x proximity;padding:5px 2px 16px;scrollbar-width:thin}
 .match-card{display:grid;gap:9px;min-width:0;scroll-snap-align:start}
 .match-open{display:grid;gap:9px;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;border-radius:var(--radius-md);font:inherit}
-.match-thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:var(--radius-md);overflow:hidden;border:1px solid rgba(210,235,220,.2);background:linear-gradient(135deg,rgba(6,20,13,.2),rgba(3,14,9,.66)),repeating-linear-gradient(90deg,transparent 0 12%,rgba(255,255,255,.05) 12% 24%),linear-gradient(120deg,var(--hc,#27573D) 0 50%,var(--ac,#6B3C32) 50% 100%);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.match-thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:var(--radius-md);overflow:hidden;border:1px solid rgba(210,235,220,.2);background-image:linear-gradient(180deg,rgba(3,9,8,.12),rgba(3,9,8,.78)),linear-gradient(110deg,color-mix(in srgb,var(--hc,#27573D) 62%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 62%,transparent)),url('assets/matchcast-stadium-cover.png');background-size:cover;background-position:var(--cover-x,50%) 52%;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
 .match-thumb::before{content:"";position:absolute;inset:12% 19%;border:1px solid rgba(255,255,255,.24);border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
 .match-thumb::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,13,9,.03) 25%,rgba(4,13,9,.72) 100%)}
 .match-card:hover .match-thumb,.match-open:focus-visible .match-thumb{transform:translateY(-3px) scale(1.015);box-shadow:0 12px 28px rgba(0,0,0,.4);border-color:rgba(210,235,220,.55)}
@@ -114,10 +117,10 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .match-thumb .tag{position:absolute;left:10px;bottom:10px;z-index:1;font-size:var(--type-xs);padding:4px 9px;border-radius:var(--radius-pill);background:rgba(4,13,9,.76);color:var(--text)}
 .mtitle{display:block;font-weight:700;font-size:var(--type-base);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mmeta{display:block;font-size:var(--type-sm);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.save-match{justify-self:start;min-height:36px;padding:4px 10px;border:1px solid transparent;border-radius:var(--radius-pill);background:transparent;color:#B7D7C2;font-size:var(--type-sm);font-weight:600;cursor:pointer}
+.save-match{justify-self:start;min-height:36px;padding:4px 10px;border:1px solid transparent;border-radius:var(--radius-pill);background:transparent;color:#D8D8DB;font-size:var(--type-sm);font-weight:600;cursor:pointer}
 .save-match:hover{background:var(--bg3);border-color:var(--line)}
-.save-match[aria-pressed="true"]{color:#A8E6BE}
-.lib-bar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px max(var(--gut),calc((100vw - 1380px)/2));background:rgba(7,17,15,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.save-match[aria-pressed="true"]{color:var(--accent)}
+.lib-bar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px max(var(--gut),calc((100vw - 1380px)/2));background:rgba(8,8,9,.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .lib-bar label{display:flex;min-width:0}
 .lib-bar input,.lib-bar select{background:var(--bg3);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;font:inherit}
 .lib-bar .lib-q{flex:1 1 240px}
@@ -127,13 +130,33 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .lib-empty,.browse-empty{max-width:680px;margin:40px auto;padding:24px var(--gut);text-align:center;color:var(--muted)}
 .browse-empty h3{color:var(--text);font-size:var(--type-lg)}
 .browse-empty p{margin:8px 0 18px}
-.browse-empty a{color:#A8E6BE}
+.browse-empty a{color:#F2F2F2}
 .saved-note{margin:10px 0 0;color:var(--muted);font-size:var(--type-sm)}
+.club-tools{max-width:1412px;margin:0 auto;padding:20px var(--gut);display:grid;grid-template-columns:minmax(220px,1fr) minmax(300px,1.6fr);gap:18px}
+.club-panel{padding:20px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--bg2);min-width:0}
+.club-panel h3{margin:0 0 8px;font-size:var(--type-lg)}.club-panel p{margin:0;color:var(--muted);line-height:1.5}
+.club-panel select{margin-top:12px;min-height:44px;width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg3);color:var(--text)}
+.club-panel .btn{margin-top:14px}.club-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;max-width:1412px;margin:0 auto;padding:0 var(--gut) 26px}
+.club-label{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:var(--type-sm);font-weight:700}
+.match-detail{max-width:1100px;margin:0 auto;padding:clamp(18px,4vw,48px) var(--gut)}
+.match-detail-cover{aspect-ratio:16/7;max-height:420px;margin:0 0 24px;border:1px solid var(--line);border-radius:var(--radius-lg);background-image:linear-gradient(90deg,rgba(3,8,8,.68),rgba(3,8,8,.03)),linear-gradient(120deg,color-mix(in srgb,var(--hc,#27573D) 52%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 52%,transparent)),url('assets/matchcast-stadium-cover.png');background-size:cover;background-position:center 48%}
+.match-detail .back{margin-bottom:22px}
+.match-detail h2{font-size:clamp(28px,5vw,54px);line-height:1.05;letter-spacing:-.035em;margin:4px 0 8px}
+.match-detail .match-summary{color:var(--muted);margin:0 0 18px}
+.match-detail .archive-note{padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:#D9E8E2;font-size:13px}
+.match-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0 28px}
+.match-stat{padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg2)}
+.match-stat span{display:block;color:var(--muted);font-size:12px}.match-stat b{display:block;margin-top:6px;font-size:20px;font-variant-numeric:tabular-nums}
+.moment-list{display:grid;gap:8px;margin:14px 0 26px;padding:0;list-style:none}
+.moment-list li{display:grid;grid-template-columns:58px 1fr;gap:10px;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--bg2)}
+.moment-list time{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}.moment-list p{margin:0;line-height:1.45}.match-detail .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 .highlight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px;max-width:1412px;margin:0 auto;padding:22px var(--gut)}
-.highlight-card{display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:var(--radius-md);background:linear-gradient(145deg,rgba(36,93,63,.15),transparent 45%),var(--bg2);min-width:0}
+.highlight-card{display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:var(--radius-md);background:linear-gradient(145deg,rgba(255,255,255,.035),transparent 45%),var(--bg2);min-width:0}
+.highlight-thumb{position:relative;aspect-ratio:16/9;margin:-16px -16px 2px;border-radius:var(--radius-md) var(--radius-md) 0 0;overflow:hidden;background-image:linear-gradient(90deg,rgba(4,12,11,.78),rgba(4,12,11,.08)),linear-gradient(130deg,color-mix(in srgb,var(--hc,#27573D) 60%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 55%,transparent)),url('assets/matchcast-stadium-cover.png');background-size:cover;background-position:var(--cover-x,50%) 48%}
+.highlight-thumb span{position:absolute;left:14px;bottom:12px;color:white;font-size:12px;font-weight:800;letter-spacing:.08em;text-shadow:0 2px 8px #000}
 .highlight-card h3{font-size:var(--type-lg)}
 .highlight-card p{margin:0;color:var(--muted);line-height:1.5}
-.highlight-card .moment{color:#A8E6BE;font-size:var(--type-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.highlight-card .moment{color:var(--accent);font-size:var(--type-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 .highlight-card .btn{justify-self:start}
 @media (max-width:560px){
   .hero{min-height:300px;padding:20px var(--gut)}
@@ -141,6 +164,8 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
   .row{padding-top:22px}
   .row-track{grid-auto-columns:minmax(220px,82%);gap:12px}
   .lib-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px}
+  .club-tools{grid-template-columns:1fr;padding-top:16px}
+  .match-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .lib-n{margin-left:0}
   .lib-bar .lib-q{flex-basis:100%}
   .lib-bar label:not(.lib-q){flex:1 1 28%;}
@@ -169,17 +194,17 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .chip button{margin-left:6px;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-weight:600}
 
 /* ---- stage: the three views, one visible at a time, each kept loaded ---- */
-.stage{position:relative;flex:1 1 auto;min-height:0;background:#060D17}
+.stage{position:relative;flex:1 1 auto;min-height:0;background:#080809}
 .view{position:absolute;inset:0}
-.view iframe{width:100%;height:100%;border:0;display:block;background:#060D17}
-.view .wait{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);pointer-events:none;background:#060D17;z-index:1;transition:opacity .3s}
+.view iframe{width:100%;height:100%;border:0;display:block;background:#080809}
+.view .wait{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);pointer-events:none;background:#080809;z-index:1;transition:opacity .3s}
 .view .wait b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
 .view .wait .wt{display:block;font-size:12px}
 .view .wait .bar{display:block;width:200px;height:3px;margin:14px auto 0;background:var(--line);border-radius:3px;overflow:hidden;position:relative}
 .view .wait .bar::after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:var(--accent);animation:slide 1.2s ease-in-out infinite}
 @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
 .view .wait .sk{position:absolute;z-index:0;inset:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,26%);grid-template-rows:auto minmax(0,1fr) auto;gap:10px;opacity:.55}
-.view .wait>div:not(.sk){position:relative;z-index:1;background:#060D17;padding:14px 26px;border-radius:12px}
+.view .wait>div:not(.sk){position:relative;z-index:1;background:#080809;padding:14px 26px;border-radius:12px}
 .view .wait .sk i{display:flex;align-items:flex-start;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;font-style:normal;font-size:12px;color:var(--muted);background:linear-gradient(90deg,transparent,rgba(140,194,255,.06),transparent) 0 0/200% 100%;animation:shimmer 2s linear infinite}
 .view .wait .sk .top{grid-column:1/3}.view .wait .sk .pitch{grid-row:2}.view .wait .sk .side{grid-row:2}.view .wait .sk .bot{grid-column:1/3}
 @keyframes shimmer{to{background-position:-200% 0}}
@@ -307,12 +332,12 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 .story li b{font-size:12px;letter-spacing:.02em}
 .story li span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .story li.on b{color:var(--ok)}
-.story .demo{padding:6px 14px;min-height:32px;display:inline-flex;align-items:center;border-radius:999px;background:var(--ok);color:#06210F;font-weight:700;font-size:12px;text-decoration:none;white-space:nowrap}
+.story .demo{padding:6px 14px;min-height:32px;display:inline-flex;align-items:center;border-radius:999px;background:var(--accent);color:#fff;font-weight:700;font-size:12px;text-decoration:none;white-space:nowrap}
 .story .demo svg{margin-right:6px;flex:none}.story .demo:hover{filter:brightness(1.08)}.story .demo:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .story-who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .story-who .seg{display:flex;gap:2px;padding:2px;background:var(--bg2);border:1px solid var(--line);border-radius:999px}
 .story-who .seg button{border:0;background:none;color:var(--muted);padding:5px 12px;min-height:32px;border-radius:999px;cursor:pointer;font-weight:600}
-.story-who .seg button[aria-pressed="true"]{background:#2A62C9;color:var(--accent-ink)}
+.story-who .seg button[aria-pressed="true"]{background:var(--accent-strong);color:var(--accent-ink)}
 .story-who .seg button:focus-visible,.story li button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .story-who em{font-style:normal;color:var(--text)}
 @media (max-width:820px){.story{padding:4px var(--gut)}.story ol,.story .demo,.story-who>b{display:none}.story-who{width:100%;justify-content:space-between}.story-who::before{content:"Viewing as";color:var(--muted);font-size:12px}.story-who .seg button{min-height:44px}.story-who em{display:none}}
@@ -374,6 +399,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
       <p class="menu-label">Your library</p>
       <button type="button" id="tab-highlights" data-view="highlights" class="sec">Highlights</button>
       <button type="button" id="tab-my-list" data-view="my-list" class="sec">My List</button>
+      <button type="button" id="tab-my-club" data-view="my-club" class="sec">My Club</button>
       <hr>
       <p class="menu-label">Tools</p>
       <button type="button" id="tab-analyst" data-view="analyst" class="sec" title="Analyze: the season analysis console (4)">Analyze</button>
@@ -384,8 +410,8 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <div class="status" aria-label="Environment">
     <button type="button" class="pill" id="crew-btn" hidden aria-label="Crew: open the agent crew, its spawn tree and scoreboard" title="Crew: the agents that make each line, their spawn tree and the scoreboard (opens the Agents tab)">Crew</button>
     <button type="button" class="pill" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
-    <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Speak approved lines. Captions always show.">Voice: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
-    <span id="lang-sel" style="display:inline-flex;gap:4px"><select id="lang-pick" aria-label="Language"></select></span>
+    <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Play spoken match commentary. Captions and on-screen text stay visible when sound is off.">Sound: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
+    <label id="lang-sel" title="Changes match commentary and speech. Interface labels remain in English."><span>Commentary</span><span class="ui-scope" aria-hidden="true">UI: English</span><select id="lang-pick" aria-label="Commentary and speech language" aria-describedby="lang-scope-note"></select><span class="sr" id="lang-scope-note">Changes match commentary and speech where a checked translation is available. Navigation and interface labels remain in English.</span></label>
     <span class="pill" id="api-pill" role="status" title="">Starting…</span><span class="pill" id="lat-pill" hidden title="Event to on air: wall-clock time from a Watch event reaching this page to the agent api's published line arriving here, the median of the last 30 matched lines. Watch batches its events once a second before they reach this page; that wait is not in the number."></span>
     <button type="button" class="pill" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status</button>
     <span class="more" aria-hidden="true">›</span>
@@ -461,6 +487,19 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <header class="browse-head"><p class="eyebrow">Your library</p><h2>My List</h2><p class="saved-note" id="saved-note">Saved on this device</p></header>
     <div class="lib-grid" id="saved-grid"></div>
     <div class="browse-empty" id="saved-empty" hidden><h3>Your list is ready for a match</h3><p>Save a match from Home or Matches and it will appear here.</p><a href="#matches">Browse matches</a></div>
+  </section>
+  <section class="browse" id="v-my-club" data-view="my-club" aria-label="My Club: favorite club and history" hidden>
+    <header class="browse-head"><p class="eyebrow">Your club</p><h2>My Club</h2><p>Follow one fictional season club, find its past matches, or open the real national-team history demo.</p></header>
+    <div class="club-tools">
+      <section class="club-panel"><h3>Choose your club</h3><p>Your choice is saved on this device. Past scores below are synthetic season results.</p><label class="sr" for="my-club-pick">Favorite club</label><select id="my-club-pick"><option value="">Choose a club</option></select></section>
+      <section class="club-panel"><div class="club-label">REAL INTERNATIONAL RESULTS</div><h3>Ask about team history</h3><p>Open the national-team demo to ask Copilot about head-to-head results. That history comes from a public results dataset; the squads and match you watch are simulated.</p><a class="btn play" id="club-history-demo" href="#watch">Open history demo</a></section>
+    </div>
+    <div class="row-head" style="max-width:1412px;margin:0 auto;padding:4px var(--gut)"><h3 id="my-club-title">Past matches</h3></div>
+    <div class="club-list" id="my-club-grid"></div>
+    <div class="browse-empty" id="my-club-empty"><h3>Choose a club to get started</h3><p>Your club’s synthetic season results will appear here.</p></div>
+  </section>
+  <section class="browse" id="v-match" data-view="match" aria-label="Past match details" hidden>
+    <article class="match-detail" id="match-detail"><p class="empty">Choose a match from the library.</p></article>
   </section>
   <section class="view" id="v-watch" data-view="watch" aria-label="Watch: fan 3D match">
     <div class="wait" role="status"><div><b>Starting Watch</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div><div class="sk" aria-hidden="true"><i class="top">Score, clock and weather</i><i class="pitch">3D pitch</i><i class="side">Match Pulse and key moments</i><i class="bot">Live commentary · Copilot · camera modes</i></div></div>
@@ -568,7 +607,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 // One shared match: the setup every view opens on. Watch and Broadcast play it live, and the Analyst opens the
 // season's recorded run for the same fixture. A live match sent from Watch or Broadcast at full time goes to the Analyst.
 const VIEWS = { watch: 'watch/index.html', analyst: 'analyst/index.html', broadcast: 'broadcast/index.html' };   // the three iframes
-const PANES = ['home', 'matches', 'highlights', 'my-list', 'watch', 'analyst', 'broadcast', 'agents'];       // browse pages stay in the shell; the match engine loads only on Watch or the studio
+const PANES = ['home', 'matches', 'highlights', 'my-list', 'my-club', 'match', 'watch', 'analyst', 'broadcast', 'agents'];       // browse pages stay in the shell; the match engine loads only on Watch or the studio
 const KEYS = ['h', 'a', 'seed', 'st', 'month', 'kick', 'half', 'f0', 's0', 'f1', 's1'];
 const $ = (id) => document.getElementById(id);
 const M = { fixture: null, setup: null };                // the shared match
@@ -774,6 +813,8 @@ try { applySplit(+localStorage.getItem(SPLIT_KEY) || 0.58); } catch (e) { applyS
 })();
 
 function show(view) {
+  const route = String(view || 'home');
+  if (route.startsWith('match/')) { detailMatchId = decodeURIComponent(route.slice(6)); view = 'match'; }
   if (!PANES.includes(view)) view = 'home';
   for (const b of Object.keys(BROWSE)) if (!$('v-' + b).hidden) BROWSE[b].y = $('v-' + b).scrollTop;   // a browse page keeps its scroll when the view changes
   current = view;
@@ -784,9 +825,9 @@ function show(view) {
   for (const v of PANES) {
     const shown = on.includes(v);
     $('v-' + v).hidden = !shown; $('v-' + v).classList.toggle('gone', !shown);
-    const tab = document.querySelector('.switch [data-view="' + v + '"]'); tab.setAttribute('aria-current', v === view ? 'page' : 'false');
+    const tab = document.querySelector('.switch [data-view="' + v + '"]'); if (tab) tab.setAttribute('aria-current', v === view ? 'page' : 'false');
   }
-  const moreLabels = { highlights: 'Highlights', 'my-list': 'My List', analyst: 'Analyze', broadcast: 'Production Studio', agents: 'Agents' };
+  const moreLabels = { highlights: 'Highlights', 'my-list': 'My List', 'my-club': 'My Club', analyst: 'Analyze', broadcast: 'Production Studio', agents: 'Agents' };
   const inMore = Object.hasOwn(moreLabels, view);
   $('more-toggle').classList.toggle('active', inMore);
   $('more-toggle').setAttribute('aria-label', inMore ? 'More, current page: ' + moreLabels[view] : 'More pages and tools');
@@ -798,11 +839,13 @@ function show(view) {
   tg.setAttribute('aria-pressed', String(bcBeside));
   for (const v of on) ensure(v);
   ALV.sync();
-  if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
+  if (location.hash.slice(1) !== route) history.replaceState(null, '', '#' + route);
   if (view === 'home') paintHome();
   if (view === 'matches') paintLibrary();
   if (view === 'highlights') paintBrowseHighlights();
   if (view === 'my-list') paintSaved();
+  if (view === 'my-club') paintMyClub();
+  if (view === 'match') paintMatchDetail();
   if (BROWSE[view]) $('v-' + view).scrollTop = BROWSE[view].y;
   paint();
 }
@@ -810,19 +853,23 @@ function show(view) {
 // ---------------------------------------------------------------- browse: Home and Matches
 // The catalog is the season (FX): each fixture's teams, colours, matchday, date, stadium and recorded score. Nothing here is ranked by
 // invented popularity, and nothing starts the 3D engine: a card opens its match on Watch, and Watch starts only then.
-const BROWSE = { home: { y: 0 }, matches: { y: 0 }, highlights: { y: 0 }, 'my-list': { y: 0 } };
+const BROWSE = { home: { y: 0 }, matches: { y: 0 }, highlights: { y: 0 }, 'my-list': { y: 0 }, 'my-club': { y: 0 } };
+let detailMatchId = '', detailFrom = 'matches';
 const LIB = { q: '', team: '', md: '', sort: 'md' };
 const SAVED_KEY = 'matchcast.my-list.v1';
+const CLUB_KEY = 'matchcast.my-club.v1';
+let favouriteClub = (() => { try { return localStorage.getItem(CLUB_KEY) || ''; } catch (e) { return ''; } })();
 const SAVED = new Set((() => { try { const value = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); return Array.isArray(value) ? value.filter((id) => typeof id === 'string') : []; } catch (e) { return []; } })());
 const fxTitle = (fx) => fx.home.club + ' v ' + fx.away.club;
-const fxSub = (fx) => (fx.national ? 'Synthetic squads, no recorded result' : 'Matchday ' + fx.matchday + ' · ' + fx.date);
+const fxSub = (fx) => (fx.national ? 'Synthetic squads · no result yet' : 'Matchday ' + fx.matchday + ' · ' + fx.date);
 const fxGoals = (fx) => (fx.national ? -1 : fx.score[0] + fx.score[1]);
+const fxUpcoming = (fx) => !fx.national && /^\d{4}-\d{2}-\d{2}$/.test(fx.date) && fx.date > new Date().toISOString().slice(0, 10);
 const fxCard = (fx) => {
-  const sc = fx.national ? 'vs' : fx.score.join(' – ');
+  const upcoming = fxUpcoming(fx), sc = fx.national || upcoming ? 'VS' : fx.score.join(' – ');
   const saved = SAVED.has(fx.id);
   return '<article class="match-card">'
-    + '<button type="button" class="match-open" data-fx="' + esc(fx.id) + '" aria-label="' + esc(fxTitle(fx) + '. ' + fxSub(fx) + '. Open on Watch') + '">'
-    + '<span class="match-thumb" style="--hc:' + esc(fx.home.color) + ';--ac:' + esc(fx.away.color) + '"><span class="sc">' + esc(sc) + '</span><span class="tag">' + (fx.national ? 'Synthetic squads' : 'Simulated result') + '</span></span>'
+    + '<button type="button" class="match-open" data-fx="' + esc(fx.id) + '" ' + (upcoming ? 'disabled' : '') + ' aria-label="' + esc(fxTitle(fx) + '. ' + fxSub(fx) + (upcoming ? '. Upcoming, no score available' : fx.national ? '. Start simulated match' : '. View season analysis')) + '">'
+    + '<span class="match-thumb" style="--hc:' + esc(fx.home.color) + ';--ac:' + esc(fx.away.color) + ';--cover-x:' + ((parseInt(fx.id.slice(1), 10) * 19 + 31) % 100) + '%"><span class="sc">' + esc(sc) + '</span><span class="tag">' + (upcoming ? 'UPCOMING · NO SCORE' : fx.national ? 'SIMULATED DEMO' : 'SIMULATED RESULT') + '</span></span>'
     + '<span class="mtitle">' + esc(fxTitle(fx)) + '</span><span class="mmeta">' + esc(fxSub(fx)) + '</span></button>'
     + '<button type="button" class="save-match" data-save-fx="' + esc(fx.id) + '" aria-pressed="' + String(saved) + '">' + (saved ? 'Remove from My List' : 'Add to My List') + '</button></article>';
 };
@@ -832,17 +879,18 @@ function paintHome() {
   if (!feat) { $('hero').innerHTML = ''; $('home-rows').innerHTML = ''; return; }
   const hero = $('hero');
   hero.style.setProperty('--hc', feat.home.color); hero.style.setProperty('--ac', feat.away.color);
-  hero.innerHTML = '<div class="hero-copy"><p class="kicker">Featured · ' + (feat.national ? 'synthetic squads' : 'synthetic season match') + '</p>'
+  hero.innerHTML = '<div class="hero-copy"><p class="kicker">' + (feat.national ? 'SIMULATED DEMO · NO RESULT YET' : 'SYNTHETIC SEASON ARCHIVE') + '</p>'
     + '<h2>' + esc(fxTitle(feat)) + '</h2><p class="sub">' + esc(fxSub(feat)) + ' · ' + esc(stadiumName(feat.stIndex)) + '</p>'
-    + '<div class="hero-go"><button type="button" class="btn play" data-fx="' + esc(feat.id) + '">Watch the match</button><button type="button" class="btn" data-save-fx="' + esc(feat.id) + '" aria-pressed="' + String(SAVED.has(feat.id)) + '">' + (SAVED.has(feat.id) ? 'Saved · remove' : '+ My List') + '</button><a class="btn" href="#matches">All matches</a></div></div>';
+    + '<div class="hero-go"><button type="button" class="btn play" data-fx="' + esc(feat.id) + '">' + (feat.national ? 'Start simulated match' : 'View season analysis') + '</button><button type="button" class="btn" data-save-fx="' + esc(feat.id) + '" aria-pressed="' + String(SAVED.has(feat.id)) + '">' + (SAVED.has(feat.id) ? 'Saved · remove' : '+ My List') + '</button><a class="btn" href="#matches">Browse matches</a></div></div>';
   const byDate = (a, b) => b.date.localeCompare(a.date) || b.matchday - a.matchday;
   const rows = [
-    ['Latest results', recorded.slice().sort(byDate).slice(0, 12), true],
-    ['Highest scoring', recorded.slice().sort((a, b) => fxGoals(b) - fxGoals(a) || a.matchday - b.matchday).slice(0, 12), true],
-    ['National teams', FX.filter((f) => f.national), false],
-  ].filter((r) => r[1].length);
+    ['Past matches', recorded.filter((f) => !fxUpcoming(f)).slice().sort(byDate).slice(0, 12), true],
+    ['Most goals', recorded.slice().sort((a, b) => fxGoals(b) - fxGoals(a) || a.matchday - b.matchday).slice(0, 12), true],
+    ['Upcoming', recorded.filter(fxUpcoming).sort((a, b) => a.date.localeCompare(b.date)), false],
+    ['Simulated demo', FX.filter((f) => f.national), false],
+  ];
   $('home-rows').innerHTML = rows.map(([title, list, all]) => '<section class="row" aria-label="' + esc(title) + '"><div class="row-head"><h3>' + esc(title) + '</h3>'
-    + (all ? '<a href="#matches">See all matches</a>' : '') + '</div><div class="row-track">' + list.map(fxCard).join('') + '</div></section>').join('');
+    + (all ? '<a href="#matches">See all matches</a>' : '') + '</div>' + (list.length ? '<div class="row-track">' + list.map(fxCard).join('') + '</div>' : title === 'Upcoming' ? '<p class="empty">No upcoming fixtures in this synthetic season.</p>' : '') + '</section>').filter((html) => !html.includes('aria-label="Most goals"') || FX.some((f) => !f.national)).join('');
 }
 const libHay = (fx) => [fx.home.club, fx.away.club, 'matchday ' + fx.matchday, fx.date, stadiumName(fx.stIndex), fx.national ? 'national synthetic squads' : 'simulated'].join(' ').toLowerCase();
 const LIB_SORT = {
@@ -873,10 +921,16 @@ function buildLibControls() {
     $('lib-q').value = ''; $('lib-team').value = ''; $('lib-md').value = ''; $('lib-sort').value = 'md';
     paintLibrary(); $('lib-q').focus();
   };
-  for (const id of ['v-home', 'v-matches', 'v-my-list']) $(id).addEventListener('click', (e) => {
+  for (const id of ['v-home', 'v-matches', 'v-my-list', 'v-my-club']) $(id).addEventListener('click', (e) => {
     const save = e.target.closest('[data-save-fx]'); if (save) { e.preventDefault(); e.stopPropagation(); toggleSaved(save.dataset.saveFx); return; }
     const open = e.target.closest('[data-fx]'); if (open) openMatch(open.dataset.fx);
   });
+  const clubPick = $('my-club-pick');
+  const favouriteClubs = new Map(); for (const fx of FX) if (!fx.national) { favouriteClubs.set(fx.home.key, fx.home.club); favouriteClubs.set(fx.away.key, fx.away.club); }
+  clubPick.innerHTML = '<option value="">Choose a club</option>' + [...favouriteClubs].sort((a, b) => a[1].localeCompare(b[1])).map(([k, name]) => '<option value="' + esc(k) + '">' + esc(name) + '</option>').join('');
+  if (favouriteClubs.has(favouriteClub)) clubPick.value = favouriteClub; else favouriteClub = '';
+  clubPick.onchange = () => { favouriteClub = clubPick.value; try { favouriteClub ? localStorage.setItem(CLUB_KEY, favouriteClub) : localStorage.removeItem(CLUB_KEY); } catch (e) { /* private browsing */ } paintMyClub(); };
+  $('club-history-demo').onclick = (e) => { e.preventDefault(); const national = FX.find((fx) => fx.national); if (national) setMatch(setupOf(national), national.id); location.hash = 'watch'; };
 }
 function persistSaved() { try { localStorage.setItem(SAVED_KEY, JSON.stringify([...SAVED])); return true; } catch (e) { return false; } }
 function toggleSaved(id) {
@@ -890,12 +944,61 @@ function paintSaved() {
   $('saved-empty').hidden = list.length > 0;
   $('saved-grid').hidden = list.length === 0;
 }
+function paintMyClub() {
+  const list = favouriteClub ? FX.filter((fx) => !fx.national && !fxUpcoming(fx) && (fx.home.key === favouriteClub || fx.away.key === favouriteClub)).sort((a, b) => b.date.localeCompare(a.date)) : [];
+  $('my-club-pick').value = favouriteClub;
+  $('my-club-title').textContent = favouriteClub ? 'Past matches · ' + (list[0] ? (list[0].home.key === favouriteClub ? list[0].home.club : list[0].away.club) : '') : 'Past matches';
+  $('my-club-grid').innerHTML = list.map(fxCard).join('');
+  $('my-club-empty').hidden = !!favouriteClub;
+}
+const MATCH_DATA = new Map(); let matchRequest = 0;
+function paintMatchDetail() {
+  const fx = byId(detailMatchId), box = $('match-detail');
+  if (!fx || fx.national) { box.innerHTML = '<p class="empty">This simulated demo has no archived season result. <a href="#watch">Start the demo</a>.</p>'; return; }
+  const cached = MATCH_DATA.get(fx.id);
+  if (cached) { renderMatchDetail(fx, cached); return; }
+  const request = ++matchRequest; box.innerHTML = '<p class="empty" role="status">Loading the saved season record…</p>';
+  fetch('analyst/data/' + encodeURIComponent(fx.id) + '.json').then((r) => { if (!r.ok) throw new Error('record unavailable'); return r.json(); }).then((data) => {
+    MATCH_DATA.set(fx.id, data); if (request === matchRequest && detailMatchId === fx.id && current === 'match') renderMatchDetail(fx, data);
+  }).catch(() => { if (request === matchRequest) box.innerHTML = '<p class="empty">This season record could not be loaded. <a href="#matches">Back to matches</a>.</p>'; });
+}
+function renderMatchDetail(fx, data) {
+  const box = $('match-detail'), stats = data.stats || {}, poss = stats.poss || [0, 0], total = (+poss[0] || 0) + (+poss[1] || 0);
+  const fmt = (n, digits = 0) => Number.isFinite(+n) ? (+n).toFixed(digits) : '—';
+  const pair = (key, digits = 0) => (stats[key] || [0, 0]).map((n) => fmt(n, digits)).join(' – ');
+  const h2 = esc(fx.home.club), a2 = esc(fx.away.club), score = (data.score || fx.score).join(' – ');
+  const moments = (data.events || []).filter((e) => e.type === 'goal' || e.type === 'red_card' || e.type === 'shot' && +e.xg >= 0.25 || e.type === 'insight' && e.kind === 'moment' && e.status === 'verified').slice(0, 16);
+  const rows = moments.map((e) => {
+    const team = e.team === fx.home.key ? fx.home.club : e.team === fx.away.key ? fx.away.club : '';
+    const line = e.type === 'goal' ? 'Goal · ' + (e.player || 'Scorer') + ' · ' + team : e.type === 'red_card' ? 'Red card · ' + (e.player || 'Player') + ' · ' + team : e.type === 'shot' ? 'Big chance · ' + (e.player || 'Player') + ' · ' + team + ' · ' + (+e.xg).toFixed(2) + ' xG' : e.text;
+    return '<li><time>' + fmt(e.minute, 1).replace(/\.0$/, '') + "'</time><p>" + esc(line) + '</p></li>';
+  }).join('');
+  box.innerHTML = '<div class="match-detail-cover" role="img" aria-label="Illustrative synthetic match cover, not a saved video frame" style="--hc:' + esc(fx.home.color) + ';--ac:' + esc(fx.away.color) + '"></div>'
+    + '<button type="button" class="btn back" data-match-action="back">← Back to ' + esc(detailFrom === 'my-club' ? 'My Club' : 'matches') + '</button>'
+    + '<p class="eyebrow">SYNTHETIC SEASON RECORD · ' + esc(fx.id) + '</p><h2>' + h2 + ' v ' + a2 + '</h2>'
+    + '<p class="match-summary">' + esc(fxSub(fx)) + ' · ' + esc(stadiumName(fx.stIndex)) + '</p>'
+    + '<p class="archive-note">' + h2 + ' ' + esc(score) + ' ' + a2 + ' · Simulated season result. This page uses saved match events; it is not recorded video.</p>'
+    + '<div class="match-stats" aria-label="Saved match statistics">'
+    + '<div class="match-stat"><span>Expected goals</span><b>' + esc(pair('xg', 2)) + '</b></div>'
+    + '<div class="match-stat"><span>Shots</span><b>' + esc(pair('shots')) + '</b></div>'
+    + '<div class="match-stat"><span>Passes</span><b>' + esc(pair('passes')) + '</b></div>'
+    + '<div class="match-stat"><span>Possession share*</span><b>' + esc(total ? fmt(poss[0] / total * 100) + '% – ' + fmt(poss[1] / total * 100) + '%' : '—') + '</b></div></div>'
+    + '<h3>Key moments</h3>' + (rows ? '<ol class="moment-list">' + rows + '</ol>' : '<p class="empty">No key moments were saved for this season record.</p>')
+    + '<p class="saved-note">*Possession is estimated from simulated on-ball actions. All figures are synthetic.</p>'
+    + '<div class="actions"><button type="button" class="btn play" data-match-action="simulate">Start a new simulation</button><button type="button" class="btn" data-match-action="save" aria-pressed="' + String(SAVED.has(fx.id)) + '">' + (SAVED.has(fx.id) ? 'Remove from My List' : 'Save to My List') + '</button></div>';
+  box.querySelector('[data-match-action="back"]').onclick = () => { location.hash = detailFrom === 'my-club' ? 'my-club' : 'matches'; };
+  box.querySelector('[data-match-action="simulate"]').onclick = () => { setMatch(setupOf(fx), fx.id); location.hash = 'watch'; };
+  box.querySelector('[data-match-action="save"]').onclick = () => { toggleSaved(fx.id); renderMatchDetail(fx, data); };
+}
 function paintBrowseHighlights() {
   const clips = new Map(HL.plan().map((clip) => [clip.id, clip]));
   const cards = HL.cards().filter((card) => clips.has(card.id));
   const grid = $('highlight-grid'); grid.textContent = '';
   for (const card of cards) {
     const article = document.createElement('article'); article.className = 'highlight-card';
+    const fx = byId(M.fixture), thumb = document.createElement('div'); thumb.className = 'highlight-thumb'; thumb.setAttribute('role', 'img'); thumb.setAttribute('aria-label', 'Illustrative simulated match cover, not a saved video frame');
+    if (fx) { thumb.style.setProperty('--hc', fx.home.color); thumb.style.setProperty('--ac', fx.away.color); thumb.style.setProperty('--cover-x', (card.minute * 13 % 100) + '%'); }
+    const thumbLabel = document.createElement('span'); thumbLabel.textContent = 'SIMULATED MOMENT · ' + card.minute + "'"; thumb.append(thumbLabel); article.append(thumb);
     const tag = document.createElement('span'); tag.className = 'moment'; tag.textContent = card.minute + "' · " + card.club + ' · ' + card.label;
     const title = document.createElement('h3'); title.textContent = card.title;
     const commentary = document.createElement('p'); commentary.textContent = card.commentary;
@@ -909,8 +1012,9 @@ function paintBrowseHighlights() {
 }
 function openMatch(id) {
   const fx = byId(id); if (!fx) return;
-  setMatch(setupOf(fx), fx.id);
-  location.hash = 'watch';
+  if (fx.national) { setMatch(setupOf(fx), fx.id); location.hash = 'watch'; return; }
+  detailFrom = current === 'my-club' ? 'my-club' : 'matches'; detailMatchId = fx.id;
+  location.hash = 'match/' + encodeURIComponent(fx.id);
 }
 
 // ---------------------------------------------------------------- the match bar
@@ -1541,21 +1645,23 @@ function init(list) {
   M.lang = 'en'; M.persona = M.persona || 'fan'; CM.setPersona(M.persona);
   const LANGS = window.MC_LANGS, pick = $('lang-pick');
   pick.innerHTML = LANGS.map((l) => '<option value="' + l + '" lang="' + l + '">' + window.MC_LANG_NAMES[l] + '</option>').join('');
+  const updateLangScope = () => { $('lang-sel').title = 'Match commentary and speech: ' + (window.MC_LANG_NAMES[M.lang] || M.lang) + '. Interface labels remain in English.'; };
   window.setLang = (l, from) => {
     if (!LANGS.includes(l) || (l === M.lang && from)) return;   // the selector's own click always re-syncs the views
     const changed = l !== M.lang;
     M.lang = l; try { localStorage.setItem('mc-lang', l); } catch (e) { /* storage may be blocked */ }
-    pick.value = l;
+    pick.value = l; updateLangScope();
     for (const v of ['watch', 'broadcast']) if (v !== from) post(v, { src: 'matchcast-shell', type: 'lang', lang: l });
     if (catchPicked && changed) askCatchUp();   // a recap on screen is asked again in the new language
     if (LV.enabled && from !== 'watch') LV.persona(M.persona, l);   // the api translates for the language the stream asks for
   };
   pick.onchange = (e) => window.setLang(e.target.value, null);
+  updateLangScope();
   try { const sv = localStorage.getItem('mc-lang'); if (LANGS.includes(sv) && sv !== 'en') setTimeout(() => window.setLang(sv, null), 0); } catch (e) { /* storage may be blocked */ }
   const vb = $('voice-btn'), vshow = () => {
-    vb.textContent = 'Voice: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
+    vb.textContent = 'Sound: ' + (VC.on ? 'on' : 'off'); vb.setAttribute('aria-pressed', String(VC.on));
     $('voice-src').textContent = VC.on ? (VC.source === 'azure' ? 'Azure Speech' : 'Browser voice (simulated)') + (VC.crowd ? ' · crowd bed (simulated)' : '') : '';
-    vb.title = 'Speak approved lines. Captions always show. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
+    vb.title = 'Play spoken match commentary. Captions and on-screen text stay visible when sound is off. Azure Speech voices (voices.json): ' + VC.voices.playByPlay + ', ' + VC.voices.analyst;
     post('watch', { src: 'matchcast-shell', type: 'voice-state', on: VC.on }); post('broadcast', { src: 'matchcast-shell', type: 'voice-state', on: VC.on });   // the commentary card says "Sound off" while Voice is off
   };
   const vd = $('voice-demo'), vdShow = () => { vd.hidden = !LV.enabled; };
@@ -1617,7 +1723,7 @@ function init(list) {
   paintPill(LV.status);
   renderAgents();
   $('status-btn').onclick = () => { const dlg = $('status-dlg'); STX.draw($('status-box')); if (dlg.showModal) dlg.showModal(); };
-  show(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
+  show(location.hash.slice(1) || 'home');
 }
 
 // first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.

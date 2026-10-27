@@ -50,11 +50,14 @@ test('Watch language picker: a pick sets the language, tells the shell, flips th
   const f = await openWatch(page, '?crew=1');
   await openPicker(f);
   await expect(f.locator('#mc-lang-note'), 'English needs no note').toBeHidden();
+  await expect(f.locator('#mc-lang-scope')).toHaveText('Commentary and speech only · interface labels stay in English.');
   // the shell hears the pick as the viewer's persona message (its setLang takes the language from there)
   await page.evaluate(() => { (window as any).__persona = []; window.addEventListener('message', (e) => { if (e.data && e.data.type === 'persona') (window as any).__persona.push(e.data.lang); }); });
 
   await pick(f, 'ar');
   expect(await state(f)).toBe('ar');
+  await expect(page.locator('#lang-pick')).toHaveValue('ar');
+  await expect(page.locator('#lang-sel')).toHaveAttribute('title', /العربية/);
   expect(await reachable(f, '#fan-pop .fm-l[data-l="zh-Hans"]'), 'the last language is not under another card').toEqual({ onTop: true, inside: true });
   expect(await reachable(f, '#mc-lang-note'), 'the note is not under another card').toEqual({ onTop: true, inside: true });
   // a line reads right to left when it is Arabic; a line that fell back to English stays left to right; the card chrome is not mirrored

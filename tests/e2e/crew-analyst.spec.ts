@@ -205,6 +205,7 @@ test('?crew=0: Watch still has Demo controls and the weather chip, camera preset
   await expect(f.locator('#mc-demo')).toBeVisible();
   await f.locator('#mc-demo').click();
   await expect(f.locator('#wxchip')).toBeVisible();
+  await expect(f.locator('#mc-weather-note')).toBeHidden();
   await expect(f.locator('#cams')).toHaveCount(1);
   await expect(f.locator('#cams')).toBeHidden();
 });

@@ -21,7 +21,7 @@ test('voice: captions match the spoken text; muted still captions; stale lines a
   expect(await page.evaluate(() => (window as any).__spoken.length)).toBe(0);
   // voice on: the same text is spoken
   await page.click('#voice-btn');
-  await expect(page.locator('#voice-btn')).toHaveText('Voice: on');
+  await expect(page.locator('#voice-btn')).toHaveText('Sound: on');
   await page.evaluate(() => VC.say('Thames Rovers 1–0 Coloso Ciudad.'));
   await expect.poll(() => page.evaluate(() => (window as any).__spoken)).toEqual(['Thames Rovers 1–0 Coloso Ciudad.']);
   await expect(page.locator('#vc-bar')).toHaveText('Thames Rovers 1–0 Coloso Ciudad.');

@@ -559,6 +559,11 @@ def copy_data(dst):
 
 
 def build(out_root):
+    os.makedirs(out_root + "assets", exist_ok=True)
+    cover = U + "assets/matchcast-stadium-cover.png"
+    cover_out = out_root + "assets/matchcast-stadium-cover.png"
+    if os.path.abspath(cover) != os.path.abspath(cover_out):
+        shutil.copy(cover, cover_out)
     write(out_root + "watch/index.html", build_watch())
     write(out_root + "broadcast/index.html", build_broadcast())
     write(out_root + "analyst/index.html", build_analyst())

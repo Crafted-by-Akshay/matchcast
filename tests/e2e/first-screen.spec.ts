@@ -79,10 +79,12 @@ test('Speed and names sit behind Demo controls, one click away; the camera prese
   const f = await viewFrame(page, 'watch');
   const btn = f.locator('#mc-demo');
   await expect(btn).toBeVisible();
+  await expect(btn).toHaveText('Simulation settings');
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
   await expect(f.locator('#cams')).toBeHidden();
   await expect(f.locator('#play')).toBeHidden();
   await expect(f.locator('#wxchip')).toBeHidden();               // the weather chip folds away with them
+  await expect(f.locator('#mc-weather-note')).toContainText('SIMULATED WEATHER');
   await expect(f.locator('#mc-pause')).toBeVisible();          // Pause stays one tap away while the speed group is folded (it presses the real button)
   await btn.click();
   await expect(btn).toHaveAttribute('aria-expanded', 'true');

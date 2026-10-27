@@ -18,7 +18,7 @@
   document.head.appendChild(st);
   const box = document.createElement('section');
   box.id = 'mcf'; box.setAttribute('aria-label', 'Live commentary');
-  box.innerHTML = '<div id="mcf-head"><span>Live commentary</span><button type="button" id="mcf-tog" aria-expanded="false" aria-controls="mcf-list">All lines</button></div><div id="mcf-sound" hidden>Sound is off. Click Voice: off in the top bar to hear the booth.</div><div id="mcf-booth" hidden></div><div id="mcf-top" aria-live="polite"></div><ol id="mcf-list" hidden></ol>';
+  box.innerHTML = '<div id="mcf-head"><span>Live commentary</span><button type="button" id="mcf-tog" aria-expanded="false" aria-controls="mcf-list">All lines</button></div><div id="mcf-sound" hidden>Sound is off. Turn Sound on in the top bar to hear spoken commentary; captions stay visible.</div><div id="mcf-booth" hidden></div><div id="mcf-top" aria-live="polite"></div><ol id="mcf-list" hidden></ol>';
   (document.getElementById('bc-view') || document.body).append(box);
   const top = box.querySelector('#mcf-top'), list = box.querySelector('#mcf-list'), tog = box.querySelector('#mcf-tog'), sound = box.querySelector('#mcf-sound'), booth = box.querySelector('#mcf-booth');
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);

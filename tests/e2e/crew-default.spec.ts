@@ -80,6 +80,7 @@ test('quiet first screen: on Watch only the feed picker is added; no crew panel,
   expect(await page.locator('#crew-tree').isVisible(), 'the spawn tree lives in the Agents tab').toBe(false);
   expect(await page.locator('#crew-score').isVisible()).toBe(false);
   for (const sel of ['#mc-demo', '#wxchip', '#cams', '#fan-pop']) expect(await f.locator(sel).isVisible(), sel + ' stays off the first screen').toBe(false);
+  await expect(f.locator('#mc-weather-note')).toContainText('SIMULATED WEATHER');
   // the only crew additions on screen: the feed picker, its one line box and a screen-reader-only live region
   const shown = await f.evaluate(() => [...document.querySelectorAll('[id^="mc-feed"],[id^="crew"]')].filter((e) => (e as HTMLElement).getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden').map((e) => e.id).sort());
   expect(shown.filter((id) => id !== 'mc-feeds' && id !== 'mc-feedpick' && id !== 'mc-feedlines' && id !== 'mc-feedsr')).toEqual([]);
