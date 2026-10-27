@@ -338,6 +338,50 @@ const MC_API_METRICS = ['xg'];
   }, 300);
 })();
 
+// ---- Make it yours: the mode popover says what the viewer is watching in one line. The controls below it set the choice (fanSet); this only reads them back.
+(() => {
+  const st = document.createElement('style');
+  st.textContent = '#fan-pop .fm-now{margin:2px 0 8px;font:600 12px/1.35 var(--f-body,system-ui,sans-serif);color:#8CC2FF}';
+  document.head.appendChild(st);
+  const shown = (sel) => {
+    const e = document.querySelector('#fan-pop ' + sel + '[aria-pressed="true"]');
+    if (!e) return '';
+    const c = e.cloneNode(true); c.querySelectorAll('.fm-planned').forEach((x) => x.remove());   // a Planned language reads as its name, not "Español Planned"
+    return c.textContent.trim();
+  };
+  const now = () => {
+    const mode = document.querySelector('#fan-pop .fm-b[aria-pressed="true"] b');
+    const sel = document.querySelector('#fan-pop .fm-sel');
+    const parts = [mode ? mode.textContent : ''];
+    if (FAN.mode === 'club') parts.push(shown('.fm-c'));
+    if (FAN.mode === 'player' && sel && sel.value) parts.push(sel.options[sel.selectedIndex].text.replace(/^\d+ · /, ''));
+    if (FAN.mode === 'metric') parts.push(shown('.fm-k'));
+    parts.push(shown('.fm-l'));
+    return parts.filter(Boolean).join(' · ');
+  };
+  // the picker redraws its own rows (a mode change adds a row), so the heading and the line are put back each time before they are read
+  const ensure = () => {
+    const pop = document.getElementById('fan-pop'), head = pop && pop.querySelector('.fm-h');
+    if (!head || !head.firstChild) return;
+    if (head.firstChild.textContent !== 'Make it yours') head.firstChild.textContent = 'Make it yours';   // written only when it differs, so the childList observer cannot loop
+    if (pop.querySelector('.fm-now')) return;
+    const line = document.createElement('p'); line.className = 'fm-now'; line.setAttribute('aria-live', 'polite');
+    head.after(line);
+  };
+  const draw = () => { ensure(); const el = document.querySelector('#fan-pop .fm-now'), text = now(); if (el && el.textContent !== text) el.textContent = text; };   // an unchanged line is not rewritten, so aria-live does not re-announce it
+  const go = setInterval(() => {
+    const pop = document.getElementById('fan-pop');
+    if (!pop || !pop.querySelector('.fm-h')) return;
+    clearInterval(go);
+    draw();
+    pop.addEventListener('click', () => setTimeout(draw, 0));   // the picker's handlers run first, then the line reads the new choice
+    pop.addEventListener('change', draw);
+    // the picker rebuilds the popover on open and on shell messages (childList), and a mode change flips aria-pressed.
+    // draw() writes the line only when its text changes, so this observer does not loop on its own writes
+    new MutationObserver(draw).observe(pop, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
+  }, 300);
+})();
+
 // ---- the shell's Fan / Analyst switch (UX review, finding 10) sets Watch's mode; every other mode (club, player, metric) stays in Watch's own picker.
 window.addEventListener('message', (e) => {
   const d = e.data || {};
