@@ -44,7 +44,8 @@ test('recap: Listen speaks the recap from the api voice route when Voice is on, 
   expect(await page.evaluate(() => (window as any).__said)).toEqual([]);   // Voice off: nothing is spoken
   await page.evaluate(() => Object.defineProperty(VC, 'on', { get: () => true, configurable: true }));
   await page.locator('#recap-listen').click();
-  const said = await page.evaluate(() => (window as any).__said);
+  // Voice on lets the live feed speak too (its own lines go through the same say), so only the recap's audio is checked here
+  const said = (await page.evaluate(() => (window as any).__said)).filter((s: any) => s.audio);
   expect(said).toHaveLength(1);
   expect(said[0].audio).toContain('/recap/casual/audio.mp3');
   await page.locator('#recap-close').click();
