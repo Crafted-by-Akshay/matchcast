@@ -15,7 +15,9 @@ for (const width of [1440, 600, 390]) {
     await expect(tog).toBeVisible();
     const [c, t, p] = [await chip.boundingBox(), await tog.boundingBox(), await panel.boundingBox()];
     expect(c && p, 'chip and panel have boxes').toBeTruthy();
+    expect(c!.x, 'the chip starts inside the panel').toBeGreaterThanOrEqual(p!.x - 0.5);
     expect(c!.x + c!.width, 'the chip is not clipped by the panel').toBeLessThanOrEqual(p!.x + p!.width + 0.5);
+    expect(t!.x, 'the commentary toggle starts inside the panel').toBeGreaterThanOrEqual(p!.x - 0.5);
     expect(t!.x + t!.width, 'the commentary toggle is not clipped by the panel').toBeLessThanOrEqual(p!.x + p!.width + 0.5);
     if (width === 1440) await expect(chip.locator('.mc-mode'), 'the mode label is visible on a desktop screen').toBeVisible();
   });
