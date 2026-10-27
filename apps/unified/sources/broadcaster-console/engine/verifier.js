@@ -83,7 +83,7 @@ function verifierTick(dt) {
   if (sample) {
     vRes('motion', !VER.tele && !VER.spin, VER.tele || VER.spin); VER.tele = null; VER.spin = null;
     const ref = officials.find((o) => o.role === 'ref'); const d = ref ? ref.pos2.distanceTo(bp2()) : 0; const inWay = ref && S.owner && ref.pos2.distanceTo(S.owner.pos2) < 1.2;
-    if (!R && !S.dead && Math.hypot(ball.v.x, ball.v.z) < 15) vRes('refpos', d < 40 && !inWay, inWay ? 'Referee in the ball carrier\'s path' : 'Referee ' + d.toFixed(0) + ' m from the ball');
+    if (!R && !S.dead && DM.hypot(ball.v.x, ball.v.z) < 15) vRes('refpos', d < 40 && !inWay, inWay ? 'Referee in the ball carrier\'s path' : 'Referee ' + d.toFixed(0) + ' m from the ball');
     let ov = null; const ps = players.filter((q) => !q.off && !(q.act && ['fall', 'slide', 'dive', 'celebrate', 'header'].includes(q.act.type)));
     for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) if (ps[i].pos2.distanceTo(ps[j].pos2) < 0.45) ov = surname(ps[i].name) + ' and ' + surname(ps[j].name);
     vRes('bodies', !ov, ov ? ov + ' overlapping' : '');

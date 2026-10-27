@@ -376,7 +376,7 @@ NATIONAL = [
 ]
 NATIONAL_SEED = 2026
 # The default match must show something. The venue fixture's tactics were a 5-4-1 low block for Argentina, which gave 0 to 2 shots
-# a half-time in most seeds; an open 4-3-3 balanced v 4-3-3 balanced on the same seed gives 14 shots and goals at 21' and 27' (one seed, not a calibration claim)
+# a half-time in most seeds; an open 4-3-3 balanced v 4-3-3 balanced on the same seed gives 13 shots and one goal at 34' (one seed, not a calibration claim)
 # (measured on the runner's 0.02 s step). Tactics are a fixture setting, not engine calibration. tests/e2e/lively-default.spec.ts guards it.
 NATIONAL_FORMATIONS = ("4-3-3", "4-3-3")
 NATIONAL_STYLES = ("balanced", "balanced")
