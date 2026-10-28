@@ -344,3 +344,14 @@ def test_a_club_then_a_number_must_be_that_clubs_score(match) -> None:
     assert home != away
     assert refusal(match, f"Northgate FC {away}, Harbour United {home}.", ["score"]) == "scoreline"
     assert refusal(match, f"Northgate FC {home}, Harbour United {away}.", ["score"]) is None
+
+
+def test_engine_context_is_a_fact_the_model_may_cite(match) -> None:
+    model = ask_model("The weather is rain, 14°C.", ["engine:weather"])
+    flow = build(match, answer_model=model)
+    run(flow.ingest(match["events"]))
+    result = run(
+        flow.ask("What is the weather like?", "casual", engine_context={"weather": "rain, 14°C"})
+    )
+    assert result.mode == "live" and result.answer == "The weather is rain, 14°C."
+    assert facts_of(model.calls[-1]["user"])["engine:weather"] == "weather now: rain, 14°C"

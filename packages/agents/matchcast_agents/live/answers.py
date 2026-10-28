@@ -392,10 +392,21 @@ class LiveAnswers:
             return None
 
     async def ask(
-        self, ctx: MatchContext, question: str, persona: str
+        self,
+        ctx: MatchContext,
+        question: str,
+        persona: str,
+        engine_context: dict[str, str] | None = None,
     ) -> tuple[AskResult | None, str]:
-        """(answer, "") when the model's answer passes its checks, else (None, the reason)."""
+        """(answer, "") when the model's answer passes its checks, else (None, the reason).
+
+        ``engine_context`` is the 3D view's weather, energy and tactics right now. It is sent as
+        facts the model may cite (``engine:<name>``), so those numbers pass the same checks."""
         sheet = fact_sheet(ctx)
+        sheet["facts"] += [
+            {"id": f"engine:{name}", "text": f"{name} now: {text}"}
+            for name, text in (engine_context or {}).items()
+        ]
         texts = {f["id"]: f["text"] for f in sheet["facts"]}
         limit = WORD_LIMIT.get(persona, 80)
         answer = await self._call(

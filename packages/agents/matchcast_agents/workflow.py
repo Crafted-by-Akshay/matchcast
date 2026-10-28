@@ -1230,7 +1230,12 @@ class MatchWorkflow:
     # ---- ask the match (AGT-16) ---------------------------------------------------------
 
     async def ask(
-        self, question: str, persona: str = "casual", assistant: Any = None, surface: str = "ask"
+        self,
+        question: str,
+        persona: str = "casual",
+        assistant: Any = None,
+        surface: str = "ask",
+        engine_context: dict[str, str] | None = None,
     ) -> Any:
         """Answer one fan question from the match, with citations: the model when it passes its
         checks, else the rules Assistant over the match tools and the knowledge base. The Broadcast
@@ -1246,7 +1251,9 @@ class MatchWorkflow:
         # lock while the agents write, and a viewer must not wait behind it (ADR-0018).
         result, rejected = None, ""
         if assistant is None and self._answers is not None and surface == "ask":
-            result, rejected = await self._answers.ask(self._ctx().as_of(), question, persona)
+            result, rejected = await self._answers.ask(
+                self._ctx().as_of(), question, persona, engine_context or {}
+            )
             if result is not None and not (await self.safety.analyze(result.answer)).allowed:
                 self._audit("system", "content-safety", "safety_blocked", "ask",
                             {"source": self.safety.source, "kind": "unsafe_content"})  # fmt: skip

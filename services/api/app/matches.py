@@ -75,6 +75,7 @@ from app.voice import (
 
 TENANT = "demo"
 HEARTBEAT_S = 15
+ENGINE_CONTEXT_CHARS = 200  # one engine fact, as the Watch view sends it
 ASK_PER_MINUTE = 20  # Copilot questions per browser session; a judge's quick run stays under it
 TALK_PER_MINUTE = 20  # player and producer replies per browser session, a budget of their own
 ASK_PER_IP_MINUTE = 60  # asks and talks from one address, whatever session ids it sends
@@ -174,6 +175,8 @@ class AskBody(BaseModel):
     # ADR-0023: the feed languages, the same as LANGUAGES in matchcast_agents.translate
     lang: Literal["en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans"] = "en"
     surface: Literal["ask", "broadcast"] = "ask"
+    # the 3D view's conditions right now (weather, energy, tactics), as short plain text; optional
+    engine_context: dict[Literal["weather", "energy", "tactics"], str] = Field(default_factory=dict)
 
 
 class DrillBody(BaseModel):
@@ -1470,7 +1473,10 @@ def build_router(registry: Registry) -> APIRouter:
             )
         registry.allow_question(request)
         try:
-            result = await flow.ask(body.question, body.persona, surface=body.surface)
+            context = {k: v[:ENGINE_CONTEXT_CHARS] for k, v in body.engine_context.items()}
+            result = await flow.ask(
+                body.question, body.persona, surface=body.surface, engine_context=context
+            )
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
         reply: dict[str, Any] = {
