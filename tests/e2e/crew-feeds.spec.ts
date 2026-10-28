@@ -194,3 +194,19 @@ test('feed picker: a saved choice is restored, and the arrow keys step from it',
   await expect(radios.nth(4)).toHaveAttribute('aria-checked', 'true');
   await expect(radios.nth(4)).toBeFocused();
 });
+
+test('feed picker: when the shell drops the live feed in use, the picker falls back to a live feed and tells the shell', async ({ page }) => {
+  test.setTimeout(300_000);
+  const f = await open(page);
+  const group = f.getByRole('radiogroup', { name: 'Feed' });
+  await expect(group).toBeVisible({ timeout: 60_000 });
+  const radios = group.getByRole('radio');
+  await radios.nth(3).click();   // Catch me up, live until the shell says otherwise
+  await expect(radios.nth(3)).toHaveAttribute('aria-checked', 'true');
+  await page.evaluate(() => post('watch', { src: 'matchcast-shell', type: 'crew-feeds', lang: 'en', simulated: true, feeds: {}, defs: [
+    { key: 'casual', label: 'Casual', live: true }, { key: 'analyst', label: 'Analyst', live: true },
+    { key: 'audio_description', label: 'Audio description', live: false }, { key: 'catch_me_up', label: 'Catch me up', live: false },
+  ] }));
+  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(3)).toHaveAttribute('aria-checked', 'false');
+});
