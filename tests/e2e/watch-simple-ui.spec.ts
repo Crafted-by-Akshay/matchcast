@@ -19,9 +19,9 @@ test('Watch keeps one live caption, the six-feed picker and a focused Copilot', 
 
   const audience = f.getByRole('radiogroup', { name: 'Feed' });
   await expect(audience.getByRole('radio')).toHaveCount(6);   // all six feeds are live and selectable (AB#450, #482)
-  await expect(audience.getByRole('radio').nth(0)).toHaveText('Fan');
+  await expect(audience.getByRole('radio').nth(0)).toHaveText('Casual');
   await expect(audience.getByRole('radio').nth(1)).toHaveText('Analyst');
-  await audience.getByRole('radio', { name: 'Fan' }).click();
+  await audience.getByRole('radio', { name: 'Casual' }).click();
   await expect.poll(() => f.evaluate(() => document.body.classList.contains('fm-casual'))).toBe(true);
   await audience.getByRole('radio', { name: 'Analyst' }).click();
   await expect.poll(() => f.evaluate(() => !document.body.classList.contains('fm-casual'))).toBe(true);
