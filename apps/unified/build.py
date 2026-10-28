@@ -159,6 +159,20 @@ def build_watch():
     main = sub(main, "'./players.json'", "'../shared/players.json'", "watch players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
+    # the Watch Copilot's typed and suggested questions go to the api through the shell (embed/copilot-shell.js), with the
+    # 3D view's weather, energy and tactics; the rules text is only the fallback when the api does not answer
+    main = sub(
+        main,
+        "  if (!typed || !SAMPLE) { chatAdd('ana', ruleAnswer(q)); return; }",
+        "  if (window.mcShellAsk) {\n"
+        "    const out = chatAdd('ai', 'Thinking…');\n"
+        "    const text = await window.mcShellAsk(q, { weather: WX[ENV.wx].label + ', ' + Math.round(ENV.temp) + '°C, wind ' + Math.round(ENV.wind * 3.6) + ' km/h', energy: TEAMS.map((T, ti) => T.key + ' ' + Math.round(teamStamina(ti) * 100) + '%').join(', '), tactics: TEAMS.map((T) => T.key + ' ' + T.tac.form + ' ' + STYLES[T.tac.style].label).join(', ') });\n"
+        "    if (text) { out.textContent = text; return; }\n"
+        "    out.parentElement.querySelector('span').textContent = '📊 Analyst'; out.textContent = ruleAnswer(q); return;\n"
+        "  }\n"
+        "  if (!typed || !SAMPLE) { chatAdd('ana', ruleAnswer(q)); return; }",
+        "watch copilot through the api",
+    )
     # the possession bar read 100-0 at kick-off: the first touch owns the ball for a frame or two before the clock has run
     main = sub(main, "return a ? Math.round(STATS.poss[ti] / a * 100) : 50;", "return a >= 5 ? Math.round(STATS.poss[ti] / a * 100) : 50;", "watch possession before any play")
     main = sub(main, LANG_OLD, LANG_NEW, "watch language labels")
@@ -216,6 +230,8 @@ def build_watch():
         + r(EMB + "langpick.js")   # before watch.js: its fanSet wrapper and the load-time wiring then see the replaced language list
         + "\n"
         + r(EMB + "watch.js")
+        + "\n"
+        + r(EMB + "copilot-shell.js")
         + "\n"
         + r(EMB + "focus.js")
         + "\n"
