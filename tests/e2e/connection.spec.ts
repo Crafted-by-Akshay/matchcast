@@ -85,6 +85,19 @@ test('warming: never reads Offline, shows seconds of the warm-up, then Rules fal
   expect(errs).toEqual([]); api.server.close();
 });
 
+test('warming on a browse page reads Starting…, then counts once the viewer is on another page', async ({ page }) => {
+  const api = await mock('error'); const errs = collectErrors(page);
+  await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api.url) + ';window.MATCHCAST_WARM_MS=6000;' }));
+  await page.goto('/index.html#home', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
+  await page.evaluate(() => { AG.reset('k1', { hk: 'thr', ak: 'cco', home: 'Thames Rovers', away: 'Coloso Ciudad' }); LV.begin('k1', { teams: ['thr', 'cco'], players: [] }); });
+  await expect(pill(page)).toHaveText('Starting…', { timeout: 5_000 });
+  await page.evaluate(() => show('analyst'));
+  await expect(pill(page)).toHaveText(/Warming up the match engine · [0-6] s of up to 6/, { timeout: 5_000 });
+  await expect(pill(page)).toHaveText('Rules fallback', { timeout: 20_000 });
+  expect(errs).toEqual([]); api.server.close();
+});
+
 test('offline: the redundant header badge is hidden and makes no api call', async ({ page }) => {
   const errs = collectErrors(page);
   await drive(page, '');
