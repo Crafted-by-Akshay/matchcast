@@ -7,7 +7,8 @@ const VC = (() => {
   let voices = { playByPlay: 'en-GB-RyanNeural', analyst: 'en-GB-SoniaNeural', es: 'es-ES-ElviraNeural', hi: 'hi-IN-SwaraNeural', pt: 'pt-BR-FranciscaNeural' };
   let gen = 0, on = false, queue = [], busy = false, bar = null, hide = 0, source = 'browser', playing = null, onChange = () => {};
   const spoken = new Set();   // one voice line per claim, however often its card is redrawn
-  try { on = localStorage.getItem(KEY) === 'on'; } catch (e) { /* storage may be blocked */ }
+  // Voice is on unless the viewer turned it off. A browser lets speech start only after a click or key press, so lines before the first one are captioned, and speech starts with it
+  try { on = localStorage.getItem(KEY) !== 'off'; } catch (e) { on = true; /* storage may be blocked: on is the default */ }
   const load = () => fetch('voices.json').then((r) => r.ok ? r.json() : null).then((j) => { if (j) voices = Object.assign(voices, j); }).catch(() => {});
   const el = () => {
     if (bar) return bar;
@@ -81,6 +82,9 @@ const VC = (() => {
   };
   const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } const synth = window.speechSynthesis; if (typeof synth?.cancel === 'function') synth.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
   // a new match from Watch: the lines queued or speaking, and the caption, belong to the match before. Their audio stops here; the next line is the new match's (FIX-01)
+  // Voice is on by default, so the bed starts with the first click or key press: the first gesture the browser lets audio start on
+  const crowdOnGesture = () => { if (on) crowdStart(); removeEventListener('pointerdown', crowdOnGesture); removeEventListener('keydown', crowdOnGesture); };
+  addEventListener('pointerdown', crowdOnGesture); addEventListener('keydown', crowdOnGesture);
   const clear = () => { gen++; queue = []; busy = false; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } const synth = window.speechSynthesis; if (typeof synth?.cancel === 'function') synth.cancel(); clearTimeout(hide); if (bar) bar.hidden = true; onChange(); };
   return { load, say, set, clear, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get level() { return crowd ? crowd.g.gain.value : 0; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();

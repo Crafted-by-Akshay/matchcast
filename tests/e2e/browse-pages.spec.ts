@@ -49,7 +49,7 @@ test('Home has a stadium cover, an explicitly simulated demo, and no invented up
   await page.goto('/index.html#home', { waitUntil: 'domcontentloaded' });
   await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
   const image = await page.locator('#hero').evaluate((el) => getComputedStyle(el).backgroundImage);
-  expect(image).toContain('matchcast-stadium-cover.png');
+  expect(image).toContain('matchcast-stadium-cover.jpg');
   await expect(page.locator('#hero .kicker')).toContainText('SIMULATED DEMO · NO RESULT YET');
   await expect(page.locator('#hero .btn.play')).toHaveText('Start simulated match');
   await expect(page.locator('.row[aria-label="Upcoming"]')).toContainText('No upcoming fixtures in this synthetic season.');
@@ -74,7 +74,7 @@ test('Highlights never offers playback for moments without a saved clip', async 
   await page.locator('#tab-highlights').click();
   await expect(page.locator('#v-highlights .highlight-card')).toHaveCount(1);
   await expect(page.locator('.highlight-thumb')).toHaveAttribute('aria-label', /not a saved video frame/);
-  expect(await page.locator('.highlight-thumb').evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('matchcast-stadium-cover.png');
+  expect(await page.locator('.highlight-thumb').evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('matchcast-stadium-cover.jpg');
   await expect(page.locator('#v-highlights button')).toContainText('Replay in 3D');
   expect(page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(false);
 });

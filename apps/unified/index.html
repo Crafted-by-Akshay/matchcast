@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<!-- the Home cover is the first thing a viewer sees: fetch it with the shell, ahead of the CSS that paints it (about 170 KB, was a 2.1 MB PNG) -->
+<link rel="preload" href="assets/matchcast-stadium-cover.jpg" as="image" type="image/jpeg" fetchpriority="high">
 <!-- warm the 3D engine while the shell paints: Watch and Broadcast both import it; keep the version equal to CDN in build.py (EXP-15) -->
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" crossorigin>
 <title>MatchCast Console</title>
@@ -90,7 +92,7 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .browse-head p:last-child{margin:8px 0 0;color:var(--muted);font-size:var(--type-sm)}
 .browse h2,.browse h3{margin:0;letter-spacing:.01em}
 .browse .sub{color:var(--muted);font-size:13px;margin:6px 0 0}
-.hero{position:relative;isolation:isolate;min-height:clamp(360px,42vw,540px);display:flex;align-items:flex-end;padding:clamp(24px,5vw,64px) max(var(--gut),calc((100vw - 1380px)/2));overflow:hidden;border-bottom:1px solid var(--line);background-image:linear-gradient(90deg,rgba(3,8,8,.97) 0%,rgba(3,8,8,.78) 42%,rgba(3,8,8,.16) 100%),linear-gradient(0deg,rgba(3,8,8,.42),transparent 52%),url('assets/matchcast-stadium-cover.png'),linear-gradient(125deg,var(--hc,#27573D) 0%,var(--hc,#27573D) 46%,var(--ac,#6B3C32) 54%,var(--ac,#6B3C32) 100%);background-size:cover;background-position:center 42%}
+.hero{position:relative;isolation:isolate;min-height:clamp(360px,42vw,540px);display:flex;align-items:flex-end;padding:clamp(24px,5vw,64px) max(var(--gut),calc((100vw - 1380px)/2));overflow:hidden;border-bottom:1px solid var(--line);background-image:linear-gradient(90deg,rgba(3,8,8,.97) 0%,rgba(3,8,8,.78) 42%,rgba(3,8,8,.16) 100%),linear-gradient(0deg,rgba(3,8,8,.42),transparent 52%),url('assets/matchcast-stadium-cover.jpg'),linear-gradient(125deg,var(--hc,#27573D) 0%,var(--hc,#27573D) 46%,var(--ac,#6B3C32) 54%,var(--ac,#6B3C32) 100%);background-size:cover;background-position:center 42%}
 .hero::before{content:"";position:absolute;z-index:-1;inset:8% 4% -34% 54%;border:1px solid rgba(255,255,255,.22);border-radius:50%;box-shadow:0 0 0 38px rgba(255,255,255,.035),0 0 0 76px rgba(255,255,255,.025)}
 .hero::after{content:"";position:absolute;z-index:-1;inset:0;background:repeating-linear-gradient(90deg,transparent 0 9%,rgba(255,255,255,.025) 9% 18%);mask-image:linear-gradient(90deg,transparent 25%,#000 100%)}
 .hero-copy{position:relative;max-width:620px;display:grid;gap:10px}
@@ -110,7 +112,7 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .row-track{display:grid;grid-auto-flow:column;grid-auto-columns:clamp(238px,24vw,330px);gap:16px;overflow-x:auto;scroll-snap-type:x proximity;padding:5px 2px 16px;scrollbar-width:thin}
 .match-card{display:grid;gap:9px;min-width:0;scroll-snap-align:start}
 .match-open{display:grid;gap:9px;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;border-radius:var(--radius-md);font:inherit}
-.match-thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:var(--radius-md);overflow:hidden;border:1px solid rgba(210,235,220,.2);background-image:linear-gradient(180deg,rgba(3,9,8,.12),rgba(3,9,8,.78)),linear-gradient(110deg,color-mix(in srgb,var(--hc,#27573D) 62%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 62%,transparent)),url('assets/matchcast-stadium-cover.png');background-size:cover;background-position:var(--cover-x,50%) 52%;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.match-thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:var(--radius-md);overflow:hidden;border:1px solid rgba(210,235,220,.2);background-image:linear-gradient(180deg,rgba(3,9,8,.12),rgba(3,9,8,.78)),linear-gradient(110deg,color-mix(in srgb,var(--hc,#27573D) 62%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 62%,transparent)),url('assets/matchcast-stadium-cover.jpg');background-size:cover;background-position:var(--cover-x,50%) 52%;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
 .match-thumb::before{content:"";position:absolute;inset:12% 19%;border:1px solid rgba(255,255,255,.24);border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
 .match-thumb::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,13,9,.03) 25%,rgba(4,13,9,.72) 100%)}
 .match-card:hover .match-thumb,.match-open:focus-visible .match-thumb{transform:translateY(-3px) scale(1.015);box-shadow:0 12px 28px rgba(0,0,0,.4);border-color:rgba(210,235,220,.55)}
@@ -160,7 +162,7 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .club-ask-answer[hidden]{display:none}.club-ask-answer p{margin:0}.club-ask-answer .source{margin-top:8px;color:var(--muted);font-size:12px}
 .club-label{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:var(--type-sm);font-weight:700}
 .match-detail{max-width:1100px;margin:0 auto;padding:clamp(18px,4vw,48px) var(--gut)}
-.match-detail-cover{aspect-ratio:16/7;max-height:420px;margin:0 0 24px;border:1px solid var(--line);border-radius:var(--radius-lg);background-image:linear-gradient(90deg,rgba(3,8,8,.68),rgba(3,8,8,.03)),linear-gradient(120deg,color-mix(in srgb,var(--hc,#27573D) 52%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 52%,transparent)),url('assets/matchcast-stadium-cover.png');background-size:cover;background-position:center 48%}
+.match-detail-cover{aspect-ratio:16/7;max-height:420px;margin:0 0 24px;border:1px solid var(--line);border-radius:var(--radius-lg);background-image:linear-gradient(90deg,rgba(3,8,8,.68),rgba(3,8,8,.03)),linear-gradient(120deg,color-mix(in srgb,var(--hc,#27573D) 52%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 52%,transparent)),url('assets/matchcast-stadium-cover.jpg');background-size:cover;background-position:center 48%}
 .match-detail .back{margin-bottom:22px}
 .match-detail h2{font-size:clamp(28px,5vw,54px);line-height:1.05;letter-spacing:-.035em;margin:4px 0 8px}
 .match-detail .match-summary{color:var(--muted);margin:0 0 18px}
@@ -173,7 +175,7 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .moment-list time{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}.moment-list p{margin:0;line-height:1.45}.match-detail .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 .highlight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px;max-width:1412px;margin:0 auto;padding:22px var(--gut)}
 .highlight-card{display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:var(--radius-md);background:linear-gradient(145deg,rgba(255,255,255,.035),transparent 45%),var(--bg2);min-width:0}
-.highlight-thumb{position:relative;aspect-ratio:16/9;margin:-16px -16px 2px;border-radius:var(--radius-md) var(--radius-md) 0 0;overflow:hidden;background-image:linear-gradient(90deg,rgba(4,12,11,.78),rgba(4,12,11,.08)),linear-gradient(130deg,color-mix(in srgb,var(--hc,#27573D) 60%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 55%,transparent)),url('assets/matchcast-stadium-cover.png');background-size:cover;background-position:var(--cover-x,50%) 48%}
+.highlight-thumb{position:relative;aspect-ratio:16/9;margin:-16px -16px 2px;border-radius:var(--radius-md) var(--radius-md) 0 0;overflow:hidden;background-image:linear-gradient(90deg,rgba(4,12,11,.78),rgba(4,12,11,.08)),linear-gradient(130deg,color-mix(in srgb,var(--hc,#27573D) 60%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 55%,transparent)),url('assets/matchcast-stadium-cover.jpg');background-size:cover;background-position:var(--cover-x,50%) 48%}
 .highlight-thumb span{position:absolute;left:14px;bottom:12px;color:white;font-size:12px;font-weight:800;letter-spacing:.08em;text-shadow:0 2px 8px #000}
 .highlight-card h3{font-size:var(--type-lg)}
 .highlight-card p{margin:0;color:var(--muted);line-height:1.5}
@@ -424,6 +426,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
       <p class="menu-label">Tools</p>
       <button type="button" id="tab-analyst" data-view="analyst" class="sec" title="Analyze: the season analysis console (4)">Analyze</button>
       <button type="button" id="tab-broadcast" data-view="broadcast" class="sec" title="Production Studio: the broadcast desk (5)">Production Studio</button>
+      <button type="button" id="more-agents" data-view="agents" class="sec" title="How the AI works: the agents, their spawn tree, the Verifier and the live scoreboard">How the AI works</button>
       <hr>
       <p class="menu-label">Help & status</p>
       <button type="button" class="pill sec" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
@@ -465,6 +468,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <span class="chip" id="sync">In sync</span>
     <span class="chip" id="src">Analyst: season run</span>
     <button type="button" class="chip" id="bc-toggle" aria-pressed="false" hidden title="Show the Broadcast desk beside the match (loads a second 3D view)">Broadcast desk beside</button>
+    <button type="button" class="chip" id="new-match" title="Start a new match with a fresh seed: the play, weather and pauses differ from the default fixture">New match</button>
   </div>
 </section>
 
@@ -649,7 +653,8 @@ const $ = (id) => document.getElementById(id);
 const M = { fixture: null, setup: null };                // the shared match
 const FR = {};                                           // view -> { el, key, ready, live, sent }
 let FX = [], STADIUM = {}, current = 'home', pendingImports = [];
-let LIVE_LAST = null;   // the last Watch start (setup and roster), for an Analyst console that opens mid-match
+let LIVE_LAST = null;   // the last Watch start (setup and roster), for an Analyst console
+let repaintPill = null;   // the header pill's painter, set once it exists: show() repaints a warm-up when the page changes that opens mid-match
 
 const keyOf = (s) => KEYS.map((k) => s[k]).join('|');
 const setupOf = (fx) => ({ h: fx.home.key, a: fx.away.key, seed: fx.setup.seed, st: fx.stIndex, month: fx.setup.month, kick: fx.setup.kickoff, half: fx.setup.half,
@@ -853,8 +858,10 @@ function show(view) {
   if (route.startsWith('match/')) { detailMatchId = decodeURIComponent(route.slice(6)); view = 'match'; }
   if (!PANES.includes(view)) view = 'home';
   for (const b of Object.keys(BROWSE)) if (!$('v-' + b).hidden) BROWSE[b].y = $('v-' + b).scrollTop;   // a browse page keeps its scroll when the view changes
+  const wasBrowse = !!BROWSE[current];
   current = view;
   document.body.dataset.view = view;   // CSS hides the match bar and the five-stage strip on the catalog pages
+  if (repaintPill && LV.status === 'warming' && wasBrowse !== !!BROWSE[view]) repaintPill(LV.status, true);   // the warm-up pill follows the page: quiet on the browse pages, counting elsewhere
   if (view !== 'watch') { hlStop(); $('hl').hidden = true; $('hl-open').hidden = true; } else paintHighlights();   // the panel and its button belong to Watch after full time; coming back to Watch shows them again
   if (!shownViews(view).includes('watch') && window.callLeave) window.callLeave();   // Watch beside Broadcast (SPLIT_VIEWS) keeps its call
   const on = shownViews(view);
@@ -1123,6 +1130,11 @@ function paintStory() {
   const q = new URLSearchParams(location.search); $('st-demo').hidden = q.get('speed') === '4';
   q.set('seed', '2026'); q.set('speed', '4'); $('st-demo').setAttribute('href', '?' + q.toString() + '#watch');   // keeps other query switches such as tour or seedBadClaim   // already the demo pace
 }
+// New match: the same fixture with a fresh seed (the seed is read from the URL at load, see the seed switch below)
+$('new-match').onclick = () => {
+  const q = new URLSearchParams(location.search); q.set('seed', String(Math.floor(Math.random() * 1e9)));
+  location.href = '?' + q.toString() + '#watch';
+};
 function setPersona(mode) {
   try { const k = 'mcx-mode', o = JSON.parse(localStorage.getItem(k) || 'null') || {}; o.mode = mode; localStorage.setItem(k, JSON.stringify(o)); } catch (e) { /* storage may be blocked; the live message still works */ }
   M.persona = mode; paintStory();
@@ -1729,9 +1741,10 @@ function init(list) {
   };
   AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); postQueue(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'This match has no checked claim from the api (it did not answer, its stream dropped, or it is on rules), so the in-page rules agents are producing the lines. The Foundry chip on the Agents tab reports the api\'s deployment, which can be live while this match is on rules.', 'warn'],
-    warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 90 s for the first batch, then up to 60 s for the first claim)', 'warn'], offline: ['Demo mode', 'This is a synthetic demo. The live agent service is not connected, so in-page rules generate the commentary.', 'demo'] };
+    warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 90 s for the first batch, then up to 60 s for the first claim)', 'warn'], starting: ['Starting…', 'The match engine starts when Watch loads a match', ''], offline: ['Demo mode', 'This is a synthetic demo. The live agent service is not connected, so in-page rules generate the commentary.', 'demo'] };
   const MATCHCAST_API_ON = () => !!(window.MATCHCAST_API || '').replace(/\/$/, '');
   let warmTick = null;   // while warming, count the seconds so a cold start shows progress; the api's own limit is MATCHCAST_WARM_MS (90 s), then the rules agents take over
+  let warmT0 = 0;        // when this warm-up began: a repaint keeps it, a new match restarts it, and the counter stops at the limit
   // the Foundry chip and the provenance line say what /v1/status says (live, simulated, planned, unavailable); with no api they say not connected
   let fSeq = 0, fAt = 0;
   const paintFoundry = async () => {
@@ -1743,19 +1756,26 @@ function init(list) {
     const chip = $('ag-foundry'); chip.textContent = 'Foundry: ' + (MATCHCAST_API_ON() ? (dep ? dep.status : 'status unavailable') : 'not connected');
     chip.title = dep ? dep.detail + ' (the api\'s deployment; the pill in the header says what this match is using)' : ''; chip.className = 'chip' + (ok ? '' : ' warn'); renderAgents();
   };
-  const paintPill = (s) => {
+  const warmLim = () => Math.round((window.MATCHCAST_WARM_MS || 90000) / 1000);
+  const warmSecs = () => Math.min(warmLim(), Math.round((Date.now() - warmT0) / 1000));
+  const warmText = () => PILL.warming[0] + ' · ' + warmSecs() + ' s' + (warmSecs() < warmLim() ? ' of up to ' + warmLim() : '');
+  // keep = a repaint of the same warm-up (the page changed under it): the counter goes on from warmT0
+  const paintPill = (s, keep) => {
     paintFoundry();
     clearInterval(warmTick); warmTick = null;
-    if (s === 'warming') {
-      const lim = Math.round((window.MATCHCAST_WARM_MS || 90000) / 1000), t0 = Date.now(), base = PILL.warming[0], p = $('api-pill');
-      const tick = () => { const n = Math.round((Date.now() - t0) / 1000); p.textContent = base + ' · ' + n + ' s' + (n < lim ? ' of up to ' + lim : ''); };
-      warmTick = setInterval(tick, 1000);
-    }
-    paintPillNow(s);
+    if (s !== 'warming') warmT0 = 0; else if (!keep || !warmT0) warmT0 = Date.now();
+    // the browse pages never show the warm-up: nothing there waits on the engine, and Watch's own load can start the clock before the viewer gets there
+    const quiet = s === 'warming' && !!BROWSE[current];
+    paintPillNow(s, quiet ? 'starting' : s);
     renderAgents();   // the Agents tab follows the api's status
-    if (s === 'warming') $('api-pill').textContent = PILL.warming[0] + ' · 0 s of up to ' + Math.round((window.MATCHCAST_WARM_MS || 90000) / 1000);
+    if (s === 'warming' && !quiet) {
+      const p = $('api-pill');
+      p.textContent = warmText();
+      warmTick = setInterval(() => { p.textContent = warmText(); if (warmSecs() >= warmLim()) { clearInterval(warmTick); warmTick = null; } }, 1000);   // the counter stops at the limit
+    }
   };
-  const paintPillNow = (s) => { const p = $('api-pill'), x = PILL[s]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
+  repaintPill = paintPill;
+  const paintPillNow = (s, look = s) => { const p = $('api-pill'), x = PILL[look]; p.textContent = x[0]; p.title = x[1]; p.className = 'pill ' + x[2]; M.agents = { src: 'matchcast-shell', type: 'agents', state: s, label: x[0], hint: x[1] }; post('broadcast', M.agents); };   // Broadcast shows where its lines come from
   const boothState = (j) => { boothLast = { src: 'matchcast-shell', type: 'booth-state', ready: !j || !!j.ready, reason: (j && j.reason) || '' }; post('watch', boothLast); post('broadcast', boothLast); };   // no answer yet (null): the card shows nothing
   // event to on air, measured in this page: hidden until the api publishes a line for events this page sent (live.js measure)
   const paintLatency = (l) => { const p = $('lat-pill'); p.hidden = !l.n; if (l.n) p.textContent = 'Event → on air ' + (l.median_ms / 1000).toFixed(1) + ' s' + (l.n < 5 ? ' (' + l.n + ' line' + (l.n === 1 ? '' : 's') + ')' : ''); };

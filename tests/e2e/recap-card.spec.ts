@@ -28,7 +28,7 @@ test('recap: Watch shows the casual recap and Broadcast the broadcast one, with 
   await expect(card).toBeVisible();
   await expect(card).toContainText('casual recap');
   await expect(page.locator('#recap-m')).toContainText('3 verified sentences, Rules fallback');
-  await page.keyboard.press('3');
+  await page.keyboard.press('5');   // 5 is Broadcast on main's view keys (3 is Watch)
   await expect(card).toContainText('broadcast recap');
   expect(await page.evaluate(() => (window as any).__asked.sort())).toEqual(['broadcast', 'casual']);
   expect(errs).toEqual([]);
@@ -41,7 +41,8 @@ test('recap: Listen speaks the recap from the api voice route when Voice is on, 
   await expect(page.locator('#recap')).toBeVisible();
   await page.evaluate(() => Object.defineProperty(VC, 'on', { get: () => false, configurable: true }));
   await page.locator('#recap-listen').click();
-  expect(await page.evaluate(() => (window as any).__said)).toEqual([]);   // Voice off: nothing is spoken
+  // Voice off: no recap audio is spoken (the live feed may still say its own lines while Voice was on by default)
+  expect((await page.evaluate(() => (window as any).__said)).filter((x: any) => x.audio)).toEqual([]);
   await page.evaluate(() => Object.defineProperty(VC, 'on', { get: () => true, configurable: true }));
   await page.locator('#recap-listen').click();
   // Voice on lets the live feed speak too (its own lines go through the same say), so only the recap's audio is checked here

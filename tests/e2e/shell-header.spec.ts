@@ -16,7 +16,7 @@ for (const width of [1280, 1440]) {
     expect(m.word.sw, 'the wordmark is not clipped').toBeLessThanOrEqual(m.word.cw + 1);
     expect(m.sw.sw, 'navigation fits without horizontal scrolling').toBeLessThanOrEqual(m.sw.cw + 1);
     expect(m.primary).toEqual(['Home', 'Matches', 'Watch', 'My Club']);
-    expect(m.tools).toEqual(['Highlights', 'My List', 'Analyze', 'Production Studio']);
+    expect(m.tools).toEqual(['Highlights', 'My List', 'Analyze', 'Production Studio', 'How the AI works']);
     expect(m.utilities).toEqual(['Tour', 'Status & service details']);
     await expect(page.locator('#tab-agents,#crew-btn')).toHaveCount(0);
     await page.locator('#more-toggle').click();
@@ -33,4 +33,13 @@ test('MatchCast mark returns to Home from any browse page', async ({ page }) => 
   await page.locator('.top .brand').click();
   await expect(page).toHaveURL(/#home$/);
   await expect(page.locator('#v-home')).toBeVisible();
+});
+
+test('More lists How the AI works, and it opens the agents view', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/index.html#home', { waitUntil: 'domcontentloaded' });
+  await page.locator('#more-toggle').click();
+  await page.locator('#more-agents').click();
+  await expect(page).toHaveURL(/#agents$/);
+  await expect(page.locator('#v-agents')).toBeVisible();
 });
