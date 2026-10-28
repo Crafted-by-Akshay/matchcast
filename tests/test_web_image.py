@@ -15,5 +15,5 @@ def test_dockerfile_copies_every_local_script_and_data_file_the_shell_loads() ->
     scripts = set(re.findall(r'<script src="([^"/:]+)"', shell))
     assert scripts, "index.html should load local scripts"
     assert scripts <= copied, f"not in the image: {sorted(scripts - copied)}"
-    for name in ("voices.json", "watch", "broadcast", "analyst", "shared"):
+    for name in ("voices.json", "assets", "watch", "broadcast", "analyst", "shared"):
         assert name in copied, f"{name} is loaded by the shell but not copied"
