@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { openShell, ready, viewFrame } from './helpers';
+import { openShell, openProductionTools, ready, viewFrame } from './helpers';
 
 // The Broadcast desk's producer section, driven by a real line: the Verifier rejects a wrong number and repairs it, the line waits for a person, Approve airs it through the shell, and the event-to-air time comes from the shell's own air message.
 declare const AG: any;
@@ -15,6 +15,7 @@ test('Broadcast asks for approval: a repaired line waits, Approve airs it, and t
   test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
+  await openProductionTools(f);
   await expect(f.locator('#mc-producer')).toBeVisible({ timeout: 240_000 });
   expect(await page.evaluate(() => AG.mode), 'Approve each line is the default').toBe('producer');
   await expect(f.locator('#mc-pmode [data-mode="producer"]')).toHaveAttribute('aria-pressed', 'true');
@@ -37,6 +38,7 @@ test('the Producer toggle switches the mode, the Agents select follows, and Auto
   test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
+  await openProductionTools(f);
   await expect(f.locator('#mc-producer')).toBeVisible({ timeout: 240_000 });
   await seedWrongGoal(page, 'k-toggle');
   await expect(f.locator('#mc-pq li')).toHaveCount(1);
@@ -57,6 +59,7 @@ test('an escalated line waits with its reason and a marker: nothing airs it, Aut
   test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
+  await openProductionTools(f);
   await expect(f.locator('#mc-producer')).toBeVisible({ timeout: 240_000 });
   await ready('broadcast')(page);   // the view has taken its first queue message, so the line below is not sent to a view that is still loading
   // a line waiting for review that the Verifier did not escalate is not a card: only an escalated line reaches the queue

@@ -154,7 +154,7 @@ if (MCS.framed) {
   const pane = $('pane-desk'); if (pane) { new MutationObserver(attachMic).observe(pane, { childList: true, subtree: true }); attachMic(); }
 }
 // type floor: 12 px for the desk text that was 10 to 11 px (UX review pass 6, finding 18)
-(() => { const st = document.createElement('style'); st.textContent = '#mcf-sound,#mc-pt,.mcp-v,.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}#bc-cams button[data-cam][aria-pressed=true]{color:#10151f!important}'; document.head.appendChild(st); })();   // the chosen camera chip is yellow: dark text (it was light on yellow, 1.4:1)
+(() => { const st = document.createElement('style'); st.textContent = '#mcf-sound{display:none!important}#mc-pt,.mcp-v,.bc-brand em,#bc-state,.bc-sec h4,.bc-tag,.bc-chip,#mc-onair-hash,.mcx-ptt-s,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain{font-size:12px!important}#bc-cams button[data-cam][aria-pressed=true]{color:#10151f!important}'; document.head.appendChild(st); })();   // Voice lives in the shell; the duplicate Sound status is hidden, and the chosen camera chip has dark text on yellow (4.8:1)
 // Judge re-test: on a phone the 3D renderer sizes its canvas (and the name-tag layer) to the window, but the live view is narrower, so the right edge was cut
 // off. Scale those layers down to the live view's width, from their top-left corner, so the whole pitch shows; nothing is scaled when they already fit.
 (() => {

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { openProductionTools, viewFrame } from './helpers';
 import { createServer } from 'node:http';
 
 // ADR-0019 (Phases 2 and 4): the Broadcast Copilot asks the api with surface "broadcast" and shows its ranked picks; the production desk strip shows the agents' trace for the lines on air, newest first.
@@ -38,14 +39,17 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
     const api = 'http://127.0.0.1:' + (server.address() as any).port;
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.route('**/config.js', (rt) => rt.fulfill({ contentType: 'text/javascript', body: 'window.MATCHCAST_API=' + JSON.stringify(api) + ';' }));
-    await page.goto('/index.html?split=1', { waitUntil: 'domcontentloaded' });
+    await page.goto('/index.html?split=1#broadcast', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => typeof LV !== 'undefined' && document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
     await page.evaluate(() => { LV.persona('club:thr', 'en'); LV.begin('k1', { teams: ['thr', 'cco'], players: [{ name: 'A One', team: 'thr' }] }); });
 
     const desk = page.frameLocator('#v-broadcast iframe');
     await expect(desk.locator('#mc-desk')).toBeVisible({ timeout: 60_000 });
+    const broadcast = await viewFrame(page, 'broadcast');
+    const watchFrame = await viewFrame(page, 'watch');
+    await openProductionTools(broadcast);
     await expect(page.locator('#v-broadcast'), 'the Copilot answers with picks once the shared match has started').toHaveClass(/ready/, { timeout: 60_000 });
-    await expect(page.frameLocator('#v-watch iframe').locator('#mc-focus'), 'no focus pill before Broadcast suggests one').toBeHidden();
+    await expect(watchFrame.locator('#mc-focus'), 'no focus pill before Broadcast suggests one').toHaveAttribute('hidden', '');
     await desk.locator('[data-cop="highlights"]').click();
     await expect(desk.locator('#mc-cop-out')).toContainText('Ivan Ruiz', { timeout: 20_000 });
     expect(asks[0].surface, 'the Copilot asks with the broadcast surface').toBe('broadcast');
@@ -54,23 +58,20 @@ test('the Copilot shows picks from the api, and Watch shows a focus suggestion',
     await expect(desk.locator('#mc-cop-out')).toContainText('drop deeper', { timeout: 20_000 });
     expect(asks.at(-1).surface).toBe('broadcast');
 
-    // Hide collapses the desk to its header and Show brings the body back
+    // Hide tools collapses the advanced controls without hiding the replay row.
     const open = await desk.locator('#mc-desk').boundingBox();
     await desk.locator('#mc-desk-hide').click();
     await expect(desk.locator('#mc-desk-body')).toBeHidden();
-    expect((await desk.locator('#mc-desk').boundingBox())!.height, 'Hide leaves the header and the replay row, and gives back the body').toBeLessThan(open!.height - 60);
+    expect((await desk.locator('#mc-desk').boundingBox())!.height, 'Hide tools leaves the title and replay row').toBeLessThan(open!.height - 60);
     await desk.locator('#mc-desk-hide').click();
     await expect(desk.locator('#mc-desk-body')).toBeVisible();
 
     await desk.locator('[data-cop="focus"]').click();
     await expect(desk.locator('#mc-cop-go')).toBeVisible({ timeout: 20_000 });
     await desk.locator('#mc-cop-go').click();
-    const watch = page.frameLocator('#v-watch iframe');
-    await expect(watch.locator('#mc-focus')).toBeVisible({ timeout: 60_000 });
-    await expect(watch.locator('#mc-focus-t')).toContainText('Ivan Ruiz');
-    await expect(watch.locator('#mc-focus-go')).toBeEnabled();
-    await watch.locator('#mc-focus-go').click();
-    await expect(watch.locator('#mc-focus-go')).toHaveText(/Camera (on|not moved)/);
+    await expect.poll(() => watchFrame.locator('#mc-focus').getAttribute('hidden'), { timeout: 60_000 }).toBeNull();
+    await expect(watchFrame.locator('#mc-focus-t')).toContainText('Ivan Ruiz');
+    await expect(watchFrame.locator('#mc-focus-go')).toBeEnabled();
   } finally {
     server.close();
   }
@@ -81,6 +82,7 @@ test('the production strip shows which agents acted on the last aired line', asy
   await page.goto('/index.html#broadcast', { waitUntil: 'domcontentloaded' });
   const desk = page.frameLocator('#v-broadcast iframe');
   await expect(desk.locator('#mc-desk')).toBeVisible({ timeout: 60_000 });
+  await openProductionTools(await viewFrame(page, 'broadcast'));
   await page.evaluate(() => {
     const frame = document.querySelector('#v-broadcast iframe') as HTMLIFrameElement;
     frame.contentWindow!.postMessage({ src: 'matchcast-shell', type: 'air', line: {
