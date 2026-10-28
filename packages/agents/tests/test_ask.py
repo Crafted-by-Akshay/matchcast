@@ -232,3 +232,17 @@ def test_score_words_win_over_the_new_metric_phrases(assistant, flow) -> None:
     assert _metric_in("How many passes so far?")[0] == "passes"
     assert _metric_in("Has Northgate FC won the ball back much?")[0] == "possession_won"
     assert _metric_in("How many turnovers has Northgate FC had?") is None
+
+
+def test_why_a_chance_mattered_is_answered_from_the_match_not_the_kb(assistant, flow) -> None:
+    result = ask(assistant, flow, "Why did that chance matter?")
+    assert result.intent == "moment"
+    assert "took the latest chance" in result.answer
+    assert [c["type"] for c in result.citations] == ["event"]
+
+
+def test_citation_tags_are_removed_for_the_viewer() -> None:
+    from matchcast_agents.ask.assistant import plain_text
+
+    text = "Ana took the latest chance at minute 23 [event:e7] . Rain is light [kb:app:x:1]."
+    assert plain_text(text) == "Ana took the latest chance at minute 23. Rain is light."

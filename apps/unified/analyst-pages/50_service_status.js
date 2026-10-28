@@ -45,7 +45,9 @@ function ssPaint(card) {
   const t = document.createElement('table'); t.className = 'tbl';
   const hd = t.createTHead().insertRow(); for (const c of ['Dependency', 'State', 'Detail']) { const th = document.createElement('th'); th.textContent = c; hd.append(th); }
   const tb = t.createTBody();
-  for (const d of doc.dependencies) {
+  // not shown here: the planned Fabric and Databricks lines and the Entra sign-in line (the deploy does not use them yet)
+  const hidden = ['Microsoft Fabric', 'Azure Databricks', 'Entra sign-in'];
+  for (const d of doc.dependencies.filter((x) => !hidden.includes(x.label))) {
     const r = tb.insertRow(); r.insertCell().textContent = d.label;
     const chip = document.createElement('span'); chip.className = 'chip ' + (Object.prototype.hasOwnProperty.call(tone, d.status) ? tone[d.status] : ''); chip.textContent = Object.prototype.hasOwnProperty.call(lbl, d.status) ? lbl[d.status] : 'Unknown'; r.insertCell().append(chip);
     r.insertCell().textContent = d.detail;
