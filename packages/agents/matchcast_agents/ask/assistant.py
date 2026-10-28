@@ -95,8 +95,8 @@ STRONG_LIVE = re.compile(
 )
 # "what is happening?": a plain status question about this match; answered with the score
 STATUS_Q = re.compile(
-    r"^\s*(?:what(?:'s| is) (?:happening|going on|up)|what (?:has )?happened"
-    r"|how(?:'s| is) (?:it|the (?:match|game)) going)\s*[?.!]*\s*$",
+    r"^\s*(?:what(?:['’]s| is) (?:happening|going on|up)|what (?:has )?happened"
+    r"|how(?:['’]s| is) (?:it|the (?:match|game)) going)\s*[?.!]*\s*$",
     re.IGNORECASE,
 )
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)

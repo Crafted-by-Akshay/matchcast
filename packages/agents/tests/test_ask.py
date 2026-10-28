@@ -188,7 +188,7 @@ def test_club_and_player_names_of_this_match_are_not_declined(assistant, flow, q
 
 @pytest.mark.parametrize(
     "question",
-    ["What is happening?", "what's going on", "How's the match going?", "What happened?"],
+    ["What is happening?", "what's going on", "How’s the match going?", "What happened?"],
 )
 def test_plain_match_status_questions_get_the_score(assistant, flow, question) -> None:
     result = ask(assistant, flow, question)  # a match question, not a decline
