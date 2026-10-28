@@ -40,10 +40,12 @@ const CM = (() => {
   const FILL_QUIET_PBP = [
     (s) => 'Still ' + s.home + ' ' + s.score + ' ' + s.away + '.',
     (s) => s.club + ' have not put a pass together in the last two minutes.',
+    (s) => 'The score is ' + s.home + ' ' + s.score + ' ' + s.away + ', and neither side has settled into a rhythm.',
   ];
   const FILL_QUIET_COLOUR = [
     (s) => 'The shape is all we can read so far.',
     (s) => 'Watch who wins the next possession and how they use it.',
+    (s) => 'Nothing has been forced yet, and both sides are still reading each other.',
   ];
   // the newest action is a shot: the count in the window and the chance's own xG, both from the events
   const FILL_SHOT_PBP = [
@@ -57,8 +59,13 @@ const CM = (() => {
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
   const club = (ti) => (ti === 0 ? names.home : names.away);
+  // a line that repeats one of the last RECENT_N lines is dropped: the feed must not say the same thing again straight away
+  const RECENT_N = 8, recent = [];
   const push = (o) => {
-    const item = { id: 'l' + (++n), t: Date.now(), minute: o.minute, text: trim(o.text, 240), kind: o.kind, tone: o.tone || '', source: o.source || 'rules', chain: o.chain || CHAIN.slice(), persona, numbers: o.numbers || [], speaker: o.speaker || '' };
+    const text = trim(o.text, 240);
+    if (recent.includes(text)) return null;
+    recent.push(text); if (recent.length > RECENT_N) recent.shift();
+    const item = { id: 'l' + (++n), t: Date.now(), minute: o.minute, text, kind: o.kind, tone: o.tone || '', source: o.source || 'rules', chain: o.chain || CHAIN.slice(), persona, numbers: o.numbers || [], speaker: o.speaker || '' };
     items.push(item); if (items.length > KEEP) items.shift();
     lastLine = o.minute; lastPushAt = Date.now(); changed(); return item;
   };
@@ -70,7 +77,8 @@ const CM = (() => {
       case 'shot': {
         const outcome = ev.fate === 'save' ? ', and the keeper saves' : ev.fate === 'miss' ? ', off target' : '';
         const big = (+ev.xg || 0) >= 0.25;
-        return { minute: ev.minute, kind: 'shot', tone: big ? 'big' : 'hot', numbers: [{ name: 'xG', value: +ev.xg || 0 }], text: (big ? 'Big chance! ' : '') + who + ' shoots for ' + tc + outcome + '. xG ' + f2(ev.xg) + '.' };
+        const call = big ? 'Big chance! ' : ev.fate === 'save' ? 'Save! ' : '';
+        return { minute: ev.minute, kind: 'shot', tone: big || ev.fate === 'save' ? 'big' : 'hot', numbers: [{ name: 'xG', value: +ev.xg || 0 }], text: call + who + ' shoots for ' + tc + outcome + '. xG ' + f2(ev.xg) + '.' };
       }
       case 'yellow_card': return { minute: ev.minute, kind: 'card', text: 'Yellow card for ' + who + ' (' + tc + ')' + (ev.reason ? ': ' + ev.reason : '') + '.' };
       case 'corner': return { minute: ev.minute, kind: 'set_piece', text: 'Corner to ' + tc + '.' };
@@ -137,7 +145,8 @@ const CM = (() => {
       seen.add(m.id);
       if (m.type === 'full_time') over = true;
       const why = m.why ? ' ' + m.why : '';
-      push({ minute: m.minute, kind: m.type, tone: ['goal', 'red_card', 'turning_point'].includes(m.type) ? 'big' : '', text: (m.title || m.type) + '.' + why, chain: CHAIN.slice() });
+      const call = m.type === 'goal' ? 'Goal! ' : '';   // the crowd call on a goal; the title keeps the scorer and the score
+      push({ minute: m.minute, kind: m.type, tone: ['goal', 'red_card', 'turning_point'].includes(m.type) ? 'big' : '', text: call + (m.title || m.type) + '.' + why, chain: CHAIN.slice() });
       last = Math.max(last == null ? -1 : last, +m.minute);
     }
     if (last != null) callPlay(last);
@@ -169,8 +178,8 @@ const CM = (() => {
       return;
     }
     if (passes === 0) {
-      push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_QUIET_PBP[k % 2](s) });
-      push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_QUIET_COLOUR[k % 2](s) });
+      push({ minute: s.at, kind: 'filler', speaker: 'pbp', text: FILL_QUIET_PBP[k % FILL_QUIET_PBP.length](s) });
+      push({ minute: s.at, kind: 'filler', speaker: 'colour', text: FILL_QUIET_COLOUR[k % FILL_QUIET_COLOUR.length](s) });
       return;
     }
     push({ minute: s.at, kind: 'filler', speaker: 'pbp', tone, text: FILL_PBP[k](s) });

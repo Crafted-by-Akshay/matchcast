@@ -7,7 +7,8 @@ const VC = (() => {
   let voices = { playByPlay: 'en-GB-RyanNeural', analyst: 'en-GB-SoniaNeural', es: 'es-ES-ElviraNeural', hi: 'hi-IN-SwaraNeural', pt: 'pt-BR-FranciscaNeural' };
   let gen = 0, on = false, queue = [], busy = false, bar = null, hide = 0, source = 'browser', playing = null, onChange = () => {};
   const spoken = new Set();   // one voice line per claim, however often its card is redrawn
-  try { on = localStorage.getItem(KEY) === 'on'; } catch (e) { /* storage may be blocked */ }
+  // Voice is on unless the viewer turned it off. A browser lets speech start only after a click or key press, so lines before the first one are captioned, and speech starts with it
+  try { on = localStorage.getItem(KEY) !== 'off'; } catch (e) { on = true; /* storage may be blocked: on is the default */ }
   const load = () => fetch('voices.json').then((r) => r.ok ? r.json() : null).then((j) => { if (j) voices = Object.assign(voices, j); }).catch(() => {});
   const el = () => {
     if (bar) return bar;

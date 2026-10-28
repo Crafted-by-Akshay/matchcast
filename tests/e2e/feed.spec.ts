@@ -321,6 +321,20 @@ test('the browser voice speaks an attack faster and higher than a pass, with no 
   expect(out[1].pitch, 'a hot line is higher').toBeGreaterThan(out[0].pitch);
 });
 
+test('the feed never says the same line twice in a row, and a save and a goal get a call', async ({ page }) => {
+  await openShell(page, 'analyst', '?seed=2026');
+  const out = await page.evaluate(() => {
+    CM.reset('var', { home: 'Ridgeview', away: 'Thames Rovers', hk: 'H', ak: 'A' });
+    CM.api('Same line again.', 1, 'line', 'k1');
+    CM.api('Same line again.', 5, 'line', 'k2');   // the same words a few minutes later: dropped
+    CM.fromWatch([{ minute: 12, type: 'shot', team: 'H', player: 'Ben', fate: 'save', xg: 0.1 }], [{ id: 'g1', minute: 20, type: 'goal', title: 'Goal: Ana (Ridgeview)' }]);
+    return CM.view().map((l: any) => l.text);
+  });
+  expect(out.filter((t) => t === 'Same line again.'), 'the repeat is dropped').toHaveLength(1);
+  expect(out.some((t) => t.startsWith('Save! ')), 'a save is called').toBe(true);
+  expect(out.some((t) => t.startsWith('Goal! ')), 'a goal is called').toBe(true);
+});
+
 test('a team-less event such as half-time does not stop the fill: it counts from the last team action', async ({ page }) => {
   await openShell(page, 'analyst', '?seed=2026');
   const out = await page.evaluate(() => {
@@ -410,9 +424,9 @@ test('the commentary card does not repeat the shell Sound control', async ({ pag
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
   await expect(f.locator('#mcf-sound')).toBeHidden();
-  await expect(page.locator('#voice-btn')).toContainText('Sound: off');
+  await expect(page.locator('#voice-btn')).toContainText('Sound: on');   // on by default: the first click or key press lets speech start
   await page.click('#voice-btn');
-  await expect(page.locator('#voice-btn')).toContainText('Sound: on');
+  await expect(page.locator('#voice-btn')).toContainText('Sound: off');
   await page.click('#voice-btn');
   await expect(f.locator('#mcf-sound')).toBeHidden();
 });
