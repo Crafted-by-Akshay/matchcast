@@ -465,6 +465,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <span class="chip" id="sync">In sync</span>
     <span class="chip" id="src">Analyst: season run</span>
     <button type="button" class="chip" id="bc-toggle" aria-pressed="false" hidden title="Show the Broadcast desk beside the match (loads a second 3D view)">Broadcast desk beside</button>
+    <button type="button" class="chip" id="new-match" title="Start a new match with a fresh seed: the play, weather and pauses differ from the default fixture">New match</button>
   </div>
 </section>
 
@@ -1123,6 +1124,11 @@ function paintStory() {
   const q = new URLSearchParams(location.search); $('st-demo').hidden = q.get('speed') === '4';
   q.set('seed', '2026'); q.set('speed', '4'); $('st-demo').setAttribute('href', '?' + q.toString() + '#watch');   // keeps other query switches such as tour or seedBadClaim   // already the demo pace
 }
+// New match: the same fixture with a fresh seed (the seed is read from the URL at load, see the seed switch below)
+$('new-match').onclick = () => {
+  const q = new URLSearchParams(location.search); q.set('seed', String(Math.floor(Math.random() * 1e9)));
+  location.href = '?' + q.toString() + '#watch';
+};
 function setPersona(mode) {
   try { const k = 'mcx-mode', o = JSON.parse(localStorage.getItem(k) || 'null') || {}; o.mode = mode; localStorage.setItem(k, JSON.stringify(o)); } catch (e) { /* storage may be blocked; the live message still works */ }
   M.persona = mode; paintStory();
