@@ -27,6 +27,10 @@ from .retrieval import ENTITY_CORPORA, Bm25Index, Hit, analyse, defines
 MAX_QUESTION = 300
 WORD_LIMIT = {"casual": 80, "broadcast": 60, "analyst": 200}
 OUT_OF_SCOPE = "I can only answer questions about this match and MatchCast."
+WATCH_POINTER = (
+    "Weather, energy and tactics are shown in the Watch view's Copilot, which reads the 3D match. "
+    "This Copilot reads the match feed."
+)
 ABSTAIN = "I can't confirm that from the match data yet."
 log = logging.getLogger(__name__)
 KB_THRESHOLD = 2.2
@@ -96,7 +100,15 @@ STRONG_LIVE = re.compile(
 # "what is happening?": a plain status question about this match; answered with the score
 STATUS_Q = re.compile(
     r"^\s*(?:what(?:['’]s| is) (?:happening|going on|up)|what (?:has )?happened"
-    r"|how(?:['’]s| is) (?:it|the (?:match|game)) going)\s*[?.!]*\s*$",
+    r"|how(?:['’]s| is) (?:it|the (?:match|game)) going"
+    r"|who(?:['’]s| is| are) (?:on top|winning|leading|ahead))\s*[?.!]*\s*$",
+    re.IGNORECASE,
+)
+# about this match's state, which no tool or knowledge page covers: abstain rather than answer
+# from a page that only shares a word (a tackle page for "the possession")
+STATE_TOPIC = re.compile(
+    r"\b(tired|tiredness|stamina|tactics?|tactical|weather|rain|rainy|pitch|substitutions?"
+    r"|injur(?:y|ed)|the possession)\b",
     re.IGNORECASE,
 )
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
@@ -239,6 +251,10 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
         STRONG_LIVE.search(question) or not DEFINITIONAL.match(question)
     ):  # about this match, but no tool covers it
         return Route("abstain", None, teams, query)
+    if STATE_TOPIC.search(question):
+        return Route(
+            "watch", None, teams, query
+        )  # the feed has no weather or energy: say where they are
     if hit(query):
         return Route("knowledge", None, teams, query)
     return Route("out_of_scope", None, teams, query)
@@ -422,6 +438,8 @@ class Assistant:
             return AskResult(answer, "history", abstained, citations, dropped)
         if plan.intent == "out_of_scope":
             return AskResult(OUT_OF_SCOPE, plan.intent, abstained=True)
+        if plan.intent == "watch":
+            return AskResult(WATCH_POINTER, plan.intent, abstained=True)
         goals = _goal_lines(ctx) if plan.intent in ("goals", "goal_impact") else []
         if plan.intent == "goals" and len(plan.teams) == 1:  # "who scored for Northgate FC?"
             goals = [g for g in goals if g[1] == plan.teams[0]]

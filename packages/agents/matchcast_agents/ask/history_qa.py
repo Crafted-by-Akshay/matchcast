@@ -47,6 +47,8 @@ _MATCH_OUTCOME = re.compile(
     r"\b(who scored|who score|scorers?|goalscorers?|scoreline|the score|who won|winner)\b", re.I
 )
 _H2H = re.compile(r"\b(record|head[- ]to[- ]head|all[- ]time|history|ranking|elo)\b", re.I)
+# "the result of the last Argentina v Brazil match": the most recent meeting, from the results file
+_LAST_MEETING = re.compile(r"\b(last|latest|most recent)\b.*\b(meeting|match|game|fixture)\b", re.I)
 _TOP = re.compile(
     r"\b(best|top|strongest)\b.*\b(teams?|nations?|sides?|countries)\b"
     r"|\b(teams?|nations?|sides?|countries)\b.*\b(best|top|strongest)\b",
@@ -87,6 +89,8 @@ def parse(question: str) -> Query | None:
     scores = len(set(teams)) >= 2 and re.search(
         r"\bscor\w*", question, re.I
     )  # "Argentina v Brazil score"
+    if len(set(teams)) >= 2 and _LAST_MEETING.search(question):
+        return Query("record", teams[0], teams[1], None)
     if (_MATCH_OUTCOME.search(question) or scores) and not _RECORD.search(question):
         return None
     metric = _metric(question)
