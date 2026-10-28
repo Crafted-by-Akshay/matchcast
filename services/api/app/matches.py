@@ -36,7 +36,7 @@ from matchcast_agents.grading import scoreboard
 from matchcast_agents.grading_live import events_digest, load_live_run
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
-from matchcast_agents.live.answers import LiveAnswers, record_facts
+from matchcast_agents.live.answers import LiveAnswers, history_facts, record_facts
 from matchcast_agents.live.knowledge import TalkKnowledge
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, BOOTH, booth, normalise
@@ -186,6 +186,24 @@ class RecordEvent(BaseModel):
     type: str = Field(min_length=1, max_length=24)
     player: str | None = Field(default=None, max_length=60)
     team: Literal["home", "away"] | None = None
+
+
+class HistoryMatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    date: str = Field(min_length=10, max_length=10)
+    home: str = Field(min_length=1, max_length=60)
+    away: str = Field(min_length=1, max_length=60)
+    score: list[int] = Field(min_length=2, max_length=2)
+
+
+class HistoryAskBody(BaseModel):
+    """A question about a club's saved matches: one fact per match, newest first."""
+
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    question: str = Field(min_length=1, max_length=300)
+    persona: Literal["casual", "analyst", "broadcast"] = "casual"
+    matches: list[HistoryMatch] = Field(min_length=1, max_length=30)
 
 
 class RecordAskBody(BaseModel):
@@ -1509,6 +1527,30 @@ def build_router(registry: Registry) -> APIRouter:
         )  # fmt: skip
         answer, reason = await LiveAnswers(client).ask_record(
             facts, body.question, body.persona, (body.home, body.away)
+        )
+        if answer is None:
+            return {"answer": None, "reason": reason, "citations": []}
+        return {"answer": answer.answer, "reason": "", "citations": answer.citations}
+
+    @router.post("/ask/history")
+    async def ask_history(body: HistoryAskBody, request: Request) -> dict[str, Any]:
+        """A club's past-matches Copilot answer: the model over one fact per saved match, checked
+        like Ask. ``answer`` is null when the model is off or its answer does not pass; the browser
+        then falls back to its own text."""
+        if not registry.allow_ask(body.session_id):
+            raise Problem(
+                429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
+            )
+        registry.allow_question(request)
+        client = registry.model_client("answers")
+        if client is None:
+            return {"answer": None, "reason": "model_off", "citations": []}
+        facts = history_facts(
+            [(m.date, m.home, m.away, (m.score[0], m.score[1])) for m in body.matches]
+        )
+        clubs = tuple(sorted({name for m in body.matches for name in (m.home, m.away)}))
+        answer, reason = await LiveAnswers(client).ask_record(
+            facts, body.question, body.persona, clubs
         )
         if answer is None:
             return {"answer": None, "reason": reason, "citations": []}

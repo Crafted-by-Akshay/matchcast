@@ -7,7 +7,7 @@ from dataclasses import replace
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.live import ScriptedModelClient
-from matchcast_agents.live.answers import LiveAnswers, fact_sheet, record_facts
+from matchcast_agents.live.answers import LiveAnswers, fact_sheet, history_facts, record_facts
 from matchcast_agents.resilience import ModelError
 
 
@@ -369,3 +369,23 @@ def test_a_saved_match_answer_is_checked_against_its_record() -> None:
     )
     assert reason == "" and answer.answer == "Northgate FC have 15 shots."
     assert facts_of(model.calls[-1]["user"])["stat:shots:home"] == "Northgate FC: shots 15"
+
+
+def test_a_club_history_answer_cites_the_match_it_uses_and_is_checked() -> None:
+    facts = history_facts(
+        [
+            ("2026-10-01", "Northgate FC", "Harbour United", (2, 1)),
+            ("2026-09-20", "Harbour United", "Northgate FC", (0, 0)),
+        ]
+    )
+    model = ask_model("Northgate FC 2-1 Harbour United.", ["match:0"])
+    club_pair = ("Harbour United", "Northgate FC")
+    answer, reason = run(
+        LiveAnswers(model).ask_record(facts, "How did we do?", "casual", club_pair)
+    )
+    assert reason == "" and answer.answer == "Northgate FC 2-1 Harbour United."
+    assert answer.citations == [{"type": "fact", "id": "match:0"}]
+    assert (
+        facts_of(model.calls[-1]["user"])["match:0"]
+        == "2026-10-01: Northgate FC 2-1 Harbour United"
+    )

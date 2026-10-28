@@ -42,23 +42,29 @@ window.MCClubAsk = (() => {
     if (sources.length) { const links = document.createElement('div'); links.className = 'ask-sources'; for (const f of sources) { const a = document.createElement('a'); a.href = '#match/' + encodeURIComponent(f.id); a.textContent = f.date + ' · ' + name(f); a.onclick = (event) => { event.preventDefault(); config.openMatch(f.id); }; links.append(a); } box.append(links); }
     if (note) { const source = document.createElement('p'); source.className = 'source'; source.textContent = note; box.append(source); }
   };
-  // POST /v1/ask/record: the saved match's summary (score, stats, key events) to the same model as Ask. null when the api is
-  // not set, is off, or its answer does not pass its checks.
-  const recordAnswer = async (f, data, q) => {
+  // One POST to the api's saved-record Copilot. null when the api is not set, is off, or its answer does not pass its checks.
+  const modelAnswer = async (path, body) => {
     const api = window.MATCHCAST_API;
     if (!api) return null;
-    const stats = {};
-    for (const key of ['shots', 'xg', 'poss', 'passes']) { const v = data.stats && data.stats[key]; if (Array.isArray(v) && v.length === 2 && v.every((x) => Number.isFinite(+x))) stats[key] = v.map(Number); }
-    const body = { session_id: 'club-' + Math.random().toString(36).slice(2, 10), question: q, persona: 'casual', home: f.home.club, away: f.away.club,
-      score: (data.score || f.score).map((x) => Math.round(+x)), stats,
-      events: (data.events || []).filter((e) => e && e.type).slice(0, 40).map((e) => ({ minute: Math.min(130, Math.max(0, +e.minute || 0)), type: String(e.type).slice(0, 24), player: e.player ? String(e.player).slice(0, 60) : null, team: e.team === 'home' || e.team === 'away' ? e.team : null })) };
     try {
-      const res = await fetch(api.replace(/\/+$/, '') + '/v1/ask/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+      const res = await fetch(api.replace(/\/+$/, '') + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
       if (!res.ok) return null;
       const j = await res.json();
       return typeof j.answer === 'string' && j.answer ? j.answer : null;
     } catch (e) { return null; }
   };
+  // POST /v1/ask/record: the saved match's summary (score, stats, key events) to the same model as Ask.
+  const recordAnswer = async (f, data, q) => {
+    const stats = {};
+    for (const key of ['shots', 'xg', 'poss', 'passes']) { const v = data.stats && data.stats[key]; if (Array.isArray(v) && v.length === 2 && v.every((x) => Number.isFinite(+x))) stats[key] = v.map(Number); }
+    const body = { session_id: 'club-' + Math.random().toString(36).slice(2, 10), question: q, persona: 'casual', home: f.home.club, away: f.away.club,
+      score: (data.score || f.score).map((x) => Math.round(+x)), stats,
+      events: (data.events || []).filter((e) => e && e.type).slice(0, 40).map((e) => ({ minute: Math.min(130, Math.max(0, +e.minute || 0)), type: String(e.type).slice(0, 24), player: e.player ? String(e.player).slice(0, 60) : null, team: e.team === 'home' || e.team === 'away' ? e.team : null })) };
+    return modelAnswer('/v1/ask/record', body);
+  };
+  // POST /v1/ask/history: one fact per saved match (date, clubs, score) to the model. null falls back to the rules text.
+  const historyAnswer = (list, q) => modelAnswer('/v1/ask/history', { session_id: 'club-' + Math.random().toString(36).slice(2, 10), question: q, persona: 'casual',
+    matches: list.slice(0, 30).map((f) => ({ date: String(f.date).slice(0, 10), home: f.home.club, away: f.away.club, score: f.score.map((x) => Math.round(+x)) })) });
   const eventText = (e) => Math.floor(+e.minute || 0) + "' · " + (e.type === 'goal' ? 'Goal · ' + (e.player || 'Scorer not recorded') : e.type === 'red_card' ? 'Red card · ' + (e.player || 'Player not recorded') : e.type === 'shot' ? 'Shot · ' + (e.player || 'Player not recorded') : e.text || e.type.replace(/_/g, ' '));
   const matchAnswer = (f, data, q) => {
     const stats = data.stats || {}, events = data.events || [], label = name(f), score = (data.score || f.score).join('–');
@@ -110,6 +116,8 @@ window.MCClubAsk = (() => {
         if (token === generation) show(lines.length ? lines.slice(0, 24).join('\n') : 'No scorer events for your club were saved in these records.', list); return;
       }
       if (/record|result|form|done|past|recent|win|los[st]|draw|score|history|head.?to.?head/.test(q)) {
+        const modelHistory = await historyAnswer(list, q); if (token !== generation) return;
+        if (modelHistory) { show(modelHistory, list, 'Saved synthetic season · connected Copilot'); return; }
         let wins = 0, draws = 0, losses = 0;
         for (const f of list) { const side = f.home.key === config.club() ? 0 : 1, ours = f.score[side], theirs = f.score[1 - side]; if (ours > theirs) wins++; else if (ours < theirs) losses++; else draws++; }
         show(clubName() + ': ' + list.length + ' matches · ' + wins + ' wins, ' + draws + ' draws, ' + losses + ' losses.\n' + list.map((f) => f.date + ' · ' + name(f) + ' · ' + f.score.join('–')).join('\n'), list); return;

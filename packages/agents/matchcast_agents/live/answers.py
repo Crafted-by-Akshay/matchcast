@@ -269,6 +269,16 @@ def record_facts(
     return facts
 
 
+def history_facts(
+    matches: list[tuple[str, str, str, tuple[int, int]]],
+) -> list[dict[str, str]]:
+    """Numbered facts about a club's saved matches, one per match: date, clubs and score."""
+    return [
+        {"id": f"match:{i}", "text": f"{date}: {home} {score[0]}-{score[1]} {away}"}
+        for i, (date, home, away, score) in enumerate(matches)
+    ]
+
+
 def _ask_problem(
     text: str, cites: list[str], texts: dict[str, str], limit: int, clubs: tuple[str, ...]
 ) -> str | None:
@@ -462,7 +472,7 @@ class LiveAnswers:
         return AskResult(text, "live", False, citations, mode="live", retrieval="local"), ""
 
     async def ask_record(
-        self, facts: list[dict[str, str]], question: str, persona: str, clubs: tuple[str, str]
+        self, facts: list[dict[str, str]], question: str, persona: str, clubs: tuple[str, ...]
     ) -> tuple[AskResult | None, str]:
         """An answer about a saved match, from its record's facts; checked like Ask."""
         texts = {f["id"]: f["text"] for f in facts}
