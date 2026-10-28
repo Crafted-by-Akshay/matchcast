@@ -98,14 +98,14 @@ test('feed picker: arrow, Home and End keys move the choice and keep focus on it
   await f.page().keyboard.press('ArrowRight');
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true');
   await expect(radios.nth(1)).toBeFocused();
-  // the Planned feeds (disabled) are stepped over: Casual, Analyst and Catch me up are the live feeds
+  // all six feeds are live, so End lands on the last one (News ticker)
   await f.page().keyboard.press('End');
-  await expect(radios.nth(3)).toHaveAttribute('aria-checked', 'true');
-  await expect(radios.nth(3)).toBeFocused();
+  await expect(radios.nth(5)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(5)).toBeFocused();
   await f.page().keyboard.press('ArrowRight');   // wraps
   await expect(radios.nth(0)).toBeFocused();
   await f.page().keyboard.press('ArrowLeft');
-  await expect(radios.nth(3)).toBeFocused();
+  await expect(radios.nth(5)).toBeFocused();
   await f.page().keyboard.press('Home');
   await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
   await expect(radios.nth(0)).toBeFocused();
@@ -179,18 +179,18 @@ for (const [name, w, h] of [['phone', 390, 844], ['small phone', 320, 640]] as c
   });
 }
 
-test('feed picker: a saved Planned choice is not restored; the picker opens on Casual and stays keyboard reachable', async ({ page }) => {
+test('feed picker: a saved choice is restored, and the arrow keys step from it', async ({ page }) => {
   test.setTimeout(300_000);
-  await page.addInitScript(() => { try { localStorage.setItem('mc-feedpick', 'audio_description'); } catch (e) { /* storage blocked */ } });
+  await page.addInitScript(() => { try { localStorage.setItem('mc-feedpick', 'ticker'); } catch (e) { /* storage blocked */ } });
   const f = await open(page);
   const group = f.getByRole('radiogroup', { name: 'Feed' });
   await expect(group).toBeVisible({ timeout: 60_000 });
   const radios = group.getByRole('radio');
-  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
-  await expect(radios.nth(2)).toHaveAttribute('aria-checked', 'false');
-  await radios.nth(0).focus();
-  await expect(radios.nth(0)).toBeFocused();
-  await f.page().keyboard.press('ArrowRight');   // the next live feed, not the Planned one
-  await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true');
-  await expect(radios.nth(1)).toBeFocused();
+  await expect(radios.nth(5)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'false');
+  await radios.nth(5).focus();
+  await expect(radios.nth(5)).toBeFocused();
+  await f.page().keyboard.press('ArrowLeft');
+  await expect(radios.nth(4)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(4)).toBeFocused();
 });
