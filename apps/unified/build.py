@@ -161,6 +161,8 @@ def build_watch():
     main = sub(main, "'./players.json'", "'../shared/players.json'", "watch players path")
     main = sub(main, "'./intl.json'", "'../shared/intl.json'", "watch intl path")
     main = sub(main, "[3, 5, 10, 45].forEach", "[3, 5, 10, 15, 45].forEach", "watch half chips")
+    # the possession bar read 100-0 at kick-off: the first touch owns the ball for a frame or two before the clock has run
+    main = sub(main, "return a ? Math.round(STATS.poss[ti] / a * 100) : 50;", "return a >= 5 ? Math.round(STATS.poss[ti] / a * 100) : 50;", "watch possession before any play")
     main = sub(main, LANG_OLD, LANG_NEW, "watch language labels")
     main = sub(main, RECAP_OLD, RECAP_NEW, "watch recap on lopsided scores")
     # EXP-5: a typed question goes to the shell (the agents), not to a stand-in model

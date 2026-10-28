@@ -186,6 +186,16 @@ def test_club_and_player_names_of_this_match_are_not_declined(assistant, flow, q
     assert route(flow._ctx(), question, assistant.index).intent != "out_of_scope"
 
 
+@pytest.mark.parametrize(
+    "question",
+    ["What is happening?", "what's going on", "How’s the match going?", "What happened?"],
+)
+def test_plain_match_status_questions_get_the_score(assistant, flow, question) -> None:
+    result = ask(assistant, flow, question)  # a match question, not a decline
+    assert result.intent == "live" and not result.abstained
+    assert result.answer.startswith("Score:") and result.citations[0]["type"] == "claim"
+
+
 def test_score_words_win_over_the_new_metric_phrases(assistant, flow) -> None:
     from matchcast_agents.ask.assistant import _metric_in
 
