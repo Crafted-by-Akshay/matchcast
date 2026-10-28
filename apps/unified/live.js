@@ -157,11 +157,12 @@ const LV = (() => {
   // a question to the agents (EXP-5): the api's Ask router answers with citations and a verdict; throws when it cannot
   // the api's Ask takes one of three audiences and answers {answer, abstained, citations, mode, variants?}
   const audience = () => (persona === 'analyst' || persona === 'broadcast' ? persona : 'casual');
-  const ask = async (question, surface = 'ask') => {
+  const ask = async (question, surface = 'ask', engineContext = null) => {
     if (!run) throw new Error('no match yet');
     if (!String(question).trim()) throw new Error('empty question');   // the api needs at least one character
     const body = { session_id: run.key.session_id, question: String(question).slice(0, 300), persona: audience(), lang: window.MC_LANGS.includes(lang) ? lang : 'en' };
     if (surface === 'broadcast') body.surface = surface;   // the Copilot's picks; a plain question sends exactly what it always did
+    if (engineContext) body.engine_context = engineContext;   // the Watch view's weather, energy and tactics, when the Watch Copilot asks
     const res = await post('/v1/matches/' + run.id + '/ask', body);
     if (!res.ok) throw Object.assign(new Error('ask ' + res.status), { status: res.status });
     const j = await res.json();

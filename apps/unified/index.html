@@ -1468,12 +1468,25 @@ const callEnd = (note) => {
 window.callLeave = () => { if (CALL.on) callEnd('Call ended: you left Watch.'); };   // the mic must not stay open on another view
 
 let boothLast = null;   // the booth's state (GET /booth), sent to both cards and re-sent to a card that loads after it
+// The Watch Copilot's question: the api answers it from the live match and the 3D view's conditions (copilot.js).
+// A reply with no text, or no live match, tells the Watch to use its own fallback.
+async function watchCopilotAsk(d) {
+  const reply = (text) => post('watch', { src: 'matchcast-shell', type: 'copilot-answer', id: d.id, text });
+  if (!(LV.enabled && LV.key)) { reply(null); return; }
+  const context = {};
+  for (const k of ['weather', 'energy', 'tactics']) if (typeof d.context?.[k] === 'string' && d.context[k]) context[k] = d.context[k].slice(0, 200);
+  try {
+    const answer = await Promise.race([LV.ask(d.question, 'ask', context), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 15000))]);
+    reply(answer.verdict === 'abstained' || !answer.text ? null : answer.text);
+  } catch (e) { reply(null); }
+}
 window.addEventListener('message', (e) => {
   const d = e.data || {};
   if (d.src !== 'matchcast') return;
   if (d.type === 'live-request' && LIVE_LAST) { post('analyst', { src: 'matchcast-shell', type: 'live-start', setup: LIVE_LAST.setup, roster: LIVE_LAST.roster }); return; }   // the Analyst console opened mid-match asks for the roster (77_live.js)
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
+  if (d.type === 'copilot-ask' && view === 'watch') { watchCopilotAsk(d); return; }   // the Watch Copilot's question goes to the model with the 3D view's conditions
   if (d.type === 'crew-feed-pick') { postCrew(); if (d.user && (d.key === 'casual' || d.key === 'analyst')) setPersona(d.key); if (d.key === 'catch_me_up') { catchPicked = true; askCatchUp(); } else leaveCatchUp(); return; }   // only a deliberate audience pick changes the shared commentary persona
   if (d.type === 'feed-ready') {
     if (view === 'watch') leaveCatchUp();   // Watch reloaded: it is back on its default feed until the picker posts a pick again
