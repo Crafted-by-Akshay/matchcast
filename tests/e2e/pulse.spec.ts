@@ -15,14 +15,14 @@ async function openWatch(page: Page): Promise<Frame> {
 }
 const send = (page: Page, card: object) => page.evaluate((c) => post('watch', { src: 'matchcast-shell', type: 'pulse', card: c }), card);
 async function pick(f: Frame, mode: string) {
-  if (await f.evaluate(() => (document.getElementById('fan-pop') as HTMLElement).hidden)) await f.click('#fan-chip');
-  await f.click(`.fm-b[data-m="${mode}"]`);
+  await f.getByRole('radio', { name: mode === 'casual' ? 'Fan' : 'Analyst' }).click();
 }
 
-test('Match Pulse cards and watch modes', async ({ page }) => {
+test('hidden moment cards keep their verified data while Watch exposes concise audience modes', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   let f = await openWatch(page);
+  await expect(f.locator('#mcx-box')).toBeHidden();
   const card = () => f.evaluate(() => { const c = document.querySelector('#mcx-live .mcx-c')!; return { text: c.querySelector('p')!.textContent, tick: c.querySelector('.mcx-t')!.textContent, chips: c.querySelectorAll('.mcx-ch:not(.fb)').length, fb: !!c.querySelector('.mcx-ch.fb'), wait: !!c.querySelector('.mcx-t.wait') }; });
 
   await pick(f, 'analyst');
@@ -47,20 +47,9 @@ test('Match Pulse cards and watch modes', async ({ page }) => {
 
   await pick(f, 'casual');
   await send(page, goal('c3'));
-  await expect.poll(async () => (await card()).text).not.toBe(analyst.text);
   expect((await card()).chips, 'Casual shows no metric chips').toBe(0);
 
-  await pick(f, 'player');
-  const who = await f.evaluate(() => (window as any).__mc.players.map((q: any) => q.name).find((n: string) => document.getElementById('fan-pcard')!.textContent!.includes(n)) ?? null);
-  expect(who, 'Player focus names a player in the mode card').not.toBeNull();
-  await send(page, goal('c4', { player: who }));
-  await expect.poll(async () => (await card()).text, { message: 'Player focus leads with the player' }).toMatch(new RegExp('^' + who + ':'));
-
-  await pick(f, 'club');
-  expect(await f.evaluate(() => JSON.parse(localStorage.getItem('mcx-mode')!).mode)).toBe('club');
-  f = await openWatch(page);
-  await expect(f.locator('#fan-chip')).toContainText(/My club/);
-  if (await f.evaluate(() => (document.getElementById('fan-pop') as HTMLElement).hidden)) await f.click('#fan-chip');
-  expect(await f.evaluate(() => [...document.querySelectorAll<HTMLElement>('.fm-l')].every((l) => (window as any).MC_LANGS.includes(l.dataset.l!) !== !!l.querySelector('.fm-planned'))), 'languages the api does not check are labelled Planned').toBe(true);
+  await expect(f.locator('#fan-chip')).toBeHidden();
+  await expect(f.locator('#fan-pop')).toBeHidden();
   expect(errs).toEqual([]);
 });

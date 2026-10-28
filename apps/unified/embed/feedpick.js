@@ -1,5 +1,5 @@
 // ---- Watch: the crew feed picker (AB#450, default on, ?crew=0 turns it off). Runs in the Watch module after twofans.js. ----
-// A radiogroup in the commentary card chooses which crew feed to read. Casual, Analyst and Catch me up are live; the other three are Planned and say so.
+// The default commentary control offers only the two audience styles: Fan and Analyst. Secondary feeds stay out of the live viewing controls.
 // Watch is an iframe, so the lines come from the shell's CREW data layer over postMessage: the shell posts {src:'matchcast-shell', type:'crew-feeds', lang, simulated, feeds, defs}
 // and this module posts {src:'matchcast', type:'crew-feed-pick', key, lang}. Honesty: while simulated is true the lines are the fixture, labelled Simulated and carrying NO Verifier tick.
 // A tick shows only on a line that carries verdict 'verified' from a real frame. English only today.
@@ -18,14 +18,14 @@
 
   const KEY = 'mc-feedpick';
   let DEFS = [
-    { key: 'casual', label: 'Casual', live: true }, { key: 'analyst', label: 'Analyst', live: true },
+    { key: 'casual', label: 'Fan', live: true }, { key: 'analyst', label: 'Analyst', live: true },
     { key: 'audio_description', label: 'Audio description', live: false }, { key: 'catch_me_up', label: 'Catch me up', live: true },
     { key: 'half_time', label: 'Half-time explainer', live: false }, { key: 'ticker', label: 'News ticker', live: false },
   ];
   let feeds = {}, lang = 'en', pick = 'casual', simulated = true, first = true;
   let cu = { state: 'idle' }, cuLast = null;   // the catch-me-up answer, and the last good recap (kept while a refresh is loading, busy or failed)
   const seen = new Set();
-  try { const s = localStorage.getItem(KEY); if (s && DEFS.some((d) => d.key === s)) pick = s; } catch (e) { /* storage blocked: the default stands */ }
+  try { const s = localStorage.getItem(KEY); if (s && ['casual', 'analyst'].includes(s) && DEFS.some((d) => d.key === s && d.live)) pick = s; } catch (e) { /* storage blocked: the default stands */ }
 
   const st = document.createElement('style'); st.id = 'mc-feedpick-css';
   st.textContent = '#mc-feeds{border-top:1px solid rgba(140,194,255,.2);padding:6px 10px 8px}'
@@ -38,20 +38,25 @@
     + '#mc-feedlines .fp-tick{color:#5BD19A;font-weight:700;flex:none}#mc-feedlines .fp-note{margin:4px 0 0;color:#c9d6f0}#mc-feedlines .fp-empty{margin:0;color:#c9d6f0}'
     + '#mc-feedlines .fp-cu-text{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:12em;overflow-y:auto}#mc-feedlines .fp-cu-text:focus-visible{outline:2px solid #F5B942;outline-offset:2px}#mc-feedlines .fp-cu-meta{margin:4px 0 0;color:#c9d6f0;display:flex;flex-wrap:wrap;gap:2px 10px}#mc-feedlines .fp-verified{color:#5BD19A;font-weight:700}'
     + '#mc-feedlines .fp-cu-btn{margin-top:6px;min-height:32px;padding:2px 10px;border-radius:999px;border:1px solid rgba(140,194,255,.35);background:transparent;color:#c9d6f0;font:600 12px system-ui,sans-serif;cursor:pointer}#mc-feedlines .fp-cu-btn:focus-visible{outline:2px solid #F5B942;outline-offset:2px}'
+    + '#mc-feed-coming{margin:0 0 6px;font:12px/1.4 system-ui,sans-serif;color:#aab6c8}#mc-feed-coming summary{width:max-content;cursor:pointer;color:#aab6c8;font-weight:600}#mc-feed-coming summary:hover{color:#fff}#mc-feed-coming ul{display:grid;gap:4px;list-style:none;margin:6px 0 0;padding:0}#mc-feed-coming li{display:flex;justify-content:space-between;gap:12px;padding:5px 8px;border:1px solid rgba(140,194,255,.15);border-radius:6px}#mc-feed-coming li span:last-child{color:#7e8da5;font-size:11px}'
     + '#mc-feedsr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}'
     + 'body.mc-feedlive #mc-two{display:none}'   // the two-voice panel steps aside only while a live feed has lines to show
     // a phone has no height to spare above Talk and Copilot: the picker sits in the card header row and ONE feed line (or its status or the English note) replaces the commentary line
-    + '@media (max-width:560px){body:not(.mc-feedon) #mc-feedlines{display:none}#mc-feeds{border-top:0;padding:0 8px 6px}#mc-feedpick{flex:1 1 0;min-width:0;margin:0 6px;flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}#mc-feedpick button{min-height:44px;flex:none}'
-    + '#mcf-head>span,body.mc-feedon #mcf-top{display:none}#mc-feedlines{display:flex;gap:6px;align-items:baseline;white-space:nowrap;overflow:hidden}#mc-feedlines ul{display:block;min-width:48px;flex:1 1 0}#mc-feedlines li:nth-child(n+2){display:none}'
+    + '@media (max-width:560px){body:not(.mc-feedon) #mc-feedlines{display:none}#mc-feeds{border-top:0;padding:0 8px 5px}#mc-feed-coming{display:none}#mc-feedpick{flex:1 1 0;min-width:0;margin:0 6px;flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}#mc-feedpick button{min-height:44px;flex:none}'
+    + '#mcf-head>span,body.mc-feedon #mcf-top,#mcf-sound{display:none!important}#mc-feedlines{display:flex;gap:6px;align-items:baseline;white-space:nowrap;overflow:hidden}#mc-feedlines ul{display:block;min-width:48px;flex:1 1 0}#mc-feedlines li:nth-child(n+2){display:none}'
     + '#mc-feedlines li>span:last-child,#mc-feedlines .fp-empty{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mc-feedlines .fp-empty{flex:1 1 0}#mc-feedlines .fp-note{margin:0;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}#mc-feedlines .fp-sim{flex:none;margin-right:0}'
     + '#mc-feedlines.fp-block{display:block;white-space:normal;overflow:visible}#mc-feedlines .fp-cu-text{max-height:5.4em;overflow-y:auto}#mc-feedlines .fp-cu-btn{min-height:44px}}';
   document.head.appendChild(st);
 
   const box = document.createElement('div'); box.id = 'mc-feeds';
   const grp = document.createElement('div'); grp.id = 'mc-feedpick'; grp.setAttribute('role', 'radiogroup'); grp.setAttribute('aria-label', 'Feed');
+  const coming = document.createElement('details'); coming.id = 'mc-feed-coming';
+  const comingTitle = document.createElement('summary'); comingTitle.textContent = 'Coming soon';
+  const comingList = document.createElement('div'); comingList.className = 'fp-coming-list';
+  coming.append(comingTitle, comingList);
   const out = document.createElement('div'); out.id = 'mc-feedlines';
   const sr = document.createElement('div'); sr.id = 'mc-feedsr'; sr.setAttribute('aria-live', 'polite'); sr.setAttribute('role', 'status');   // announces only newly published lines
-  box.append(grp, out, sr);
+  box.append(grp, coming, out, sr);
   const head = feed.querySelector('#mcf-head');
   feed.insertBefore(box, head ? head.nextSibling : feed.firstChild);
   // the group moves into the header row on a phone (see the CSS note above)
@@ -60,7 +65,9 @@
   if (mq.addEventListener) mq.addEventListener('change', seat); else if (mq.addListener) mq.addListener(seat);
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const def = () => DEFS.find((d) => d.key === pick) || DEFS[0];
+  const liveDefs = () => DEFS.filter((d) => d.live && ['casual', 'analyst'].includes(d.key));
+  const def = () => DEFS.find((d) => d.key === pick && d.live) || liveDefs()[0] || DEFS[0];
+  const drawComing = () => { coming.hidden = true; comingTitle.textContent = ''; comingList.textContent = ''; };
 
   // the catch-me-up block: built once and updated in place, so the Update button keeps keyboard focus across answers
   const cuBox = document.createElement('div'); cuBox.className = 'fp-cu';
@@ -102,7 +109,8 @@
     const sig = DEFS.map((d) => d.key + d.label + d.live).join('|');
     if (sig !== built) {
       built = sig;
-      grp.innerHTML = DEFS.map((d) => '<button type="button" role="radio" data-key="' + esc(d.key) + '">' + esc(d.label) + (d.live ? '' : '<span class="fp-tag">Planned</span>') + '</button>').join('');
+      grp.innerHTML = liveDefs().map((d) => '<button type="button" role="radio" data-key="' + esc(d.key) + '">' + esc(d.label) + '</button>').join('');
+      drawComing();
     }
     grp.querySelectorAll('button').forEach((b) => { const sel = b.dataset.key === pick; b.setAttribute('aria-checked', String(sel)); b.tabIndex = sel ? 0 : -1; });
   };
@@ -140,14 +148,14 @@
     if (!first && fresh.length) sr.textContent = fresh.join('. ');
     first = false;
   };
-  const postPick = (key) => { try { window.parent.postMessage({ src: 'matchcast', type: 'crew-feed-pick', key, lang: 'en' }, '*'); } catch (e) { /* no shell */ } };
+  const postPick = (key, user = false) => { try { window.parent.postMessage({ src: 'matchcast', type: 'crew-feed-pick', key, lang: 'en', user }, '*'); } catch (e) { /* no shell */ } };
   const choose = (key, fromUser) => {
-    if (!DEFS.some((d) => d.key === key)) return;
+    if (!['casual', 'analyst'].includes(key) || !DEFS.some((d) => d.key === key && d.live)) return;
     pick = key;
     if (fromUser) { try { localStorage.setItem(KEY, key); } catch (e) { /* storage blocked */ } }
     if (key === 'catch_me_up' && def().live) cu = { state: 'loading' };   // the shell reads the route for this pick (a re-pick is throttled there)
     drawPick(); drawLines();
-    postPick(key);
+    postPick(key, fromUser);
   };
   cuBtn.addEventListener('click', () => { cu = { state: 'loading' }; drawLines(); postPick('catch_me_up'); });
   const focusPick = () => { const nb = grp.querySelector('[aria-checked=true]'); if (nb) nb.focus(); };
@@ -157,16 +165,23 @@
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     if (!step && e.key !== 'Home' && e.key !== 'End') return;
     e.preventDefault();
-    const i = DEFS.findIndex((d) => d.key === pick);
-    const n = e.key === 'Home' ? 0 : e.key === 'End' ? DEFS.length - 1 : (i + step + DEFS.length) % DEFS.length;
-    choose(DEFS[n].key, true); focusPick();
+    const active = liveDefs(), i = active.findIndex((d) => d.key === pick);
+    const n = e.key === 'Home' ? 0 : e.key === 'End' ? active.length - 1 : (i + step + active.length) % active.length;
+    if (active[n]) choose(active[n].key, true); focusPick();
+  });
+
+  window.addEventListener('mc-audience', (e) => {
+    if (!['casual', 'analyst'].includes(e.detail)) return;
+    pick = e.detail;
+    try { localStorage.setItem(KEY, pick); } catch (error) { /* storage blocked */ }
+    drawPick(); drawLines();
   });
 
   window.addEventListener('message', (e) => {
     const d = e.data || {};
     if (e.source !== window.parent || d.src !== 'matchcast-shell') return;
     if (d.type === 'crew-feeds') {
-      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: String(x.label), live: !!x.live })); if (!DEFS.some((x) => x.key === pick)) pick = DEFS[0].key; }
+      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: x.key === 'casual' ? 'Fan' : String(x.label), live: !!x.live })); if (!['casual', 'analyst'].includes(pick) || !DEFS.some((x) => x.key === pick && x.live)) pick = (liveDefs()[0] || DEFS[0]).key; }
       simulated = d.simulated !== false;   // anything but an explicit false counts as the fixture
       feeds = d.feeds && typeof d.feeds === 'object' ? d.feeds : {};
       announce(); drawPick(); drawLines();

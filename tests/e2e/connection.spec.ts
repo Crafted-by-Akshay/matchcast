@@ -85,10 +85,11 @@ test('warming: never reads Offline, shows seconds of the warm-up, then Rules fal
   expect(errs).toEqual([]); api.server.close();
 });
 
-test('offline: Offline (simulated) and no api call', async ({ page }) => {
+test('offline: the redundant header badge is hidden and makes no api call', async ({ page }) => {
   const errs = collectErrors(page);
   await drive(page, '');
-  await expect(pill(page)).toHaveText('Offline (simulated)');
+  await expect(pill(page)).toHaveText('Demo mode');
+  await expect(pill(page)).toBeHidden();
   expect(await page.evaluate(() => !LV.enabled)).toBe(true);
   expect(errs).toEqual([]);
 });
@@ -154,7 +155,7 @@ test('the Broadcast desk says the same agents state as the shell pill', async ({
   await openView(page, 'broadcast');
   await page.waitForFunction(() => document.getElementById('v-broadcast')!.classList.contains('ready'), null, { timeout: 240_000 });
   const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;
-  const words: Record<string, string> = { 'Live agents': 'Agents: live from the api', 'Rules fallback': 'Agents: api did not answer, rules in this page', 'Offline (simulated)': 'Agents: rules in this page (no api connected)' };
+  const words: Record<string, string> = { 'Live agents': 'Agents: live from the api', 'Rules fallback': 'Agents: api did not answer, rules in this page', 'Demo mode': 'Agents: rules in this page (no api connected)' };
   await expect.poll(async () => { const p = String(await pill(page).textContent()); const d = String(await f.locator('#mc-agentstate').textContent()); return p.startsWith('Warming') ? d.startsWith('Agents: Warming') : d === words[p]; }, { timeout: 30_000 }).toBe(true);
   api.server.close();
 });

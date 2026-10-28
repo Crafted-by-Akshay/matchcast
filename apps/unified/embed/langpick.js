@@ -7,6 +7,9 @@
   try { if (window.parent !== window) qs += '&' + window.parent.location.search; } catch (e) { /* cross-origin parent */ }
   let on = !/[?&]crew=0(&|$)/.test(qs);   // default on; ?crew=0 or localStorage mc-crew=0 turns it off, an explicit crew=1 beats a stored 0
   try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked */ }
+  const singlePicker = document.createElement('style');
+  singlePicker.textContent = '#fan-pop .fm-lang,#fan-intro .fm-lang{display:none!important}';
+  document.head.appendChild(singlePicker);   // the shell header is the one language control in Watch; the preference panel keeps the scope/fallback note only
   if (!on) return;
   if (typeof FAN_LANGS === 'undefined' || typeof fanPicker === 'undefined' || typeof fanApply === 'undefined' || typeof fanPop === 'undefined') return;
 

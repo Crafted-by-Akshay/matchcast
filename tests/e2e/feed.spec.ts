@@ -405,17 +405,16 @@ test('Voice on starts the crowd bed, labelled simulated, and Voice off stops it'
   expect(await page.evaluate(() => VC.crowd)).toBe(false);
 });
 
-test('the commentary card says Sound is off until Voice is on', async ({ page }) => {
+test('the commentary card does not repeat the shell Sound control', async ({ page }) => {
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
   await expect.poll(() => f.evaluate(() => !!document.getElementById('mcf')), { timeout: 240_000 }).toBe(true);
-  // Voice is off by default, so the card must learn that from the shell (the hint is hidden until then)
-  await expect(f.locator('#mcf-sound')).toBeVisible({ timeout: 10_000 });
-  await expect(f.locator('#mcf-sound')).toContainText('Turn Sound on');
+  await expect(f.locator('#mcf-sound')).toBeHidden();
+  await expect(page.locator('#voice-btn')).toContainText('Sound: off');
+  await page.click('#voice-btn');
+  await expect(page.locator('#voice-btn')).toContainText('Sound: on');
   await page.click('#voice-btn');
   await expect(f.locator('#mcf-sound')).toBeHidden();
-  await page.click('#voice-btn');
-  await expect(f.locator('#mcf-sound')).toBeVisible();
 });
 
 test('the commentary card says when the live booth is off, and why, and hides that once it is on', async ({ page }) => {

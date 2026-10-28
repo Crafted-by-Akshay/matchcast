@@ -59,13 +59,13 @@ test('switching back keeps Watch on the same match', async () => {
   expect(s).toEqual({ started: true, seed });
 });
 
-test('Watch events reach the agents, the audit chain verifies and the Agents tab shows provenance', async () => {
+test('Watch events reach the internal pipeline, the audit chain verifies and provenance remains available', async () => {
   await expect.poll(async () => { await stepSim(watch); return page.evaluate(() => AG?.run?.stat.verified ?? 0); }, { timeout: 120_000, message: 'no verified claims' }).toBeGreaterThan(0);
   const run = await page.evaluate(() => ({ events: AG.run.stat.events, claims: AG.run.claims.length }));
   expect(run.events).toBeGreaterThan(0); expect(run.claims).toBeGreaterThan(0);
   const chain = await page.evaluate(() => MCC.verify());
   expect(chain.ok && chain.count > 0, 'audit chain should verify').toBe(true);
-  await page.keyboard.press('6');
+  await page.evaluate(() => { location.hash = 'agents'; });   // internal diagnostics remain routeable for tests and support, but are hidden from the main menu
   await expect(page.locator('#v-agents')).toBeVisible();
   expect(await page.locator('#ag-claims tr[data-id]').count()).toBeGreaterThan(0);
   await expect(page.locator('#ag-prov dl')).toBeVisible();

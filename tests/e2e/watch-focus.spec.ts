@@ -16,7 +16,8 @@ test('MCWatch.focus: a player id or a zone moves the camera (player mode); unkno
     const out: Record<string, any> = { has: typeof w.MCWatch?.focus };
     out.player = w.MCWatch.focus({ player_id: slug(target.name) });
     out.playerMode = document.body.classList.contains('fm-player');
-    out.chip = document.getElementById('fan-chip')!.textContent;
+    out.chipHidden = getComputedStyle(document.getElementById('fan-chip')!).display === 'none';
+    out.card = document.getElementById('fan-pcard')!.textContent;
     out.num = String(target.num);
     out.zones = ['box', 'midfield', 'wide'].map((z) => w.MCWatch.focus({ zone: z }));
     out.unknownPlayer = w.MCWatch.focus({ player_id: 'nobody-here' });
@@ -27,8 +28,8 @@ test('MCWatch.focus: a player id or a zone moves the camera (player mode); unkno
   expect(r.has).toBe('function');
   expect(r.player).toBe(true);
   expect(r.playerMode).toBe(true);
-  expect(r.chip).toContain('Player focus');
-  expect(r.chip).toContain(r.num);   // the chip shows the followed player's number
+  expect(r.chipHidden).toBe(true);
+  expect(r.card).toContain(r.num);   // the followed-player card shows the selected player's number
   expect(r.zones.every((z: unknown) => typeof z === 'boolean')).toBe(true);
   expect(r.zones[1]).toBe(true);   // there is always someone in the middle third
   expect(r.unknownPlayer).toBe(false);
