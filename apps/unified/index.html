@@ -668,6 +668,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 { const st = document.querySelector('.status'); if (st) { const edge = () => st.classList.toggle('end', st.scrollLeft + st.clientWidth >= st.scrollWidth - 2); st.addEventListener('scroll', edge, { passive: true }); addEventListener('resize', edge); edge(); } }
 const toast = (t) => { const el = $('toast'); el.textContent = t; const sb = $('story'); if (sb) { const r = sb.getBoundingClientRect(); el.style.setProperty('--toast-dt', Math.round(r.top + r.height / 2) + 'px');   /* desktop: centred on the stage-steps row, off the views' cards and camera chips (UX pass 10) */ el.style.setProperty('--toast-top', Math.round(r.top) + 'px'); el.style.setProperty('--toast-h', Math.round(r.height || 48) + 'px'); } el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 // the full-time recap card (Watch: casual, Broadcast: broadcast persona); the api's own recap, every sentence checked by the Verifier
+let watchLive = false;   // a match is live on Watch (kicked off, not yet full time): the crowd bed plays while Watch is on screen
 let RECAP = { gen: 0, closed: false };
 let RUN_GEN = 0;   // the match run on screen: a new Watch start takes the next number, and an answer from an older run is refused (FIX-01)
 const RECAP_PERSONA = { watch: 'casual', broadcast: 'broadcast' };
@@ -836,6 +837,8 @@ const wide = window.matchMedia('(min-width: 900px)');
 // Watch is the default live match. Production Studio opens on its own preview so users never see two different weather states side by side; ?split=1 is still available from Watch for comparison.
 let bcBeside = new URLSearchParams(location.search).get('split') === '1';
 function shownViews(view) { return wide.matches && view === 'watch' && bcBeside ? SPLIT_VIEWS : [view]; }
+// the crowd bed (voice.js) is for a live match on Watch only: on while Watch is on screen, off on Home and the other pages, off at full time
+function syncBed() { if (typeof VC !== 'undefined') VC.bed(watchLive && shownViews(current).includes('watch')); }
 (() => { const t = $('bc-toggle'); t.onclick = () => { bcBeside = !bcBeside; show(current); }; })();
 const SPLIT_KEY = 'mc.split', SPLIT_MIN = 0.25, SPLIT_MAX = 0.8;
 let splitFrac = 0.58;
@@ -863,6 +866,7 @@ function show(view) {
   for (const b of Object.keys(BROWSE)) if (!$('v-' + b).hidden) BROWSE[b].y = $('v-' + b).scrollTop;   // a browse page keeps its scroll when the view changes
   const wasBrowse = !!BROWSE[current];
   current = view;
+  syncBed();
   document.body.dataset.view = view;   // CSS hides the match bar and the five-stage strip on the catalog pages
   if (repaintPill && LV.status === 'warming' && wasBrowse !== !!BROWSE[view]) repaintPill(LV.status, true);   // the warm-up pill follows the page: quiet on the browse pages, counting elsewhere
   if (view !== 'watch') { hlStop(); $('hl').hidden = true; $('hl-open').hidden = true; } else paintHighlights();   // the panel and its button belong to Watch after full time; coming back to Watch shows them again
@@ -1582,6 +1586,7 @@ window.addEventListener('message', (e) => {
   const f = FR[view];
   if (d.setup) f.live = { setup: d.setup, started: !!d.started, over: !!d.over, score: d.score || [0, 0], minute: d.minute || 0 };
   if (d.type === 'start') {
+    if (view === 'watch') { watchLive = true; syncBed(); }   // kick-off on Watch: the crowd bed starts
     LIVE_LAST = { setup: d.setup, roster: d.roster }; MAPS.start(d.setup, d.roster);
     post('analyst', { src: 'matchcast-shell', type: 'live-start', setup: d.setup, roster: d.roster });
     // a new match was started inside the view (its own setup or New match): it becomes the shared match
@@ -1603,6 +1608,7 @@ window.addEventListener('message', (e) => {
   } else if (d.type === 'fulltime') {
     if (f.sent === 'done') return;
     f.sent = 'done';
+    if (view === 'watch') { watchLive = false; syncBed(); }   // full time: the crowd bed stops
     const msg = { src: 'matchcast-shell', type: 'import', dataset: d.dataset, recap: LV.enabled && LV.key && view === 'watch' && LV.status !== 'fallback' && LV.status !== 'offline' ? { api: LV.base, session_id: LV.key.session_id, match_id: LV.key.match_id } : null };
     if (FR.analyst && FR.analyst.ready) post('analyst', msg); else pendingImports.push(msg);
     toast('Full time: the live match went to the Analyst as a new library entry');

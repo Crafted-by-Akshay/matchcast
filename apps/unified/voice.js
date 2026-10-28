@@ -59,9 +59,9 @@ const VC = (() => {
       if (item.tone === 'big') queue.unshift(item); else queue.push(item);
       next(); }
   };
-  // the crowd bed (simulated): a murmur under the commentary while Voice is on. It is synthesised here, not a recording. It sits at BED, lifts on an attack
-  // (swell 0.45) and erupts on a goal (0.8), then settles back to BED.
-  let crowd = null, swellT = 0;
+  // the crowd bed (simulated): a murmur under the commentary while Voice is on and a match is live on Watch (bed() below). It is synthesised here, not a recording.
+  // It sits at BED, lifts on an attack (swell 0.45) and erupts on a goal (0.8), then settles back to BED.
+  let crowd = null, swellT = 0, bedWanted = false;
   const BED = 0.3;   // gain under the voices: the first version was 0.04, about -40 dBFS, which the commentary covered entirely
   const crowdStart = () => {
     if (crowd || !('AudioContext' in window)) return;
@@ -80,11 +80,13 @@ const VC = (() => {
     g.cancelScheduledValues(t); g.setTargetAtTime(Math.max(peak, g.value), t, 0.3);   // a lift never pulls an eruption back down
     clearTimeout(swellT); swellT = setTimeout(() => { if (crowd) crowd.g.gain.setTargetAtTime(BED, crowd.ctx.currentTime, 1.5); }, 3000);
   };
-  const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } const synth = window.speechSynthesis; if (typeof synth?.cancel === 'function') synth.cancel(); busy = false; crowdStop(); } else crowdStart(); onChange(); };
+  const set = (v) => { on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* storage may be blocked */ } if (!on) { gen++; queue = []; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } const synth = window.speechSynthesis; if (typeof synth?.cancel === 'function') synth.cancel(); busy = false; crowdStop(); } else if (bedWanted) crowdStart(); onChange(); };
+  // the bed plays only while a match is live on Watch: the shell calls bed(true) at kick-off and bed(false) when the viewer leaves Watch or at full time
+  const bed = (v) => { bedWanted = !!v; if (bedWanted && on) crowdStart(); else crowdStop(); };
   // a new match from Watch: the lines queued or speaking, and the caption, belong to the match before. Their audio stops here; the next line is the new match's (FIX-01)
-  // Voice is on by default, so the bed starts with the first click or key press: the first gesture the browser lets audio start on
-  const crowdOnGesture = () => { if (on) crowdStart(); removeEventListener('pointerdown', crowdOnGesture); removeEventListener('keydown', crowdOnGesture); };
+  // the first click or key press unlocks audio in the browser; if the match is already live then, the bed starts with that gesture
+  const crowdOnGesture = () => { if (on && bedWanted) crowdStart(); removeEventListener('pointerdown', crowdOnGesture); removeEventListener('keydown', crowdOnGesture); };
   addEventListener('pointerdown', crowdOnGesture); addEventListener('keydown', crowdOnGesture);
   const clear = () => { gen++; queue = []; busy = false; if (typeof SPX !== 'undefined') SPX.stop(); if (playing) { playing.pause(); playing = null; } const synth = window.speechSynthesis; if (typeof synth?.cancel === 'function') synth.cancel(); clearTimeout(hide); if (bar) bar.hidden = true; onChange(); };
-  return { load, say, set, clear, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get level() { return crowd ? crowd.g.gain.value : 0; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
+  return { load, say, set, bed, clear, speaks, swell, onChange: (fn) => { onChange = fn; }, get on() { return on; }, get crowd() { return !!crowd; }, get level() { return crowd ? crowd.g.gain.value : 0; }, get voices() { return voices; }, get source() { return source; }, get EXPIRY_MS() { return EXPIRY_MS; } };
 })();

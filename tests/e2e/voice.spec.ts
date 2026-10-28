@@ -50,6 +50,9 @@ test('the crowd bed is audible under the commentary, and swells on an attack and
   await openShell(page, 'agents');
   await page.evaluate(() => VC.set(false));
   await page.click('#voice-btn');
+  // the bed is for a live match on Watch only: not on this page, so nothing plays before kick-off
+  expect(await page.evaluate(() => VC.crowd), 'no crowd bed before a match is live on Watch').toBe(false);
+  await page.evaluate(() => VC.bed(true));   // Watch kicks off
   // a murmur under the voices (full gain is 1): at rest it must be clearly above hiss, not inaudible
   const rest = await page.evaluate(() => VC.level);
   expect(rest, 'the crowd bed is audible at rest').toBeGreaterThanOrEqual(0.15);
