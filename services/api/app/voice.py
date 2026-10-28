@@ -136,11 +136,19 @@ def speakable(text: str) -> str:
     return " ".join(MARKER.sub("", text).split())
 
 
+# styles the commentary voices have (Speech voices list); others get the prosody only
+STYLED = {"en-GB-RyanNeural": "cheerful", "en-GB-SoniaNeural": "cheerful"}
+MARKUP = "ssml-2"  # bumped when the markup changes, so a clip made before is not served again
+
+
 def ssml(text: str, voice: str) -> str:
     locale = voice.rsplit("-", 1)[0]  # en-GB-RyanNeural -> en-GB
+    body = f"<prosody rate='+0%' pitch='+3%'>{escape(text)}</prosody>"
+    if style := STYLED.get(voice):
+        body = f"<mstts:express-as style='{style}'>{body}</mstts:express-as>"
     return (
-        f"<speak version='1.0' xml:lang='{locale}'>"
-        f"<voice name='{voice}'>{escape(text)}</voice></speak>"
+        f"<speak version='1.0' xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='{locale}'>"
+        f"<voice name='{voice}'>{body}</voice></speak>"
     )
 
 
@@ -158,7 +166,7 @@ def _store_from_env() -> ClipStore | None:
 
 
 def clip_key(text: str, voice: str) -> str:
-    return hashlib.sha256(f"{voice}\n{text}".encode()).hexdigest()[:32]
+    return hashlib.sha256(f"{MARKUP}\n{voice}\n{text}".encode()).hexdigest()[:32]
 
 
 class VoiceService:
