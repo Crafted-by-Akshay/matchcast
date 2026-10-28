@@ -130,6 +130,12 @@ RANKING_Q = re.compile(
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _SCORE_PAIR = re.compile(r"\b\d+\s*(?:[-–—:]|to|vs\.?)\s*\d+\b", re.IGNORECASE)
 _CITE = re.compile(r"\[(kb|claim|event):([^\]]+)\]")
+MOMENT_WORD = re.compile(r"\b(chance|chances|moment|shot|attack|save)\b", re.IGNORECASE)
+
+
+def plain_text(text: str) -> str:
+    """The answer as a viewer reads it: the citation tags removed and the gaps they leave tidied."""
+    return re.sub(r"\s+([.,;:!?])", r"\1", " ".join(_CITE.sub("", text).split()))
 
 
 @dataclass
@@ -146,7 +152,7 @@ class AskResult:
 
 @dataclass(frozen=True)
 class Route:
-    intent: str  # live|knowledge|both|leader|goals|goal_impact|history|out_of_scope|abstain
+    intent: str  # live|knowledge|both|leader|goals|goal_impact|moment|history|out_of_scope|abstain
     metric: tuple[str, str] | None
     teams: tuple[str, ...]
     kb_query: str
@@ -231,6 +237,9 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     which = _goal_ordinal(question)
     if IMPACT_Q.search(question) and GOAL_WORD.search(question) and which:
         return Route("goal_impact", ("goals", which), teams, "")  # the score change at one goal
+    if IMPACT_Q.search(question) and MOMENT_WORD.search(question):
+        # "why did that chance matter": a moment of this match, never a knowledge page
+        return Route("moment", None, teams, "")
 
     def hit(query: str) -> bool:
         top = max((h.score for h in index.search(query, k=1)), default=0.0) if query else 0.0
@@ -482,6 +491,13 @@ class Assistant:
                 sentences.append((f"{club} haven't scored yet. {_cites(claims)}", "live"))
             else:
                 sentences.append((_live_sentence(ctx, label, claims), "live"))
+        if plan.intent == "moment":  # the latest shot of the match, cited to its event
+            moment = _last_shot_line(ctx)
+            if moment is None:
+                return AskResult(ABSTAIN, plan.intent, abstained=True)
+            event_id, line = moment
+            event_numbers[event_id] = extract_numbers(line)
+            sentences.append((f"{line} [event:{event_id}]", None))
         if plan.intent in ("knowledge", "both"):
             hits, retrieval = await self._retrieve(plan.kb_query)
             for text, chunk_id in _knowledge_sentences(hits):
@@ -567,6 +583,20 @@ def _goal_lines(ctx: MatchContext) -> list[tuple[str, str, str]]:
         )
         lines.append((event["event_id"], team, text))
     return lines
+
+
+def _last_shot_line(ctx: MatchContext) -> tuple[str, str] | None:
+    """(event id, line) for the match's latest shot, or None when no shot is on the record yet."""
+    shots = [e for e in ctx.events if e["payload"]["type"] == "shot"]
+    if not shots:
+        return None
+    event = shots[-1]
+    payload = event["payload"]
+    who = ctx.player_name(payload["player_id"]) if payload.get("player_id") else "A player"
+    club = f" for {ctx.club_name(payload['team_id'])}" if payload.get("team_id") else ""
+    aim = " on target" if payload.get("on_target") else ""
+    minute = int(event["event_time_ms"] // 60_000)
+    return event["event_id"], f"{who} took the latest chance{club} at minute {minute}{aim}."
 
 
 def _fit(sentences: list[str], limit: int) -> str:

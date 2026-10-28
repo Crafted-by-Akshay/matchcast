@@ -1183,10 +1183,12 @@ const teamsOf = (s) => ({ hk: s.h, ak: s.a, home: nameOf(s.h), away: nameOf(s.a)
 const METRIC = { score: ['score', 'goals'], shot: ['shot_xg', 'xG'], xg_total: ['xg_total', 'xG'] };
 const valueOf = (c) => c.dropped ? (c.feed ? 'feed ' + c.feed : '') : c.kind === 'score' ? c.inputs.score.join('–') : c.kind === 'shot' ? (+c.inputs.xg).toFixed(2) : c.kind === 'xg_total' ? c.inputs.xg.map((x) => (+x).toFixed(2)).join(' / ')
   : c.inputs && c.inputs.value != null ? String(c.inputs.value) : '';
+// the api's reason codes read as a viewer's words: "api: published in pub-line-…" is "Published after verification"
+const plainReason = (r) => String(r || '').replace(/^api: published in \S+$/, 'Published after verification').replace(/^api: /, '');
 function ledgerRows(claims) {
   const f = { verdict: $('lg-verdict').value, agent: $('lg-agent').value, metric: $('lg-metric').value };
   return claims.filter((c) => !c.pub).reverse().map((c) => ({ id: c.id, time: mins(c.minute), metric: (METRIC[c.kind] || [c.inputs && c.inputs.metric ? c.inputs.metric : c.kind])[0], value: valueOf(c), units: (METRIC[c.kind] || [null, c.inputs && c.inputs.units || ''])[1],
-    agent: c.agent, source: c.source === 'model' ? 'model' : 'rules', verdict: c.verdict, repaired: c.repaired, reason: c.reason || '', approval: c.approval || (c.verdict === 'verified' ? 'approved' : c.verdict === 'pending' ? 'pending' : 'held') }))
+    agent: c.agent, source: c.source === 'model' ? 'model' : 'rules', verdict: c.verdict, repaired: c.repaired, reason: plainReason(c.reason), approval: c.approval || (c.verdict === 'verified' ? 'approved' : c.verdict === 'pending' ? 'pending' : 'held') }))
     .filter((x) => (!f.verdict || x.verdict === f.verdict) && (!f.agent || x.agent === f.agent) && (!f.metric || x.metric === f.metric));
 }
 const csvCell = (s) => /[",\n]/.test(String(s)) ? '"' + String(s).replace(/"/g, '""') + '"' : String(s);
@@ -1304,7 +1306,7 @@ function renderAgents() {
     ['Line', c.dropped ? '<b>Verifier dropped</b> · ' + (c.feed ? 'feed ' + esc(c.feed) + ' · ' : '') + 'reason <code>' + esc(c.reasonCode || 'not given') + '</code> · the text stays in the audit chain, not shown' : esc(c.text)],
     ['Inputs', '<code>' + esc(MCC.canon(c.inputs)) + '</code>'],
     ['Evidence', esc((c.dropped ? (c.eventIds || []).join(', ') : c.evidence.join(', ')) || c.basis || '')],
-    ['Verifier', esc(c.verdict + ': ' + c.reason)],
+    ['Verifier', esc(c.verdict + ': ' + plainReason(c.reason))],
     ['Route', esc(c.route || 'held, not aired')],
     ['Contract', c.dropped ? 'feed_drop · 1.2.0' : esc(c.schema + ' · ' + c.locale + ' · ' + c.rules)],
     ['Agent', c.dropped ? 'Api Verifier (as the api reports it)' : c.source === 'model' ? 'Model · live agent api' : 'Rules · in the page, ' + agentState().note],
@@ -1496,7 +1498,7 @@ async function watchCopilotAsk(d) {
   for (const k of ['weather', 'energy', 'tactics']) if (typeof d.context?.[k] === 'string' && d.context[k]) context[k] = d.context[k].slice(0, 200);
   try {
     const answer = await Promise.race([LV.ask(d.question, 'ask', context), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 15000))]);
-    reply(answer.verdict === 'abstained' || !answer.text ? null : answer.text);
+    reply(answer.verdict === 'abstained' || !answer.text ? null : answer.text.replace(/\[(kb|claim|event):[^\]]*\]/g, '').replace(/\s+([.,;:!?])/g, '$1').replace(/\s+/g, ' ').trim() || null);   // citation tags are for the audit, never shown
   } catch (e) { reply(null); }
 }
 window.addEventListener('message', (e) => {

@@ -30,6 +30,7 @@ from matchcast_agents import (
     rules_agents,
 )
 from matchcast_agents.ask import kb_root
+from matchcast_agents.ask.assistant import plain_text
 from matchcast_agents.data_scientist import ask as ds_ask_season
 from matchcast_agents.feeds import FEED_KEYS
 from matchcast_agents.grading import scoreboard
@@ -1571,8 +1572,11 @@ def build_router(registry: Registry) -> APIRouter:
             )
         except WorkflowError as error:
             raise Problem(STATUS[error.code], error.code, str(error)) from error
+        answer_text = plain_text(
+            result.answer
+        )  # citation tags are for the audit, not the viewer
         reply: dict[str, Any] = {
-            "answer": result.answer,
+            "answer": answer_text,
             "intent": result.intent,
             "abstained": result.abstained,
             "citations": result.citations,
@@ -1584,11 +1588,11 @@ def build_router(registry: Registry) -> APIRouter:
             reply["broadcast"] = result.broadcast
         # the Broadcast picks stay English: the desk never reads variants, so no translation call
         if body.lang != "en" and not result.abstained and result.broadcast is None:
-            key = "ask-" + hashlib.sha256(result.answer.encode()).hexdigest()[:12]
+            key = "ask-" + hashlib.sha256(answer_text.encode()).hexdigest()[:12]
             variant = await registry.translation.variant(
                 f"{body.session_id}/{match_id}",
                 key,
-                result.answer,
+                answer_text,
                 body.lang,
                 _names(flow),
                 lambda reason: flow.record_translation_rejected(key, body.lang, reason),
