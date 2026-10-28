@@ -7,7 +7,7 @@ from dataclasses import replace
 from conftest import fixed_clock, run
 from matchcast_agents import MatchWorkflow, WorkflowConfig, rules_agents
 from matchcast_agents.live import ScriptedModelClient
-from matchcast_agents.live.answers import fact_sheet
+from matchcast_agents.live.answers import LiveAnswers, fact_sheet, record_facts
 from matchcast_agents.resilience import ModelError
 
 
@@ -355,3 +355,17 @@ def test_engine_context_is_a_fact_the_model_may_cite(match) -> None:
     )
     assert result.mode == "live" and result.answer == "The weather is rain, 14°C."
     assert facts_of(model.calls[-1]["user"])["engine:weather"] == "weather now: rain, 14°C"
+
+
+def test_a_saved_match_answer_is_checked_against_its_record() -> None:
+    facts = record_facts(
+        "Northgate FC", "Harbour United", (1, 2), {"shots": (15.0, 4.0)},
+        [(34.0, "goal", "Ana Ruiz", "home")], {"weather": "rain, 16°C"},
+    )  # fmt: skip
+    model = ask_model("Northgate FC have 15 shots.", ["stat:shots:home"])
+    club_pair = ("Northgate FC", "Harbour United")
+    answer, reason = run(
+        LiveAnswers(model).ask_record(facts, "How many shots?", "casual", club_pair)
+    )
+    assert reason == "" and answer.answer == "Northgate FC have 15 shots."
+    assert facts_of(model.calls[-1]["user"])["stat:shots:home"] == "Northgate FC: shots 15"

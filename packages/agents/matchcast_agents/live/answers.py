@@ -239,6 +239,36 @@ def _sentence_at(text: str, position: int) -> str:
     return text[start : min(ends, default=len(text))]
 
 
+def record_facts(
+    home: str,
+    away: str,
+    score: tuple[int, int],
+    stats: dict[str, tuple[float, float]],
+    events: list[tuple[float, str, str | None, str | None]],
+    engine_context: dict[str, str],
+) -> list[dict[str, str]]:
+    """Numbered facts about a saved match: its score, stats, key events and the 3D view's state."""
+    facts = [
+        {
+            "id": "score",
+            "text": f"score {score[0]}-{score[1]}: {home} {score[0]}, {away} {score[1]}",
+        }
+    ]
+    for key in sorted(stats):  # one fact per club, worded like the live facts: "Club: shots 15"
+        a, b = stats[key]
+        facts.append({"id": f"stat:{key}:home", "text": f"{home}: {key} {a:g}"})
+        facts.append({"id": f"stat:{key}:away", "text": f"{away}: {key} {b:g}"})
+    for i, (minute, kind, player, team) in enumerate(events):
+        side = {"home": home, "away": away}.get(team or "", "")
+        line = f"minute {int(minute)} {kind.replace('_', ' ')}"
+        line += f" by {player}" if player else ""
+        line += f" ({side})" if side else ""
+        facts.append({"id": f"event:{i}", "text": line})
+    for name, text in engine_context.items():
+        facts.append({"id": f"engine:{name}", "text": f"{name} now: {text}"})
+    return facts
+
+
 def _ask_problem(
     text: str, cites: list[str], texts: dict[str, str], limit: int, clubs: tuple[str, ...]
 ) -> str | None:
@@ -430,6 +460,33 @@ class LiveAnswers:
             return None, reason
         citations = [{"type": "fact", "id": c} for c in dict.fromkeys(cites)]
         return AskResult(text, "live", False, citations, mode="live", retrieval="local"), ""
+
+    async def ask_record(
+        self, facts: list[dict[str, str]], question: str, persona: str, clubs: tuple[str, str]
+    ) -> tuple[AskResult | None, str]:
+        """An answer about a saved match, from its record's facts; checked like Ask."""
+        texts = {f["id"]: f["text"] for f in facts}
+        limit = WORD_LIMIT.get(persona, 80)
+        answer = await self._call(
+            prompt("ask"),
+            {"question": question, "persona": persona, "word_limit": limit, "facts": facts},
+            ASK_SCHEMA,
+        )
+        if answer is None:
+            return None, "model_unavailable"
+        if answer.get("answerable") is not True:
+            return None, "not_answerable"
+        text, cites = answer.get("answer"), answer.get("cites")
+        if not isinstance(text, str) or not isinstance(cites, list) or not cites:
+            return None, "malformed"
+        if not all(isinstance(c, str) and c in texts for c in cites):
+            return None, "unknown_citation"
+        text = text.strip()
+        reason = _ask_problem(text, list(dict.fromkeys(cites)), texts, max(limit, 40), clubs)
+        if reason:
+            return None, reason
+        citations = [{"type": "fact", "id": c} for c in dict.fromkeys(cites)]
+        return AskResult(text, "record", False, citations, mode="live", retrieval="local"), ""
 
     async def talk(
         self,
