@@ -324,10 +324,14 @@ const MC_API_NAME = { xg: 'xg', poss: 'possession_share' };
 (() => {
   const KEY = 'mcx-mode';
   const persona = () => FAN.mode === 'club' ? 'club:' + TEAMS[FAN.club].key : FAN.mode === 'player' && FAN.player ? 'player:' + FAN.player.name : FAN.mode === 'metric' ? 'metric:' + (MC_API_NAME[FAN.metric] || FAN.metric) : FAN.mode;
-  const tell = () => { MCS.send({ type: 'persona', persona: persona(), lang: FAN.lang }); if (window.__mcxCards) window.__mcxCards.redraw(); window.dispatchEvent(new CustomEvent('mc-audience', { detail: FAN.mode === 'analyst' || FAN.mode === 'metric' ? 'analyst' : 'casual' })); };
+  const tell = () => { MCS.send({ type: 'persona', persona: persona(), lang: FAN.lang }); if (window.__mcxCards) window.__mcxCards.redraw(); };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: FAN.mode, club: FAN.club, metric: FAN.metric, lang: FAN.lang, player: FAN.player ? FAN.player.name : null })); } catch (e) { /* storage may be blocked */ } };
   const _set = fanSet;
-  fanSet = function (o, why) { _set(o, why); save(); tell(); };
+  fanSet = function (o, why) {
+    _set(o, why); save(); tell();
+    // a viewer's Fan or Analyst choice moves the feed picker; the saved mode restored on load does not (the default feed stays Casual)
+    if (o && o.mode !== undefined) window.dispatchEvent(new CustomEvent('mc-audience', { detail: FAN.mode === 'analyst' || FAN.mode === 'metric' ? 'analyst' : 'casual' }));
+  };
   let saved = null; try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { saved = null; }
   const go = setInterval(() => {
     if (!window.__mc || !players.length || !$('load').hidden) return;

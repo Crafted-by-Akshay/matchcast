@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { openShell, ready, viewFrame } from './helpers';
 
-test('Watch keeps one live caption, two audience choices and a focused Copilot', async ({ page }) => {
+test('Watch keeps one live caption, the six-feed picker and a focused Copilot', async ({ page }) => {
   test.setTimeout(300_000);
   await openShell(page, 'watch');
   await ready('watch')(page);
@@ -18,7 +18,7 @@ test('Watch keeps one live caption, two audience choices and a focused Copilot',
   await expect(f.locator('#fan-chip')).toBeHidden();
 
   const audience = f.getByRole('radiogroup', { name: 'Feed' });
-  await expect(audience.getByRole('radio')).toHaveCount(2);
+  await expect(audience.getByRole('radio')).toHaveCount(6);   // all six feeds are live and selectable (AB#450, #482)
   await expect(audience.getByRole('radio').nth(0)).toHaveText('Fan');
   await expect(audience.getByRole('radio').nth(1)).toHaveText('Analyst');
   await audience.getByRole('radio', { name: 'Fan' }).click();

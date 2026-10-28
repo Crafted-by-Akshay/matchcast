@@ -4,7 +4,7 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 // AB#450: the Watch feed picker (flag ?crew=1). All six feeds are live; a feed with no lines yet says it is waiting. Lines come from CREW.state.feeds
 // (the Simulated fixture until the orchestration frames land) through the shell's postMessage bus. Wall-clock timing is meaningless under
 // software GL, so every wait polls for state, never for a duration. Honesty: fixture lines are labelled Simulated and carry no Verifier tick.
-const LABELS = ['Fan', 'Analyst', 'Audio description', 'Catch me up', 'Half-time explainer', 'News ticker'];
+const LABELS = ['Casual', 'Analyst', 'Audio description', 'Catch me up', 'Half-time explainer', 'News ticker'];
 
 async function open(page: any, width = 1280, height = 800, query = '?crew=1') {
   await page.route('**/broadcast/**', (r: any) => r.abort());   // Watch must load here; a second 3D engine is not needed
@@ -18,7 +18,7 @@ async function open(page: any, width = 1280, height = 800, query = '?crew=1') {
 const realFrame = (page: any, lang = 'en') => page.evaluate((l: string) => post('watch', { src: 'matchcast-shell', type: 'crew-feeds', lang: l, simulated: false, defs: CREW.FEEDS,
   feeds: { casual: [{ publication_id: 'r1', text: 'A real checked line.', match_time_ms: 41 * 60000, source_event_ids: ['e1'], verdict: 'verified' }, { publication_id: 'r2', text: 'A line with no verdict.', match_time_ms: 42 * 60000, source_event_ids: ['e2'] }], analyst: [] } }), lang);
 
-test('with ?crew=0 nothing is added: no picker, style, body class or iframe parameter', async ({ page }) => {
+test('with ?crew=0 nothing is added: no picker, style, body class or iframe parameter, and the two-voice panel is not touched', async ({ page }) => {
   test.setTimeout(300_000);
   const f = await open(page, 1280, 800, '?crew=0');
   await f.waitForSelector('#mc-two', { state: 'attached', timeout: 60_000 });
@@ -26,7 +26,8 @@ test('with ?crew=0 nothing is added: no picker, style, body class or iframe para
   expect(await f.locator('#mc-feedpick-css').count()).toBe(0);
   expect(await f.evaluate(() => document.body.className)).not.toMatch(/mc-feed/);
   expect(await page.evaluate(() => [...document.querySelectorAll('iframe')].map((i) => i.src).join(' '))).not.toContain('crew=1');
-  await expect(f.locator('#mc-two')).toBeHidden();   // simplified UI does not show the duplicate two-viewer demo
+  // the two-voice panel shows as it always did (twofans un-hides it once a line has two wordings; force that here)
+  expect(await f.evaluate(() => { const b = document.getElementById('mc-two')!; b.hidden = false; return getComputedStyle(b).display; })).not.toBe('none');
 });
 
 test('feed picker: six labelled choices, no Planned tags, waiting copy, Simulated lines with a minute and no tick, saved choice', async ({ page }) => {
@@ -99,12 +100,12 @@ test('feed picker: arrow, Home and End keys move the choice and keep focus on it
   await expect(radios.nth(1)).toBeFocused();
   // all six feeds are live, so End lands on the last one (News ticker)
   await f.page().keyboard.press('End');
-  await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true');
-  await expect(radios.nth(1)).toBeFocused();
+  await expect(radios.nth(5)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(5)).toBeFocused();
   await f.page().keyboard.press('ArrowRight');   // wraps
   await expect(radios.nth(0)).toBeFocused();
   await f.page().keyboard.press('ArrowLeft');
-  await expect(radios.nth(1)).toBeFocused();
+  await expect(radios.nth(5)).toBeFocused();
   await f.page().keyboard.press('Home');
   await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
   await expect(radios.nth(0)).toBeFocused();
@@ -114,18 +115,19 @@ test('feed picker: arrow, Home and End keys move the choice and keep focus on it
   await expect(radios.nth(0)).toBeFocused();
 });
 
-test('the duplicate two-viewer panel stays hidden in the simplified commentary layout', async ({ page }) => {
+test('feed picker: the two-voice panel steps aside only while the picked feed is live and has lines', async ({ page }) => {
   test.setTimeout(300_000);
   const f = await open(page);
   const group = f.getByRole('radiogroup', { name: 'Feed' });
   await expect(group).toBeVisible({ timeout: 60_000 });
-  await expect(f.locator('#mc-two')).toBeHidden();
+  const disp = () => f.evaluate(() => { const b = document.getElementById('mc-two')!; b.hidden = false; return getComputedStyle(b).display; });
+  expect(await disp(), 'a live feed with no lines leaves the panel').not.toBe('none');
   await page.evaluate(() => CREW.play(23));
   await expect(f.locator('#mc-feedlines li').first()).toBeVisible({ timeout: 60_000 });
   expect(await disp(), 'a live feed with lines replaces the panel').toBe('none');
   await group.getByRole('radio', { name: /Audio description/ }).click();
   expect(await disp(), 'a live feed with no lines yet leaves the panel').not.toBe('none');
-  await group.getByRole('radio', { name: /Fan/ }).click();
+  await group.getByRole('radio', { name: /Casual/ }).click();
   expect(await disp()).toBe('none');
   await page.evaluate(() => CREW.reset());
   await expect(f.locator('#mc-feedlines')).toContainText('waiting for a moment');
@@ -155,23 +157,24 @@ for (const [name, w, h] of [['phone', 390, 844], ['small phone', 320, 640]] as c
     await expect(f.locator('#mc-feedlines li').first()).toBeVisible({ timeout: 60_000 });
     await page.evaluate(() => post('watch', { src: 'matchcast-shell', type: 'lang', lang: 'es' }));
     await expect(f.locator('#mc-feedlines .fp-note')).toBeVisible({ timeout: 30_000 });
-    await expect(f.locator('#mc-trust')).toBeHidden();
-    await expect(f.locator('#mcf-sound')).toBeHidden();
     const geom = () => f.evaluate(() => {
       const r = (sel: string) => { const e = document.querySelector(sel); if (!e || getComputedStyle(e).display === 'none') return null; const b = e.getBoundingClientRect(); return b.width ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
-      return { mcf: r('#mcf'), pick: r('#mc-feedpick'), lines: r('#mc-feedlines li'), note: r('#mc-feedlines .fp-note'), cp: r('#cpbtn'), sw: document.documentElement.scrollWidth, iw: innerWidth };
+      return { mcf: r('#mcf'), pick: r('#mc-feedpick'), lines: r('#mc-feedlines li'), note: r('#mc-feedlines .fp-note'), talk: r('#mcx-talk'), cp: r('#cpbtn'), sw: document.documentElement.scrollWidth, iw: innerWidth };
     });
     // the Talk and Copilot controls are placed by a one second timer: poll until they are drawn
-    await expect.poll(async () => { const g = await geom(); return !!(g.cp && g.mcf && g.lines && g.note); }, { timeout: 30_000 }).toBe(true);
+    await expect.poll(async () => { const g = await geom(); return !!(g.talk && g.cp && g.mcf && g.lines && g.note); }, { timeout: 30_000 }).toBe(true);
     const g = await geom();
     const hit = (a: any, b: any) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
     expect(g.pick!.l).toBeGreaterThanOrEqual(0);
     expect(g.pick!.r).toBeLessThanOrEqual(g.iw);
     expect(g.sw, 'Watch does not scroll sideways').toBeLessThanOrEqual(g.iw);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'the shell does not scroll sideways').toBe(true);
-    // The caption and the two audience choices stay compact at phone width; Talk lives inside Copilot instead of floating beside the card.
+    // The commentary card already reached the Talk row on a phone before this feature (98 px tall at 390 px). The picker lives in its header row and the one-line feed text replaces the commentary line, so the card must not grow.
     expect(g.mcf!.b - g.mcf!.t, 'the commentary card is no taller than before').toBeLessThanOrEqual(99);
+    expect(g.mcf!.t, 'the card does not rise above the Talk control').toBeGreaterThanOrEqual(g.talk!.t);
+    expect(hit(g.lines!, g.talk!), 'feed text clear of Talk').toBe(false);
     expect(hit(g.lines!, g.cp!), 'feed text clear of Copilot').toBe(false);
+    expect(hit(g.note!, g.talk!), 'English note clear of Talk').toBe(false);
     expect(g.note!.r, 'the English note stays inside the card').toBeLessThanOrEqual(g.mcf!.r);
   });
 }
