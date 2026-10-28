@@ -87,11 +87,9 @@ def walltime(text, label):
     return text
 
 
-# FIX-11: the detection boxes and raw track ids (?1124) are a debug view. The overlay is the prototype's (sources/ is read only), so its
-# default changes here: Boxes is off at every width and the button is labelled as debug (vision_debug_button).
-VISION_LABELS = [
-    ("const VIS = { on: false, boxes: true,", "const VIS = { on: false, boxes: false,", "vision boxes off by default"),
-]
+# The detection boxes are the tracker's visible work, so they stay on with the prototype's default (boxes: true). Turning Vision on shows
+# them (vision-events.js), and the Boxes button in the Vision panel hides them. No patch is needed here.
+VISION_LABELS = []
 
 
 def vision_labels(text, label):
@@ -104,7 +102,7 @@ def vision_debug_button(head, label):
     return sub(
         head,
         '<button id="visp-box" aria-pressed="true" title="Show detected boxes">Boxes</button>',
-        '<button id="visp-box" aria-pressed="false" title="Debug: detected boxes and raw track ids">Debug boxes</button>',
+        '<button id="visp-box" aria-pressed="true" title="Hide or show the detected boxes">Boxes</button>',
         label + " debug boxes button",
     )
 
