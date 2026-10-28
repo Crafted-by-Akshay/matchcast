@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// AB#450: the Watch feed picker (flag ?crew=1). Casual, Analyst and Catch me up are live; the other three are Planned. Lines come from CREW.state.feeds
+// AB#450: the Watch feed picker (flag ?crew=1). All six feeds are live; a feed with no lines yet says it is waiting. Lines come from CREW.state.feeds
 // (the Simulated fixture until the orchestration frames land) through the shell's postMessage bus. Wall-clock timing is meaningless under
 // software GL, so every wait polls for state, never for a duration. Honesty: fixture lines are labelled Simulated and carry no Verifier tick.
 const LABELS = ['Casual', 'Analyst', 'Audio description', 'Catch me up', 'Half-time explainer', 'News ticker'];
@@ -30,7 +30,7 @@ test('with ?crew=0 nothing is added: no picker, style, body class or iframe para
   expect(await f.evaluate(() => { const b = document.getElementById('mc-two')!; b.hidden = false; return getComputedStyle(b).display; })).not.toBe('none');
 });
 
-test('feed picker: six labelled choices, Planned tags, waiting copy, Simulated lines with a minute and no tick, saved choice', async ({ page }) => {
+test('feed picker: six labelled choices, no Planned tags, waiting copy, Simulated lines with a minute and no tick, saved choice', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   const f = await open(page);
@@ -39,19 +39,19 @@ test('feed picker: six labelled choices, Planned tags, waiting copy, Simulated l
   const radios = group.getByRole('radio');
   expect(await radios.count()).toBe(6);
   for (let i = 0; i < 6; i++) await expect(radios.nth(i)).toContainText(LABELS[i]);
-  expect(await group.locator('.fp-tag:visible').count()).toBe(3);
+  expect(await group.locator('.fp-tag:visible').count()).toBe(0);
   await expect(radios.nth(0).locator('.fp-tag')).toHaveCount(0);
   await expect(radios.nth(1).locator('.fp-tag')).toHaveCount(0);
-  await expect(radios.nth(2).locator('.fp-tag')).toHaveText('Planned');
+  await expect(radios.nth(2).locator('.fp-tag')).toHaveCount(0);
   await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
   const card = f.locator('#mc-feedlines');
   await expect(card).toContainText('waiting for a moment');
   expect(await f.locator('#mc-trust').count(), 'the Verifier chip stays').toBe(1);
   await expect(radios.nth(3).locator('.fp-tag')).toHaveCount(0);
-  // a Planned feed is listed but cannot be chosen (AB#373): it must not look like a running control
-  await expect(radios.nth(2)).toBeDisabled();
-  await expect(radios.nth(2)).toHaveAttribute('aria-disabled', 'true');
-  expect(await radios.nth(2).getAttribute('aria-checked')).toBe('false');
+  await radios.nth(2).click();
+  await expect(radios.nth(2)).toHaveAttribute('aria-checked', 'true');
+  await expect(card).toContainText('waiting for a moment');
+  expect(await card.locator('li').count()).toBe(0);
   await radios.nth(0).click();
   await page.evaluate(() => CREW.play(23));
   const line = card.locator('li').first();
@@ -98,14 +98,14 @@ test('feed picker: arrow, Home and End keys move the choice and keep focus on it
   await f.page().keyboard.press('ArrowRight');
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true');
   await expect(radios.nth(1)).toBeFocused();
-  // the Planned feeds (disabled) are stepped over: Casual, Analyst and Catch me up are the live feeds
+  // all six feeds are live, so End lands on the last one (News ticker)
   await f.page().keyboard.press('End');
-  await expect(radios.nth(3)).toHaveAttribute('aria-checked', 'true');
-  await expect(radios.nth(3)).toBeFocused();
+  await expect(radios.nth(5)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(5)).toBeFocused();
   await f.page().keyboard.press('ArrowRight');   // wraps
   await expect(radios.nth(0)).toBeFocused();
   await f.page().keyboard.press('ArrowLeft');
-  await expect(radios.nth(3)).toBeFocused();
+  await expect(radios.nth(5)).toBeFocused();
   await f.page().keyboard.press('Home');
   await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
   await expect(radios.nth(0)).toBeFocused();
@@ -125,8 +125,8 @@ test('feed picker: the two-voice panel steps aside only while the picked feed is
   await page.evaluate(() => CREW.play(23));
   await expect(f.locator('#mc-feedlines li').first()).toBeVisible({ timeout: 60_000 });
   expect(await disp(), 'a live feed with lines replaces the panel').toBe('none');
-  await group.getByRole('radio', { name: /Catch me up/ }).click();
-  expect(await disp(), 'a Planned feed leaves the panel').not.toBe('none');
+  await group.getByRole('radio', { name: /Audio description/ }).click();
+  expect(await disp(), 'a live feed with no lines yet leaves the panel').not.toBe('none');
   await group.getByRole('radio', { name: /Casual/ }).click();
   expect(await disp()).toBe('none');
   await page.evaluate(() => CREW.reset());
@@ -179,20 +179,20 @@ for (const [name, w, h] of [['phone', 390, 844], ['small phone', 320, 640]] as c
   });
 }
 
-test('feed picker: a saved Planned choice is not restored; the picker opens on Casual and stays keyboard reachable', async ({ page }) => {
+test('feed picker: a saved choice is restored, and the arrow keys step from it', async ({ page }) => {
   test.setTimeout(300_000);
-  await page.addInitScript(() => { try { localStorage.setItem('mc-feedpick', 'audio_description'); } catch (e) { /* storage blocked */ } });
+  await page.addInitScript(() => { try { localStorage.setItem('mc-feedpick', 'ticker'); } catch (e) { /* storage blocked */ } });
   const f = await open(page);
   const group = f.getByRole('radiogroup', { name: 'Feed' });
   await expect(group).toBeVisible({ timeout: 60_000 });
   const radios = group.getByRole('radio');
-  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
-  await expect(radios.nth(2)).toHaveAttribute('aria-checked', 'false');
-  await radios.nth(0).focus();
-  await expect(radios.nth(0)).toBeFocused();
-  await f.page().keyboard.press('ArrowRight');   // the next live feed, not the Planned one
-  await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true');
-  await expect(radios.nth(1)).toBeFocused();
+  await expect(radios.nth(5)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'false');
+  await radios.nth(5).focus();
+  await expect(radios.nth(5)).toBeFocused();
+  await f.page().keyboard.press('ArrowLeft');
+  await expect(radios.nth(4)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(4)).toBeFocused();
 });
 
 test('feed picker: when the shell drops the live feed in use, the picker falls back to a live feed and tells the shell', async ({ page }) => {

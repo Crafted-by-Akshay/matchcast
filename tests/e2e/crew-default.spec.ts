@@ -52,23 +52,18 @@ test('localStorage mc-crew=0 turns it off; an explicit ?crew=1 beats it', async 
   await expect(page.locator('#crew-btn')).toBeVisible();
 });
 
-test('Planned labels: three feeds say Planned, three are live (casual, analyst, catch me up), and a Planned feed says it is not built', async ({ page }) => {
+test('no Planned labels: all six feeds are live, and a feed with no lines yet says it is waiting', async ({ page }) => {
   test.setTimeout(300_000);
   await open(page);
   await ready('watch')(page);
   const f = await viewFrame(page, 'watch');
   const group = f.getByRole('radiogroup', { name: 'Feed' });
   await expect(group).toBeVisible({ timeout: 60_000 });
-  expect(await group.locator('.fp-tag:visible').count()).toBe(3);
+  expect(await group.locator('.fp-tag:visible').count()).toBe(0);
   for (const n of ['Audio description', 'Half-time explainer', 'News ticker']) {
-    const r = group.getByRole('radio', { name: new RegExp(n) });
-    await expect(r.locator('.fp-tag')).toHaveText('Planned');
-    await r.click();
-    await expect(f.locator('#mc-feedlines')).toContainText('Planned: this feed is not built yet');
+    await group.getByRole('radio', { name: new RegExp(n) }).click();
+    await expect(f.locator('#mc-feedlines')).toContainText('waiting for a moment');
   }
-  await expect(group.getByRole('radio', { name: /^Casual/ }).locator('.fp-tag')).toHaveCount(0);
-  await expect(group.getByRole('radio', { name: /^Analyst/ }).locator('.fp-tag')).toHaveCount(0);
-  await expect(group.getByRole('radio', { name: /^Catch me up/ }).locator('.fp-tag')).toHaveCount(0);
 });
 
 test('quiet first screen: on Watch only the feed picker is added; no crew panel, Demo controls, weather or camera presets', async ({ page }) => {

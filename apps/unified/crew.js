@@ -11,14 +11,14 @@
   var on = !/[?&]crew=0(&|$)/.test(qs);
   try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked: the default stands */ }
 
-  // feed keys and labels from the Feeds lane registry (feeds/450); casual, analyst and catch_me_up (CREW-7.3, read on demand) are live
+  // feed keys and labels from the Feeds lane registry (feeds/450); all six are live: casual and analyst from the writers, catch_me_up read on demand (CREW-7.3), and audio description, half-time and ticker aired by the match service (AB#454, AB#471, CREW-7.4)
   var FEEDS = [
     { key: 'casual', label: 'Casual', live: true },
     { key: 'analyst', label: 'Analyst', live: true },
-    { key: 'audio_description', label: 'Audio description', live: false },
+    { key: 'audio_description', label: 'Audio description', live: true },
     { key: 'catch_me_up', label: 'Catch me up', live: true },
-    { key: 'half_time', label: 'Half-time explainer', live: false },
-    { key: 'ticker', label: 'News ticker', live: false }
+    { key: 'half_time', label: 'Half-time explainer', live: true },
+    { key: 'ticker', label: 'News ticker', live: true }
   ];
   var ARMS = [
     { key: 'full_crew', label: 'Full crew' },
