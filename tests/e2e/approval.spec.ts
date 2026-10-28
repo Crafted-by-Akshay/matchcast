@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { collectErrors, openShell, ready, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 
 // EXP-7 and EXP-11: approval queue in the Agents tab, lower-third and teleprompter in Broadcast.
 declare const AG: any, MCC: any;
@@ -40,10 +40,10 @@ test('approval queue: approve, wrong-number edit rejected, kill never airs, audi
 test('lower-third waits for approval in producer mode and airs at once in demo mode; red-card alerts', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
-  await page.click('#tab-agents');
+  await openView(page, 'agents');
   await page.selectOption('#aq-mode', 'producer');
   await seed(page);
   await expect.poll(() => page.locator('#aq-list li[data-id]').count()).toBe(1);

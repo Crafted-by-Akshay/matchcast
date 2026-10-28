@@ -13,12 +13,14 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   if (!framed) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const style = document.createElement('style');
-  style.textContent = '#mc-desk{position:absolute;left:10px;top:10px;bottom:56px;width:min(360px,50%,calc(100% - 20px));z-index:40;display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(10,20,40,.92);border-radius:8px;font:500 12px system-ui,sans-serif;color:#e8eefc;overflow:hidden}'
-    + '#mc-desk button{padding:4px 8px;border-radius:4px;border:1px solid #3aa0ff;background:#12294a;color:#fff;font:inherit;cursor:pointer}'
+  style.textContent = '#mc-desk{position:absolute;left:auto;right:12px;top:10px;bottom:56px;width:min(360px,50vw,calc(100% - 24px));z-index:40;display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(8,8,9,.96);border:1px solid #303238;border-radius:10px;font:500 12px system-ui,sans-serif;color:#f5f5f5;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.38)}'
+    + '#mc-desk button{padding:5px 9px;border-radius:6px;border:1px solid #414249;background:#1a1b1e;color:#fff;font:inherit;cursor:pointer}'
     + '#mc-desk button:disabled{opacity:.55;cursor:default}'
     + '#mc-desk-body{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto}'
     + '#mc-desk-body[hidden]{display:none}'
-    + '@media (max-width:480px){#mc-desk{top:64px!important;bottom:auto!important;width:calc(100% - 20px)!important;background:none!important;padding:0!important;overflow:visible!important}#mc-desk>div:first-child,#mc-desk-body{display:none!important}}'   // a phone stage is about 180 px tall: only the replay row shows there, where it was before the desk; the Copilot and the strip need a wider pane
+    + '#mc-lens-more{display:none}'
+    + '#mc-desk-body #mc-onair{position:static!important;max-width:none!important;width:auto!important;margin:0!important;flex-wrap:wrap}'
+    + '@media (max-width:480px){#mc-desk{top:64px!important;bottom:auto!important;left:8px!important;right:8px!important;width:auto!important;padding:5px!important;background:rgba(8,8,9,.92)!important;overflow:visible!important}#mc-desk>div:first-child{font-size:11px}#mc-desk-body{position:fixed!important;left:8px!important;right:8px!important;top:116px!important;bottom:64px!important;z-index:60!important;padding:8px!important;background:rgba(8,8,9,.98)!important;border:1px solid #303238!important;border-radius:10px;overflow:auto!important}#mc-desk-body[hidden]{display:none!important}}'   // phone tools open in a scrollable sheet; the initial preview remains compact
     + '#mc-desk ol,#mc-desk ul{margin:0;padding-left:18px}'
     + '.mcd-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}'
     + '.mcd-ch{padding:2px 6px;border-radius:999px;background:#17283F;border:1px solid #2c4a72;font-size:11px}'
@@ -26,11 +28,11 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   document.head.append(style);
   const box = document.createElement('section');
   box.id = 'mc-desk'; box.setAttribute('aria-label', 'Production desk: orchestration and Broadcast Copilot');
-  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center"><b>Production desk</b> <span id="mc-pitch">3D pitch: loading</span>'
-    + '<button type="button" id="mc-desk-hide" aria-expanded="true" aria-controls="mc-desk-body">Hide</button></div>'
+  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Production Studio</b> <span id="mc-pitch">Match preview · follows Watch</span>'
+    + '<button type="button" id="mc-desk-hide" aria-expanded="false" aria-controls="mc-desk-body">Production tools</button></div>'
     + '<div id="mc-replay-slot"></div>'   // the instant-replay row (replay.js) sits here, above the body
     + '<div id="mc-desk-body">'
-    + '<div id="mc-lens" role="group" aria-label="Steer the agents: who the commentary is written for"><span>Lens</span><button type="button" data-lens="casual">Casual</button><button type="button" data-lens="analyst">Analyst</button><button type="button" data-lens="broadcast">Broadcast</button><select id="mc-lens-more" aria-label="More lenses: a club, a player or a metric" style="max-width:150px;padding:3px;border-radius:4px;background:#12294a;color:#fff;border:1px solid #3aa0ff;font:inherit"></select></div>'
+    + '<div id="mc-lens" role="group" aria-label="Commentary style"><span>Commentary</span><button type="button" data-lens="casual">Fan</button><button type="button" data-lens="analyst">Analyst</button><button type="button" data-lens="broadcast">Broadcast</button><select id="mc-lens-more" aria-label="More lenses: a club, a player or a metric" style="max-width:150px;padding:3px;border-radius:4px;background:#12294a;color:#fff;border:1px solid #3aa0ff;font:inherit"></select></div>'
     + '<div id="mc-orch" aria-live="polite"><b>On air</b> <span>Nothing aired yet.</span></div>'
     + '<div id="mc-cop" role="group" aria-label="Ask the Broadcast Copilot">'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" data-cop="highlights">Highlights</button><button type="button" data-cop="focus">Where to focus</button><button type="button" data-cop="plan">Production plan</button></div>'
@@ -42,6 +44,29 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     + '</div>';
   (document.getElementById('bc-view') || document.body).append(box);
   const $ = (id) => box.querySelector('#' + id);
+  const preview = $('mc-pitch'), previewLabel = 'Match preview · follows Watch';
+  const keepPreviewLabel = () => { if (preview.textContent !== previewLabel) preview.textContent = previewLabel; };
+  keepPreviewLabel(); new MutationObserver(keepPreviewLabel).observe(preview, { childList: true, characterData: true, subtree: true });
+  // Replace internal script names in Copilot results with the plain source/status viewers need.
+  const cleanPredictionLabels = () => {
+    const onAir = document.getElementById('mc-onair');
+    if (onAir && onAir.parentElement !== $('mc-desk-body')) $('mc-desk-body').append(onAir);
+    document.querySelectorAll('.bc-h small').forEach((label) => {
+      const value = label.textContent || '';
+      if (!/predict\.js/i.test(value)) return;
+      label.textContent = /next\s+10/i.test(value) ? 'Next 10 match minutes · simulated' : 'Simulated estimate';
+    });
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.parentElement || node.parentElement.closest('script,style')) continue;
+      const value = node.nodeValue || '';
+      if (/predict\.js/i.test(value)) node.nodeValue = value.replace(/predict\.js\s*·\s*live/ig, 'Simulated estimate').replace(/predict\.js/ig, 'rules · simulated');
+    }
+  };
+  const predictionObserver = new MutationObserver(cleanPredictionLabels);
+  predictionObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+  cleanPredictionLabels();
   // the desk runs down to just above the lower-third while it is on air, and shrinks to its header when Hide collapses it
   let l3 = null;   // the lower-third is made by the desk module after this script runs; MCDesk.lowerThird sets it
   const placeDesk = () => {
@@ -117,7 +142,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   const out = (html) => { $('mc-cop-out').innerHTML = html; };
   box.querySelectorAll('[data-cop]').forEach((b) => { b.onclick = () => ask(b.dataset.cop); });
   $('mc-desk-hide').onclick = (e) => {
-    const shut = !$('mc-desk-body').hidden; $('mc-desk-body').hidden = shut; e.currentTarget.textContent = shut ? 'Show' : 'Hide'; e.currentTarget.setAttribute('aria-expanded', String(!shut)); placeDesk();
+    const open = $('mc-desk-body').hidden; $('mc-desk-body').hidden = !open; e.currentTarget.textContent = open ? 'Hide tools' : 'Production tools'; e.currentTarget.setAttribute('aria-expanded', String(open)); placeDesk();
   };
   function ask(intent) {
     const id = 'c' + Date.now().toString(36) + (++n); latest = id; pending.set(id, intent);
@@ -168,7 +193,7 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
     + '<ol id="mc-pq" aria-live="polite"></ol>'
     + '<div id="mc-pt" class="mcp-v">Event to air: no line on air yet.</div>';
   const body = document.getElementById('mc-desk-body');
-  if (body) body.prepend(box); else (document.getElementById('bc-view') || document.body).append(box);
+  if (body) { body.prepend(box); body.hidden = true; } else (document.getElementById('bc-view') || document.body).append(box);
   const list = box.querySelector('#mc-pq'), note = box.querySelector('#mc-pt');
   // what the Verifier did, in words: a wording it rejected is kept, and the line shows the repaired one
   const verdict = (x) => {

@@ -308,7 +308,13 @@ def build_broadcast():
         "<title>MatchCast Broadcaster desk</title>",
         "broadcast title",
     )
-    head = head.replace("</style>", r(BS + "bc.css") + "\n</style>", 1)
+    head = head.replace(
+        "</style>",
+        r(BS + "bc.css")
+        + "\n/* The shell already supplies the match header and shared controls. Keep the desk's own task tabs. */\n"
+        + ".bc-top{display:none}\n</style>",
+        1,
+    )
     head = vision_debug_button(head, "broadcast")
     return (
         head
@@ -584,6 +590,11 @@ def copy_data(dst):
 
 
 def build(out_root):
+    os.makedirs(out_root + "assets", exist_ok=True)
+    cover = U + "assets/matchcast-stadium-cover.png"
+    cover_out = out_root + "assets/matchcast-stadium-cover.png"
+    if os.path.abspath(cover) != os.path.abspath(cover_out):
+        shutil.copy(cover, cover_out)
     write(out_root + "watch/index.html", build_watch())
     write(out_root + "broadcast/index.html", build_broadcast())
     write(out_root + "analyst/index.html", build_analyst())
@@ -638,7 +649,7 @@ if __name__ == "__main__":
             open(dst + f, "w", encoding="utf-8").write(t)
         # the shell and its scripts, hand-written
         shell = ["index.html", "langs.js", "contracts.js", "agents.js", "feed.js", "highlights.js", "live.js", "trace-panel.js", "crew.js", "crew-analyst-shots.js", "crew-analyst-momentum.js", "crew-analyst-ppda.js", "crew-analyst-progressive.js", "crew-analyst-shape.js", "crew-analyst-radar.js", "maps.js", "crew-analyst.js", "crew-score.js", "crew-tree.js"]
-        shell += ["speech.js", "status.js", "voice.js", "voices.json"]
+        shell += ["club-ask.js", "speech.js", "status.js", "voice.js", "voices.json"]
         for f in shell + ["config.js"]:
             shutil.copy(U + f, dst + f)
         print("local copy", dst)

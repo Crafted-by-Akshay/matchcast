@@ -110,8 +110,8 @@
     chip.title = 'Vision ' + s.passes_in + ' passes in, ' + s.lines_verified + ' lines verified by the Verifier';
   });
 })();
-// Camera mode (experimental): the Vision button is the pixel tracker reading the rendered, simulated pitch. Its passes go to the same agents, and the chip above says how far they agree with the engine. The labels say what it is, so nobody mistakes it for a real camera feed.
+// Vision is a pixel tracker reading the rendered, simulated pitch. Its passes go to the same agents and are checked against the engine.
 (() => {
   const b = $('visb');
-  if (b) { b.textContent = 'Camera mode (experimental)'; b.title = 'Camera mode: the tracker reads the rendered simulated pitch, not a real camera. Its passes go to the agents and are checked against the engine.'; }
+  if (b) { b.textContent = 'Vision tracking'; b.title = 'Tracks the rendered simulated pitch, not a real camera. Vision passes go to the analysis and are checked against the match engine.'; }
 })();

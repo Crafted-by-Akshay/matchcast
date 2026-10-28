@@ -1,6 +1,6 @@
 import { test, expect, type Page } from './fixtures';
 import { createServer, type Server } from 'node:http';
-import { collectErrors } from './helpers';
+import { collectErrors, openView } from './helpers';
 
 // Ported from apps/unified/tests/connection.cjs (EXP-1). A mock api records what the shell sends.
 // Cases: live (pill 'Live agents', contract events reach the api, its claim shows), fallback (api answers 503: 'Rules fallback'), offline (no api).
@@ -85,10 +85,11 @@ test('warming: never reads Offline, shows seconds of the warm-up, then Rules fal
   expect(errs).toEqual([]); api.server.close();
 });
 
-test('offline: Offline (simulated) and no api call', async ({ page }) => {
+test('offline: the redundant header badge is hidden and makes no api call', async ({ page }) => {
   const errs = collectErrors(page);
   await drive(page, '');
-  await expect(pill(page)).toHaveText('Offline (simulated)');
+  await expect(pill(page)).toHaveText('Demo mode');
+  await expect(pill(page)).toBeHidden();
   expect(await page.evaluate(() => !LV.enabled)).toBe(true);
   expect(errs).toEqual([]);
 });
@@ -96,6 +97,7 @@ test('offline: Offline (simulated) and no api call', async ({ page }) => {
 test('status dialog: offline says everything is simulated', async ({ page }) => {
   const errs = collectErrors(page);
   await drive(page, '');
+  await page.locator('#more-toggle').click();
   await page.locator('#status-btn').click();
   await expect(page.locator('#status-dlg')).toBeVisible();
   await expect(page.locator('#status-box')).toContainText('No api is configured');
@@ -110,6 +112,7 @@ test('status dialog: lists each dependency from /v1/status', async ({ page }) =>
     { key: 'c', label: 'Sim thing', status: 'simulated', detail: 'in memory' }] };
   await page.route('**/v1/status', (rt) => rt.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(doc) }));
   await drive(page, 'http://127.0.0.1:9');
+  await page.locator('#more-toggle').click();
   await page.locator('#status-btn').click();
   const items = page.locator('#status-box li');
   await expect(items).toHaveCount(3);
@@ -149,10 +152,10 @@ test('the Broadcast desk says the same agents state as the shell pill', async ({
   const api = await mock('ok');
   await drive(page, api.url);
   await expect(pill(page)).toHaveText('Live agents', { timeout: 20_000 });
-  await page.locator('#tab-broadcast').click();
+  await openView(page, 'broadcast');
   await page.waitForFunction(() => document.getElementById('v-broadcast')!.classList.contains('ready'), null, { timeout: 240_000 });
   const f = page.frames().find((x) => /broadcast\/index\.html/.test(x.url()))!;
-  const words: Record<string, string> = { 'Live agents': 'Agents: live from the api', 'Rules fallback': 'Agents: api did not answer, rules in this page', 'Offline (simulated)': 'Agents: rules in this page (no api connected)' };
+  const words: Record<string, string> = { 'Live agents': 'Agents: live from the api', 'Rules fallback': 'Agents: api did not answer, rules in this page', 'Demo mode': 'Agents: rules in this page (no api connected)' };
   await expect.poll(async () => { const p = String(await pill(page).textContent()); const d = String(await f.locator('#mc-agentstate').textContent()); return p.startsWith('Warming') ? d.startsWith('Agents: Warming') : d === words[p]; }, { timeout: 30_000 }).toBe(true);
   api.server.close();
 });

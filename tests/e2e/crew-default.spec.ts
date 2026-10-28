@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// The crew UI is ON by default (judges add no query flag). ?crew=0 or localStorage mc-crew=0 turns it off; an explicit ?crew=1 beats a stored 0.
-// The shell forwards crew=1 or crew=0 to the Watch iframe. The Watch first screen stays quiet; a "Crew" button in the header opens the Agents tab at the Crew section.
+// Crew processing remains on by default, but its simulated dashboard is hidden from the main menu. ?crew=0 or localStorage mc-crew=0 disables it; explicit ?crew=1 beats a stored 0.
+// The shell forwards crew=1 or crew=0 to Watch. The Watch first screen stays focused on the match and commentary.
 // Every wait polls for state, never for a duration.
 async function open(page: any, query = '', width = 1280, height = 800) {
   await page.route('**/broadcast/**', (r: any) => r.abort());   // Watch must load here; a second 3D engine is not needed
@@ -11,12 +11,13 @@ async function open(page: any, query = '', width = 1280, height = 800) {
 }
 const watchSrc = (page: any) => page.evaluate(() => (document.querySelector('#v-watch iframe') as HTMLIFrameElement).src);
 
-test('crew is on by default: the Crew button shows, Watch gets crew=1, the feed picker is there', async ({ page }) => {
+test('crew processing stays on by default while the unhelpful dashboard is hidden', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   await open(page);
   expect(await page.evaluate(() => (window as any).CREW.enabled)).toBe(true);
-  await expect(page.getByRole('button', { name: /^Crew/ })).toBeVisible();
+  await page.locator('#more-toggle').click();
+  await expect(page.locator('#tab-agents,#crew-btn')).toHaveCount(0);
   await ready('watch')(page);
   expect(await watchSrc(page)).toMatch(/[?&]crew=1(&|$)/);
   const f = await viewFrame(page, 'watch');
@@ -49,7 +50,8 @@ test('localStorage mc-crew=0 turns it off; an explicit ?crew=1 beats it', async 
   await page.goto('/index.html?split=1&crew=1#watch', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!(window as any).CREW);
   expect(await page.evaluate(() => (window as any).CREW.enabled)).toBe(true);
-  await expect(page.locator('#crew-btn')).toBeVisible();
+  await page.locator('#more-toggle').click();
+  await expect(page.locator('#tab-agents,#crew-btn')).toHaveCount(0);
 });
 
 test('no Planned labels: all six feeds are live, and a feed with no lines yet says it is waiting', async ({ page }) => {
@@ -75,41 +77,18 @@ test('quiet first screen: on Watch only the feed picker is added; no crew panel,
   expect(await page.locator('#crew-tree').isVisible(), 'the spawn tree lives in the Agents tab').toBe(false);
   expect(await page.locator('#crew-score').isVisible()).toBe(false);
   for (const sel of ['#mc-demo', '#wxchip', '#cams', '#fan-pop']) expect(await f.locator(sel).isVisible(), sel + ' stays off the first screen').toBe(false);
+  await expect(f.locator('#mc-weather-note')).toContainText('SIMULATED WEATHER');
   // the only crew additions on screen: the feed picker, its one line box and a screen-reader-only live region
   const shown = await f.evaluate(() => [...document.querySelectorAll('[id^="mc-feed"],[id^="crew"]')].filter((e) => (e as HTMLElement).getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden').map((e) => e.id).sort());
   expect(shown.filter((id) => id !== 'mc-feeds' && id !== 'mc-feedpick' && id !== 'mc-feedlines' && id !== 'mc-feedsr')).toEqual([]);
   expect(await f.locator('#mc-feedpick').isVisible()).toBe(true);
 });
 
-test('the Crew button opens the Agents tab at the Crew section, by keyboard, and the spawn tree and scoreboard are there', async ({ page }) => {
-  test.setTimeout(300_000);
-  await open(page);
-  const btn = page.getByRole('button', { name: /^Crew/ });
-  await expect(btn).toBeVisible();
-  await btn.focus();
-  await expect(btn).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#tab-agents')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('#crew-tree')).toBeVisible();
-  await expect(page.locator('#crew-score')).toBeVisible();
-  await expect(page.locator('#ct-h')).toBeFocused();
-  expect(await page.evaluate(() => { const r = document.getElementById('ct-h')!.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), 'the Crew heading is scrolled into view').toBe(true);
-});
-
-test('Crew button at 320 px: visible, tappable, no sideways scroll, and it opens the Crew section', async ({ page }) => {
-  test.setTimeout(300_000);
+test('the hidden agent dashboard does not reappear on a small screen', async ({ page }) => {
   await open(page, '', 320, 640);
-  const btn = page.getByRole('button', { name: /^Crew/ });
-  await expect(btn).toBeVisible();
-  const b = await btn.boundingBox();
-  expect(b!.x).toBeGreaterThanOrEqual(0);
-  expect(b!.x + b!.width).toBeLessThanOrEqual(320);
-  expect(b!.height, 'a tap target of at least 44 px').toBeGreaterThanOrEqual(44);
+  await page.locator('#more-toggle').click();
+  await expect(page.locator('#tab-agents,#crew-btn')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await btn.click();
-  await expect(page.locator('#tab-agents')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('#crew-tree')).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll on the Agents tab').toBe(true);
 });
 
 test('feed picker on a phone: the default Casual feed keeps the live commentary line; picking Analyst replaces it', async ({ page }) => {
@@ -182,7 +161,7 @@ test('a parent whose location cannot be read does not hide ?crew=0 on the Watch 
   await p2.close();
 });
 
-test('header at 320 px: Crew, Tour, Voice and Status do not grow the header, and Talk and Copilot stay on screen', async ({ page, browser }) => {
+test('header at 320 px: Tour, Voice and Status do not grow the header, and Copilot stays on screen', async ({ page, browser }) => {
   test.setTimeout(420_000);
   const off = await browser.newPage({ viewport: { width: 320, height: 640 } });
   await off.route('**/broadcast/**', (r: any) => r.abort());
@@ -191,12 +170,14 @@ test('header at 320 px: Crew, Tour, Voice and Status do not grow the header, and
   await off.close();
   await open(page, '', 320, 640);
   const hOn = await page.evaluate(() => document.querySelector('header.top')!.getBoundingClientRect().height);
-  expect(hOn, 'the Crew pill fits in the rows the header already had').toBeLessThanOrEqual(hOff + 1);
+  expect(hOn, 'hiding the unnecessary Crew pill keeps the header compact').toBeLessThanOrEqual(hOff + 1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await ready('watch')(page);
   const f = await viewFrame(page, 'watch');
-  await expect.poll(() => f.evaluate(() => !!document.getElementById('mcx-talk') && !!document.getElementById('cpbtn')), { timeout: 60_000 }).toBe(true);
+  await expect.poll(() => f.evaluate(() => !!document.getElementById('cpbtn')), { timeout: 60_000 }).toBe(true);
+  await expect(f.locator('#mcx-talk')).toBeHidden();
   const fb = await (await f.frameElement()).boundingBox();
-  const r = await f.evaluate(() => ['#mcx-talk', '#cpbtn'].map((s) => { const b = document.querySelector(s)!.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; }));
-  for (const x of r) { expect(fb!.y + x.b, 'on screen vertically').toBeLessThanOrEqual(640); expect(x.r).toBeLessThanOrEqual(320); expect(x.l).toBeGreaterThanOrEqual(0); }
+  const r = await f.locator('#cpbtn').boundingBox();
+  expect(fb!.y + r!.y + r!.height, 'the single Copilot entry stays on screen').toBeLessThanOrEqual(640);
+  expect(r!.x + r!.width).toBeLessThanOrEqual(320);
 });

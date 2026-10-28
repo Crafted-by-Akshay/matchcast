@@ -14,11 +14,13 @@ MatchCast is an AI production crew for a live football broadcast. It turns a str
 
 Three things to click once it is open:
 
-1. **Watch** view: the match starts on load. Pick Casual or Analyst in the Feed picker (or a watch mode: My club, Player focus, One metric) and see the same moment explained differently; pick one of ten languages in the header.
+1. **Watch** view: the synthetic match starts on load. Choose Fan or Analyst in the Feed selector to change the live commentary; pick one of ten languages in the header. xG and possession remain analysis data, not extra viewer modes.
 2. Press **Why?** or **How was this made?** on any line: the claim, its cited events and each agent's step.
-3. **Crew** pill (Agents tab): the spawn tree of the specialists each goal called, and the scoreboard. Then **Seed a bad claim** (the Verifier rejects a wrong number and repairs it from the raw event log) and **Cut the model** (the rules twins take over mid-match and the lines keep coming).
+3. **Analyze** for the season table, match evidence and audit history; **Production Studio** for instant replay and approved on-air controls. The production queue, feed status and Copilot are behind the Studio's **Production tools** disclosure. The internal Agents diagnostics page is not part of the judge-facing route.
 
-## The five stages
+## The five pipeline stages
+
+These stages still describe the data flow; the stage strip is hidden in the app to keep the viewing screens clear.
 
 | Stage | What MatchCast does | Where |
 | --- | --- | --- |
@@ -26,7 +28,7 @@ Three things to click once it is open:
 | Interpret | Stats, xG and patterns computed by tested metric functions | [`docs/metrics.md`](docs/metrics.md), `packages/metrics` |
 | Explain | The Analyst turns events into claims with evidence; the Narrator writes lines from the claim's inputs | [`docs/architecture/04-agents.md`](docs/architecture/04-agents.md), `packages/agents` |
 | Render | Watch, Analyst and Broadcast views alongside the match | [`docs/architecture/11-frontend.md`](docs/architecture/11-frontend.md), `apps/unified` |
-| Personalise | Watch modes, favourite club, player focus, one metric, modes and favourites work in the app; lines in ten feed languages are translated by Azure AI Translator and re-checked by the Verifier for numbers, names and neutral wording (ADR-0023); a language Watch does not list yet shows English and is labelled | [`docs/architecture/10-voice-and-translation.md`](docs/architecture/10-voice-and-translation.md) |
+| Personalise | Fan/Analyst commentary styles and club favorites work in the app; lines in ten feed languages are translated by Azure AI Translator and re-checked by the Verifier for numbers, names and neutral wording (ADR-0023); a language Watch does not list yet shows English and is labelled | [`docs/architecture/10-voice-and-translation.md`](docs/architecture/10-voice-and-translation.md) |
 
 ## Architecture
 
@@ -73,9 +75,9 @@ The production crew around them, as merged on 26 Oct:
 - **Specialists.** On a goal or red card the Showrunner planner spawns up to five specialists in parallel (replay, tactics, stats, rhythm, head-to-head history), at most one on any other moment. Each reports findings with the event ids (or result rows) they rest on, so the Verifier can recount them; specialists never write a line. The spawn tree shows on the Crew panel. The routing decision is still the Producer's; a separate Showrunner model call is not built.
 - **Verifier gate and repair.** Recount, then an adversarial pass of five falsification attempts, then one repair (a number goes back to the Analyst, wording to the Narrator). A booth line that fails its repair on a checkable fact (a number, a player, a source, stale state) waits for the producer flagged as escalated, and can only be killed; any other line that fails is dropped from air.
 - **Approval as a mode.** In producer mode the two booth voices (play-by-play and colour) wait for one producer's approval after the Verifier. The derived feeds never wait: they air once verified, or are dropped.
-- **Six feeds.** Casual, analyst and catch-me-up (on request, in the viewer's language) are on the Watch screen. The news ticker and audio description air on the api's derived lane and show on the producer's six-up monitor; Watch tags them **Planned** until viewers see them. The half-time explainer is written and verified but not aired (**Planned**).
+- **Watch commentary.** Casual, Analyst and Catch me up (on request) are the three available Watch choices. Audio description, Half-time explainer and News ticker stay in a collapsed **Coming soon** section as plain unavailable labels, not selectable feeds. The producer's monitor can still show its separate feed status.
 - **Shared memory and replan.** Storylines from verified lines reach the Producer and Narrator with numbers masked; 60 s with no verified line makes the Showrunner replan once and open a player's storyline, which that player's next goal pays off once. The replan assigns the replay specialist but does not run it yet (**Planned**).
-- **Failure drill.** **Cut the model** on the Agents tab cuts one match's model; the rules twins take over (ADR-0014) and each fallback is audited. **Restore the model** brings it back after the breaker's 30 s.
+- **Failure drill.** The internal `#agents` support route retains **Cut the model** for diagnostics; the rules twins take over (ADR-0014) and each fallback is audited. **Restore the model** brings it back after the breaker's 30 s.
 - **Event → on air.** A header pill shows the median wall time from a Watch event reaching the app to its verified line arriving in the browser.
 
 **Why a multi-agent graph, and why Agent Framework.** A broadcast is already a crew: someone picks the moment, someone finds the numbers, someone writes the words, and someone else checks them before air. We kept those jobs apart on purpose. The Verifier must not be the agent that wrote the line, or it grades its own work; and a failed check has to go back to the right agent (a wrong number to the Analyst, wording to the Narrator). Microsoft Agent Framework's `WorkflowBuilder` gives us that as a typed graph: each agent is an executor, edges carry small dataclasses, the Stats Desk edge is conditional, and each step is a span in the trace. A single loop would be simpler and faster: in the live eval a single gpt-5-mini agent answered in 1.9 s against the crew's 6.3 s, and on that clean match it aired no wrong line either. What it cannot do is check itself, so it has no step to catch a planted error. Limits we accept: a new workflow is built per event (the framework refuses concurrent runs on one instance), checkpointing is our own Table store, and `MATCHCAST_ORCHESTRATOR=native` runs the same steps as plain calls, with a test that the two give identical claims, lines and audit records (ADR-0002).

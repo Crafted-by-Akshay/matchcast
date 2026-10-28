@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { openShell } from './helpers';
+import { openShell, openView } from './helpers';
 
 // EXP-15: a view that cannot start says why, and a slow start offers a reload instead of a spinner for ever.
 test('loading: without WebGL, Watch and Broadcast say so, Agents still opens', async ({ page }) => {
@@ -12,9 +12,9 @@ test('loading: without WebGL, Watch and Broadcast say so, Agents still opens', a
   await expect(wait).toContainText('needs WebGL', { timeout: 10_000 });
   await expect(wait.locator('.bar')).toBeHidden();
   await expect(wait.locator('.sk'), 'no skeleton for a view that cannot load').toBeHidden();
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await expect(page.locator('#v-broadcast .wait')).toContainText('needs WebGL', { timeout: 10_000 });
-  await page.click('#tab-agents');
+  await openView(page, 'agents');
   await expect(page.locator('#v-agents')).toBeVisible();
 });
 

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { collectErrors, openShell, ready, viewFrame } from './helpers';
+import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 
 // EXP-17: one EN/ES/HI selector in the shell drives Watch, Broadcast (graphics and desk script) and the voice; a line with no checked translation stays English.
 declare const AG: any, VC: any, MCC: any, post: any;
@@ -10,7 +10,7 @@ test('language selector: voice speaks the checked translation, falls back to Eng
   test.setTimeout(420_000);
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   await page.locator('#lang-pick').selectOption('es');

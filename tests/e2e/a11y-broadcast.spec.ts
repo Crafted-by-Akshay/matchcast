@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import AxeBuilder from '@axe-core/playwright';
-import { openShell, ready, viewFrame } from './helpers';
+import { openShell, ready, viewFrame, openView } from './helpers';
 
 // Broadcast view: no serious or critical WCAG 2 A/AA violations on any desk tab, in both colour schemes.
 // axe scans the Broadcast iframe from the shell page; only serious and critical impacts fail.
@@ -10,7 +10,7 @@ for (const scheme of ['light', 'dark'] as const) test(`broadcast view (${scheme}
   test.setTimeout(420_000);
   await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   const bad: string[] = [];

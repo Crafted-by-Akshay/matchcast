@@ -1,14 +1,13 @@
 import { test, expect } from './fixtures';
-import type {} from './helpers';
+import { collectErrors, openShell, ready, viewFrame, openView } from './helpers';
 declare const post: any;
-import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // Keyboard path through the Broadcast desk: every control is reachable with Tab, shows a visible focus ring, and Escape closes the dialogs it opens.
 test('Broadcast desk: Tab reaches every control with a visible focus indicator', async ({ page }) => {
   test.setTimeout(420_000);
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   await bc.locator('#bc-tabs button[data-p="desk"]').focus();
@@ -37,7 +36,7 @@ test('Broadcast states: the agent source is said in words, and missing speech di
   const errs = collectErrors(page);
   await page.addInitScript(() => { Object.defineProperty(window, 'speechSynthesis', { value: undefined, configurable: true }); });
   await openShell(page, 'agents');
-  await page.click('#tab-broadcast');
+  await openView(page, 'broadcast');
   await ready('broadcast')(page);
   const bc = await viewFrame(page, 'broadcast');
   await expect(bc.locator('#mc-agentstate')).toContainText('rules in this page');

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { openShell, viewFrame } from './helpers';
+import { openShell, openProductionTools, viewFrame } from './helpers';
 
 // AB#475 (CREW-7.6, the producer desk's six-up view). Every feed card shows its last line (or "waiting for a moment"), its Verified count, its Dropped count and its lines per minute;
 // the booth row shows the producer queue count. Every feed has a writer now, so none says Planned: a feed with no line yet says waiting, never 0 lines as if live.
@@ -16,6 +16,7 @@ test('six-up: counts, lines per minute over the last 5 match minutes, waiting st
   test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
+  await openProductionTools(f);
   await expect(f.locator('#mc-feeds')).toBeVisible({ timeout: 240_000 });
   const card = (k: string) => f.locator('[data-feed="' + k + '"]');
 
@@ -71,6 +72,7 @@ test('six-up in a 320 px desk: two columns, no sideways scroll, nothing under 12
   await page.setViewportSize({ width: 640, height: 844 });
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
+  await openProductionTools(f);
   await expect(f.locator('#mc-feeds')).toBeVisible({ timeout: 240_000 });
   await post(page, { type: 'feed-air', record: line('casual', 'P1', 'A fairly long casual line that must be cut to one line rather than push the page sideways.', 1860000) });
   await post(page, { type: 'queue', mode: 'producer', items: [] });

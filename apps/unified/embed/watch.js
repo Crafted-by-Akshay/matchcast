@@ -65,6 +65,31 @@ document.addEventListener('visibilitychange', () => MCRes.restart());
     + '.fm-planned{font-size:9px;opacity:.7}.mcx-w{margin-top:6px;border-top:1px solid var(--line);padding-top:6px;font:11px/1.4 var(--f-mono);color:var(--muted)}.mcx-w b{color:var(--ink)}';
   st.textContent += '@media (max-width:560px){button:not(.sw):not(.dk-grab),select,input:not([type=checkbox]),textarea,#px-head{min-height:44px !important;min-width:44px !important}input[type=checkbox]{width:24px;height:24px}label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}';   // phone: 44 px tap targets
   st.textContent += '#pulse,#visp,#datap,#fan-strip{--panel:rgb(9,13,19)}#px-body .px-row{flex-wrap:wrap;gap:0 8px}#px-ctlv{margin-left:auto}';   // panels fully opaque so player labels do not show through (pass 4; 96 percent in pass 3 still showed a ghost); the control line wraps instead of running into its label (UX review pass 3)
+  st.textContent += '#mcf{background:rgb(15,15,17)!important}';
+  st.textContent += '#pulse,#mcx-box,#cap,#mc-two,#mc-trust,#mcx-talk,#mcf-sound,#fan-intro,#fan-chip,#fan-pop,#fan-metric{display:none!important}#copilot .agents,#copilot .cp-t small,#mcx-booth-note{display:none!important}';   // one live commentary line and a Fan/Analyst choice; hide duplicate captions and legacy persona controls
+  const placeAskFirst = () => {
+    const tabs = document.getElementById('cp-tabs');
+    const ask = tabs && tabs.querySelector('[role="tab"][data-t="ask"]');
+    if (tabs && ask && tabs.firstElementChild !== ask) tabs.insertBefore(ask, tabs.firstElementChild);
+  };
+  const cleanCopilotControls = () => {
+    placeAskFirst();
+    document.querySelectorAll('#copilot button').forEach((button) => {
+      if (/ask the verifier for a verdict/i.test((button.textContent || '').replace(/\s+/g, ' ').trim())) {
+        button.hidden = true; button.setAttribute('aria-hidden', 'true'); button.style.setProperty('display', 'none', 'important');
+      }
+    });
+  };
+  const cpObserver = new MutationObserver(cleanCopilotControls);
+  cpObserver.observe(document.body, { childList: true, subtree: true });
+  cleanCopilotControls();
+  const cpBtn = document.getElementById('cpbtn'), cpDrawer = document.getElementById('copilot');
+  if (cpBtn && cpDrawer) cpBtn.addEventListener('click', () => { if (cpDrawer.hidden) setTimeout(() => [...document.querySelectorAll('#cp-tabs [role="tab"]')].find((t) => t.dataset.t === 'ask')?.click(), 0); }, true);
+  const modeChip = document.getElementById('fan-chip');
+  if (modeChip) {
+    const labelModeChip = () => { if (modeChip.textContent.trim() !== 'More modes') modeChip.textContent = 'More modes'; modeChip.title = 'More ways to follow this match'; modeChip.setAttribute('aria-label', 'More viewing modes'); };
+    labelModeChip(); new MutationObserver(labelModeChip).observe(modeChip, { childList: true, subtree: true });
+  }
   st.textContent += '@media (max-width:640px){#fan-strip,#fan-metric{display:none !important}}';   // phone: the live stats strip sat under the Match Pulse bar; Match data holds the numbers (UX review, finding 14)
   st.textContent += '#mcf-sound,#mc-trust,#third .tx .k,#cap .h span,#capclk,#visp-s,#visp-box,#visp-x,#visp-b small,#visp-b em,#visp-b .vp-m,#fan-chip i,#fan-strip .fh,#fan-strip span,#px-head span,#px-ball,#px-body .px-k,#mcf-head,#mcf-head span,#mcf-tog,#mcf .src,#mcf .chain,#wxchip,#wxchip span,#mcx-idx,.mcx-ptt-s,.mcx-t,.mcx-ch,.mcx-b,.mcx-w,.mcx-gm,.fm-planned{font-size:12px !important}';   // type floor: 12 px for the HUD text that was 9 to 11 px; the pitch name labels stay small on purpose (UX review pass 6, finding 18)
   st.textContent += '@media (max-width:1100px){#third{display:none !important}}';
@@ -302,7 +327,11 @@ const MC_API_NAME = { xg: 'xg', poss: 'possession_share' };
   const tell = () => { MCS.send({ type: 'persona', persona: persona(), lang: FAN.lang }); if (window.__mcxCards) window.__mcxCards.redraw(); };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: FAN.mode, club: FAN.club, metric: FAN.metric, lang: FAN.lang, player: FAN.player ? FAN.player.name : null })); } catch (e) { /* storage may be blocked */ } };
   const _set = fanSet;
-  fanSet = function (o, why) { _set(o, why); save(); tell(); };
+  fanSet = function (o, why) {
+    _set(o, why); save(); tell();
+    // a viewer's Fan or Analyst choice moves the feed picker; the saved mode restored on load does not (the default feed stays Casual)
+    if (o && o.mode !== undefined) window.dispatchEvent(new CustomEvent('mc-audience', { detail: FAN.mode === 'analyst' || FAN.mode === 'metric' ? 'analyst' : 'casual' }));
+  };
   let saved = null; try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { saved = null; }
   const go = setInterval(() => {
     if (!window.__mc || !players.length || !$('load').hidden) return;
@@ -311,9 +340,10 @@ const MC_API_NAME = { xg: 'xg', poss: 'possession_share' };
     if (saved && FAN_MODES.some((m) => m[0] === saved.mode)) {
       const p = saved.player ? players.find((q) => q.name === saved.player) : null;
       const metric = saved.mode === 'metric' && !MC_API_METRICS.includes(saved.metric) ? MC_API_METRICS[0] : FAN_METRICS.includes(saved.metric) ? saved.metric : FAN.metric;
-      _set({ mode: saved.mode, club: saved.club === 1 ? 1 : 0, metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
+      const mode = saved.mode === 'analyst' || saved.mode === 'metric' ? 'analyst' : 'casual';
+      _set({ mode, club: saved.club === 1 ? 1 : 0, metric, lang: window.__shellLang || (FAN_LANGS.some((l) => l[0] === saved.lang) ? saved.lang : 'en'), player: p || FAN.player }, 'restore');
     }
-    tell();
+    save(); tell();
   }, 300);
 })();
 

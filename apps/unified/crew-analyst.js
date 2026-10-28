@@ -1,6 +1,6 @@
 /* Analyst live view (CREW-7.8, AB#501). With CREW.enabled (on by default, ?crew=0 turns it off) the Analyst tab is a compact view drawn from the shell's own data:
    AG.run (events, verified claims), CREW.state.feeds.analyst (the crew fixture) and M.indices (Watch's control/chaos/tempo).
-   The 27-page console stays one click away behind "Full console" (same iframe, same routing as before, see routeAnalyst in index.html).
+   The complete analysis console stays one click away behind the Overview / Full analysis switch (same iframe, same routing as before, see routeAnalyst in index.html).
    The match is the browser simulator, so every panel says Simulated. Nothing here is estimated: a panel with no honest source says so. */
 const ALV = (() => {
   const FAV_KEY = 'mc-crew-fav';
@@ -27,10 +27,11 @@ const ALV = (() => {
     + '#al svg{display:block;width:100%;height:auto;max-width:100%}'
     + '#al [data-side="0"]{--side:var(--accent)}#al [data-side="1"]{--side:var(--hot)}'
     + '#al .key{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}#al .key span{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--side);color:var(--text)}#al .key span[data-fav="1"]{background:var(--side);color:#fff;font-weight:700}'
+    + '#al .view-switch,#al-bar .view-switch{display:inline-flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--bg);margin-left:auto}#al .view-switch button,#al-bar .view-switch button{min-height:30px;padding:4px 11px;border:0;border-radius:7px;background:transparent;color:var(--muted);font:600 12px var(--font,system-ui,sans-serif);cursor:pointer}#al .view-switch button[aria-pressed="true"],#al-bar .view-switch button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:700}#al-bar .view-switch{margin-left:0}#al-bar .view-switch button{min-height:30px}'
     + '#al [data-fav="1"]{font-weight:700}#al tr[data-fav="1"] td:first-child::before,#al li[data-fav="1"] b::before{content:"\\2605  ";color:var(--side)}'
     + '#al .gauge{height:10px;border-radius:6px;background:var(--bg3);overflow:hidden;margin:3px 0 8px}#al .gauge i{display:block;height:100%;background:var(--ok)}#al .gauge.chaos i{background:var(--warn)}'
     + '#al .share{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:3px 0 4px}#al .share i{display:block;background:var(--side)}'
-    + '.view.alv .wait{display:none}#al-bar{position:absolute;top:0;left:0;right:0;height:40px;z-index:3;display:flex;align-items:center;padding:0 12px;background:var(--bg2);border-bottom:1px solid var(--line)}#al-bar[hidden]{display:none}#al-back{font:600 12px var(--font,system-ui,sans-serif);min-height:32px;padding:4px 12px;border-radius:999px;background:var(--bg3);color:var(--text);border:1px solid var(--accent);cursor:pointer}';
+    + '.view.alv .wait{display:none}#al-bar{position:absolute;top:0;left:0;right:0;height:40px;z-index:3;display:flex;align-items:center;justify-content:flex-end;padding:0 12px;background:var(--bg2);border-bottom:1px solid var(--line)}#al-bar[hidden]{display:none}#al-back{font:600 12px var(--font,system-ui,sans-serif);min-height:32px;padding:4px 12px;border-radius:999px;background:var(--bg3);color:var(--text);border:1px solid var(--accent);cursor:pointer}';
 
   const run = () => (typeof AG !== 'undefined' && AG.run) || null;
   const sideOf = (r, team) => (!r || team == null ? -1 : team === r.names.hk ? 0 : team === r.names.ak ? 1 : -1);
@@ -143,7 +144,8 @@ const ALV = (() => {
     const sec = document.getElementById('v-analyst'); if (!sec) return null;
     const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
     hostEl = document.createElement('div'); hostEl.id = 'al'; hostEl.setAttribute('role', 'region'); hostEl.setAttribute('aria-label', 'Analyst live view');
-    hostEl.innerHTML = '<div class="alh"><h2>Analyst live view</h2><span class="sim" title="The match is the browser simulator, not a real fixture">Simulated</span><label>Favourite club <select id="al-fav"></select></label><span class="sp"></span><button type="button" id="al-full" title="Open the 27-page enterprise console">Full console</button></div><div id="al-body" class="grid"></div>';
+    const switcher = () => '<div class="view-switch" role="group" aria-label="Analysis view"><button type="button" data-mode="overview" aria-pressed="' + (!full) + '">Overview</button><button type="button" data-mode="full" aria-pressed="' + full + '">Full analysis</button></div>';
+    hostEl.innerHTML = '<div class="alh"><h2>Match overview</h2><span class="sim" title="This match is simulated">Simulated</span><label>Your club <select id="al-fav"></select></label>' + switcher() + '</div><div id="al-body" class="grid"></div>';
     sec.insertBefore(hostEl, sec.firstChild);
     hostEl.addEventListener('click', (e) => {   // the Maps section's team and map buttons
       const t = e.target.closest && e.target.closest('#al-maps [data-team],#al-maps [data-map]'); if (!t) return;   // only the Maps buttons: other panels mark their svgs with data-map too
@@ -151,14 +153,17 @@ const ALV = (() => {
       if (t.dataset.map) mapKind = t.dataset.map;
       bodySig = ''; render(); drawMap(true);
     });
-    const bar = document.createElement('div'); bar.id = 'al-bar'; bar.hidden = true;
-    const back = document.createElement('button'); back.type = 'button'; back.id = 'al-back'; back.textContent = 'Live view'; back.title = 'Back to the compact live view';
-    bar.appendChild(back); sec.appendChild(bar);
-    hostEl.querySelector('#al-full').onclick = () => {
-      if (typeof M === 'undefined' || !M.fixture) { if (typeof toast === 'function') toast('Pick a season fixture to open the full console'); return; }   // the console needs a match to route to; without one it would sit on a spinner
-      full = true; sync(); if (typeof routeAnalyst === 'function') routeAnalyst(); sync(); back.focus();
-    };
-    back.onclick = () => { full = false; sync(); hostEl.querySelector('#al-full').focus(); };
+    const bar = document.createElement('div'); bar.id = 'al-bar'; bar.hidden = true; bar.innerHTML = switcher(); sec.appendChild(bar);
+    sec.addEventListener('click', (e) => {
+      const control = e.target.closest && e.target.closest('.view-switch [data-mode]'); if (!control) return;
+      const nextFull = control.dataset.mode === 'full';
+      if (nextFull && (typeof M === 'undefined' || !M.fixture)) { if (typeof toast === 'function') toast('Choose a match to open Full analysis'); return; }
+      full = nextFull; sync();
+      if (full && typeof routeAnalyst === 'function') routeAnalyst();
+      sync();
+      const selected = (full ? bar : hostEl).querySelector('[data-mode="' + (full ? 'full' : 'overview') + '"]');
+      if (selected) selected.focus();
+    });
     hostEl.querySelector('#al-fav').onchange = (e) => { const cl = clubs(); if (cl) { favName = cl[+e.target.value]; try { localStorage.setItem(FAV_KEY, favName); } catch (x) { /* storage blocked: favName keeps it for this visit */ } } bodySig = ''; render(); };
     return hostEl;
   }
@@ -183,6 +188,8 @@ const ALV = (() => {
     sec.setAttribute('aria-label', live ? 'Analyst: live view' : 'Analyst: enterprise console');
     if (fr) { fr.style.display = live ? 'none' : ''; fr.style.marginTop = live ? '' : '40px'; fr.style.height = live ? '' : 'calc(100% - 40px)'; }   // the Live view bar sits above the console, covering none of it
     document.getElementById('al-bar').hidden = live;
+    hostEl.querySelectorAll('.view-switch [data-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.mode === (live ? 'overview' : 'full'))));
+    document.querySelectorAll('#al-bar .view-switch [data-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.mode === (live ? 'overview' : 'full'))));
     if (live) render();
   }
   if (on()) { setInterval(() => { if (typeof current !== 'undefined' && current === 'analyst') { sync(); } }, 500); window.CREW.subscribe(() => { bodySig = ''; if (hostEl && !full) render(); }); }

@@ -7,6 +7,9 @@
   try { if (window.parent !== window) qs += '&' + window.parent.location.search; } catch (e) { /* cross-origin parent */ }
   let on = !/[?&]crew=0(&|$)/.test(qs);   // default on; ?crew=0 or localStorage mc-crew=0 turns it off, an explicit crew=1 beats a stored 0
   try { if (on && !/[?&]crew=1(&|$)/.test(qs) && localStorage.getItem('mc-crew') === '0') on = false; } catch (e) { /* storage blocked */ }
+  const singlePicker = document.createElement('style');
+  singlePicker.textContent = '#fan-pop .fm-lang,#fan-intro .fm-lang{display:none!important}';
+  document.head.appendChild(singlePicker);   // the shell header is the one language control in Watch; the preference panel keeps the scope/fallback note only
   if (!on) return;
   if (typeof FAN_LANGS === 'undefined' || typeof fanPicker === 'undefined' || typeof fanApply === 'undefined' || typeof fanPop === 'undefined') return;
 
@@ -25,7 +28,7 @@
   const st = document.createElement('style');
   st.textContent = '#fan-pop:not([hidden]){z-index:40}'   // above the live cards (z 30, 31) that could cover the longer language row
     + '@media (min-width:761px){#fan-pop:not([hidden]){max-height:calc(100vh - var(--mc-pop-top,130px) - 12px);overflow-y:auto}}'   // the prototype's phone sheet (70vh) already scrolls
-    + '.fm-planned{margin-inline-start:4px}.mc-lang-note{margin:6px 0 0;font:12px/1.4 system-ui,sans-serif;color:var(--muted,#9fb0cc)}.mc-lang-note[hidden]{display:none}';
+    + '.fm-planned{margin-inline-start:4px}.mc-lang-note{margin:6px 0 0;font:12px/1.4 system-ui,sans-serif;color:var(--muted,#9fb0cc)}.mc-lang-note[hidden]{display:none}.mc-lang-scope{margin:3px 0 6px;font:12px/1.4 system-ui,sans-serif;color:var(--muted,#9fb0cc)}';
   document.head.appendChild(st);
 
   // A line reads right to left when it is written in Arabic, whatever the picked language: a line that fell back to English stays left to right (dir=auto), and the card chrome is not mirrored.
@@ -55,6 +58,9 @@
     const nm = document.createElement('bdi'); nm.textContent = name(FAN.lang);
     note.append(built(FAN.lang) ? 'Lines show in ' : '', nm, built(FAN.lang) ? ' once a checked translation arrives. Until then, or if translating fails, they stay in English.' : ' is Planned: lines stay in English for now.');
     row.after(note);
+    const scope = document.createElement('p'); scope.className = 'mc-lang-scope'; if (box.id === 'fan-pop') scope.id = 'mc-lang-scope';
+    scope.textContent = 'Commentary and speech only · interface labels stay in English.';
+    note.after(scope);
   };
   // the panel is taller with ten languages: on a desktop it stops short of the frame's bottom and scrolls
   const _pop = fanPop;

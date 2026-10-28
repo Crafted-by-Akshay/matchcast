@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { openShell, viewFrame } from './helpers';
+import { openShell, openProductionTools, viewFrame } from './helpers';
 
 // The Broadcast desk's panels are a classic script that runs before the 3D module's three.js import, so the producer queue and the Copilot show even when the 3D engine never loads. The shell's loading card lifts on the panels' own signal.
 declare const AG: any;
@@ -11,9 +11,10 @@ test('the desk panels and the approval queue show while three.js never loads, an
   await openShell(page, 'broadcast', '?seed=2026');
   await expect(page.locator('#v-broadcast'), 'the card lifts on the panels signal, not the pitch start').toHaveClass(/panels/, { timeout: 60_000 });
   const f = await viewFrame(page, 'broadcast');
+  await openProductionTools(f);
   await expect(f.locator('#mc-desk')).toBeVisible();
   await expect(f.locator('#mc-producer'), 'the producer section shows without the pitch').toBeVisible();
-  await expect(f.locator('#mc-pitch')).toHaveText('3D pitch: loading');
+  await expect(f.locator('#mc-pitch')).toHaveText('Match preview · follows Watch');
   await expect(f.locator('#mc-cop [data-cop="highlights"]')).toBeVisible();
   await expect(f.locator('#mc-pq'), 'a silent booth reads as a fault: the empty queue says a booth line waits here until approved').toContainText('a booth line waits here until you approve it', { timeout: 30_000 });
 

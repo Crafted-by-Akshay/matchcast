@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { readFileSync } from 'fs';
-import { collectErrors, openShell, ready, stepSim, viewFrame } from './helpers';
+import { collectErrors, openShell, openView, ready, stepSim, viewFrame } from './helpers';
 
 // DAT-4 task 272: control, chaos and tempo. The port holds to the Python results; Watch draws the sparkline and the Analyst's match page shows the numbers.
 const golden = JSON.parse(readFileSync('packages/metrics/golden/indices-golden.json', 'utf8'));
@@ -26,20 +26,22 @@ test('indices: an empty window is bounded and does not throw', () => {
   expect(idx.tempo([], 60000)).toBe(0);
 });
 
-test('indices: Watch in Analyst mode draws the sparkline and the Analyst match page shows the indices', async ({ page }) => {
+test('indices: Watch retains the metric series behind hidden diagnostics and Analyze shows the indices', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
-  await openShell(page, 'watch', '?crew=0');
+  await openShell(page, 'watch');
   await ready('watch')(page);
   const w = await viewFrame(page, 'watch');
+  await w.getByRole('radio', { name: 'Analyst', exact: true }).click();
   await stepSim(w, 6000);   // 5 simulated minutes
   await expect.poll(() => w.evaluate(() => (window as any).mcIndicesNow().passes), { timeout: 60_000 }).toBeGreaterThan(5);
   const now: any = await w.evaluate(() => (window as any).mcIndicesNow());
   expect(now.control).toBeGreaterThanOrEqual(0); expect(now.control).toBeLessThanOrEqual(100);
   expect(now.chaos).toBeGreaterThanOrEqual(0); expect(now.chaos).toBeLessThanOrEqual(100);
-  await expect(w.locator('#mcx-idx')).toBeVisible({ timeout: 10_000 });
+  await expect(w.locator('#mcx-idx')).toBeHidden();
+  await expect.poll(() => w.locator('#mcx-idx svg').count(), { timeout: 10_000 }).toBe(3);
   await expect(w.locator('#mcx-idx')).toContainText('Control');
-  await page.locator('#tabs [data-view="analyst"], [role="tab"]:has-text("Analyst")').first().click();
+  await openView(page, 'analyst');
   const a = await viewFrame(page, 'analyst');
   await ready('analyst', 120_000)(page);   // the shell routes the Analyst to its live page once it is ready; the match page is opened after that
   await a.evaluate(() => (window as any).go('match'));
@@ -49,18 +51,21 @@ test('indices: Watch in Analyst mode draws the sparkline and the Analyst match p
   expect(errs).toEqual([]);
 });
 
-test('indices: the sparkline panel stays hidden until it has two minutes to draw (no stuck "too early" box)', async ({ page }) => {
+test('indices: the retained sparkline data starts at two minutes while the Watch diagnostics stay hidden', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   await openShell(page, 'watch');
   await ready('watch')(page);
   const w = await viewFrame(page, 'watch');
+  await w.getByRole('radio', { name: 'Analyst', exact: true }).click();
   await stepSim(w, 300);   // 15 simulated seconds
   await expect.poll(() => w.evaluate(() => (window as any).mcIndicesNow().series.length), { timeout: 30_000 }).toBeLessThan(2);
   await w.waitForTimeout(2500);   // the panel repaints every 2 s
   await expect(w.locator('#mcx-idx')).toBeHidden();
   await stepSim(w, 3000);
-  await expect(w.locator('#mcx-idx')).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => w.evaluate(() => (window as any).mcIndicesNow().series.length), { timeout: 30_000 }).toBeGreaterThanOrEqual(2);
+  await expect(w.locator('#mcx-idx')).toBeHidden();
+  await expect.poll(() => w.locator('#mcx-idx svg').count(), { timeout: 10_000 }).toBe(3);
   await expect(w.locator('#mcx-idx')).not.toContainText('too early');
   expect(errs).toEqual([]);
 });

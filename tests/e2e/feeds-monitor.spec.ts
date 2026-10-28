@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { openShell, viewFrame } from './helpers';
+import { openShell, openProductionTools, viewFrame } from './helpers';
 
 // AB#497 (CREW-6.3, the desk side of the six derived feeds). The desk monitors the six English feeds: what each has aired, the lines the Verifier dropped with the reason, and a kill per feed.
 // The record shapes are matchcast.onair/1 1.2.0 (AB#498, merged). Derived lines never enter the producer queue.
@@ -17,6 +17,7 @@ test('the desk monitors the six feeds: what each aired, the Verifier drops with 
   test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
+  await openProductionTools(f);
   await expect(f.locator('#mc-feeds')).toBeVisible({ timeout: 240_000 });
   await expect(f.locator('#mc-feeds')).toContainText('simulated');
   await expect(f.locator('#mc-feed-list li')).toHaveCount(6);
@@ -58,6 +59,7 @@ test('the desk keys its dedupe by match: the same ids from another match both co
   test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
+  await openProductionTools(f);
   await expect(f.locator('#mc-feeds')).toBeVisible({ timeout: 240_000 });
   const streamA = { session_id: 'match-a', match_id: 'm-a' };
   const streamB = { session_id: 'match-b', match_id: 'm-b' };
@@ -69,4 +71,3 @@ test('the desk keys its dedupe by match: the same ids from another match both co
   await post(page, { type: 'feed-drop', record: { ...drop, stream: streamB } });
   await expect(f.locator('#mc-drop-list li', { hasText: 'Ticker · number_mismatch' })).toHaveCount(2);
 });
-

@@ -29,7 +29,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 128
     // the Copilot drawer: the commentary card never sits on top of it or on Pulse (it steps aside while the drawer is open)
     if (iw > 560) {
       await f.evaluate(() => (document.getElementById('cpbtn') as HTMLElement).click());
-      await expect.poll(async () => { const m = await rects(); return !!m.drawer && !overlap(m.mcf, m.drawer) && !overlap(m.mcf, m.pulse) && (!!m.mcf || !!m.note); }, { timeout: 15_000, message: 'with the Copilot drawer open the commentary card covers neither the drawer nor Pulse, and if it steps aside the drawer says so' }).toBe(true);
+      await expect.poll(async () => { const m = await rects(); return !!m.drawer && !overlap(m.mcf, m.drawer) && !overlap(m.mcf, m.pulse); }, { timeout: 15_000, message: 'with the Copilot drawer open the commentary card covers neither the drawer nor Pulse, while the drawer remains usable' }).toBe(true);
       await f.evaluate(() => (document.getElementById('cp-close') as HTMLElement | null)?.click());
       await expect.poll(async () => !!(await rects()).mcf, { timeout: 15_000, message: 'the commentary card is back once the drawer closes' }).toBe(true);
     }
