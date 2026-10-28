@@ -93,6 +93,12 @@ STRONG_LIVE = re.compile(
     r"|\bwhat(?:'s| is) the score\b|\bcurrent score\b",
     re.IGNORECASE,
 )
+# "what is happening?": a plain status question about this match; answered with the score
+STATUS_Q = re.compile(
+    r"^\s*(?:what(?:'s| is) (?:happening|going on|up)|what (?:has )?happened"
+    r"|how(?:'s| is) (?:it|the (?:match|game)) going)\s*[?.!]*\s*$",
+    re.IGNORECASE,
+)
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
 # "who has the most shots?" (or shots on target) compares the two clubs. Only that exact question
 # is answered; a club, a player, a zone or a period named in it abstains, since the club totals
@@ -195,6 +201,8 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     if names_outside_the_match(ctx, question, index):
         return Route("out_of_scope", None, (), "")
     teams = tuple(t for t in (ctx.home, ctx.away) if ctx.club_name(t).casefold() in lowered)
+    if STATUS_Q.match(question):
+        return Route("live", ("goals", "Score"), teams, "")  # the score is the match's status
     if FUTURE_CUE.search(question):
         return Route("abstain", None, teams, "")  # we never predict
     clauses = [c for c in CLAUSE.split(question) if c and c.strip()]
