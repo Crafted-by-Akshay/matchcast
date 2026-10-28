@@ -58,7 +58,7 @@
     if (window.__mcHeadless) return;   // engine specs drive frame() in bulk with no GPU: a pixel capture per frame costs seconds each
     if (!window.__mc.vis.VIS.on) {
       window.__mc.vis.toggle(true);
-      // the tracker runs, but the panel (debug-style accuracy numbers) stays closed until asked for (UX review pass 7). FIX-11: the detection boxes and raw track ids are a debug view, off at every width (build.py sets VIS.boxes to false).
+      // the tracker runs, but the panel (debug-style accuracy numbers) stays closed until asked for (UX review pass 7). The detection boxes show with it (VIS.boxes stays on); the panel's Boxes button hides them.
       $('visp').hidden = true; const b = $('visb'); if (b) b.setAttribute('aria-pressed', 'false');
     }
   }, 300);
@@ -73,6 +73,12 @@
     const b = $('visb'); if (b) b.setAttribute('aria-pressed', vp.hidden ? 'false' : 'true');
   };
   for (const id of ['visb', 'visp-x']) { const el = $(id); if (el) el.addEventListener('click', panelOnly, true); }
+  // turning Vision on shows the detection boxes, so the viewer sees the tracker working; the panel's Boxes button can hide them again
+  const boxesOn = () => {
+    const v = window.__mc && window.__mc.vis; if (!v) return;
+    v.VIS.boxes = true; const bx = $('visp-box'); if (bx) bx.setAttribute('aria-pressed', 'true');
+  };
+  const vb = $('visb'); if (vb) vb.addEventListener('click', () => { const v = window.__mc && window.__mc.vis; if (v && !v.VIS.on) boxesOn(); }, true);
 })();
 // Vision throttle: a capture reads the GPU back, which on a slow machine stalls the frame loop. The tracker's period (VIS.period, in match seconds) is stretched so that captures use about a tenth of the wall time, up to 3 s, and eases back to 0.2 s when they are cheap. The panel's "Hz" shows the period actually in use.
 (() => {

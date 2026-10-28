@@ -3,9 +3,9 @@ import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
 // UX review pass 7: the first screen of Watch tells the story, not the tracker's accuracy numbers. The Vision tracker runs from kick-off,
 // but its panel stays closed until asked for, and the On-the-ball card no longer hides under the Live commentary card.
-// FIX-11: the detection boxes and raw track ids are a debug view, off by default at every width (the Boxes button reads "Debug boxes").
+// The detection boxes show while Vision is on (the panel's Boxes button hides them); the raw track ids stay in the panel.
 for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 1280, 720], ['laptop', 1024, 768], ['phone', 390, 844]] as const) {
-  test(`Watch on ${name}: Vision runs with its panel and debug boxes closed, and the bottom cards do not overlap`, async ({ page }) => {
+  test(`Watch on ${name}: Vision runs with its panel closed and its boxes shown, and the bottom cards do not overlap`, async ({ page }) => {
     test.setTimeout(300_000);
     const errs = collectErrors(page);
     await page.setViewportSize({ width, height });
@@ -21,7 +21,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['wide laptop', 128
       return { iw, cap: rect('cap'), on: (window as any).__mc.vis.VIS.on, boxes: (window as any).__mc.vis.VIS.boxes, panel: rect('visp'), third: rect('third'), mcf: rect('mcf'), pressed: document.getElementById('visb')!.getAttribute('aria-pressed') };
     });
     expect(m.on, 'the tracker runs').toBe(true);
-    expect(m.boxes, 'the detection boxes (and raw track ids) are a debug view, off by default at every width').toBe(false);
+    expect(m.boxes, 'the detection boxes show while Vision is on').toBe(true);
     expect(m.panel, 'the Vision panel starts closed').toBeNull();
     expect(m.pressed).toBe('false');
     if (m.third && m.mcf) {
