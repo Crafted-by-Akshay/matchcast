@@ -27,6 +27,10 @@ from .retrieval import ENTITY_CORPORA, Bm25Index, Hit, analyse, defines
 MAX_QUESTION = 300
 WORD_LIMIT = {"casual": 80, "broadcast": 60, "analyst": 200}
 OUT_OF_SCOPE = "I can only answer questions about this match and MatchCast."
+WATCH_POINTER = (
+    "Weather, energy and tactics are shown in the Watch view's Copilot, which reads the 3D match. "
+    "This Copilot reads the match feed."
+)
 ABSTAIN = "I can't confirm that from the match data yet."
 log = logging.getLogger(__name__)
 KB_THRESHOLD = 2.2
@@ -248,7 +252,9 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     ):  # about this match, but no tool covers it
         return Route("abstain", None, teams, query)
     if STATE_TOPIC.search(question):
-        return Route("abstain", None, teams, query)
+        return Route(
+            "watch", None, teams, query
+        )  # the feed has no weather or energy: say where they are
     if hit(query):
         return Route("knowledge", None, teams, query)
     return Route("out_of_scope", None, teams, query)
@@ -432,6 +438,8 @@ class Assistant:
             return AskResult(answer, "history", abstained, citations, dropped)
         if plan.intent == "out_of_scope":
             return AskResult(OUT_OF_SCOPE, plan.intent, abstained=True)
+        if plan.intent == "watch":
+            return AskResult(WATCH_POINTER, plan.intent, abstained=True)
         goals = _goal_lines(ctx) if plan.intent in ("goals", "goal_impact") else []
         if plan.intent == "goals" and len(plan.teams) == 1:  # "who scored for Northgate FC?"
             goals = [g for g in goals if g[1] == plan.teams[0]]

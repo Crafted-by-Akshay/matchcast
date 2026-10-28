@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 from conftest import run
 from matchcast_agents.ask import Assistant, Bm25Index, load_kb
-from matchcast_agents.ask.assistant import ABSTAIN, OUT_OF_SCOPE, WORD_LIMIT, check_citations, route
+from matchcast_agents.ask.assistant import (
+    ABSTAIN,
+    OUT_OF_SCOPE,
+    WATCH_POINTER,
+    WORD_LIMIT,
+    check_citations,
+    route,
+)
 
 KB = Path(__file__).parents[3] / "kb"
 
@@ -211,11 +218,11 @@ def test_who_is_on_top_gets_the_score(assistant, flow, question) -> None:
         "What is the possession?",
     ],
 )
-def test_match_state_questions_abstain_instead_of_a_page_that_shares_a_word(
+def test_match_state_questions_point_to_watch_instead_of_a_page_that_shares_a_word(
     assistant, flow, question
 ) -> None:
     result = ask(assistant, flow, question)
-    assert result.abstained and result.answer == ABSTAIN and not result.citations
+    assert result.abstained and result.answer == WATCH_POINTER and not result.citations
 
 
 def test_score_words_win_over_the_new_metric_phrases(assistant, flow) -> None:

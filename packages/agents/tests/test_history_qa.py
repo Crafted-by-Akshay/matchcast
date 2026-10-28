@@ -139,3 +139,9 @@ def test_federation_names_do_not_reach_the_answers() -> None:
     for question in ("Argentina results in 2022", "best team in 2026", "Argentina in 1930"):
         text, _, _, _ = qa.answer(question)
         assert "FIFA" not in text and "UEFA" not in text, question
+
+
+def test_the_last_meeting_of_two_nations_is_a_history_question() -> None:
+    query = qa.parse("What was the result of the last Argentina v Brazil match?")
+    assert query is not None and query.kind == "record"
+    assert {query.team, query.opponent} == {"Argentina", "Brazil"} and query.year is None
