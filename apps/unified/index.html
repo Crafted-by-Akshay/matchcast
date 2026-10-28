@@ -1059,15 +1059,15 @@ function paintBrowseHighlights() {
     const canvas = document.createElement('canvas'); canvas.className = 'short-canvas'; canvas.width = SH.W; canvas.height = SH.H; canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', 'Vertical replay of ' + card.title);
     const caption = document.createElement('p'); caption.className = 'short-caption'; caption.textContent = card.commentary + ' ' + card.why;
     const short = document.createElement('button'); short.type = 'button'; short.className = 'btn'; short.textContent = 'Play short';
-    const hasFrames = card.frames.length >= 4; let stopShort = null;
-    if (hasFrames) { SH.still(canvas, 'Ready'); } else { SH.still(canvas, 'No frames for this moment'); short.disabled = true; }
+    let stopShort = null;
+    SH.still(canvas, 'Ready');   // the grid lists only cards with enough frames (HL.plan)
     short.addEventListener('click', () => {
       if (stopShort) { stopShort(); stopShort = null; short.textContent = 'Play short'; return; }
       short.textContent = 'Stop short';
+      if (typeof VC !== 'undefined') VC.say(card.commentary, { id: 'short-' + card.id, role: 'playByPlay' });   // spoken only when Voice is on; the caption always shows
       stopShort = SH.play(canvas, card.frames, () => { stopShort = null; short.textContent = 'Play short'; });
     });
-    if (!hasFrames) article.append(thumb);
-    article.append(canvas, caption, short, tag, title, commentary, why, action); grid.append(article);
+    article.append(thumb, canvas, caption, short, tag, title, commentary, why, action); grid.append(article);
   }
   $('highlights-empty').hidden = cards.length > 0;
   grid.hidden = cards.length === 0;

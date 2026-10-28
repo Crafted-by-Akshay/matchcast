@@ -28,8 +28,15 @@ test('shorts: each key moment with frames gets a 9:16 canvas with its commentary
   await expect(page).toHaveURL(/#highlights$/);
   const short = page.locator('#highlight-grid .highlight-card').first();
   await expect(short.locator('canvas.short-canvas')).toHaveCount(1);
+  await expect(short).toContainText('SIMULATED MOMENT · 27\'');   // the card still says it is simulated
   await expect(short.locator('.short-caption')).toContainText("27' Ana scores for Thames Rovers");
+  // the caption is handed to the voice line (voice.js), once per short
+  await page.evaluate(() => {
+    const w = window as any; w.said = [];
+    const say = VC.say; VC.say = (text: string, o: any) => { w.said.push(text); return say(text, o); };
+  });
   await short.getByRole('button', { name: 'Play short' }).click();
   await expect(short.getByRole('button', { name: 'Stop short' })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).said)).toEqual(["27' Ana scores for Thames Rovers. Thames Rovers 1-0 Coloso Ciudad after the goal."]);
   expect(errs).toEqual([]);
 });
