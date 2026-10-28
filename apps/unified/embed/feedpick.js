@@ -18,7 +18,7 @@
 
   const KEY = 'mc-feedpick';
   let DEFS = [
-    { key: 'casual', label: 'Fan', live: true }, { key: 'analyst', label: 'Analyst', live: true },
+    { key: 'casual', label: 'Casual', live: true }, { key: 'analyst', label: 'Analyst', live: true },
     { key: 'audio_description', label: 'Audio description', live: true }, { key: 'catch_me_up', label: 'Catch me up', live: true },
     { key: 'half_time', label: 'Half-time explainer', live: true }, { key: 'ticker', label: 'News ticker', live: true },
   ];
@@ -179,7 +179,7 @@
     const d = e.data || {};
     if (e.source !== window.parent || d.src !== 'matchcast-shell') return;
     if (d.type === 'crew-feeds') {
-      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: x.key === 'casual' ? 'Fan' : String(x.label), live: !!x.live })); const fl = DEFS.find((x) => x.live); if (!DEFS.some((x) => x.key === pick && x.live)) { pick = (fl || DEFS[0]).key; postPick(pick); } }
+      if (Array.isArray(d.defs) && d.defs.length) { DEFS = d.defs.map((x) => ({ key: String(x.key), label: String(x.label), live: !!x.live })); const fl = DEFS.find((x) => x.live); if (!DEFS.some((x) => x.key === pick && x.live)) { pick = (fl || DEFS[0]).key; postPick(pick); } }
       simulated = d.simulated !== false;   // anything but an explicit false counts as the fixture
       feeds = d.feeds && typeof d.feeds === 'object' ? d.feeds : {};
       announce(); drawPick(); drawLines();
