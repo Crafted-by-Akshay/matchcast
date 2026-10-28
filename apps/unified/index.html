@@ -181,6 +181,8 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .highlight-card p{margin:0;color:var(--muted);line-height:1.5}
 .highlight-card .moment{color:var(--accent);font-size:var(--type-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 .highlight-card .btn{justify-self:start}
+.short-canvas{display:block;width:100%;max-width:270px;height:auto;aspect-ratio:9/16;border-radius:var(--radius-md);background:#0b3d2a}
+.short-caption{font-size:13px;line-height:1.45}
 @media (max-width:560px){
   .hero{min-height:300px;padding:20px var(--gut)}
   .hero h2{font-size:26px}
@@ -623,6 +625,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="agents.js"></script>
 <script src="feed.js"></script>
 <script src="highlights.js"></script>
+<script src="shorts.js"></script>
 <script src="live.js"></script>
 <script src="trace-panel.js"></script>
 <script src="crew.js"></script>
@@ -1052,14 +1055,26 @@ function paintBrowseHighlights() {
     const article = document.createElement('article'); article.className = 'highlight-card';
     const fx = byId(M.fixture), thumb = document.createElement('div'); thumb.className = 'highlight-thumb'; thumb.setAttribute('role', 'img'); thumb.setAttribute('aria-label', 'Illustrative simulated match cover, not a saved video frame');
     if (fx) { thumb.style.setProperty('--hc', fx.home.color); thumb.style.setProperty('--ac', fx.away.color); thumb.style.setProperty('--cover-x', (card.minute * 13 % 100) + '%'); }
-    const thumbLabel = document.createElement('span'); thumbLabel.textContent = 'SIMULATED MOMENT · ' + card.minute + "'"; thumb.append(thumbLabel); article.append(thumb);
+    const thumbLabel = document.createElement('span'); thumbLabel.textContent = 'SIMULATED MOMENT · ' + card.minute + "'"; thumb.append(thumbLabel);
     const tag = document.createElement('span'); tag.className = 'moment'; tag.textContent = card.minute + "' · " + card.club + ' · ' + card.label;
     const title = document.createElement('h3'); title.textContent = card.title;
     const commentary = document.createElement('p'); commentary.textContent = card.commentary;
     const why = document.createElement('p'); why.textContent = card.why;
     const action = document.createElement('button'); action.type = 'button'; action.className = 'btn'; action.textContent = 'Replay in 3D';
     action.addEventListener('click', () => sendClips([card.id]));
-    article.append(tag, title, commentary, why, action); grid.append(article);
+    // the Short: a 9:16 replay from the clip's own frames, captioned with the moment's commentary
+    const canvas = document.createElement('canvas'); canvas.className = 'short-canvas'; canvas.width = SH.W; canvas.height = SH.H; canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', 'Vertical replay of ' + card.title);
+    const caption = document.createElement('p'); caption.className = 'short-caption'; caption.textContent = card.commentary + ' ' + card.why;
+    const short = document.createElement('button'); short.type = 'button'; short.className = 'btn'; short.textContent = 'Play short';
+    let stopShort = null;
+    SH.still(canvas, 'Ready');   // the grid lists only cards with enough frames (HL.plan)
+    short.addEventListener('click', () => {
+      if (stopShort) { stopShort(); stopShort = null; short.textContent = 'Play short'; return; }
+      short.textContent = 'Stop short';
+      if (typeof VC !== 'undefined') VC.say(card.commentary, { id: 'short-' + card.id, role: 'playByPlay' });   // spoken only when Voice is on; the caption always shows
+      stopShort = SH.play(canvas, card.frames, () => { stopShort = null; short.textContent = 'Play short'; });
+    });
+    article.append(thumb, canvas, caption, short, tag, title, commentary, why, action); grid.append(article);
   }
   $('highlights-empty').hidden = cards.length > 0;
   grid.hidden = cards.length === 0;
