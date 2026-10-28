@@ -12,6 +12,10 @@ def test_a_commentary_voice_gets_its_cheerful_style_and_prosody():
     assert "xmlns:mstts='https://www.w3.org/2001/mstts'" in markup
 
 
+def test_the_second_commentary_voice_gets_cheerful_too():
+    assert "<mstts:express-as style='cheerful'>" in ssml("Save!", "en-GB-SoniaNeural")
+
+
 def test_a_voice_without_a_known_style_gets_the_prosody_only():
     markup = ssml("Gol de Ana.", "es-ES-ElviraNeural")
     assert "express-as" not in markup
