@@ -15,11 +15,10 @@ test('shell: route and tool menus work by keyboard, a skip link exists, publishe
   await page.keyboard.press('ArrowDown');
   await expect(page.locator('#tab-highlights')).toBeFocused();
   await page.keyboard.press('End');
-  await expect(page.locator('#tab-agents')).toBeFocused();
+  await expect(page.locator('#tab-broadcast')).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/#agents$/);
-  await expect(page.locator('#more-toggle')).toHaveAttribute('aria-label', 'More, current page: Agents');
-  await expect(page.locator('#more-toggle')).toBeFocused();
+  await expect(page).toHaveURL(/#broadcast$/);
+  await expect(page.locator('#more-toggle')).toHaveAttribute('aria-label', 'More, current page: Production Studio');
   await expect(page.locator('a.skip')).toHaveAttribute('href', '#stage');
   // a published line goes to the polite live region
   await page.evaluate(() => {
@@ -31,7 +30,7 @@ test('shell: route and tool menus work by keyboard, a skip link exists, publishe
   await expect(page.locator('#sr-lines')).toHaveAttribute('aria-live', 'polite');
 });
 
-test('shell: no serious or critical axe violations on the Agents tab', async ({ page }) => {
+test('shell: no serious or critical axe violations on the internal pipeline view', async ({ page }) => {
   test.skip(!existsSync('node_modules/axe-core/axe.min.js'), 'axe-core is not installed');
   await openShell(page, 'agents');
   await page.addScriptTag({ content: readFileSync('node_modules/axe-core/axe.min.js', 'utf8') });

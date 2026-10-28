@@ -11,9 +11,9 @@ test.beforeEach(({ page }) => page.addInitScript(() => { (window as any).MC_TEST
 test('language picker: ten feed languages, the choice is kept on reload', async ({ page }) => {
   const errs = collectErrors(page);
   await openShell(page, 'agents');
-  await expect(page.locator('#lang-pick')).toHaveAccessibleName('Commentary and speech language');
+  await expect(page.locator('#lang-pick')).toHaveAccessibleName('Commentary language');
   await expect(page.locator('#lang-sel')).toHaveAttribute('title', /Interface labels remain in English/);
-  await expect(page.locator('#lang-sel .ui-scope')).toHaveText('UI: English');
+  await expect(page.locator('#lang-sel')).toContainText('Commentary language');
   await expect(page.locator('#lang-pick option')).toHaveCount(LANGS.length);
   expect(await page.locator('#lang-pick option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).toEqual(LANGS);
   await page.locator('#lang-pick').selectOption('ja');

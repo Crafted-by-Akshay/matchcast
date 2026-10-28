@@ -14,7 +14,7 @@ test('tour: the button opens a five-step guide that switches views, and Escape c
   await expect(page.locator('#tour-back')).toBeHidden();
   await page.click('#tour-go');
   await expect(d).toContainText('Step 2 of 5');
-  await expect(page.locator('#v-agents')).toBeVisible();
+  await expect(page.locator('#v-analyst')).toBeVisible();
   await page.click('#tour-go'); await expect(d).toContainText('Broadcast');
   await page.click('#tour-back'); await expect(d).toContainText('Step 2 of 5');
   for (let i = 0; i < 3; i++) await page.click('#tour-go');
@@ -42,7 +42,7 @@ test('tour: ?tour=1 opens it, and number keys never switch views while it is ope
   await expect(d).toContainText('Step 1 of 5');
 });
 
-test('shortcuts: keys 1 to 6 pressed inside a view switch the shell view', async ({ page }) => {
+test('shortcuts: keys 1 to 5 pressed inside a view switch the shell view', async ({ page }) => {
   await page.route('**/watch/index.html*', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body><input id="n"><button id="b">x</button></body></html>' }));
   await openShell(page, 'watch');
   const f = await viewFrame(page, 'watch');
@@ -50,8 +50,8 @@ test('shortcuts: keys 1 to 6 pressed inside a view switch the shell view', async
   await f.locator('#b').focus();
   await page.keyboard.press('4');
   await expect(page.locator('#v-analyst')).toBeVisible();
-  await page.keyboard.press('6');
-  await expect(page.locator('#v-agents')).toBeVisible();
+  await page.keyboard.press('5');
+  await expect(page.locator('#v-broadcast')).toBeVisible();
   await page.goto('/index.html#watch');
   const g = await viewFrame(page, 'watch');
   await expect.poll(() => g.evaluate(() => document.readyState)).toBe('complete');
