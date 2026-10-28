@@ -196,6 +196,28 @@ def test_plain_match_status_questions_get_the_score(assistant, flow, question) -
     assert result.answer.startswith("Score:") and result.citations[0]["type"] == "claim"
 
 
+@pytest.mark.parametrize("question", ["Who is on top?", "Who's winning?", "who is leading"])
+def test_who_is_on_top_gets_the_score(assistant, flow, question) -> None:
+    result = ask(assistant, flow, question)
+    assert result.intent == "live" and result.answer.startswith("Score:")
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "How is the weather affecting play?",
+        "Who is the most tired?",
+        "Should anyone change tactics?",
+        "What is the possession?",
+    ],
+)
+def test_match_state_questions_abstain_instead_of_a_page_that_shares_a_word(
+    assistant, flow, question
+) -> None:
+    result = ask(assistant, flow, question)
+    assert result.abstained and result.answer == ABSTAIN and not result.citations
+
+
 def test_score_words_win_over_the_new_metric_phrases(assistant, flow) -> None:
     from matchcast_agents.ask.assistant import _metric_in
 

@@ -96,7 +96,15 @@ STRONG_LIVE = re.compile(
 # "what is happening?": a plain status question about this match; answered with the score
 STATUS_Q = re.compile(
     r"^\s*(?:what(?:['’]s| is) (?:happening|going on|up)|what (?:has )?happened"
-    r"|how(?:['’]s| is) (?:it|the (?:match|game)) going)\s*[?.!]*\s*$",
+    r"|how(?:['’]s| is) (?:it|the (?:match|game)) going"
+    r"|who(?:['’]s| is| are) (?:on top|winning|leading|ahead))\s*[?.!]*\s*$",
+    re.IGNORECASE,
+)
+# about this match's state, which no tool or knowledge page covers: abstain rather than answer
+# from a page that only shares a word (a tackle page for "the possession")
+STATE_TOPIC = re.compile(
+    r"\b(tired|tiredness|stamina|tactics?|tactical|weather|rain|rainy|pitch|substitutions?"
+    r"|injur(?:y|ed)|the possession)\b",
     re.IGNORECASE,
 )
 PLAYER_Q = re.compile(r"\b(who has|who had|which player|most|best|top)\b", re.IGNORECASE)
@@ -238,6 +246,8 @@ def route(ctx: MatchContext, question: str, index: Bm25Index) -> Route:
     if cue and (
         STRONG_LIVE.search(question) or not DEFINITIONAL.match(question)
     ):  # about this match, but no tool covers it
+        return Route("abstain", None, teams, query)
+    if STATE_TOPIC.search(question):
         return Route("abstain", None, teams, query)
     if hit(query):
         return Route("knowledge", None, teams, query)
