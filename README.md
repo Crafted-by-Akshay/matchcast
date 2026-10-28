@@ -18,14 +18,22 @@ Five things to click, in about four minutes:
 2. **Watch.** The synthetic match starts on load (Argentina v Brazil, the default fixture, seed 2026). Pick Fan or Analyst commentary, or one of the six feeds in the feed picker, and a language in the header (ten languages).
 3. **Why?** on any line shows the claim, the events it cites and each agent's step.
 4. **Analyze** has an Overview and a Full analysis (season table, match evidence, audit history). **Production Studio** has instant replay and approve, edit and kill controls for the booth lines.
-5. **Ask**, in Watch or My Club. An answer carries a source chip that says where it came from. A question the data cannot answer is refused rather than guessed.
+5. **Ask**, in Watch or My Club. An answer carries a source chip that says where it came from. Plain status questions such as "what is happening?" get the score, and a question the data cannot answer is refused rather than guessed.
+6. **How the AI works** (More > Tools) opens the Agents view. It shows the crew's spawn tree for the latest moment, the accuracy scoreboard of the three arms against simulator truth, and the Verifier's checks. Both panels are labelled Simulated while they show the fixture.
+7. **The bad-claim demo.** On the Agents view, tick **Seed a bad claim (demo)**: the next score claim is wrong, the Verifier rejects it and repairs it from the event log. The same switch sends the flag to the api when a match is created, so tick it before you press **Watch** and start a match. The api plants its wrong claim at minute 12. Direct link: `/?seedBadClaim=1#agents`.
 
 ### What changed on 28 Oct
 
-- **Browse and Watch redesign (#480).** Home, Matches and My Club are the primary tabs; Watch has Fan and Analyst commentary with one live card and an Ask-first Copilot; Analyze has one Overview and Full analysis switch; Production Studio keeps its advanced controls under one disclosure.
+- **Browse and Watch redesign (#480).** Home, Matches and My Club are the primary tabs. Watch has Fan and Analyst commentary, one live card and a Copilot. Analyze has an Overview and a Full analysis switch, and Production Studio keeps its advanced controls under one disclosure.
 - **Six feeds (#482).** The feed picker no longer marks audio description, half-time explainer and news ticker as Planned. All six are selectable.
+- **Warm-up pill (#485).** The header says "Starting" on the browse pages, and its counter stops at the 90 s limit.
+- **Copilot status and history (#486).** Plain match-status questions get the score, and a question about the last meeting of two national teams is answered from the CC0 results file. The live model path for these answers is not yet tested.
+- **New match (#487).** Watch has a New match button that reloads the fixture with a fresh seed. The possession bar starts at 50-50, not 100-0.
+- **Commentary (#488).** A line that repeats one of the last eight is dropped, saves and goals get "Save!" and "Goal!", and Voice is on by default. The rate and pitch that vary by tone apply in the browser's own speech fallback. The Azure Speech clips are not varied yet.
+- **Agents entry (#492).** More > Tools > How the AI works opens the Agents view.
+- **Faster Home (#493).** The Home cover is a 170 KB JPEG, preloaded at startup.
 - **Labels and empty states (#474 to #477, #475, #476).** Empty Highlights controls are disabled with a reason, dead Analyst links point at Watch, the Verifier's figures carry their population and mode, and the trace page follows the match the Match centre has open.
-- **Web image (#484).** `club-ask.js` is now copied into the web image; without it the live page would have asked for a file that was not there.
+- **Web image (#484).** `club-ask.js` is copied into the web image. Without it the live page would have asked for a file that was not there.
 
 ## The five pipeline stages
 
