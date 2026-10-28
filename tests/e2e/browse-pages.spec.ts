@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { mkdirSync } from 'node:fs';
 
 test('Home, Matches, Highlights and My List stay in the shell until a match is opened', async ({ page }) => {
   await page.goto('/index.html#home', { waitUntil: 'domcontentloaded' });
@@ -95,9 +96,10 @@ test('Opening a past match shows the saved events and stats without starting eit
 test('My Club remembers a favorite and lists only that club’s past synthetic season matches', async ({ page }) => {
   await page.goto('/index.html#home', { waitUntil: 'domcontentloaded' });
   await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
-  await page.locator('#more-toggle').click();
   await page.locator('#tab-my-club').click();
   await expect(page).toHaveURL(/#my-club$/);
+  await expect(page.getByRole('tab', { name: 'Ask Copilot' })).toHaveCount(0);
+  await expect(page.locator('#club-ask-open')).toBeVisible();
   await page.locator('#my-club-pick').selectOption({ label: 'Harbor City' });
   await expect(page.locator('#my-club-grid .match-card')).toHaveCount(7);
   await expect(page.locator('#my-club-grid')).toContainText('SIMULATED RESULT');
@@ -105,6 +107,38 @@ test('My Club remembers a favorite and lists only that club’s past synthetic s
   await page.reload();
   await expect(page.locator('#my-club-pick')).toHaveValue('HAR');
   await expect(page.locator('#my-club-grid .match-card')).toHaveCount(7);
+});
+
+test('My Club Ask uses the chosen club and saved match records without opening Watch', async ({ page }) => {
+  await page.route('**/analyst/data/M001.json', (route) => route.fulfill({ json: {
+    score: [2, 1], stats: { xg: [1.25, 0.6], shots: [9, 4], passes: [120, 80], poss: [60, 40] },
+    events: [{ type: 'goal', minute: 3, player: 'Avery Vale', team: 'HAR' }],
+  } }));
+  await page.goto('/index.html?historyAsk=1#my-club', { waitUntil: 'domcontentloaded' });
+  await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
+  await page.locator('#my-club-pick').selectOption('HAR');
+  await page.locator('#club-ask-open').click();
+  await expect(page.getByRole('complementary', { name: 'Club Copilot' })).toBeVisible();
+  await expect(page.locator('#my-club-grid')).toBeVisible();
+  await expect(page.locator('#club-ask-title')).toContainText('Harbor City');
+  await page.locator('#club-ask-q').fill('How has my club done in its past matches?');
+  await page.locator('#club-ask-form').getByRole('button', { name: 'Ask Copilot' }).click();
+  await expect(page.locator('#club-ask-answer')).toContainText('7 matches');
+  await expect(page.locator('#club-ask-answer a')).toHaveCount(7);
+  await page.locator('#club-ask-context').selectOption('M001');
+  await page.locator('#club-ask-q').fill('Who scored?');
+  await page.locator('#club-ask-form').getByRole('button', { name: 'Ask Copilot' }).click();
+  await expect(page.locator('#club-ask-answer')).toContainText('Avery Vale');
+  await expect(page.locator('#club-ask-answer')).toContainText("3'");
+  await page.locator('#club-ask-q').fill('What was the xG?');
+  await page.locator('#club-ask-form').getByRole('button', { name: 'Ask Copilot' }).click();
+  await expect(page.locator('#club-ask-answer')).toContainText('1.25');
+  await expect(page).toHaveURL(/index\.html#my-club$/);
+  await page.locator('#club-ask-answer a').first().click();
+  await expect(page).toHaveURL(/#match\/M001$/);
+  await page.getByRole('button', { name: 'Back to My Club' }).click();
+  await expect(page).toHaveURL(/#my-club$/);
+  expect(page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(false);
 });
 
 test('Matches search, team, matchday and sort filters change the results', async ({ page }) => {
@@ -209,3 +243,49 @@ for (const width of [390, 768, 1440]) {
     }
   });
 }
+
+for (const width of [390, 768, 1440]) {
+  test(`My Club Copilot opens beside the club and closes at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/index.html#my-club', { waitUntil: 'domcontentloaded' });
+    await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
+    await page.locator('#my-club-pick').selectOption('HAR');
+    await page.locator('#club-ask-open').click();
+    const panel = page.getByRole('complementary', { name: 'Club Copilot' });
+    await expect(panel).toBeVisible();
+    await expect(page.locator('#club-ask-q')).toBeFocused();
+    const evidence = process.env.BROWSE_SCREENSHOTS_DIR;
+    if (evidence) { mkdirSync(evidence, { recursive: true }); await page.screenshot({ path: `${evidence}/my-club-copilot-${width}.png` }); }
+    const box = await panel.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(page.locator('#club-ask-open')).toBeFocused();
+    expect(page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(false);
+  });
+}
+
+test('My Club Copilot answers the existing live match in place and declines unavailable archive facts', async ({ page }) => {
+  await page.goto('/index.html#my-club', { waitUntil: 'domcontentloaded' });
+  await expect.poll(() => page.locator('#fx option').count()).toBeGreaterThan(20);
+  await page.locator('#my-club-pick').selectOption('HAR');
+  await page.locator('#club-ask-open').click();
+  await expect(page.locator('#club-ask-context option[value="live"]')).toHaveCount(0);
+  await page.locator('#club-ask-q').fill('What is our training budget?');
+  await page.locator('#club-ask-form').getByRole('button', { name: 'Ask Copilot' }).click();
+  await expect(page.locator('#club-ask-answer')).toContainText('can’t confirm that');
+  await page.evaluate(() => {
+    // Use a controlled existing run; browsing must never instantiate Watch.
+    (window as any).eval("AG.reset('club-live-test', {home:'Harbor City',away:'Ridgeview',hk:'HAR',ak:'RID'}); AG.run.events.push({type:'pass',minute:1}); AG.ask = async () => ({text:'Harbor City lead 1–0.'}); MCClubAsk.sync();");
+  });
+  await page.locator('#club-ask-context').selectOption('live');
+  await expect(page.locator('#club-ask-answer')).toBeHidden();
+  await page.locator('#club-ask-q').fill('What is the score?');
+  await page.locator('#club-ask-form').getByRole('button', { name: 'Ask Copilot' }).click();
+  await expect(page.locator('#club-ask-answer')).toContainText('Harbor City lead 1–0.');
+  await expect(page.locator('#club-ask-answer')).toContainText('Current live match');
+  await expect(page).toHaveURL(/#my-club$/);
+  expect(page.frames().some((frame) => /watch\/index\.html/.test(frame.url()))).toBe(false);
+});

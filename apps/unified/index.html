@@ -42,12 +42,12 @@ button,select{font:inherit;color:inherit}
 .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;background:linear-gradient(135deg,#B20710,#E50914);color:#fff;flex:none}
 .brand b{font-size:15px;letter-spacing:.01em}
 .brand small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand{cursor:pointer}.brand:focus-visible{outline:var(--focus-ring);outline-offset:4px;border-radius:8px}
 .switch{position:relative;display:flex;gap:4px;padding:4px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;margin-left:auto;max-width:100%}
 .switch::-webkit-scrollbar{display:none}
 .switch button{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:8px;font-weight:600}
 .switch button small{font-weight:500;font-size:12px}
 .switch button[aria-current="page"]{background:var(--accent-strong);color:var(--accent-ink)}
-#crew-btn{font-weight:700;border-color:var(--accent);color:var(--accent)}#crew-btn:focus-visible{outline:var(--focus-ring);outline-offset:2px}
 .switch button:focus-visible,.matchbar select:focus-visible,.matchbar button:focus-visible{outline:var(--focus-ring);outline-offset:2px}
 .status{display:flex;gap:6px;flex:none}
 .status .more{display:none}
@@ -59,14 +59,15 @@ button.pill{background:none;cursor:pointer;font-family:inherit}
 .st-list{list-style:none;padding:0;margin:8px 0;font-size:13px;line-height:1.7}
 .st-live{color:#3fb950}.st-simulated{color:#d29922}.st-planned{color:#8b949e}.st-unavailable{color:#f85149}
 #lang-sel{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;font-weight:700;white-space:nowrap}
-#lang-sel .ui-scope{font-size:10px;font-weight:500;color:var(--muted);opacity:.85}
 #lang-sel select{font:inherit;font-size:12px;padding:2px 6px;border:1px solid var(--line,#999);border-radius:999px;background:var(--bg2);color:var(--text);max-width:9.5em}
 #lang-sel:focus-within{outline:var(--focus-ring);outline-offset:2px;border-radius:8px}
 #voice-src:empty{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0;min-height:0}   /* a live region for voice announcements, not a visible control */
 #api-pill::before{content:"Agents ·";margin-right:.4em;color:var(--muted)}   /* says which part the pill is about, so it does not read as a contradiction of the engine chips */
+#api-pill.demo::before{content:none}
+#api-pill.demo{display:none}   /* on the offline demo the Watch cards already say Simulated; service details stay in More > Status */
 @media (max-width:1500px){.brand small{display:none}.proto{display:none}}
 @media (max-width:1400px){.switch button small{display:none}}
-@media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#crew-btn,#fx,#lang-sel select,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
+@media (max-width:560px){.proto{display:none}.switch button,#tour-btn,#fx,#lang-sel select,#status-btn,#voice-btn,#voice-demo{min-height:44px;min-width:44px}#v-agents button,#v-agents select,#v-agents input:not([type=checkbox]){min-height:44px;min-width:44px}#v-agents input[type=checkbox]{width:24px;height:24px}#v-agents label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;min-height:44px}}
 
 /* ---- browse: Home and Matches. Catalog only, so no 3D engine starts here; the match bar and the five-stage strip stay on the player views ---- */
 body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="matches"] .matchbar,body[data-view="matches"] .story,body[data-view="highlights"] .matchbar,body[data-view="highlights"] .story,body[data-view="my-list"] .matchbar,body[data-view="my-list"] .story,body[data-view="my-club"] .matchbar,body[data-view="my-club"] .story,body[data-view="match"] .matchbar,body[data-view="match"] .story{display:none}
@@ -137,6 +138,26 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .club-panel h3{margin:0 0 8px;font-size:var(--type-lg)}.club-panel p{margin:0;color:var(--muted);line-height:1.5}
 .club-panel select{margin-top:12px;min-height:44px;width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg3);color:var(--text)}
 .club-panel .btn{margin-top:14px}.club-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;max-width:1412px;margin:0 auto;padding:0 var(--gut) 26px}
+.club-tabs{display:flex;gap:6px;max-width:1412px;margin:12px auto 0;padding:0 var(--gut);border-bottom:1px solid var(--line)}
+.club-tabs button{border:0;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);padding:10px 14px;font:600 14px/1.2 var(--font,system-ui,sans-serif);cursor:pointer}
+.club-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--text);background:var(--bg2)}
+.club-actions{max-width:1412px;margin:0 auto 20px;padding:0 var(--gut);display:flex;justify-content:flex-end}
+.club-ask{position:fixed;z-index:60;right:16px;top:84px;bottom:36px;width:min(460px,calc(100vw - 32px));max-width:100%;margin:0;padding:0;overflow:auto;overscroll-behavior:contain;background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 16px 70px #000a}
+.club-ask[hidden]{display:none}
+@media(min-width:1100px){body.club-copilot-open #v-my-club{padding-right:490px}}
+.club-ask-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+.club-ask-head strong{font-size:20px}.club-ask-head button{min-width:40px;min-height:40px;background:var(--bg3);color:var(--text);border:1px solid var(--line);border-radius:8px;font-size:22px;cursor:pointer}
+.club-ask select{width:100%;min-width:0;max-width:100%;margin-top:8px}
+.club-ask .ask-sources{display:grid;gap:8px;margin-top:14px}.club-ask .ask-sources a{overflow-wrap:anywhere}
+@media(max-width:600px){.club-ask{top:100px;right:8px;bottom:16px;width:calc(100vw - 16px)}.club-actions{justify-content:stretch}.club-actions button{width:100%}}
+.club-ask .club-panel{padding:clamp(16px,3vw,26px)}
+.club-ask .ask-suggestions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.club-ask .ask-suggestions button{min-height:40px;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg3);color:var(--text);font:600 13px var(--font,system-ui,sans-serif);cursor:pointer}
+.club-ask-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.club-ask-form input{flex:1 1 280px;min-width:0;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:var(--text);font:inherit}
+.club-ask-form button{min-height:44px}
+.club-ask-answer{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:9px;background:var(--bg3);line-height:1.5}
+.club-ask-answer[hidden]{display:none}.club-ask-answer p{margin:0}.club-ask-answer .source{margin-top:8px;color:var(--muted);font-size:12px}
 .club-label{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:var(--type-sm);font-weight:700}
 .match-detail{max-width:1100px;margin:0 auto;padding:clamp(18px,4vw,48px) var(--gut)}
 .match-detail-cover{aspect-ratio:16/7;max-height:420px;margin:0 0 24px;border:1px solid var(--line);border-radius:var(--radius-lg);background-image:linear-gradient(90deg,rgba(3,8,8,.68),rgba(3,8,8,.03)),linear-gradient(120deg,color-mix(in srgb,var(--hc,#27573D) 52%,transparent),color-mix(in srgb,var(--ac,#6B3C32) 52%,transparent)),url('assets/matchcast-stadium-cover.png');background-size:cover;background-position:center 48%}
@@ -165,6 +186,7 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
   .row-track{grid-auto-columns:minmax(220px,82%);gap:12px}
   .lib-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px}
   .club-tools{grid-template-columns:1fr;padding-top:16px}
+  .club-tabs{overflow-x:auto;scrollbar-width:none}.club-tabs button{flex:none}
   .match-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .lib-n{margin-left:0}
   .lib-bar .lib-q{flex-basis:100%}
@@ -178,7 +200,7 @@ body[data-view="home"] .matchbar,body[data-view="home"] .story,body[data-view="m
 .matchbar{display:flex;align-items:center;gap:14px;min-height:var(--mbar);padding:8px var(--gut);background:var(--bg2);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
 .fx{display:flex;flex-direction:column;gap:3px;min-width:0}
 .fx label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.fx select{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:6px 10px;max-width:380px;min-width:300px}
+.fx select{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:6px 10px;max-width:320px;min-width:240px}
 .scoreline{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;justify-content:center}
 .team{display:flex;align-items:center;gap:7px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .team i{width:10px;height:10px;border-radius:50%;flex:none}
@@ -323,7 +345,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 @media (max-width:820px){ .ag-grid{grid-template-columns:1fr} }
 
 /* ---- story strip: the five stages of one moment, live, and the Fan / Analyst switch ---- */
-.story{display:flex;align-items:center;gap:12px;padding:6px var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+.story{display:none;align-items:center;gap:12px;padding:6px var(--gut);background:var(--bg);border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
 .story ol{list-style:none;margin:0;padding:0;display:flex;gap:4px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
 .story li{display:flex;align-items:center}
 .story li+li::before{content:"→"/"";color:var(--muted);margin:0 6px}
@@ -334,13 +356,11 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 .story li.on b{color:var(--ok)}
 .story .demo{padding:6px 14px;min-height:32px;display:inline-flex;align-items:center;border-radius:999px;background:var(--accent);color:#fff;font-weight:700;font-size:12px;text-decoration:none;white-space:nowrap}
 .story .demo svg{margin-right:6px;flex:none}.story .demo:hover{filter:brightness(1.08)}.story .demo:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
-.story-who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
-.story-who .seg{display:flex;gap:2px;padding:2px;background:var(--bg2);border:1px solid var(--line);border-radius:999px}
-.story-who .seg button{border:0;background:none;color:var(--muted);padding:5px 12px;min-height:32px;border-radius:999px;cursor:pointer;font-weight:600}
-.story-who .seg button[aria-pressed="true"]{background:var(--accent-strong);color:var(--accent-ink)}
-.story-who .seg button:focus-visible,.story li button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
-.story-who em{font-style:normal;color:var(--text)}
-@media (max-width:820px){.story{padding:4px var(--gut)}.story ol,.story .demo,.story-who>b{display:none}.story-who{width:100%;justify-content:space-between}.story-who::before{content:"Viewing as";color:var(--muted);font-size:12px}.story-who .seg button{min-height:44px}.story-who em{display:none}}
+.story li.stage-personalise{padding:3px 8px;display:flex;flex-direction:column;line-height:1.2}
+.story li.stage-personalise b{font-size:12px;letter-spacing:.02em}
+.story li.stage-personalise span{font-size:12px;color:var(--muted)}
+.story li button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+@media (max-width:820px){.story{padding:4px var(--gut)}.story ol,.story .demo{display:none}}
 @media (min-width:1200px){.matchbar .meta.err{white-space:normal;overflow:visible}.matchbar{flex-wrap:nowrap}.matchbar .meta{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.scoreline{flex:0 0 auto}}   /* one row on a desktop; the meta line ends in an ellipsis and keeps its full text as the tooltip */
 
 /* ---- narrow screens: the switcher scrolls, the match bar stacks ---- */
@@ -386,7 +406,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <div class="sr-only" id="sr-lines" aria-live="polite" aria-atomic="true"></div>
 
 <header class="top">
-  <div class="brand">
+  <div class="brand" role="button" tabindex="0" aria-label="MatchCast home" title="Go to Home">
     <span class="mark" aria-hidden="true">MC</span>
     <div><b>MatchCast</b><small title="Synthetic football, explained">Synthetic football, explained</small></div>
   </div>
@@ -394,27 +414,25 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <button type="button" id="tab-home" data-view="home" aria-current="page" title="Home: featured match and season rows (1)">Home</button>
     <button type="button" id="tab-matches" data-view="matches" title="Matches: search and browse the season (2)">Matches</button>
     <button type="button" id="tab-watch" data-view="watch" title="Watch: open the 3D match player (3)">Watch</button>
+    <button type="button" id="tab-my-club" data-view="my-club" title="My Club: past matches and Ask Copilot">My Club</button>
     <button type="button" id="more-toggle" class="tools-toggle" aria-expanded="false" aria-controls="more-menu">More</button>
     <div class="tools-menu" id="more-menu" role="group" aria-label="More MatchCast pages" hidden>
       <p class="menu-label">Your library</p>
       <button type="button" id="tab-highlights" data-view="highlights" class="sec">Highlights</button>
       <button type="button" id="tab-my-list" data-view="my-list" class="sec">My List</button>
-      <button type="button" id="tab-my-club" data-view="my-club" class="sec">My Club</button>
       <hr>
       <p class="menu-label">Tools</p>
       <button type="button" id="tab-analyst" data-view="analyst" class="sec" title="Analyze: the season analysis console (4)">Analyze</button>
       <button type="button" id="tab-broadcast" data-view="broadcast" class="sec" title="Production Studio: the broadcast desk (5)">Production Studio</button>
-      <button type="button" id="tab-agents" data-view="agents" class="sec" title="Agents: the agent pipeline (6)">Agents</button>
       <hr>
       <p class="menu-label">Help & status</p>
-      <button type="button" class="pill sec" id="crew-btn" hidden aria-label="Crew: open the agent crew, its spawn tree and scoreboard" title="Crew: agent specialists, spawn tree and scoreboard">Crew</button>
       <button type="button" class="pill sec" id="tour-btn" aria-haspopup="dialog" title="A 60-second guide for first-time visitors">Tour</button>
       <button type="button" class="pill sec" id="status-btn" aria-haspopup="dialog" title="Which parts are live, simulated or planned">Status & service details</button>
     </div>
   </nav>
   <div class="status" aria-label="Environment">
     <button type="button" class="pill" id="voice-btn" aria-pressed="false" title="Play spoken match commentary. Captions and on-screen text stay visible when sound is off.">Sound: off</button><span class="pill" id="voice-src" aria-live="polite"></span><button type="button" class="pill" id="voice-demo" aria-pressed="false" hidden title="Play a fixed Azure Speech sample of the commentary voice">Voice sample</button>
-    <label id="lang-sel" title="Changes match commentary and speech. Interface labels remain in English."><span>Commentary</span><span class="ui-scope" aria-hidden="true">UI: English</span><select id="lang-pick" aria-label="Commentary and speech language" aria-describedby="lang-scope-note"></select><span class="sr" id="lang-scope-note">Changes match commentary and speech where a checked translation is available. Navigation and interface labels remain in English.</span></label>
+    <label id="lang-sel" title="Commentary language"><span>Commentary language</span><select id="lang-pick" aria-label="Commentary language" aria-describedby="lang-scope-note"></select><span class="sr" id="lang-scope-note">Changes spoken and written commentary. Interface labels stay in English.</span></label>
     <span class="pill" id="api-pill" role="status" title="">Starting…</span><span class="pill" id="lat-pill" hidden title="Event to on air: wall-clock time from a Watch event reaching this page to the agent api's published line arriving here, the median of the last 30 matched lines. Watch batches its events once a second before they reach this page; that wait is not in the number."></span>
     <span class="more" aria-hidden="true">›</span>
   </div>
@@ -433,8 +451,9 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 
 <section class="matchbar" aria-label="Shared match">
   <div class="fx">
-    <label for="fx">Season fixture</label>
-    <select id="fx"></select>
+    <label for="fx" title="Choose the match shown in Watch and the analysis views. Browse Matches in the header for past results and saved match pages.">Select match</label>
+    <select id="fx" aria-describedby="fx-hint" title="Choose a match. Use Matches in the header to browse past results and season details."></select>
+    <span class="sr" id="fx-hint">Use Matches in the header to browse past results and saved match pages.</span>
   </div>
   <div class="scoreline" aria-live="polite">
     <span class="team h" id="home-name"><i id="home-dot"></i><span id="home-club">Choose a fixture</span></span>
@@ -449,19 +468,15 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   </div>
 </section>
 
-<section class="story" id="story" aria-label="How one moment becomes a line, live">
+<section class="story" id="story" hidden aria-label="How one moment becomes a line, live">
   <ol role="list">
-    <li id="st-1"><button type="button" data-go="agents" title="Open the Agents tab"><b>1 Ingest</b><span>events from the match</span></button></li>
-    <li id="st-2"><button type="button" data-go="agents" title="Open the Agents tab"><b>2 Interpret</b><span>claims with evidence</span></button></li>
-    <li id="st-3"><button type="button" data-go="agents" title="Open the Agents tab"><b>3 Explain</b><span>verified lines</span></button></li>
+    <li id="st-1"><button type="button" data-go="analyst" title="Open Analyze"><b>1 Ingest</b><span>events from the match</span></button></li>
+    <li id="st-2"><button type="button" data-go="analyst" title="Open Analyze"><b>2 Interpret</b><span>claims with evidence</span></button></li>
+    <li id="st-3"><button type="button" data-go="analyst" title="Open Analyze"><b>3 Explain</b><span>verified lines</span></button></li>
     <li id="st-4"><button type="button" data-go="watch" title="Open the 3D match"><b>4 Render</b><span>3D match on screen</span></button></li>
+    <li class="stage-personalise" aria-label="5 Personalise"><b>5 Personalise</b><span>Watch modes</span></li>
   </ol>
   <a class="demo" id="st-demo" href="?seed=2026&amp;speed=4#watch" title="Replay a fixed match (seed 2026) at 4× speed so goals and verified lines arrive within a minute"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3l6 5-6 5V3zm6 0l6 5-6 5V3z" fill="currentColor"/></svg>Demo at 4× speed</a>
-  <div class="story-who" role="group" aria-label="5 Personalise: who is watching">
-    <b>5 Personalise</b>
-    <span class="seg"><button type="button" data-persona="casual" aria-pressed="false" title="Plain lines for a casual fan">Fan</button><button type="button" data-persona="analyst" aria-pressed="false" title="Full lines with numbers, chips and evidence">Analyst</button></span>
-    <em id="st-who"></em>
-  </div>
 </section>
 
 <main class="stage" id="stage" tabindex="-1">
@@ -491,14 +506,32 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
     <div class="browse-empty" id="saved-empty" hidden><h3>Your list is ready for a match</h3><p>Save a match from Home or Matches and it will appear here.</p><a href="#matches">Browse matches</a></div>
   </section>
   <section class="browse" id="v-my-club" data-view="my-club" aria-label="My Club: favorite club and history" hidden>
-    <header class="browse-head"><p class="eyebrow">Your club</p><h2>My Club</h2><p>Follow one fictional season club, find its past matches, or open the real national-team history demo.</p></header>
-    <div class="club-tools">
-      <section class="club-panel"><h3>Choose your club</h3><p>Your choice is saved on this device. Past scores below are synthetic season results.</p><label class="sr" for="my-club-pick">Favorite club</label><select id="my-club-pick"><option value="">Choose a club</option></select></section>
-      <section class="club-panel"><div class="club-label">REAL INTERNATIONAL RESULTS</div><h3>Ask about team history</h3><p>Open the national-team demo to ask Copilot about head-to-head results. That history comes from a public results dataset; the squads and match you watch are simulated.</p><a class="btn play" id="club-history-demo" href="#watch">Open history demo</a></section>
-    </div>
-    <div class="row-head" style="max-width:1412px;margin:0 auto;padding:4px var(--gut)"><h3 id="my-club-title">Past matches</h3></div>
-    <div class="club-list" id="my-club-grid"></div>
-    <div class="browse-empty" id="my-club-empty"><h3>Choose a club to get started</h3><p>Your club’s synthetic season results will appear here.</p></div>
+    <header class="browse-head"><p class="eyebrow">Your club</p><h2>My Club</h2><p>Your club, its past matches, and the match happening now.</p></header>
+      <div class="club-tools" style="grid-template-columns:1fr">
+        <section class="club-panel"><h3>Choose your club</h3><p>Your choice is saved on this device. Past scores below are synthetic season results.</p><label class="sr" for="my-club-pick">Choose your club</label><select id="my-club-pick"><option value="">Choose a club</option></select></section>
+      </div>
+    <div class="club-actions"><button type="button" class="btn play" id="club-ask-open" aria-expanded="false" aria-controls="club-ask-panel">✦ Ask Copilot</button></div>
+    <section id="club-matches-panel" aria-label="Club matches">
+      <div class="row-head" style="max-width:1412px;margin:0 auto;padding:4px var(--gut)"><h3 id="my-club-title">Past matches</h3></div>
+      <div class="club-list" id="my-club-grid"></div>
+      <div class="browse-empty" id="my-club-empty"><h3>Choose a club to get started</h3><p>Your club’s synthetic season results will appear here.</p></div>
+    </section>
+    <aside id="club-ask-panel" class="club-ask" aria-label="Club Copilot" hidden>
+      <div class="club-panel">
+        <div class="club-ask-head"><strong>✦ Copilot</strong><button type="button" id="club-ask-close" aria-label="Close Copilot">×</button></div>
+        <h3 id="club-ask-title">Ask about your club</h3>
+        <p id="club-ask-scope">Choose your club above, then ask about its results, players or key moments.</p>
+        <label for="club-ask-context">Ask about</label>
+        <select id="club-ask-context" aria-describedby="club-ask-scope"><option value="history">Club history</option></select>
+        <div class="ask-suggestions" id="club-ask-suggestions" aria-label="Suggested questions"></div>
+        <form class="club-ask-form" id="club-ask-form">
+          <label class="sr" for="club-ask-q">Your question</label>
+          <input id="club-ask-q" maxlength="300" autocomplete="off" placeholder="Ask about your club or a match" required>
+          <button class="btn play" type="submit">Ask Copilot</button>
+        </form>
+        <div id="club-ask-answer" class="club-ask-answer" role="status" aria-live="polite" hidden></div>
+      </div>
+    </aside>
   </section>
   <section class="browse" id="v-match" data-view="match" aria-label="Past match details" hidden>
     <article class="match-detail" id="match-detail"><p class="empty">Choose a match from the library.</p></article>
@@ -510,8 +543,8 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
   <section class="view gone" id="v-analyst" data-view="analyst" aria-label="Analyst: enterprise console" hidden>
     <div class="wait" role="status"><div><b>Opening the Analyst</b><span class="wt">Loading the season</span><i class="bar"></i></div></div>
   </section>
-  <section class="view gone" id="v-broadcast" data-view="broadcast" aria-label="Broadcast: desk" hidden>
-    <div class="wait" role="status"><div><b>Starting the Broadcast desk</b><span class="wt">Loading the 3D engine</span><i class="bar"></i></div><div class="sk" aria-hidden="true"><i class="top">Camera modes · Dynamic, Tactical, Ball cam</i><i class="pitch">Broadcast camera</i><i class="side">Moments, calls and lower-thirds</i><i class="bot">Commentary feed and the Broadcast Copilot</i></div></div>
+  <section class="view gone" id="v-broadcast" data-view="broadcast" aria-label="Production Studio: match preview and production controls" hidden>
+    <div class="wait" role="status"><div><b>Opening Production Studio</b><span class="wt">Loading the match preview and controls</span><i class="bar"></i></div><div class="sk" aria-hidden="true"><i class="top">Replay · camera · on-air controls</i><i class="pitch">Match preview</i><i class="side">Approval queue and camera choices</i><i class="bot">Only approved lines reach the on-air display</i></div></div>
   </section>
   <section class="view gone" id="v-agents" data-view="agents" aria-label="Agents: the shared pipeline" hidden>
     <div class="ag">
@@ -562,8 +595,8 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 </main>
 
 <footer class="foot">
-  <span>Simulated match, fictional clubs. Each view keeps its own clock; switching does not restart a running match.</span>
-  <span><kbd>1</kbd> Home · <kbd>2</kbd> Matches · <kbd>3</kbd> Watch · <kbd>4</kbd> Analyze · <kbd>5</kbd> Studio · <kbd>6</kbd> Agents</span>
+  <span>Synthetic match, fictional clubs. Production Studio follows the selected match; switching views does not restart it.</span>
+  <span><kbd>1</kbd> Home · <kbd>2</kbd> Matches · <kbd>3</kbd> Watch · <kbd>4</kbd> Analyze · <kbd>5</kbd> Studio</span>
 </footer>
 <aside class="recap" id="recap" role="region" aria-label="Full-time recap" hidden>
   <h2 id="recap-h">Full-time recap</h2>
@@ -603,6 +636,7 @@ dialog.tour button.go{background:var(--accent-strong);border-color:var(--accent-
 <script src="speech.js"></script>
 <script src="status.js"></script>
 <script src="voice.js"></script>
+<script src="club-ask.js"></script>
 <script>
 "use strict";
 // ---------------------------------------------------------------- the shell
@@ -735,7 +769,7 @@ function restartWait(view) { delete since[view]; const b = document.querySelecto
 // loading states (EXP-15): no WebGL means Watch and Broadcast cannot draw, so say so once; a slow start gets a note and a reload button outside the live region
 const hasGL = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } })();
 const SLOW_MS = window.MC_SLOW_MS || 25000;
-const NOGL = 'Your browser has WebGL off or unavailable. Try Chrome, Edge or Safari with hardware acceleration on. The Analyst and Agents tabs still work.';
+const NOGL = 'Your browser has WebGL off or unavailable. Try Chrome, Edge or Safari with hardware acceleration on. Analyze and the production controls still work without a pitch preview.';
 function stallCheck() {
   for (const v of ['watch', 'broadcast', 'analyst']) {
     const sec = $('v-' + v), w = sec && sec.querySelector('.wait'), btn = sec && sec.querySelector('.stall');
@@ -762,7 +796,7 @@ function ensure(view) {
   const want = keyOf(M.setup);
   if (!FR[view]) {
     const el = document.createElement('iframe');
-    el.title = view === 'watch' ? 'Watch: fan 3D match' : 'Broadcast: desk';
+    el.title = view === 'watch' ? 'Watch: fan 3D match' : 'Production Studio: match preview';
     el.setAttribute('allow', 'fullscreen');
     if (window.mcHookKeys) window.mcHookKeys(el);
     el.src = url(view);
@@ -791,9 +825,9 @@ function post(view, msg) { const f = frameOf(view); if (f && f.contentWindow) f.
 // Watch and Broadcast share the screen on a wide window (the live match beside its desk); a phone shows one at a time.
 const SPLIT_VIEWS = ['watch', 'broadcast'];
 const wide = window.matchMedia('(min-width: 900px)');
-// Watch is alone by default: one 3D render, one story. The Broadcast desk joins it beside the match on request (?split=1 or the button), and the Broadcast tab still shows both.
+// Watch is the default live match. Production Studio opens on its own preview so users never see two different weather states side by side; ?split=1 is still available from Watch for comparison.
 let bcBeside = new URLSearchParams(location.search).get('split') === '1';
-function shownViews(view) { return wide.matches && (view === 'broadcast' || (view === 'watch' && bcBeside)) ? SPLIT_VIEWS : [view]; }
+function shownViews(view) { return wide.matches && view === 'watch' && bcBeside ? SPLIT_VIEWS : [view]; }
 (() => { const t = $('bc-toggle'); t.onclick = () => { bcBeside = !bcBeside; show(current); }; })();
 const SPLIT_KEY = 'mc.split', SPLIT_MIN = 0.25, SPLIT_MAX = 0.8;
 let splitFrac = 0.58;
@@ -829,7 +863,7 @@ function show(view) {
     $('v-' + v).hidden = !shown; $('v-' + v).classList.toggle('gone', !shown);
     const tab = document.querySelector('.switch [data-view="' + v + '"]'); if (tab) tab.setAttribute('aria-current', v === view ? 'page' : 'false');
   }
-  const moreLabels = { highlights: 'Highlights', 'my-list': 'My List', 'my-club': 'My Club', analyst: 'Analyze', broadcast: 'Production Studio', agents: 'Agents' };
+  const moreLabels = { highlights: 'Highlights', 'my-list': 'My List', analyst: 'Analyze', broadcast: 'Production Studio' };
   const inMore = Object.hasOwn(moreLabels, view);
   $('more-toggle').classList.toggle('active', inMore);
   $('more-toggle').setAttribute('aria-label', inMore ? 'More, current page: ' + moreLabels[view] : 'More pages and tools');
@@ -840,13 +874,17 @@ function show(view) {
   const tg = $('bc-toggle'); tg.hidden = true;   // the second 3D view is off the first screen for the sprint (AB#497); ?split=1 still opens it
   tg.setAttribute('aria-pressed', String(bcBeside));
   for (const v of on) ensure(v);
+  if (view === 'broadcast') ensure('watch');   // the visible Studio preview consumes the hidden Watch engine's match frames
   ALV.sync();
   if (location.hash.slice(1) !== route) history.replaceState(null, '', '#' + route);
   if (view === 'home') paintHome();
   if (view === 'matches') paintLibrary();
   if (view === 'highlights') paintBrowseHighlights();
   if (view === 'my-list') paintSaved();
-  if (view === 'my-club') paintMyClub();
+  if (view === 'my-club') {
+    const address = new URL(location.href); if (address.searchParams.has('historyAsk')) { address.searchParams.delete('historyAsk'); history.replaceState(null, '', address.pathname + address.search + address.hash); }
+    paintMyClub();
+  }
   if (view === 'match') paintMatchDetail();
   if (BROWSE[view]) $('v-' + view).scrollTop = BROWSE[view].y;
   paint();
@@ -933,7 +971,12 @@ function buildLibControls() {
   clubPick.innerHTML = '<option value="">Choose a club</option>' + [...favouriteClubs].sort((a, b) => a[1].localeCompare(b[1])).map(([k, name]) => '<option value="' + esc(k) + '">' + esc(name) + '</option>').join('');
   if (favouriteClubs.has(favouriteClub)) clubPick.value = favouriteClub; else favouriteClub = '';
   clubPick.onchange = () => { favouriteClub = clubPick.value; try { favouriteClub ? localStorage.setItem(CLUB_KEY, favouriteClub) : localStorage.removeItem(CLUB_KEY); } catch (e) { /* private browsing */ } paintMyClub(); };
-  $('club-history-demo').onclick = (e) => { e.preventDefault(); const national = FX.find((fx) => fx.national); if (national) setMatch(setupOf(national), national.id); location.hash = 'watch'; };
+  MCClubAsk.init({ fixtures: FX, club: () => favouriteClub, upcoming: fxUpcoming,
+    live: () => AG.run,
+    openMatch: (id) => openMatch(id),
+    askLive: async (q) => { if (LV.enabled && LV.key) { try { return await LV.ask(q); } catch (e) { /* use the current event record below */ } } return AG.ask(q); }
+  });
+
 }
 function persistSaved() { try { localStorage.setItem(SAVED_KEY, JSON.stringify([...SAVED])); return true; } catch (e) { return false; } }
 function toggleSaved(id) {
@@ -953,6 +996,7 @@ function paintMyClub() {
   $('my-club-title').textContent = favouriteClub ? 'Past matches · ' + (list[0] ? (list[0].home.key === favouriteClub ? list[0].home.club : list[0].away.club) : '') : 'Past matches';
   $('my-club-grid').innerHTML = list.map(fxCard).join('');
   $('my-club-empty').hidden = !!favouriteClub;
+  if (window.MCClubAsk) MCClubAsk.sync();
 }
 const MATCH_DATA = new Map(); let matchRequest = 0;
 function paintMatchDetail() {
@@ -1068,7 +1112,6 @@ function paint() {
 }
 
 // ---------------------------------------------------------------- the five-stage strip (ingest, interpret, explain, render, personalise)
-const PERSONA_NAME = { casual: 'Fan', analyst: 'Analyst' };
 function paintStory() {
   const w = FR.watch && FR.watch.live, r = AG.run, on = !!(r && w && w.started && r.key === keyOf(M.setup));
   const st = on ? r.stat : { events: 0, claims: 0, verified: 0, lines: 0 };
@@ -1079,17 +1122,12 @@ function paintStory() {
   set(4, current === 'agents' ? '3D in Watch and Broadcast' : ({ watch: 'Watch: 3D match', broadcast: 'Broadcast: desk', analyst: 'Analyst: console' })[current] || '3D match', true);
   const q = new URLSearchParams(location.search); $('st-demo').hidden = q.get('speed') === '4';
   q.set('seed', '2026'); q.set('speed', '4'); $('st-demo').setAttribute('href', '?' + q.toString() + '#watch');   // keeps other query switches such as tour or seedBadClaim   // already the demo pace
-  let stored = null; try { stored = (JSON.parse(localStorage.getItem('mcx-mode') || 'null') || {}).mode; } catch (e) { stored = null; }
-  const p = !M.persona || M.persona === 'fan' ? (stored || 'analyst') : M.persona;   // the shell's first value is the placeholder 'fan'; until Watch reports, show the saved mode, else Analyst (Watch's default)
-  for (const b of document.querySelectorAll('.story-who [data-persona]')) b.setAttribute('aria-pressed', b.dataset.persona === p ? 'true' : 'false');
-  $('st-who').textContent = PERSONA_NAME[p] ? '' : 'Showing: ' + String(p).replace(':', ' · ');
 }
 function setPersona(mode) {
   try { const k = 'mcx-mode', o = JSON.parse(localStorage.getItem(k) || 'null') || {}; o.mode = mode; localStorage.setItem(k, JSON.stringify(o)); } catch (e) { /* storage may be blocked; the live message still works */ }
   M.persona = mode; paintStory();
   post('watch', { src: 'matchcast-shell', type: 'persona-set', mode });
 }
-for (const b of document.querySelectorAll('.story-who [data-persona]')) b.onclick = () => setPersona(b.dataset.persona);
 for (const b of document.querySelectorAll('.story [data-go]')) b.onclick = () => { location.hash = b.dataset.go; };
 setInterval(paintStory, 1000);
 
@@ -1424,7 +1462,7 @@ window.addEventListener('message', (e) => {
   if (d.type === 'live-request' && LIVE_LAST) { post('analyst', { src: 'matchcast-shell', type: 'live-start', setup: LIVE_LAST.setup, roster: LIVE_LAST.roster }); return; }   // the Analyst console opened mid-match asks for the roster (77_live.js)
   const view = Object.keys(VIEWS).find((v) => FR[v] && FR[v].el && FR[v].el.contentWindow === e.source);
   if (!view) return;
-  if (d.type === 'crew-feed-pick') { postCrew(); if (d.key === 'catch_me_up') { catchPicked = true; askCatchUp(); } else leaveCatchUp(); return; }   // AB#450: Watch's feed picker opened or changed; it only needs the lines, the pick stays in Watch
+  if (d.type === 'crew-feed-pick') { postCrew(); if (d.user && (d.key === 'casual' || d.key === 'analyst')) setPersona(d.key); if (d.key === 'catch_me_up') { catchPicked = true; askCatchUp(); } else leaveCatchUp(); return; }   // only a deliberate audience pick changes the shared commentary persona
   if (d.type === 'feed-ready') {
     if (view === 'watch') leaveCatchUp();   // Watch reloaded: it is back on its default feed until the picker posts a pick again
     post(view, { src: 'matchcast-shell', type: 'voice-state', on: VC.on });
@@ -1572,7 +1610,7 @@ function init(list) {
   for (const b of document.querySelectorAll('.switch [data-view]')) b.onclick = () => { if (location.hash.slice(1) !== b.dataset.view) location.hash = b.dataset.view; else show(b.dataset.view); };
   // Crew entry (on unless ?crew=0): opens the Agents tab, which holds the crew spawn tree and scoreboard, scrolled to the Crew section
   const crewBtn = $('crew-btn');
-  if (window.CREW && CREW.enabled) {
+  if (crewBtn && window.CREW && CREW.enabled) {
     crewBtn.hidden = false;
     crewBtn.onclick = () => {
       show('agents');
@@ -1598,7 +1636,7 @@ function init(list) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if ($('tour').open) return;
     if (e.target.closest && e.target.closest('input,select,textarea,dialog,[role=dialog],[contenteditable]')) return;
-    const map = { '1': 'home', '2': 'matches', '3': 'watch', '4': 'analyst', '5': 'broadcast', '6': 'agents' };
+    const map = { '1': 'home', '2': 'matches', '3': 'watch', '4': 'analyst', '5': 'broadcast' };
     if (map[e.key]) location.hash = map[e.key];
   };
   document.addEventListener('keydown', shortcut);
@@ -1691,7 +1729,7 @@ function init(list) {
   };
   AG.onChange(() => { $('ag-bad').checked = AG.seeding || LV.badState === 'pending'; if (!AG.seeding && LV.badState !== 'pending') LV.seedBad(false); renderAgents(); pushCards(); postQueue(); });
   const PILL = { live: ['Live agents', 'The claims come from the agent api', ''], fallback: ['Rules fallback', 'This match has no checked claim from the api (it did not answer, its stream dropped, or it is on rules), so the in-page rules agents are producing the lines. The Foundry chip on the Agents tab reports the api\'s deployment, which can be live while this match is on rules.', 'warn'],
-    warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 90 s for the first batch, then up to 60 s for the first claim)', 'warn'], offline: ['Offline (simulated)', 'No api configured; the in-page rules agents run alone', ''] };
+    warming: ['Warming up the match engine', 'Waiting for the first claim from the api (up to 90 s for the first batch, then up to 60 s for the first claim)', 'warn'], offline: ['Demo mode', 'This is a synthetic demo. The live agent service is not connected, so in-page rules generate the commentary.', 'demo'] };
   const MATCHCAST_API_ON = () => !!(window.MATCHCAST_API || '').replace(/\/$/, '');
   let warmTick = null;   // while warming, count the seconds so a cold start shows progress; the api's own limit is MATCHCAST_WARM_MS (90 s), then the rules agents take over
   // the Foundry chip and the provenance line say what /v1/status says (live, simulated, planned, unavailable); with no api they say not connected
@@ -1731,11 +1769,11 @@ function init(list) {
 
 // first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
 const TOUR = [
-  ['Watch', 'watch', 'Browse the synthetic season from Home or Matches. Save fixtures to My List on this device; Highlights shows only clips captured in the current Watch session. A synthetic match plays in 3D from fictional clubs. Pick a watch mode (Analyst, Casual, My club, Player focus) and the explanation cards change. Press Talk to a player to ask a question or give an order (typed questions are checked against the match record when the agent api is connected; otherwise a labelled rules fallback answers), or try Copilot Ask: it answers only what the match data can prove.'],
-  ['Agents', 'agents', 'Four agents write lines about the match and a Verifier recounts every number from the event log before anything is shown. Switch the approval mode to Producer to approve, edit or kill a line yourself. Provenance on any row shows its source events and audit records.'],
+  ['Watch', 'watch', 'Browse the synthetic season from Home or Matches. Save fixtures to My List on this device; Highlights shows only clips captured in the current Watch session. A synthetic match plays in 3D from fictional clubs. Choose Fan or Analyst to change the live commentary. Press Talk to a player to ask a question or give an order (typed questions are checked against the match record when the agent api is connected; otherwise a labelled rules fallback answers), or try Copilot Ask: it answers only what the match data can prove.'],
+  ['Analyze', 'analyst', 'Open the analysis workspace for the selected match, its evidence and season reports. The app checks every number before it reaches the commentary.'],
   ['Production Studio', 'broadcast', 'The Broadcast desk: lower-thirds and a teleprompter fed only by approved lines, instant replay, odds with the reasons on screen, and Ask the producer.'],
   ['Analyze', 'analyst', 'The Analyst workspace for the same match: pre-match, live and post-match pages, players, reports and data science.'],
-  ['Prove it', 'agents', 'The audit chain is tamper-evident: use Verify chain on the Agents tab and it recomputes every hash. Anything not really connected yet is labelled Simulated or Planned.']];
+  ['Prove it', 'analyst', 'Open the audit log in Analyze to inspect source events and verify the record chain. The app labels simulated and planned services clearly.']];
 let tourAt = 0;
 function tourShow(i) {
   tourAt = Math.max(0, Math.min(TOUR.length - 1, i));
@@ -1749,6 +1787,9 @@ function tourShow(i) {
 function tourOpen() { const d = $('tour'); if (!d.open) d.showModal(); tourShow(0); }
 function tourInit() {
   $('tour-btn').onclick = () => { closeMoreMenu(); tourOpen(); };
+  const brand = document.querySelector('.top .brand');
+  brand.onclick = () => show('home');
+  brand.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show('home'); } };
   $('tour-skip').onclick = () => $('tour').close();
   $('tour-back').onclick = () => tourShow(tourAt - 1);
   $('tour-go').onclick = () => {

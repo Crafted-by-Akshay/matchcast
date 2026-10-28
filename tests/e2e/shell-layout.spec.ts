@@ -5,14 +5,13 @@ declare const AG: any;
 // UX review 2026-10-24, shell items: one utility row on a phone, 32 px chips on a desktop, no stray
 // control beside Voice, no clipped subtitle, and a fixture list that labels synthetic results clearly.
 
-// Judge re-test: on a phone nothing in the header runs past the right edge (it used to be one sideways-scrolling row). The utilities wrap:
-// language and Status share the wordmark's row, Tour, Voice and the agents pill sit under the view switcher.
+// Judge re-test: on a phone nothing in the header runs past the right edge (it used to be one sideways-scrolling row). Tour and Status live in More; the visible controls remain reachable and the menu keeps full-size tap targets.
 for (const width of [390, 320]) {
   test(`phone header at ${width} px wraps its utilities inside the screen, under 44 px targets`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await openShell(page, 'watch');
     const m = await page.evaluate(() => {
-      const ids = ['tour-btn', 'voice-btn', 'status-btn', 'api-pill', 'lang-sel'];
+      const ids = ['more-toggle', 'voice-btn', 'api-pill', 'lang-sel'];
       const boxes = ids.map((id) => { const r = document.getElementById(id)!.getBoundingClientRect(); return { id, l: r.left, r: r.right, h: r.height }; });
       const past = [...document.querySelectorAll('.top *')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > innerWidth + 0.5 || r.left < -0.5); }).map((e) => e.id || (e as HTMLElement).className || e.tagName);
       return { boxes, past, stageH: document.getElementById('stage')!.getBoundingClientRect().height, over: document.documentElement.scrollWidth - document.documentElement.clientWidth };
@@ -22,6 +21,12 @@ for (const width of [390, 320]) {
     for (const b of m.boxes.filter((x) => x.id !== 'api-pill' && x.id !== 'lang-sel')) expect(b.h, b.id + ' tap target').toBeGreaterThanOrEqual(44);
     expect(m.over).toBeLessThanOrEqual(0);
     if (width === 390) expect(m.stageH, 'the view still gets about half of an 844 px phone').toBeGreaterThanOrEqual(420);
+    await page.locator('#more-toggle').click();
+    await expect(page.locator('#more-menu')).toBeVisible();
+    for (const id of ['tour-btn', 'status-btn']) {
+      const target = await page.locator('#' + id).boundingBox();
+      expect(target?.height, id + ' tap target in More').toBeGreaterThanOrEqual(44);
+    }
   });
 }
 
@@ -46,6 +51,9 @@ test('desktop chips are at least 32 px tall and the live-region pill is not draw
 test('the fixture list labels synthetic scores, and the score label says so too', async ({ page }) => {
   await page.route(/\/(watch|broadcast)\/index\.html/, (rt) => rt.abort());   // no 3D view, so no live score replaces the label
   await openShell(page, 'analyst');
+  await expect(page.locator('label[for="fx"]')).toHaveText('Select match');
+  await expect(page.locator('#fx')).toHaveAttribute('aria-describedby', 'fx-hint');
+  await expect(page.locator('#tab-matches')).toBeVisible();   // past results and saved match pages are browsed from Matches
   const labels = await page.$$eval('#fx option', (os) => os.map((o) => o.title || '').filter((t) => /\d–\d/.test(t)));   // the score moved from the label to the title (quiet first screen)
   expect(labels.length).toBeGreaterThan(20);
   for (const t of labels) expect(t).toMatch(/^Simulated result \d+–\d+/);

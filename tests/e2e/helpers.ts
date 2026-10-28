@@ -10,10 +10,11 @@ export async function openShell(page: Page, hash = 'watch', query = '') {
   await page.waitForFunction(() => document.querySelectorAll('#fx option').length > 20, null, { timeout: 30_000 });
 }
 
-/** Open a shell route through the visible navigation, including routes grouped under More. */
+/** Open a shell route through the visible navigation; the internal Agents route uses its support hash. */
 export async function openView(page: Page, view: string) {
   const primary = page.locator(`.switch > [data-view="${view}"]`);
   if (await primary.count()) { await primary.click(); return; }
+  if (view === 'agents') { await page.evaluate(() => { location.hash = 'agents'; }); return; }
   const menu = page.locator('#more-menu');
   if (await menu.isHidden()) await page.locator('#more-toggle').click();
   await menu.locator(`[data-view="${view}"]`).click();
@@ -23,6 +24,12 @@ export async function viewFrame(page: Page, view: 'watch' | 'broadcast' | 'analy
   const re = new RegExp(view + '/index\\.html');
   await expect.poll(() => page.frames().some((f) => re.test(f.url())), { timeout: 100_000, message: `${view} frame never attached` }).toBe(true);
   return page.frames().find((f) => re.test(f.url()))!;
+}
+
+export async function openProductionTools(frame: Frame) {
+  const body = frame.locator('#mc-desk-body');
+  if (await body.isHidden()) await frame.locator('#mc-desk-hide').click();
+  await expect(body).toBeVisible();
 }
 
 /** Collect uncaught page errors and console errors, ignoring blocked fonts and network noise. */
