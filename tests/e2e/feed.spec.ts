@@ -332,7 +332,7 @@ test('the feed never says the same line twice in a row, and a save and a goal ge
   });
   expect(out.filter((t) => t === 'Same line again.'), 'the repeat is dropped').toHaveLength(1);
   expect(out.some((t) => t.startsWith('Save! ')), 'a save is called').toBe(true);
-  expect(out.some((t) => t.startsWith('Goal! ')), 'a goal is called').toBe(true);
+  expect(out.some((t) => t.startsWith('Goal! Ana (Ridgeview)')), 'a goal is called, and its Goal: is not said twice').toBe(true);
 });
 
 test('a team-less event such as half-time does not stop the fill: it counts from the last team action', async ({ page }) => {

@@ -59,12 +59,15 @@ const CM = (() => {
 
   const idx = (team) => (!names || team == null) ? -1 : team === names.hk ? 0 : team === names.ak ? 1 : -1;
   const club = (ti) => (ti === 0 ? names.home : names.away);
-  // a line that repeats one of the last RECENT_N lines is dropped: the feed must not say the same thing again straight away
+  // a booth or live line that repeats one of the last RECENT_N such lines is dropped: the booth must not say the same thing again straight away.
+  // Watch's event lines are never dropped here: a second corner to the same side is its own line, at its own minute
   const RECENT_N = 8, recent = [];
   const push = (o) => {
     const text = trim(o.text, 240);
-    if (recent.includes(text)) return null;
-    recent.push(text); if (recent.length > RECENT_N) recent.shift();
+    if (o.kind === 'filler' || o.source === 'live') {
+      if (recent.includes(text)) return null;
+      recent.push(text); if (recent.length > RECENT_N) recent.shift();
+    }
     const item = { id: 'l' + (++n), t: Date.now(), minute: o.minute, text, kind: o.kind, tone: o.tone || '', source: o.source || 'rules', chain: o.chain || CHAIN.slice(), persona, numbers: o.numbers || [], speaker: o.speaker || '' };
     items.push(item); if (items.length > KEEP) items.shift();
     lastLine = o.minute; lastPushAt = Date.now(); changed(); return item;
@@ -78,7 +81,7 @@ const CM = (() => {
         const outcome = ev.fate === 'save' ? ', and the keeper saves' : ev.fate === 'miss' ? ', off target' : '';
         const big = (+ev.xg || 0) >= 0.25;
         const call = big ? 'Big chance! ' : ev.fate === 'save' ? 'Save! ' : '';
-        return { minute: ev.minute, kind: 'shot', tone: big || ev.fate === 'save' ? 'big' : 'hot', numbers: [{ name: 'xG', value: +ev.xg || 0 }], text: call + who + ' shoots for ' + tc + outcome + '. xG ' + f2(ev.xg) + '.' };
+        return { minute: ev.minute, kind: 'shot', tone: big ? 'big' : 'hot', numbers: [{ name: 'xG', value: +ev.xg || 0 }], text: call + who + ' shoots for ' + tc + outcome + '. xG ' + f2(ev.xg) + '.' };
       }
       case 'yellow_card': return { minute: ev.minute, kind: 'card', text: 'Yellow card for ' + who + ' (' + tc + ')' + (ev.reason ? ': ' + ev.reason : '') + '.' };
       case 'corner': return { minute: ev.minute, kind: 'set_piece', text: 'Corner to ' + tc + '.' };
@@ -145,8 +148,10 @@ const CM = (() => {
       seen.add(m.id);
       if (m.type === 'full_time') over = true;
       const why = m.why ? ' ' + m.why : '';
-      const call = m.type === 'goal' ? 'Goal! ' : '';   // the crowd call on a goal; the title keeps the scorer and the score
-      push({ minute: m.minute, kind: m.type, tone: ['goal', 'red_card', 'turning_point'].includes(m.type) ? 'big' : '', text: call + (m.title || m.type) + '.' + why, chain: CHAIN.slice() });
+      const goal = m.type === 'goal';
+      const call = goal ? 'Goal! ' : '';   // the crowd call on a goal; the title keeps the scorer and the score, without its own "Goal:" so the word is not said twice
+      const title = goal ? (m.title || m.type).replace(/^goal:\s*/i, '') : (m.title || m.type);
+      push({ minute: m.minute, kind: m.type, tone: ['goal', 'red_card', 'turning_point'].includes(m.type) ? 'big' : '', text: call + title + '.' + why, chain: CHAIN.slice() });
       last = Math.max(last == null ? -1 : last, +m.minute);
     }
     if (last != null) callPlay(last);
@@ -205,7 +210,7 @@ const historyLine = (names) => {
   const last = m ? ' Last meeting: ' + m.date + ', ' + names.home + ' ' + m.score + ' ' + names.away + ' (' + m.competition + ').' : '';
   return { minute: 0, kind: 'buildup', speaker: 'colour', text: 'Real results: ' + h.played + ' meetings, ' + names.home + ' ' + h.home_wins + ' wins, ' + h.draws + ' draws, ' + names.away + ' ' + h.away_wins + ' wins.' + last };
 };
-const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playTi = -1; playFrom = 0; n = 0; fillN = 0; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); const hl = historyLine(names); if (hl) push(hl); } };
+const reset = (key, nm) => { names = nm || null; items = []; seenApi.clear(); events = []; seen = new Set(); score = [0, 0]; lastLine = -99; playAt = -1; playTi = -1; playFrom = 0; n = 0; fillN = 0; recent.length = 0; over = false; changed(); if (names) { push({ minute: 0, kind: 'buildup', speaker: 'pbp', text: 'Welcome to ' + names.home + ' against ' + names.away + '.' }); push({ minute: 0, kind: 'buildup', speaker: 'colour', text: 'Plenty to watch here. Keep an eye on how each side starts in possession.' }); const hl = historyLine(names); if (hl) push(hl); } };
   // the feed the views draw: newest last, each with its label
   const view = (count) => items.slice(-(count || 40)).map((x) => ({ id: x.id, t: x.t, minute: x.minute, text: x.text, kind: x.kind, tone: x.tone, source: x.source, label: LABEL[x.source], chain: x.chain, persona: x.persona, numbers: x.numbers, speaker: x.speaker || (x.source === 'live' || x.kind === 'summary' ? 'colour' : 'pbp') }));
   // the persona in effect (casual, analyst, broadcast, or a lens such as club:<key>): each line keeps the one it was written under
