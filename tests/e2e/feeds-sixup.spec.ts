@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { openShell, openProductionTools, viewFrame } from './helpers';
 
 // AB#475 (CREW-7.6, the producer desk's six-up view). Every feed card shows its last line (or "waiting for a moment"), its Verified count, its Dropped count and its lines per minute;
-// the booth row shows the producer queue count. Feeds without a writer (audio description, catch-me-up, half-time, ticker) say Planned, never 0 lines as if live.
+// the booth row shows the producer queue count. Every feed has a writer now, so none says Planned: a feed with no line yet says waiting, never 0 lines as if live.
 const post = (page: import('@playwright/test').Page, msg: Record<string, unknown>) =>
   page.evaluate((m) => {
     const frame = document.querySelector('#v-broadcast iframe') as HTMLIFrameElement;
@@ -12,7 +12,7 @@ const line = (feed: string, publication_id: string, text: string, match_time_ms:
   feed, publication_id, lang: 'en', text, source_event_ids: ['E12'], claim_ids: [], match_time_ms, aired_at: '2026-10-25T14:00:00Z', repair_count: 0,
 });
 
-test('six-up: counts, lines per minute over the last 5 match minutes, waiting state, Planned feeds, booth queue', async ({ page }) => {
+test('six-up: counts, lines per minute over the last 5 match minutes, waiting state, booth queue', async ({ page }) => {
   test.setTimeout(300_000);
   await openShell(page, 'broadcast', '?seed=2026');
   const f = await viewFrame(page, 'broadcast');
@@ -21,18 +21,12 @@ test('six-up: counts, lines per minute over the last 5 match minutes, waiting st
   const card = (k: string) => f.locator('[data-feed="' + k + '"]');
 
   // a feed with a writer and no line yet is waiting, never blank
-  for (const k of ['casual', 'analyst']) {
+  for (const k of ['casual', 'analyst', 'audio_description', 'catch_me_up', 'half_time', 'ticker']) {
     await expect(card(k)).toContainText('waiting for a moment');
     await expect(card(k)).toContainText('Verified 0');
     await expect(card(k)).toContainText('Dropped 0');
     await expect(card(k)).toContainText('0.0 lines/min');
     await expect(card(k)).not.toContainText('Planned');
-  }
-  // the four feeds with no writer are Planned, not live-looking zeros
-  for (const k of ['audio_description', 'catch_me_up', 'half_time', 'ticker']) {
-    await expect(card(k)).toContainText('Planned');
-    await expect(card(k)).not.toContainText('Verified');
-    await expect(card(k)).not.toContainText('lines/min');
   }
   // the booth row is the producer queue count
   await expect(f.locator('#mc-booth')).toContainText('0 waiting');

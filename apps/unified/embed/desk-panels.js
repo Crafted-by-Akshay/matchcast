@@ -233,8 +233,8 @@ const send = (msg) => { if (framed) window.parent.postMessage(Object.assign({ sr
   if (!framed) return;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const FEEDS = [['casual', 'Casual'], ['analyst', 'Analyst'], ['audio_description', 'Audio description'], ['catch_me_up', 'Catch-me-up'], ['half_time', 'Half-time'], ['ticker', 'Ticker']];
-  // The one list of feeds that have a writer today (packages/agents feeds.py: a feed with a persona; casual and analyst). Any other feed is Planned until a record for it arrives. Six-up view, AB#475.
-  const WRITERS = ['casual', 'analyst'];
+  // The feeds that have a writer today (packages/agents feeds.py, and catch_me_up, read on demand from the route). A feed missing from this list is Planned until a record for it arrives. Six-up view, AB#475.
+  const WRITERS = ['casual', 'analyst', 'audio_description', 'catch_me_up', 'half_time', 'ticker'];
   const RATE_MIN = 5;   // lines per minute is the lines aired over the last 5 match minutes, by the onair record's match_time_ms
   const feeds = Object.fromEntries(FEEDS.map(([k, label]) => [k, { label, on: true, aired: 0, dropped: 0, seenRec: false, times: [], last: '' }]));
   let latestMs = 0;   // the newest match time any feed has aired: the match clock the rate window ends at

@@ -1,10 +1,10 @@
 import { test, expect } from './fixtures';
 import { collectErrors, openShell, ready, viewFrame } from './helpers';
 
-// AB#450: the Watch audience picker offers Fan and Analyst. Lines come from CREW.state.feeds
+// AB#450: the Watch feed picker (flag ?crew=1). All six feeds are live; a feed with no lines yet says it is waiting. Lines come from CREW.state.feeds
 // (the Simulated fixture until the orchestration frames land) through the shell's postMessage bus. Wall-clock timing is meaningless under
 // software GL, so every wait polls for state, never for a duration. Honesty: fixture lines are labelled Simulated and carry no Verifier tick.
-const LABELS = ['Fan', 'Analyst'];
+const LABELS = ['Fan', 'Analyst', 'Audio description', 'Catch me up', 'Half-time explainer', 'News ticker'];
 
 async function open(page: any, width = 1280, height = 800, query = '?crew=1') {
   await page.route('**/broadcast/**', (r: any) => r.abort());   // Watch must load here; a second 3D engine is not needed
@@ -29,20 +29,28 @@ test('with ?crew=0 nothing is added: no picker, style, body class or iframe para
   await expect(f.locator('#mc-two')).toBeHidden();   // simplified UI does not show the duplicate two-viewer demo
 });
 
-test('feed picker: Fan and Analyst, Simulated lines and saved choice', async ({ page }) => {
+test('feed picker: six labelled choices, no Planned tags, waiting copy, Simulated lines with a minute and no tick, saved choice', async ({ page }) => {
   test.setTimeout(300_000);
   const errs = collectErrors(page);
   const f = await open(page);
   const group = f.getByRole('radiogroup', { name: 'Feed' });
   await expect(group).toBeVisible({ timeout: 60_000 });
   const radios = group.getByRole('radio');
-  expect(await radios.count()).toBe(2);
-  for (let i = 0; i < LABELS.length; i++) await expect(radios.nth(i)).toContainText(LABELS[i]);
-  await expect(f.locator('#mc-feed-coming')).toBeHidden();
+  expect(await radios.count()).toBe(6);
+  for (let i = 0; i < 6; i++) await expect(radios.nth(i)).toContainText(LABELS[i]);
+  expect(await group.locator('.fp-tag:visible').count()).toBe(0);
+  await expect(radios.nth(0).locator('.fp-tag')).toHaveCount(0);
+  await expect(radios.nth(1).locator('.fp-tag')).toHaveCount(0);
+  await expect(radios.nth(2).locator('.fp-tag')).toHaveCount(0);
   await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
   const card = f.locator('#mc-feedlines');
   await expect(card).toContainText('waiting for a moment');
-  await expect(f.locator('#mc-trust')).toBeHidden();
+  expect(await f.locator('#mc-trust').count(), 'the Verifier chip stays').toBe(1);
+  await expect(radios.nth(3).locator('.fp-tag')).toHaveCount(0);
+  await radios.nth(2).click();
+  await expect(radios.nth(2)).toHaveAttribute('aria-checked', 'true');
+  await expect(card).toContainText('waiting for a moment');
+  expect(await card.locator('li').count()).toBe(0);
   await radios.nth(0).click();
   await page.evaluate(() => CREW.play(23));
   const line = card.locator('li').first();
@@ -89,6 +97,7 @@ test('feed picker: arrow, Home and End keys move the choice and keep focus on it
   await f.page().keyboard.press('ArrowRight');
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true');
   await expect(radios.nth(1)).toBeFocused();
+  // all six feeds are live, so End lands on the last one (News ticker)
   await f.page().keyboard.press('End');
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true');
   await expect(radios.nth(1)).toBeFocused();
@@ -113,7 +122,14 @@ test('the duplicate two-viewer panel stays hidden in the simplified commentary l
   await expect(f.locator('#mc-two')).toBeHidden();
   await page.evaluate(() => CREW.play(23));
   await expect(f.locator('#mc-feedlines li').first()).toBeVisible({ timeout: 60_000 });
-  await expect(f.locator('#mc-two')).toBeHidden();
+  expect(await disp(), 'a live feed with lines replaces the panel').toBe('none');
+  await group.getByRole('radio', { name: /Audio description/ }).click();
+  expect(await disp(), 'a live feed with no lines yet leaves the panel').not.toBe('none');
+  await group.getByRole('radio', { name: /Fan/ }).click();
+  expect(await disp()).toBe('none');
+  await page.evaluate(() => CREW.reset());
+  await expect(f.locator('#mc-feedlines')).toContainText('waiting for a moment');
+  expect(await disp(), 'back to no lines: the panel returns').not.toBe('none');
 });
 
 test('feed picker: the pick goes to the shell, and a language with no translated line says English is shown', async ({ page }) => {
@@ -139,7 +155,6 @@ for (const [name, w, h] of [['phone', 390, 844], ['small phone', 320, 640]] as c
     await expect(f.locator('#mc-feedlines li').first()).toBeVisible({ timeout: 60_000 });
     await page.evaluate(() => post('watch', { src: 'matchcast-shell', type: 'lang', lang: 'es' }));
     await expect(f.locator('#mc-feedlines .fp-note')).toBeVisible({ timeout: 30_000 });
-    await expect(f.locator('#mc-feed-coming')).toBeHidden();
     await expect(f.locator('#mc-trust')).toBeHidden();
     await expect(f.locator('#mcf-sound')).toBeHidden();
     const geom = () => f.evaluate(() => {
@@ -160,3 +175,35 @@ for (const [name, w, h] of [['phone', 390, 844], ['small phone', 320, 640]] as c
     expect(g.note!.r, 'the English note stays inside the card').toBeLessThanOrEqual(g.mcf!.r);
   });
 }
+
+test('feed picker: a saved choice is restored, and the arrow keys step from it', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.addInitScript(() => { try { localStorage.setItem('mc-feedpick', 'ticker'); } catch (e) { /* storage blocked */ } });
+  const f = await open(page);
+  const group = f.getByRole('radiogroup', { name: 'Feed' });
+  await expect(group).toBeVisible({ timeout: 60_000 });
+  const radios = group.getByRole('radio');
+  await expect(radios.nth(5)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'false');
+  await radios.nth(5).focus();
+  await expect(radios.nth(5)).toBeFocused();
+  await f.page().keyboard.press('ArrowLeft');
+  await expect(radios.nth(4)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(4)).toBeFocused();
+});
+
+test('feed picker: when the shell drops the live feed in use, the picker falls back to a live feed and tells the shell', async ({ page }) => {
+  test.setTimeout(300_000);
+  const f = await open(page);
+  const group = f.getByRole('radiogroup', { name: 'Feed' });
+  await expect(group).toBeVisible({ timeout: 60_000 });
+  const radios = group.getByRole('radio');
+  await radios.nth(3).click();   // Catch me up, live until the shell says otherwise
+  await expect(radios.nth(3)).toHaveAttribute('aria-checked', 'true');
+  await page.evaluate(() => post('watch', { src: 'matchcast-shell', type: 'crew-feeds', lang: 'en', simulated: true, feeds: {}, defs: [
+    { key: 'casual', label: 'Casual', live: true }, { key: 'analyst', label: 'Analyst', live: true },
+    { key: 'audio_description', label: 'Audio description', live: false }, { key: 'catch_me_up', label: 'Catch me up', live: false },
+  ] }));
+  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(3)).toHaveAttribute('aria-checked', 'false');
+});

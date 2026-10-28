@@ -54,17 +54,18 @@ test('localStorage mc-crew=0 turns it off; an explicit ?crew=1 beats it', async 
   await expect(page.locator('#tab-agents,#crew-btn')).toHaveCount(0);
 });
 
-test('Watch exposes only the two audience choices in its live commentary control', async ({ page }) => {
+test('no Planned labels: all six feeds are live, and a feed with no lines yet says it is waiting', async ({ page }) => {
   test.setTimeout(300_000);
   await open(page);
   await ready('watch')(page);
   const f = await viewFrame(page, 'watch');
   const group = f.getByRole('radiogroup', { name: 'Feed' });
   await expect(group).toBeVisible({ timeout: 60_000 });
-  await expect(group.getByRole('radio')).toHaveCount(2);
-  await expect(group.getByRole('radio').nth(0)).toContainText('Fan');
-  await expect(group.getByRole('radio').nth(1)).toContainText('Analyst');
-  await expect(f.locator('#mc-feed-coming')).toBeHidden();
+  expect(await group.locator('.fp-tag:visible').count()).toBe(0);
+  for (const n of ['Audio description', 'Half-time explainer', 'News ticker']) {
+    await group.getByRole('radio', { name: new RegExp(n) }).click();
+    await expect(f.locator('#mc-feedlines')).toContainText('waiting for a moment');
+  }
 });
 
 test('quiet first screen: on Watch only the feed picker is added; no crew panel, Demo controls, weather or camera presets', async ({ page }) => {
@@ -79,7 +80,7 @@ test('quiet first screen: on Watch only the feed picker is added; no crew panel,
   await expect(f.locator('#mc-weather-note')).toContainText('SIMULATED WEATHER');
   // the only crew additions on screen: the feed picker, its one line box and a screen-reader-only live region
   const shown = await f.evaluate(() => [...document.querySelectorAll('[id^="mc-feed"],[id^="crew"]')].filter((e) => (e as HTMLElement).getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden').map((e) => e.id).sort());
-  expect(shown.filter((id) => id !== 'mc-feeds' && id !== 'mc-feedpick' && id !== 'mc-feedlines' && id !== 'mc-feedsr' && id !== 'mc-feed-coming')).toEqual([]);
+  expect(shown.filter((id) => id !== 'mc-feeds' && id !== 'mc-feedpick' && id !== 'mc-feedlines' && id !== 'mc-feedsr')).toEqual([]);
   expect(await f.locator('#mc-feedpick').isVisible()).toBe(true);
 });
 
