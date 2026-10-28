@@ -42,6 +42,23 @@ window.MCClubAsk = (() => {
     if (sources.length) { const links = document.createElement('div'); links.className = 'ask-sources'; for (const f of sources) { const a = document.createElement('a'); a.href = '#match/' + encodeURIComponent(f.id); a.textContent = f.date + ' · ' + name(f); a.onclick = (event) => { event.preventDefault(); config.openMatch(f.id); }; links.append(a); } box.append(links); }
     if (note) { const source = document.createElement('p'); source.className = 'source'; source.textContent = note; box.append(source); }
   };
+  // POST /v1/ask/record: the saved match's summary (score, stats, key events) to the same model as Ask. null when the api is
+  // not set, is off, or its answer does not pass its checks.
+  const recordAnswer = async (f, data, q) => {
+    const api = window.MATCHCAST_API;
+    if (!api) return null;
+    const stats = {};
+    for (const key of ['shots', 'xg', 'poss', 'passes']) { const v = data.stats && data.stats[key]; if (Array.isArray(v) && v.length === 2 && v.every((x) => Number.isFinite(+x))) stats[key] = v.map(Number); }
+    const body = { session_id: 'club-' + Math.random().toString(36).slice(2, 10), question: q, persona: 'casual', home: f.home.club, away: f.away.club,
+      score: (data.score || f.score).map((x) => Math.round(+x)), stats,
+      events: (data.events || []).filter((e) => e && e.type).slice(0, 40).map((e) => ({ minute: Math.min(130, Math.max(0, +e.minute || 0)), type: String(e.type).slice(0, 24), player: e.player ? String(e.player).slice(0, 60) : null, team: e.team === 'home' || e.team === 'away' ? e.team : null })) };
+    try {
+      const res = await fetch(api.replace(/\/+$/, '') + '/v1/ask/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+      if (!res.ok) return null;
+      const j = await res.json();
+      return typeof j.answer === 'string' && j.answer ? j.answer : null;
+    } catch (e) { return null; }
+  };
   const eventText = (e) => Math.floor(+e.minute || 0) + "' · " + (e.type === 'goal' ? 'Goal · ' + (e.player || 'Scorer not recorded') : e.type === 'red_card' ? 'Red card · ' + (e.player || 'Player not recorded') : e.type === 'shot' ? 'Shot · ' + (e.player || 'Player not recorded') : e.text || e.type.replace(/_/g, ' '));
   const matchAnswer = (f, data, q) => {
     const stats = data.stats || {}, events = data.events || [], label = name(f), score = (data.score || f.score).join('–');
@@ -72,7 +89,12 @@ window.MCClubAsk = (() => {
       if (!list.length) { show('Choose your club above to ask about its past matches.', [], ''); return; }
       if (context !== 'history') {
         const f = list.find((item) => item.id === context); if (!f) { show('That saved match is not available for this club.'); return; }
-        const data = await record(f); if (token === generation) show(matchAnswer(f, data, q), [f]); return;
+        const data = await record(f); if (token !== generation) return;
+        const modelAnswer = await recordAnswer(f, data, q);   // the model over this record; the record's own text only when it does not answer
+        if (token !== generation) return;
+        if (modelAnswer) show(modelAnswer, [f], 'Saved synthetic season · connected Copilot');
+        else show(matchAnswer(f, data, q), [f]);
+        return;
       }
       // An opponent named in the question narrows the same selected club's records.
       const opponents = new Map(); for (const f of list) { const side = f.home.key === config.club() ? f.away : f.home; opponents.set(side.club.toLowerCase(), side.key); }

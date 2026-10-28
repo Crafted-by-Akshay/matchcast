@@ -36,6 +36,7 @@ from matchcast_agents.grading import scoreboard
 from matchcast_agents.grading_live import events_digest, load_live_run
 from matchcast_agents.hub import StreamEvent
 from matchcast_agents.live import FoundryModelClient, ModelClient, ModelCut, live_agents
+from matchcast_agents.live.answers import LiveAnswers, record_facts
 from matchcast_agents.live.knowledge import TalkKnowledge
 from matchcast_agents.messages import LineRecord
 from matchcast_agents.personas import ALIASES, BOOTH, booth, normalise
@@ -176,6 +177,29 @@ class AskBody(BaseModel):
     lang: Literal["en", "es", "pt", "hi", "ar", "fr", "de", "id", "ja", "zh-Hans"] = "en"
     surface: Literal["ask", "broadcast"] = "ask"
     # the 3D view's conditions right now (weather, energy, tactics), as short plain text; optional
+    engine_context: dict[Literal["weather", "energy", "tactics"], str] = Field(default_factory=dict)
+
+
+class RecordEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    minute: float = Field(ge=0, le=130)
+    type: str = Field(min_length=1, max_length=24)
+    player: str | None = Field(default=None, max_length=60)
+    team: Literal["home", "away"] | None = None
+
+
+class RecordAskBody(BaseModel):
+    """A question about a saved match: its record's summary, not a live session."""
+
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(pattern=ID)
+    question: str = Field(min_length=1, max_length=300)
+    persona: Literal["casual", "analyst", "broadcast"] = "casual"
+    home: str = Field(min_length=1, max_length=60)
+    away: str = Field(min_length=1, max_length=60)
+    score: list[int] = Field(min_length=2, max_length=2)
+    stats: dict[str, list[float]] = Field(default_factory=dict, max_length=12)
+    events: list[RecordEvent] = Field(default_factory=list, max_length=40)
     engine_context: dict[Literal["weather", "energy", "tactics"], str] = Field(default_factory=dict)
 
 
@@ -1463,6 +1487,32 @@ def build_router(registry: Registry) -> APIRouter:
             if variant.text is not None:
                 recap = {**recap, "variants": {lang: variant.text}}
         return recap
+
+    @router.post("/ask/record")
+    async def ask_record(body: RecordAskBody, request: Request) -> dict[str, Any]:
+        """A saved match's Copilot answer: the model over the record's facts, checked like Ask.
+        ``answer`` is null when the model is off or its answer does not pass; the browser then
+        falls back to its own text."""
+        if not registry.allow_ask(body.session_id):
+            raise Problem(
+                429, "rate_limited", f"at most {ASK_PER_MINUTE} questions a minute", retry_after=60
+            )
+        registry.allow_question(request)
+        client = registry.model_client("answers")
+        if client is None:
+            return {"answer": None, "reason": "model_off", "citations": []}
+        stats = {k: (v[0], v[1]) for k, v in body.stats.items() if len(v) == 2}
+        events = [(e.minute, e.type, e.player, e.team) for e in body.events]
+        facts = record_facts(
+            body.home, body.away, (body.score[0], body.score[1]), stats, events,
+            {k: v[:ENGINE_CONTEXT_CHARS] for k, v in body.engine_context.items()},
+        )  # fmt: skip
+        answer, reason = await LiveAnswers(client).ask_record(
+            facts, body.question, body.persona, (body.home, body.away)
+        )
+        if answer is None:
+            return {"answer": None, "reason": reason, "citations": []}
+        return {"answer": answer.answer, "reason": "", "citations": answer.citations}
 
     @router.post("/matches/{match_id}/ask")
     async def ask(match_id: str, body: AskBody, request: Request) -> dict[str, Any]:
