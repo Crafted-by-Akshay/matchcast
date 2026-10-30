@@ -1825,11 +1825,11 @@ function init(list) {
 
 // first-time tour: five steps, each switches to the view it talks about. Opens from the Tour button or with ?tour=1; never by itself.
 const TOUR = [
-  ['Watch', 'watch', 'Browse the synthetic season from Home or Matches. Save fixtures to My List on this device; Highlights shows only clips captured in the current Watch session. A synthetic match plays in 3D from fictional clubs. Choose Fan or Analyst to change the live commentary. Press Talk to a player to ask a question or give an order (typed questions are checked against the match record when the agent api is connected; otherwise a labelled rules fallback answers), or try Copilot Ask: it answers only what the match data can prove.'],
-  ['Analyze', 'analyst', 'Open the analysis workspace for the selected match, its evidence and season reports. The app checks every number before it reaches the commentary.'],
-  ['Production Studio', 'broadcast', 'The Broadcast desk: lower-thirds and a teleprompter fed only by approved lines, instant replay, odds with the reasons on screen, and Ask the producer.'],
-  ['Analyze', 'analyst', 'The Analyst workspace for the same match: pre-match, live and post-match pages, players, reports and data science.'],
-  ['Prove it', 'analyst', 'Open the audit log in Analyze to inspect source events and verify the record chain. The app labels simulated and planned services clearly.']];
+  ['Watch', 'watch', 'Kick off a synthetic match in 3D, with fictional clubs and no real players. Pick Fan or Analyst for the live commentary, then press Talk to a player to ask a question or give an order. Answers are checked against the match record when the agent service is on; otherwise a labelled rules fallback answers. Try Copilot Ask too: it only says what the data can prove. Save fixtures to My List from Home or Matches.'],
+  ['Analyze', 'analyst', 'Dive into the analysis for the match you picked. Every number is checked against the match record before it reaches the commentary.'],
+  ['Production Studio', 'broadcast', 'The Broadcast desk is the control room: live lower-thirds, a teleprompter fed only by approved lines, instant replays, odds with their reasons on screen, and Ask the producer.'],
+  ['Analyze', 'analyst', 'Go deeper into the same match: pre-match, live and post-match pages, players, reports and data science.'],
+  ['Prove it', 'analyst', 'Open the audit log in Analyze, trace every source event, and verify the record chain yourself. Simulated and planned services are labelled, so nothing is passed off as real.']];
 let tourAt = 0;
 function tourShow(i) {
   tourAt = Math.max(0, Math.min(TOUR.length - 1, i));
